@@ -514,7 +514,6 @@ ask_user 询问用户 (可选)
 - 📌 [API 文档](docs/backend/)
 
 ### 🏗️ 系统架构
-- 📌 [智能体实现总结](ExpertAgent_实现总结.md)
 - 📌 [视频工作流设计](docs/video_workflow_feedback.md)
 - 📌 [配置系统说明](docs/系统配置要求.md)
 
