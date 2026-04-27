@@ -299,6 +299,15 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Enterprise loader error (non-critical): {e}")
 
+    # 如果 enterprise 未加载，注册主仓库的用户路由（演示模式）
+    try:
+        from utils.enterprise_loader import enterprise_loader
+        if not enterprise_loader.loaded:
+            from api.user import router as user_router
+            app.include_router(user_router)
+    except Exception as e:
+        logger.warning(f"Failed to register user router (non-critical): {e}")
+
     async def start_edition_auth_service():
         try:
             from services.edition_auth_service import edition_auth_service
@@ -317,10 +326,6 @@ app.include_router(admin_router)
 
 # 注册系统状态 API 路由
 app.include_router(system_router)
-
-# 注册用户偏好 API 路由
-from api.user import router as user_router
-app.include_router(user_router)
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
