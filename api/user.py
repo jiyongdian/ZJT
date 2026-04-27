@@ -105,7 +105,7 @@ async def get_implementation_preferences(
                 continue
 
             impl_config = UnifiedConfigRegistry.get_implementation(impl_name)
-            if impl_config and impl_config.is_enabled():
+            if impl_config and impl_config.is_enabled(task_config.driver_name):
                 # 使用与后台一致的方式获取 display_name
                 display_name = impl_config.display_name
 
