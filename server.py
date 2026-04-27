@@ -291,23 +291,6 @@ app = FastAPI(title="ZJT Server")
 @app.on_event("startup")
 async def startup_event():
     """应用启动时执行的任务"""
-    # 加载 enterprise 模块（如果存在）
-    try:
-        from utils.enterprise_loader import enterprise_loader
-        if enterprise_loader.discover():
-            enterprise_loader.load(app)
-    except Exception as e:
-        logger.warning(f"Enterprise loader error (non-critical): {e}")
-
-    # 如果 enterprise 未加载，注册主仓库的用户路由（演示模式）
-    try:
-        from utils.enterprise_loader import enterprise_loader
-        if not enterprise_loader.loaded:
-            from api.user import router as user_router
-            app.include_router(user_router)
-    except Exception as e:
-        logger.warning(f"Failed to register user router (non-critical): {e}")
-
     async def start_edition_auth_service():
         try:
             from services.edition_auth_service import edition_auth_service
@@ -326,6 +309,23 @@ app.include_router(admin_router)
 
 # 注册系统状态 API 路由
 app.include_router(system_router)
+
+# 尝试加载 enterprise 模块，未加载时注册主仓库的用户路由（演示模式）
+try:
+    from utils.enterprise_loader import enterprise_loader
+    if enterprise_loader.discover():
+        enterprise_loader.load(app)
+    else:
+        from api.user import router as user_router
+        app.include_router(user_router)
+except Exception as e:
+    import logging as _logging
+    _logging.warning(f"Enterprise/user router error (non-critical): {e}")
+    try:
+        from api.user import router as user_router
+        app.include_router(user_router)
+    except Exception:
+        pass
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
