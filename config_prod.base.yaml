@@ -171,3 +171,7 @@ checkin:
     7: 18
     14: 24
     30: 30
+
+enterprise:
+  min_version: "1.0.0"
+  max_version: "1.0.0"

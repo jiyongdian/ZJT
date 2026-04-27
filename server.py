@@ -297,7 +297,7 @@ async def startup_event():
             await edition_auth_service.start()
         except Exception as e:
             logger.warning(f"Failed to start edition auth service (non-critical): {e}")
-    
+
     asyncio.create_task(start_edition_auth_service())
 
 # 导入并注册 script_writer API 路由
@@ -310,9 +310,22 @@ app.include_router(admin_router)
 # 注册系统状态 API 路由
 app.include_router(system_router)
 
-# 注册用户偏好 API 路由
-from api.user import router as user_router
-app.include_router(user_router)
+# 尝试加载 enterprise 模块，未加载时注册主仓库的用户路由（演示模式）
+try:
+    from utils.enterprise_loader import enterprise_loader
+    if enterprise_loader.discover():
+        enterprise_loader.load(app)
+    else:
+        from api.user import router as user_router
+        app.include_router(user_router)
+except Exception as e:
+    import logging as _logging
+    _logging.warning(f"Enterprise/user router error (non-critical): {e}")
+    try:
+        from api.user import router as user_router
+        app.include_router(user_router)
+    except Exception:
+        pass
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
