@@ -477,6 +477,7 @@ class LLMVendor:
     VOLCENGINE = 'volcengine'  # 火山引擎供应商（Doubao 模型）
     CLAUDE = 'claude'      # Claude 供应商（Anthropic 模型）
     ZJT_API = 'zjt_api'    # ZJT API 供应商（Qwen3.5/3.6 模型）
+    DEEPSEEK = 'deepseek'  # DeepSeek 供应商（DeepSeek-V4 模型）
 
 
 class LLMModel:
@@ -500,6 +501,10 @@ class LLMModel:
     # Claude 模型
     CLAUDE_HAIKU_4_5 = 'claude-haiku-4-5'
 
+    # DeepSeek 模型
+    DEEPSEEK_V4_FLASH = 'deepseek-v4-flash'
+    DEEPSEEK_V4_PRO = 'deepseek-v4-pro'
+
 
 # 模型前缀 -> 供应商映射（用于 LLMClientFactory 路由）
 MODEL_PREFIX_VENDOR_MAP = {
@@ -511,4 +516,5 @@ MODEL_PREFIX_VENDOR_MAP = {
     'doubao': LLMVendor.VOLCENGINE,
     'qwen3.5': LLMVendor.ZJT_API,  # ZJT API 的 Qwen 3.5 Plus 模型
     'qwen3.6': LLMVendor.ZJT_API,  # ZJT API 的 Qwen 3.6 Plus 模型
+    'deepseek': LLMVendor.DEEPSEEK,  # DeepSeek 的 DeepSeek-V4 模型
 }
