@@ -291,13 +291,21 @@ app = FastAPI(title="ZJT Server")
 @app.on_event("startup")
 async def startup_event():
     """应用启动时执行的任务"""
+    # 加载 enterprise 模块（如果存在）
+    try:
+        from utils.enterprise_loader import enterprise_loader
+        if enterprise_loader.discover():
+            enterprise_loader.load(app)
+    except Exception as e:
+        logger.warning(f"Enterprise loader error (non-critical): {e}")
+
     async def start_edition_auth_service():
         try:
             from services.edition_auth_service import edition_auth_service
             await edition_auth_service.start()
         except Exception as e:
             logger.warning(f"Failed to start edition auth service (non-critical): {e}")
-    
+
     asyncio.create_task(start_edition_auth_service())
 
 # 导入并注册 script_writer API 路由

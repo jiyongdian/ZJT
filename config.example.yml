@@ -201,6 +201,12 @@ alembic:
 edition:
   mode: "community"
 
+# Enterprise 模块版本兼容性配置
+# 当 enterprise/ 目录存在时，主仓库会校验 enterprise 模块版本是否在此范围内
+enterprise:
+  min_version: "1.0.0"
+  max_version: "1.0.0"
+
 file_storage:
   # Qiniu cloud storage configuration
   # 标准存储每月免费额度具体包括：
@@ -258,4 +264,6 @@ checkin:
 
 zjt:
   token: ""
+
+
 
