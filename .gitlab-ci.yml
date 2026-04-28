@@ -48,6 +48,7 @@ unit_tests:
       alias: docker
       variables:
         DOCKER_TLS_CERTDIR: ""
+      command: ["--registry-mirror=https://docker.1ms.run", "--registry-mirror=https://docker.mirrors.ustc.edu.cn"]
 
 
   # 缓存配置（加速后续构建）
