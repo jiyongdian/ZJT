@@ -411,12 +411,13 @@
           },
           body: JSON.stringify({
             workflow_data: workflowData,
-            default_world_id: state.defaultWorldId
+            default_world_id: state.defaultWorldId,
+            workflow_ratio: state.ratio
           })
         });
 
         const result = await response.json();
-        
+
         if(result.code === 0){
           showToast('保存成功', 'success');
         } else {
@@ -455,7 +456,8 @@
           },
           body: JSON.stringify({
             workflow_data: workflowData,
-            default_world_id: state.defaultWorldId
+            default_world_id: state.defaultWorldId,
+            workflow_ratio: state.ratio
           })
         });
 
@@ -582,6 +584,12 @@
             state.style.referenceImageUrl = workflow.style_reference_image;
           }
 
+          // 从数据库主表加载 workflow_ratio
+          if(workflow.workflow_ratio){
+            console.log('[加载工作流] 从数据库加载 workflow_ratio:', workflow.workflow_ratio);
+            window.__loadedWorkflowRatio = workflow.workflow_ratio;
+          }
+
           // 检查是否从剧本智能体跳转过来，且带有世界ID
           const urlParams = new URLSearchParams(window.location.search);
           const fromWorldId = urlParams.get('from_world_id');
@@ -619,6 +627,14 @@
             console.log('[加载工作流] workflow_data.defaultWorldId:', workflow.workflow_data.defaultWorldId);
             restoreWorkflow(workflow.workflow_data);
             console.log('[加载工作流] 恢复后 state.defaultWorldId:', state.defaultWorldId);
+          } else {
+            // 新建工作流时，workflow_data为空，需要应用主表的workflow_ratio
+            if(window.__loadedWorkflowRatio){
+              state.ratio = window.__loadedWorkflowRatio;
+              ratioSelectEl.value = window.__loadedWorkflowRatio;
+              console.log('[加载工作流] 新工作流应用 workflow_ratio:', state.ratio);
+              delete window.__loadedWorkflowRatio;
+            }
           }
 
           // 自动继承世界画风：当工作流画风为空但关联的世界有画风时，自动填充
@@ -649,7 +665,8 @@
                     body: JSON.stringify({
                       style: state.style.name || null,
                       style_reference_image: state.style.referenceImageUrl || null,
-                      workflow_data: serializeWorkflow()
+                      workflow_data: serializeWorkflow(),
+                      workflow_ratio: state.ratio
                     })
                   });
                   console.log('[加载工作流] 已将世界画风保存到工作流');
@@ -857,10 +874,16 @@
           updateZoomLevel();
         }
         
-        // 恢复比例
-        if(data.ratio){
+        // 恢复比例：优先使用主表 workflow_ratio，其次使用 workflow_data.ratio
+        if(window.__loadedWorkflowRatio){
+          state.ratio = window.__loadedWorkflowRatio;
+          ratioSelectEl.value = window.__loadedWorkflowRatio;
+          console.log('[恢复工作流] 从主表恢复 workflow_ratio:', state.ratio);
+          delete window.__loadedWorkflowRatio;  // 清理临时变量
+        } else if(data.ratio){
           state.ratio = data.ratio;
           ratioSelectEl.value = data.ratio;
+          console.log('[恢复工作流] 从 workflow_data 恢复 ratio:', state.ratio);
         }
         
         // 恢复画风和构图倾向（从 workflow_data 中恢复）

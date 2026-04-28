@@ -24,6 +24,7 @@ class VideoWorkflow:
         self.style = kwargs.get('style')
         self.style_reference_image = kwargs.get('style_reference_image')
         self.default_world_id = kwargs.get('default_world_id')
+        self.workflow_ratio = kwargs.get('workflow_ratio')
         self.create_time = kwargs.get('create_time')
         self.update_time = kwargs.get('update_time')
     
@@ -35,7 +36,7 @@ class VideoWorkflow:
                 workflow_data = json.loads(workflow_data)
             except:
                 pass
-        
+
         return {
             'id': self.id,
             'name': self.name,
@@ -47,6 +48,7 @@ class VideoWorkflow:
             'style': self.style,
             'style_reference_image': self.style_reference_image,
             'default_world_id': self.default_world_id,
+            'workflow_ratio': self.workflow_ratio,
             'create_time': self.create_time.isoformat() if self.create_time else None,
             'update_time': self.update_time.isoformat() if self.update_time else None
         }
@@ -65,7 +67,8 @@ class VideoWorkflowModel:
         workflow_data: Optional[Dict] = None,
         style: Optional[str] = None,
         style_reference_image: Optional[str] = None,
-        default_world_id: Optional[int] = None
+        default_world_id: Optional[int] = None,
+        workflow_ratio: Optional[str] = None
     ) -> int:
         """
         Create a new video workflow record
@@ -84,12 +87,12 @@ class VideoWorkflowModel:
             Inserted record ID
         """
         sql = """
-            INSERT INTO video_workflow 
-            (name, user_id, description, cover_image, status, workflow_data, style, style_reference_image, default_world_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO video_workflow
+            (name, user_id, description, cover_image, status, workflow_data, style, style_reference_image, default_world_id, workflow_ratio)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         workflow_data_str = json.dumps(workflow_data) if workflow_data else None
-        params = (name, user_id, description, cover_image, status, workflow_data_str, style, style_reference_image, default_world_id)
+        params = (name, user_id, description, cover_image, status, workflow_data_str, style, style_reference_image, default_world_id, workflow_ratio)
         
         try:
             record_id = execute_insert(sql, params)
@@ -182,19 +185,19 @@ class VideoWorkflowModel:
         # Get paginated data (exclude workflow_data to reduce memory usage)
         offset = (page - 1) * page_size
         data_sql = f"""
-            SELECT id, name, description, cover_image, user_id, status, style, style_reference_image, create_time, update_time 
-            FROM video_workflow 
+            SELECT id, name, description, cover_image, user_id, status, style, style_reference_image, default_world_id, workflow_ratio, create_time, update_time
+            FROM video_workflow
             WHERE {where_clause}
             ORDER BY {order_by} {order_direction}
             LIMIT %s OFFSET %s
         """
-        
+
         params.extend([page_size, offset])
-        
+
         try:
             results = execute_query(data_sql, tuple(params), fetch_all=True)
             workflows = [VideoWorkflow(**row).to_dict() for row in results] if results else []
-            
+
             return {
                 'total': total,
                 'page': page,
@@ -204,7 +207,7 @@ class VideoWorkflowModel:
         except Exception as e:
             logger.error(f"Failed to list video workflows for user {user_id}: {e}")
             raise
-    
+
     @staticmethod
     def list_all(
         page: int = 1,
@@ -256,19 +259,19 @@ class VideoWorkflowModel:
         # Exclude workflow_data to reduce memory usage
         offset = (page - 1) * page_size
         data_sql = f"""
-            SELECT id, name, description, cover_image, user_id, status, style, style_reference_image, create_time, update_time 
-            FROM video_workflow 
+            SELECT id, name, description, cover_image, user_id, status, style, style_reference_image, default_world_id, workflow_ratio, create_time, update_time
+            FROM video_workflow
             WHERE {where_clause}
             ORDER BY {order_by} {order_direction}
             LIMIT %s OFFSET %s
         """
-        
+
         params.extend([page_size, offset])
-        
+
         try:
             results = execute_query(data_sql, tuple(params), fetch_all=True)
             workflows = [VideoWorkflow(**row).to_dict() for row in results] if results else []
-            
+
             return {
                 'total': total,
                 'page': page,
@@ -294,7 +297,7 @@ class VideoWorkflowModel:
         Returns:
             Number of affected rows
         """
-        allowed_fields = ['name', 'description', 'cover_image', 'status', 'workflow_data', 'style', 'style_reference_image', 'default_world_id']
+        allowed_fields = ['name', 'description', 'cover_image', 'status', 'workflow_data', 'style', 'style_reference_image', 'default_world_id', 'workflow_ratio']
         
         update_fields = []
         params = []
@@ -399,6 +402,7 @@ CREATE TABLE IF NOT EXISTS `video_workflow` (
   `workflow_data` json DEFAULT NULL COMMENT '工作流配置数据(JSON格式)',
   `style` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '画风',
   `style_reference_image` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '画风参考图URL',
+  `workflow_ratio` varchar(10) DEFAULT NULL COMMENT '工作流宽高比: 16:9 (横屏) | 9:16 (竖屏)',
   `default_world_id` int unsigned DEFAULT NULL COMMENT '默认世界ID',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
