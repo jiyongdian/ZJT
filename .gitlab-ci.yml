@@ -18,9 +18,8 @@ stages:
 variables:
   # Docker 配置 - DinD
   DOCKER_HOST: tcp://docker:2375
-  DOCKER_OPTS: "--registry-mirror=https://docker.mirrors.ustc.edu.cn"
   DOCKER_TLS_CERTDIR: ""
-  FF_NETWORK_PER_BUILD: "1"
+  DOCKER_DRIVER: overlay2
 
   # 测试数据库配置
   DB_HOST: mysql_test
@@ -47,12 +46,8 @@ unit_tests:
   services:
     - name: m.daocloud.io/docker.io/library/docker:24-dind
       alias: docker
-      # 关键配置
       variables:
         DOCKER_TLS_CERTDIR: ""
-      # 确保使用正确的 entrypoint
-      entrypoint: ["dockerd-entrypoint.sh"]
-      command: ["--host=tcp://0.0.0.0:2375", "--host=unix:///var/run/docker.sock", "--tls=false"]
 
 
   # 缓存配置（加速后续构建）
