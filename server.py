@@ -222,9 +222,11 @@ _PROCESSED_HTML_CACHE = {}
 def _get_processed_html(file_path: str) -> bytes:
     """
     获取处理后的 HTML 内容，带版本号的 js/css 引用。
-    结果会被缓存，服务器启动后只处理一次。
+    当启用 cache_bust 时，结果会被缓存以提高性能。
+    当禁用 cache_bust（开发模式）时，不缓存以便实时看到文件修改。
     """
-    if file_path in _PROCESSED_HTML_CACHE:
+    # 禁用 cache_bust 时，不使用缓存，以便在开发中实时看到文件变更
+    if CACHE_BUST_ENABLED and file_path in _PROCESSED_HTML_CACHE:
         return _PROCESSED_HTML_CACHE[file_path]
 
     with open(file_path, 'r', encoding='utf-8') as f:
@@ -246,8 +248,11 @@ def _get_processed_html(file_path: str) -> bytes:
 
         content = re.sub(pattern, replace_with_version, content)
 
-    _PROCESSED_HTML_CACHE[file_path] = content.encode('utf-8')
-    return _PROCESSED_HTML_CACHE[file_path]
+    # 仅在启用 cache_bust 时才缓存处理结果
+    if CACHE_BUST_ENABLED:
+        _PROCESSED_HTML_CACHE[file_path] = content.encode('utf-8')
+
+    return content.encode('utf-8')
 
 
 MP_VERIFY_FILENAME = "MP_verify_lXQewBFqjUipl3B8.txt"
@@ -4557,6 +4562,7 @@ class VideoWorkflowCreateRequest(BaseModel):
     style: Optional[str] = None
     style_reference_image: Optional[str] = None
     default_world_id: Optional[int] = None
+    workflow_ratio: Optional[str] = None
 
 class VideoWorkflowUpdateRequest(BaseModel):
     name: Optional[str] = None
@@ -4567,6 +4573,7 @@ class VideoWorkflowUpdateRequest(BaseModel):
     style: Optional[str] = None
     style_reference_image: Optional[str] = None
     default_world_id: Optional[int] = None
+    workflow_ratio: Optional[str] = None
 
 
 @app.get('/api/video-workflow/list')
@@ -5554,7 +5561,8 @@ async def create_video_workflow(
             workflow_data=workflow_request.workflow_data,
             style=workflow_request.style,
             style_reference_image=workflow_request.style_reference_image,
-            default_world_id=workflow_request.default_world_id
+            default_world_id=workflow_request.default_world_id,
+            workflow_ratio=workflow_request.workflow_ratio
         )
         
         return JSONResponse({
@@ -5618,6 +5626,8 @@ async def update_video_workflow(
             update_fields['style_reference_image'] = update_request.style_reference_image
         if update_request.default_world_id is not None:
             update_fields['default_world_id'] = update_request.default_world_id
+        if update_request.workflow_ratio is not None:
+            update_fields['workflow_ratio'] = update_request.workflow_ratio
         
         if update_fields:
             VideoWorkflowModel.update(workflow_id, **update_fields)
