@@ -144,20 +144,24 @@ class ImplementationConfig:
             return list(self.default_computing_power.values())[0] if self.default_computing_power else 0
         return self.default_computing_power
 
-    def is_enabled(self) -> bool:
+    def is_enabled(self, driver_key: Optional[str] = None) -> bool:
         """
-        检查实现方是否启用（从数据库读取）
+        检查实现方是否启用（优先从数据库读取）
+
+        Args:
+            driver_key: 业务驱动名称，用于数据库查询。如果不传则回退到代码默认值
 
         Returns:
             True 如果启用，False 如果禁用
         """
-        try:
-            from model.implementation_power import ImplementationPowerModel
-            return ImplementationPowerModel.is_enabled(self.name)
-        except ImportError:
-            pass
-        except Exception:
-            pass
+        if driver_key:
+            try:
+                from model.implementation_power import ImplementationPowerModel
+                return ImplementationPowerModel.is_enabled(self.name, driver_key)
+            except ImportError:
+                pass
+            except Exception:
+                pass
         # 回退到代码默认值
         return self.enabled
 
@@ -376,7 +380,7 @@ class UnifiedTaskConfig:
             impl_config = UnifiedConfigRegistry.get_implementation(impl_name)
             if impl_config:
                 # 检查实现方是否启用（从数据库读取）
-                if not impl_config.is_enabled():
+                if not impl_config.is_enabled(self.driver_name):
                     continue
 
                 # 获取排序值（从数据库读取，如果没有则使用默认值）

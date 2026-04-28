@@ -1,0 +1,34 @@
+name: Guard Enterprise Path
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Forbid enterprise/ in working tree
+        run: |
+          if git ls-files | grep -q '^enterprise/'; then
+            echo "::error::FORBIDDEN: enterprise/ path found in working tree"
+            echo "The enterprise/ directory belongs to the separate zjt-enterprise repo."
+            echo "It must NEVER be committed to the main repository."
+            exit 1
+          fi
+          echo "OK: No enterprise/ path in working tree"
+
+      - name: Forbid enterprise/ in commit history
+        run: |
+          if git log --all --diff-filter=ACMR --name-only --pretty=format: | grep -q '^enterprise/'; then
+            echo "::error::FORBIDDEN: enterprise/ found in commit history"
+            echo "The enterprise/ directory belongs to the separate zjt-enterprise repo."
+            echo "It must NEVER be committed to the main repository."
+            exit 1
+          fi
+          echo "OK: No enterprise/ path in commit history"
