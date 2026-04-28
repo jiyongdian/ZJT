@@ -30,7 +30,7 @@ class GptImageDuomiV1Driver(BaseVideoDriver):
     DEFAULT_MODEL = "gpt-image-2"
 
     def __init__(self, driver_type: int = 25):
-        super().__init__(driver_name="gpt_image_duomi_v1", driver_type=driver_type)
+        super().__init__(driver_name="duomi_gpt_image_v1", driver_type=driver_type)
 
         # 加载配置
         self._token = get_dynamic_config_value("duomi", "token", default="")

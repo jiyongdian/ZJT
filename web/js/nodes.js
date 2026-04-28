@@ -5925,6 +5925,7 @@
                 }
                 
                 let apiUrl, res;
+                console.log('[DEBUG-宫格生图] state.ratio:', state.ratio, 'ratioSelectEl.value:', ratioSelectEl.value, '发送比例:', state.ratio || '16:9', '模型:', finalModel);
                 if(referenceImageUrls.length > 0) {
                   // 有参考图片URL，使用图片编辑API，直接传URL
                   const taskId1 = TaskConfig.getTaskIdByKey(finalModel, 'image_edit');
