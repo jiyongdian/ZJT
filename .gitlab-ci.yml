@@ -47,10 +47,16 @@ unit_tests:
   services:
     - name: m.daocloud.io/docker.io/library/docker:24-dind
       alias: docker
-      command: 
-        - "--registry-mirror=https://docker.1ms.run"
-        - "--registry-mirror=https://m60nr9km.mirror.aliyuncs.com"
-        - "--registry-mirror=https://docker.mirrors.ustc.edu.cn"
+      # 关键：在 service 级别设置环境变量，确保 dind 使用非 TLS 模式
+      variables:
+        DOCKER_TLS_CERTDIR: ""
+      # 暂时注释 registry-mirror，排除镜像源导致启动阻塞的问题
+      # 确认 dind 正常工作后可以取消注释
+      # command: 
+      #   - "--registry-mirror=https://docker.1ms.run"
+      #   - "--registry-mirror=https://m60nr9km.mirror.aliyuncs.com"
+      #   - "--registry-mirror=https://docker.mirrors.ustc.edu.cn"
+
 
   # 缓存配置（加速后续构建）
   cache:
