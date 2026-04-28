@@ -37,7 +37,8 @@
         "read_prop_json",
         "read_script_json",
         "get_script_problem",
-        "get_long_user_input"
+        "get_long_user_input",
+        "ask_user"
       ],
       "summary_only": true
     },
@@ -48,7 +49,8 @@
         "create_character_json",
         "update_character_json",
         "list_character_jsons",
-        "read_character_json"
+        "read_character_json",
+        "ask_user"
       ],
       "summary_only": true
     },
@@ -63,7 +65,8 @@
         "list_prop_jsons",
         "read_prop_json",
         "update_prop_json",
-        "create_prop_json"
+        "create_prop_json",
+        "ask_user"
       ],
       "summary_only": true
     },
@@ -81,7 +84,8 @@
         "list_location_jsons",
         "read_prop_json",
         "list_prop_jsons",
-        "get_long_user_input"
+        "get_long_user_input",
+        "ask_user"
       ],
       "summary_only": true
     },
@@ -116,7 +120,8 @@
         "list_location_jsons",
         "read_prop_json",
         "list_prop_jsons",
-        "get_long_user_input"
+        "get_long_user_input",
+        "ask_user"
       ],
       "summary_only": true
     },

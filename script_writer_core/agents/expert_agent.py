@@ -29,7 +29,9 @@ class ExpertAgent(BaseAgent):
         vendor_id: Optional[int] = None,
         model_id: Optional[int] = None,
         enable_thinking: bool = False,
-        thinking_effort: str = "medium"
+        thinking_effort: str = "medium",
+        task_manager: Optional[Any] = None,
+        task_id: Optional[str] = None
     ):
         # 使用第一个技能名称作为主要标识
         primary_skill = skill_names[0] if skill_names else "unknown"
@@ -59,6 +61,8 @@ class ExpertAgent(BaseAgent):
         self.model_id = model_id
         self.enable_thinking = enable_thinking
         self.thinking_effort = thinking_effort
+        self.task_manager = task_manager
+        self.task_id = task_id
         
         self.history_manager = ExpertHistoryManager(
             file_manager=file_manager,
@@ -252,17 +256,26 @@ class ExpertAgent(BaseAgent):
             })
             
             result = self._execute_tool(tool_name, tool_args)
-            
+
             self.outputs.append(result)
-            
+
+            # 将result转换为JSON字符串以便后续解析，而不是Python dict的字符串表示
             self.add_to_history("tool", {
                 "tool_call_id": tool_call.id,
                 "name": tool_name,
-                "content": str(result)
+                "content": json.dumps(result, ensure_ascii=False)
             })
     
     def _execute_tool(self, tool_name: str, tool_args: Dict[str, Any]) -> Dict[str, Any]:
         """执行工具调用"""
+        # 特殊处理 ask_user 工具（但仍需检查权限）
+        if tool_name == "ask_user":
+            if "ask_user" not in self.allowed_tools:
+                error_msg = f"工具 {tool_name} 不在允许列表中"
+                logger.warning(f"{self.agent_id}: {error_msg}")
+                return {"error": error_msg}
+            return self._handle_ask_user(tool_args)
+
         if tool_name not in self.allowed_tools:
             error_msg = f"工具 {tool_name} 不在允许列表中"
             logger.warning(f"{self.agent_id}: {error_msg}")
@@ -282,10 +295,68 @@ class ExpertAgent(BaseAgent):
             error_msg = f"工具执行失败: {str(e)}"
             logger.error(f"{self.agent_id}: {error_msg}", exc_info=True)
             return {"error": error_msg}
+<<<<<<< HEAD
     
     def _is_deepseek_model(self) -> bool:
         """判断当前模型是否为 DeepSeek 模型"""
         return 'deepseek' in (self.model or '').lower()
+=======
+
+    def _handle_ask_user(self, tool_args: Dict[str, Any]) -> Dict[str, Any]:
+        """处理 ask_user 工具调用 - 向用户提问并等待响应"""
+        if not self.task_manager or not self.task_id:
+            error_msg = "ask_user 工具未配置 task_manager 或 task_id"
+            logger.error(f"{self.agent_id}: {error_msg}")
+            return {"error": error_msg}
+
+        # 提取参数
+        question = tool_args.get("question", "")
+        options = tool_args.get("options", [])
+        context = tool_args.get("context", {})
+
+        if not question:
+            return {"error": "question 参数不能为空"}
+
+        logger.info(f"{self.agent_id}: Creating user verification request: {question}")
+
+        try:
+            # 创建验证请求
+            verification = self.task_manager.create_verification(
+                task_id=self.task_id,
+                verification_type="ask_user",
+                title="需要用户输入",
+                description=question,
+                options=options,
+                context=context
+            )
+
+            # 阻塞等待用户响应（最多5分钟）
+            result = self.task_manager.wait_for_verification(
+                verification=verification,
+                timeout=300
+            )
+
+            logger.info(f"{self.agent_id}: User responded: {result}")
+
+            # 检查是否超时或出错
+            if result.get("success") == False:
+                return {
+                    "error": result.get("error", "验证失败"),
+                    "user_input": None
+                }
+
+            # 返回用户的回答
+            return {
+                "success": True,
+                "user_input": result.get("user_input", ""),
+                "message": f"用户已回答: {result.get('user_input', '')}"
+            }
+
+        except Exception as e:
+            error_msg = f"ask_user 处理失败: {str(e)}"
+            logger.error(f"{self.agent_id}: {error_msg}", exc_info=True)
+            return {"error": error_msg}
+>>>>>>> 8d68324 (    feat: 完善 ExpertAgent ask_user 功能和历史记录持久化)
 
     def _format_messages_for_api(self) -> List[Dict[str, Any]]:
         """格式化消息用于 API 调用"""
@@ -350,7 +421,39 @@ class ExpertAgent(BaseAgent):
     
     def _get_tool_definitions(self) -> List[Dict[str, Any]]:
         """获取工具定义"""
-        return self.tool_executor.get_tool_definitions(self.allowed_tools)
+        tool_defs = self.tool_executor.get_tool_definitions(self.allowed_tools)
+
+        # 如果配置了 task_manager，则添加 ask_user 工具定义
+        if self.task_manager and self.task_id:
+            ask_user_def = {
+                "type": "function",
+                "function": {
+                    "name": "ask_user",
+                    "description": "向用户提问并等待回答。如果问题有固定的选项范围，请提供 options 参数以便用户快速选择；用户也可以点击'其他'选项自由输入。",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "question": {
+                                "type": "string",
+                                "description": "要提问的问题内容。例如：'你喜欢什么类型的故事？'"
+                            },
+                            "options": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "可选的选项列表。当问题有固定答案范围时，提供此参数以便用户快速选择。例如：['科幻', '悬疑', '爱情', '冒险']。用户可以选择选项，也可以点击'其他'自由输入。如果问题是开放式的，可以不提供此参数。"
+                            },
+                            "context": {
+                                "type": "object",
+                                "description": "额外的上下文信息（可选）。例如：{'type': 'genre_selection', 'related_field': 'story_type'}"
+                            }
+                        },
+                        "required": ["question"]
+                    }
+                }
+            }
+            tool_defs.append(ask_user_def)
+
+        return tool_defs
     
     def _save_session_history(
         self,

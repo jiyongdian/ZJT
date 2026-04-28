@@ -408,7 +408,9 @@ class PMAgent(BaseAgent):
             vendor_id=task.vendor_id,
             model_id=task.model_id,
             enable_thinking=task.enable_thinking,
-            thinking_effort=task.thinking_effort
+            thinking_effort=task.thinking_effort,
+            task_manager=self.task_manager,
+            task_id=task.task_id
         )
 
         expert_task = {
@@ -419,7 +421,18 @@ class PMAgent(BaseAgent):
         }
 
         result = expert.execute_task(expert_task)
-        
+
+        # 合并 ExpertAgent 的对话历史到 PM 的历史中
+        # 这样 ask_user 工具调用和用户回答会被保存到数据库
+        if expert.conversation_history:
+            logger.info(f"{self.agent_id}: Expert {skill_name} has {len(expert.conversation_history)} messages in conversation_history")
+            # 打印前3条消息以调试
+            for i, msg in enumerate(expert.conversation_history[:3]):
+                msg_role = msg.get('role', 'unknown')
+                logger.debug(f"  Message {i}: role={msg_role}, content_type={type(msg.get('content')).__name__}")
+            self.conversation_history.extend(expert.conversation_history)
+            logger.info(f"{self.agent_id}: Merged {len(expert.conversation_history)} messages from {skill_name} expert to PM history. PM history now has {len(self.conversation_history)} messages")
+
         if result.get("success"):
             logger.info(f"{self.agent_id}: Expert {skill_name} succeeded")
             self.consecutive_failures = 0

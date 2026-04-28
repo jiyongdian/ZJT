@@ -7,9 +7,11 @@ import queue
 import uuid
 import logging
 import os
+import time
 from config.constant import FilePathConstants
 from model.agent_tasks import AgentTasksModel, AgentTaskEntity
 from model.agent_task_messages import AgentTaskMessagesModel
+from model.agent_verifications import AgentVerificationsModel, AgentVerificationEntity
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +114,7 @@ class VerificationStatus(Enum):
 
 @dataclass
 class VerificationRequest:
-    """人工验证请求"""
+    """人工验证请求（轻量内存对象，持久化到数据库）"""
     verification_id: str
     task_id: str
     verification_type: str
@@ -123,8 +125,7 @@ class VerificationRequest:
     status: VerificationStatus = VerificationStatus.PENDING
     result: Optional[Dict[str, Any]] = None
     created_at: datetime = field(default_factory=datetime.now)
-    response_event: threading.Event = field(default_factory=threading.Event)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典格式"""
         return {
@@ -192,7 +193,6 @@ class TaskManager:
     
     def __init__(self):
         self.tasks: Dict[str, AgentTask] = {}
-        self.verifications: Dict[str, VerificationRequest] = {}
         self.task_threads: Dict[str, threading.Thread] = {}
         self._lock = threading.Lock()
         logger.info("TaskManager initialized")
@@ -427,7 +427,7 @@ class TaskManager:
         options: Optional[List[str]] = None,
         context: Optional[Dict[str, Any]] = None
     ) -> VerificationRequest:
-        """创建人工验证请求"""
+        """创建人工验证请求（持久化到数据库，支持跨进程）"""
         verification_id = str(uuid.uuid4())
         verification = VerificationRequest(
             verification_id=verification_id,
@@ -438,72 +438,136 @@ class TaskManager:
             options=options or [],
             context=context or {}
         )
-        
-        with self._lock:
-            self.verifications[verification_id] = verification
-        
+
+        # 写入数据库（跨进程共享）
+        try:
+            AgentVerificationsModel.create(
+                verification_id=verification_id,
+                task_id=task_id,
+                verification_type=verification_type,
+                title=title,
+                description=description,
+                options=options or [],
+                context=context or {}
+            )
+        except Exception as e:
+            logger.error(f"Failed to save verification to database: {e}")
+            raise
+
         logger.info(f"Created verification {verification_id} for task {task_id}")
         return verification
     
-    def get_verification(self, verification_id: str) -> Optional[VerificationRequest]:
-        """获取验证请求"""
-        with self._lock:
-            return self.verifications.get(verification_id)
+    def get_verification(self, verification_id: str) -> Optional[AgentVerificationEntity]:
+        """获取验证请求（从数据库读取，支持跨进程）"""
+        try:
+            return AgentVerificationsModel.get_by_verification_id(verification_id)
+        except Exception as e:
+            logger.error(f"Failed to get verification {verification_id}: {e}")
+            return None
     
     def wait_for_verification(
-        self, 
-        verification: VerificationRequest, 
+        self,
+        verification: VerificationRequest,
         timeout: int = 300
     ) -> Dict[str, Any]:
-        """阻塞等待人工验证结果"""
+        """阻塞等待人工验证结果（通过数据库轮询，支持多 Worker）"""
         logger.info(f"Waiting for verification {verification.verification_id}")
-        
+
+        # 在发送前快照验证数据（防止数据竞争）
+        verification_dict = verification.to_dict()
+
         task = self.get_task(verification.task_id)
         if task:
             task.status = TaskStatus.WAITING_HUMAN
             task.message_queue.put({
                 "type": "human_verification_required",
-                "verification": verification.to_dict()
+                "verification": verification_dict
             })
-        
-        success = verification.response_event.wait(timeout=timeout)
-        
-        if not success:
-            logger.warning(f"Verification {verification.verification_id} timed out")
-            verification.status = VerificationStatus.CANCELLED
-            return {"success": False, "error": "验证超时"}
-        
-        if task:
-            task.status = TaskStatus.RUNNING
-        
-        logger.info(f"Verification {verification.verification_id} received response: {verification.status.value}")
-        return verification.result or {"success": False, "error": "未知错误"}
+
+        # 推送到数据库，让 SSE 可见（无论 task 是否存在）
+        self.push_message(verification.task_id, 'human_verification_required', verification_dict)
+
+        # 更新任务状态为 waiting_human
+        try:
+            AgentTasksModel.update_status(
+                task_id=verification.task_id,
+                status='waiting_human'
+            )
+        except Exception as e:
+            logger.error(f"Failed to update task status to waiting_human: {e}")
+
+        # 轮询数据库等待结果（替代 threading.Event，支持跨进程）
+        poll_interval = 0.5  # 500ms 轮询间隔
+        elapsed = 0.0
+
+        while elapsed < timeout:
+            time.sleep(poll_interval)
+            elapsed += poll_interval
+
+            try:
+                db_verification = AgentVerificationsModel.get_by_verification_id(
+                    verification.verification_id
+                )
+                if db_verification and db_verification.status != 'pending':
+                    # 用户已提交回答
+                    logger.info(f"Verification {verification.verification_id} received response: {db_verification.status}")
+
+                    # 恢复任务状态
+                    if task:
+                        task.status = TaskStatus.RUNNING
+                    try:
+                        AgentTasksModel.update_status(
+                            task_id=verification.task_id,
+                            status='running'
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to restore task status to running: {e}")
+
+                    return db_verification.result or {"success": False, "error": "未知错误"}
+            except Exception as e:
+                logger.error(f"Error polling verification {verification.verification_id}: {e}")
+
+        # 超时
+        logger.warning(f"Verification {verification.verification_id} timed out after {timeout}s")
+
+        # 更新数据库状态为 cancelled
+        try:
+            AgentVerificationsModel.submit_result(
+                verification.verification_id,
+                status='cancelled',
+                result={"success": False, "error": "验证超时"}
+            )
+        except Exception as e:
+            logger.error(f"Failed to cancel verification on timeout: {e}")
+
+        return {"success": False, "error": "验证超时"}
     
     def submit_verification(
-        self, 
-        verification_id: str, 
+        self,
+        verification_id: str,
         result: Dict[str, Any]
     ) -> bool:
-        """提交人工验证结果"""
-        verification = self.get_verification(verification_id)
-        if not verification:
-            logger.warning(f"Verification {verification_id} not found")
+        """提交人工验证结果（写入数据库，支持跨进程）"""
+        action = result.get("action")
+        if action == "confirm":
+            status = "approved"
+        elif action == "cancel":
+            status = "rejected"
+        else:
+            status = "cancelled"
+
+        try:
+            success = AgentVerificationsModel.submit_result(
+                verification_id=verification_id,
+                status=status,
+                result=result
+            )
+            if success:
+                logger.info(f"Verification {verification_id} submitted with action: {action}")
+            return success
+        except Exception as e:
+            logger.error(f"Failed to submit verification {verification_id}: {e}")
             return False
-        
-        with self._lock:
-            action = result.get("action")
-            if action == "confirm":
-                verification.status = VerificationStatus.APPROVED
-            elif action == "cancel":
-                verification.status = VerificationStatus.REJECTED
-            else:
-                verification.status = VerificationStatus.CANCELLED
-            
-            verification.result = result
-            verification.response_event.set()
-        
-        logger.info(f"Verification {verification_id} submitted with action: {action}")
-        return True
     
     def cancel_task(self, task_id: str) -> bool:
         """取消任务"""
@@ -542,7 +606,8 @@ class TaskManager:
         try:
             deleted_tasks = AgentTasksModel.delete_old_tasks(max_age_hours)
             deleted_messages = AgentTaskMessagesModel.delete_old_messages(max_age_hours)
-            if deleted_tasks > 0 or deleted_messages > 0:
-                logger.info(f"Cleaned up {deleted_tasks} tasks and {deleted_messages} messages from database")
+            deleted_verifications = AgentVerificationsModel.delete_old_verifications(max_age_hours)
+            if deleted_tasks > 0 or deleted_messages > 0 or deleted_verifications > 0:
+                logger.info(f"Cleaned up {deleted_tasks} tasks, {deleted_messages} messages, {deleted_verifications} verifications from database")
         except Exception as e:
             logger.error(f"Failed to cleanup old tasks from database: {e}")

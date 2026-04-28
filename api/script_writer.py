@@ -1938,10 +1938,13 @@ async def get_task_status(request: Request, task_id: str):
 async def submit_verification(request: Request, verification_id: str, verify_request: VerificationSubmitRequest):
     """提交人工验证结果"""
     try:
+        result = {
+            "action": "confirm" if verify_request.approved else "cancel",
+            "user_input": verify_request.user_input
+        }
         success = task_manager.submit_verification(
             verification_id=verification_id,
-            approved=verify_request.approved,
-            user_input=verify_request.user_input
+            result=result
         )
         
         if not success:
