@@ -4543,6 +4543,7 @@
     data() {
       return {
         prompt: '',
+        videoModel: null,  // 选中的视频模型 ID
         model: '9:16',
         durationSeconds: 15,
         count: 1,
@@ -4562,31 +4563,62 @@
         enhanceTaskIds: {},
         enhanceTaskId: '',  // Track current enhancement task ID
         enhanceStatusInterval: null,  // Interval for polling enhancement status
+        modelConfigs: {},  // From TaskConfig
+        configLoaded: false,  // Configuration loaded flag
+        typeNameMap: {},  // Task type ID to name mapping
       }
     },
     mounted() {
       // Get auth_token from localStorage (set by App component)
       this.authToken = localStorage.getItem('auth_token') || '';
+
+      // Load task configs using global TaskConfig
+      this.fetchModelConfigs();
     },
+
     computed: {
-      canSubmit() { return !!this.prompt.trim() && !this.loading },
+      currentModel() {
+        return this.modelConfigs[this.videoModel];
+      },
+
+      canSubmit() { return !!this.prompt.trim() && !!this.videoModel && !this.loading },
       statusText() {
         if (['SUCCESS', 'completed'].includes(this.status)) return '生成完成！';
         if (['FAILED'].includes(this.status)) return this.error || '任务失败';
         if (['QUEUED', 'RUNNING'].includes(this.status) || this.loading) return '正在生成视频，请稍候...';
         return '';
       },
+      videoModelOptions() {
+        if (!this.configLoaded) return [];
+        return TaskConfig.getModelOptionsForCategory('text_to_video');
+      },
       modelOptions() {
-        return [
+        if (!this.currentModel) return [
           { value: '9:16', label: '竖屏' },
           { value: '16:9', label: '横屏' }
         ];
+
+        const ratios = this.currentModel.ratios || ['9:16', '16:9'];
+        const ratioMap = {
+          '9:16': '竖屏',
+          '16:9': '横屏',
+          '1:1': '正方形',
+          '2:3': '2:3',
+          '3:2': '3:2',
+          '3:4': '3:4',
+          '4:3': '4:3',
+          '21:9': '超宽屏'
+        };
+        return ratios.map(r => ({ value: r, label: ratioMap[r] || r }));
       },
       durationOptions() {
-        return [
+        if (!this.currentModel) return [
           { value: 10, label: '10秒' },
           { value: 15, label: '15秒' }
         ];
+
+        const durations = this.currentModel.durations || [10];
+        return durations.map(d => ({ value: d, label: `${d}秒` }));
       },
       countOptions() {
         return [
@@ -4597,30 +4629,92 @@
         ];
       }
     },
+
+    watch: {
+      videoModel(newVal) {
+        if (newVal && this.currentModel) {
+          const config = this.currentModel;
+
+          // Update model (ratio) to first supported option if current is not supported
+          const supportedRatios = config.ratios || ['9:16'];
+          if (!supportedRatios.includes(this.model)) {
+            this.model = config.default_ratio || supportedRatios[0];
+          }
+
+          // Update duration to first supported option if current is not supported
+          const supportedDurations = config.durations || [10];
+          if (!supportedDurations.includes(this.durationSeconds)) {
+            this.durationSeconds = config.default_duration || supportedDurations[0];
+          }
+        }
+      }
+    },
+
     methods: {
+      async fetchModelConfigs() {
+        try {
+          await TaskConfig.load();
+          this.modelConfigs = TaskConfig.getModelConfigs();
+
+          // Load task type name mapping
+          const taskTypeConfig = TaskConfig.getTaskTypeConfig();
+          this.typeNameMap = taskTypeConfig.task_type_name_map || {};
+
+          this.configLoaded = true;
+
+          // Set default model - first text_to_video model available
+          const videoModelOptions = TaskConfig.getModelOptionsForCategory('text_to_video');
+          console.log('Available text_to_video models:', videoModelOptions);
+          if (videoModelOptions.length > 0) {
+            this.videoModel = videoModelOptions[0].value;
+            console.log('Default video model set to:', this.videoModel);
+
+            // Set default ratio and duration based on the first model
+            const defaultConfig = this.modelConfigs[this.videoModel];
+            if (defaultConfig) {
+              if (defaultConfig.default_ratio) {
+                this.model = defaultConfig.default_ratio;
+              }
+              if (defaultConfig.default_duration) {
+                this.durationSeconds = defaultConfig.default_duration;
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Failed to load model configs:', err);
+        }
+      },
+
       async submit(){
         if(!this.canSubmit) return;
-        this.loading = true; 
-        this.error=''; 
-        this.results=[]; 
+        this.loading = true;
+        this.error='';
+        this.results=[];
         this.projectIds=[];
-        this.projectId=''; 
+        this.projectId='';
         this.status='';
-        
+
         try {
+          // Get task_id from model key
+          const taskId = TaskConfig.getTaskIdByKey(this.videoModel, 'text_to_video');
+          if (!taskId) {
+            throw new Error(`未找到文生视频模型 ${this.videoModel} 对应的任务配置`);
+          }
+
           const form = new FormData();
           form.append('prompt', this.prompt);
+          form.append('task_id', taskId);  // Pass task_id (not model key)
           form.append('ratio', this.model);
           form.append('duration_seconds', this.durationSeconds);
           form.append('count', this.count);
           form.append('timeout', '900'); // 15 minutes timeout
-          
+
           // Add user_id from localStorage
           const userId = localStorage.getItem('user_id');
           if (userId) {
             form.append('user_id', userId);
           }
-          
+
           // Add auth_token if available
           if (this.authToken) {
             form.append('auth_token', this.authToken);
@@ -4837,7 +4931,7 @@
         if (!taskId) {
           return;
         }
-        
+
         try {
           const authToken = localStorage.getItem('auth_token');
           const params = authToken ? { auth_token: authToken } : {};
@@ -4861,38 +4955,43 @@
           setTimeout(() => this.pollEnhanceStatus(item, index), 5000);
         }
       },
-      
+
       async fetchHistory(append = false) {
         const userId = localStorage.getItem('user_id');
         if (!userId) {
           alert('请先登录');
           return;
         }
-        
+
         if (!append) {
           this.historyPage = 1;
           this.historyList = [];
         }
-        
+
         this.historyLoading = true;
         try {
           const authToken = localStorage.getItem('auth_token');
-          
-          // 如果没有获取到任务类型配置，先获取
-          if (!this.taskTypeConfig) {
-            await this.fetchTaskTypeConfig();
+
+          // 获取文生视频任务类型列表
+          let textToVideoTypes = [2];  // 默认 Sora2 TEXT_TO_VIDEO = 2
+          try {
+            // 尝试从 TaskConfig 中获取
+            await TaskConfig.load();
+            const types = TaskConfig.getTaskTypeIdsByCategory('text_to_video');
+            if (types && types.length > 0) {
+              textToVideoTypes = types;
+            }
+          } catch (err) {
+            console.warn('Failed to get text_to_video types from TaskConfig, using default:', err);
           }
-          
-          // 使用后端返回的图生视频类型列表，如果没有则使用默认值
-          const imageToVideoTypes = this.taskTypeConfig?.image_to_video_types || [3, 10, 11, 12, 14, 15, 19, 20];
-          const typesStr = imageToVideoTypes.join(',');
-          
+          const typesStr = textToVideoTypes.join(',');
+
           const response = await axios.get('/api/ai-tools/history', {
             params: {
               user_id: parseInt(userId),
               page: this.historyPage,
               page_size: 20,
-              types: typesStr,  // 使用后端配置的所有图生视频类型
+              types: typesStr,  // 使用后端配置的所有文生视频类型
               auth_token: authToken || undefined
             }
           });
@@ -4922,11 +5021,7 @@
       },
       
       getHistoryTypeText(type) {
-        const typeMap = {
-          2: 'AI视频生成',
-          5: '视频高清修复'
-        };
-        return typeMap[type] || '未知类型';
+        return this.typeNameMap[type] || '未知类型';
       },
       
       getStatusText(status) {
@@ -5009,14 +5104,10 @@
         const resolved = value || this.model;
         return modelMap[resolved] || resolved || '未知';
       },
-      
+
       getDurationText(item) {
         const duration = item?.original_duration ?? item?.duration ?? item?.video_duration ?? (typeof this.durationSeconds === 'number' ? this.durationSeconds : null);
         return duration ? `${duration}秒` : '未知';
-      },
-      
-      goToCharacterCard(projectId) {
-        window.location.href = '/character_card.html?task_id=' + projectId;
       }
     },
     
@@ -5033,7 +5124,17 @@
           </div>
 
           <div class="field">
-            <label class="label">视频模式</label>
+            <label class="label">视频生成模型</label>
+            <select class="input" v-model="videoModel">
+              <option value="">-- 请选择模型 --</option>
+              <option v-for="opt in videoModelOptions" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label class="label">视频比例</label>
             <select class="input" v-model="model">
               <option v-for="opt in modelOptions" :key="opt.value" :value="opt.value">
                 {{ opt.label }}
@@ -5140,7 +5241,6 @@
                 <div v-if="item.result_url" style="margin-top: 8px;">
                   <button class="btn secondary" @click="downloadHistoryResult(item)" style="display: inline-block; margin-right: 8px;">查看结果</button>
                   <button v-if="item.status == 2 && item.type == 2" class="btn" @click="enhanceVideo(item, item.id)" :disabled="enhancingVideos[item.id]" style="display: inline-block;">{{ enhancingVideos[item.id] ? '已修复' : '生成高清视频' }}</button>
-                  <button v-if="item.status == 2 && item.project_id" class="btn" @click="goToCharacterCard(item.project_id)" style="margin-left: 8px;">创建角色卡</button>
                 </div>
               </div>
               

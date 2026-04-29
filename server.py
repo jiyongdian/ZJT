@@ -33,7 +33,7 @@ from model.location import LocationModel
 from model.script import ScriptModel
 from model.props import PropsModel
 import uuid
-from api.clients.duomi_client import create_video_remix, create_character as create_character_task, get_character_task_result
+from api.clients.duomi_client import create_video_remix
 from PIL import Image
 from llm import call_ernie_vl_api
 from task.scheduler import init_scheduler
@@ -1521,8 +1521,9 @@ async def ai_app_run(
         task_config = UnifiedConfigRegistry.get_by_id(task_id)
         if not task_config:
             raise HTTPException(status_code=400, detail=f"无效的 task_id: {task_id}")
-        # 验证任务分类是否正确
-        if task_config.category != TaskCategory.TEXT_TO_VIDEO:
+        # 验证任务分类是否正确（支持主分类和附加分类）
+        supported_categories = [task_config.category] + task_config.categories
+        if TaskCategory.TEXT_TO_VIDEO not in supported_categories:
             raise HTTPException(status_code=400, detail=f"task_id {task_id} 不是文生视频任务")
         
         text_to_video_type = task_id
@@ -3537,168 +3538,6 @@ async def video_remix(
         raise HTTPException(status_code=500, detail=f"视频重新编辑失败: {str(e)}")
 
 
-@app.post("/api/create-character")
-@require_permission("character:create_card")
-async def api_create_character(
-    request: Request,
-    timestamps: str = Form(..., description="Time range (format: 'start,end', 1-3 seconds)"),
-    url: Optional[str] = Form(None, description="Video URL (not for real people)"),
-    from_task: Optional[str] = Form(None, description="Task ID or database record ID (supports real people)"),
-    callback_url: Optional[str] = Form(None, description="Callback URL"),
-    user_id: Optional[int] = Form(None, description="User ID"),
-    auth_token: Optional[str] = Form(None, description="Authentication token")
-):
-    """
-    Create character generation task using SORA API
-    Either url or from_task must be provided
-    from_task can be either a Duomi API task ID or a database record ID
-    """
-    try:
-        # 检查认证
-        if CHECK_AUTH_TOKEN and auth_token is None:
-            raise HTTPException(
-                status_code=400,
-                detail="请提供认证令牌"
-            )
-        
-        # Validate that either url or from_task is provided
-        if not url and not from_task:
-            raise HTTPException(
-                status_code=400, 
-                detail="必须提供 url 或 from_task 其中一个参数"
-            )
-        
-        # Validate timestamps format
-        try:
-            parts = timestamps.split(",")
-            if len(parts) != 2:
-                raise ValueError("Invalid format")
-            start = float(parts[0])
-            end = float(parts[1])
-            diff = end - start
-            if diff < 1 or diff > 3:
-                raise HTTPException(
-                    status_code=400, 
-                    detail="时间范围差值必须在 1-3 秒之间"
-                )
-        except ValueError:
-            raise HTTPException(
-                status_code=400, 
-                detail="timestamps 格式错误，应为 '起始秒,结束秒'"
-            )
-        
-        # 计算所需算力
-        task_config = TaskTypeRegistry.get(TaskTypeId.CHARACTER_CARD)  # 创建角色卡
-        computing_power = task_config.get_computing_power()
-        
-        if CHECK_AUTH_TOKEN:
-            headers = {'Authorization': f'Bearer {auth_token}'}
-            
-            # 检查算力是否充足
-            success, message, response_data = await async_make_perseids_request(
-                endpoint='user/check_computing_power',
-                method='GET',
-                headers=headers
-            )
-            if not success:
-                raise HTTPException(
-                    status_code=400,
-                    detail=message
-                )
-            
-            # 检查算力是否足够
-            user_computing_power = response_data.get('computing_power', 0)
-            user_id_from_token = response_data.get('user_id')
-            if user_computing_power < computing_power:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"您的算力不足，需要 {computing_power} 算力，当前仅有 {user_computing_power} 算力"
-                )
-            if user_id_from_token != user_id:
-                raise HTTPException(
-                    status_code=400, 
-                    detail="用户ID不匹配"
-                )
-        
-        # 生成交易ID
-        transaction_id = str(uuid.uuid4())
-        
-        # Call the character creation API
-        response = await asyncio.to_thread(
-            create_character_task,
-            timestamps=timestamps,
-            url=url,
-            from_task=from_task,
-            callback_url=callback_url
-        )
-        
-        logger.info(f"Character creation response: {response}")
-        
-        # Check for API errors first
-        if "error" in response:
-            error_info = response.get("error", {})
-            error_message = error_info.get("message", "未知错误")
-            error_code = error_info.get("code", "unknown")
-            raise HTTPException(
-                status_code=500, 
-                detail=f"创建角色任务失败: [{error_code}] {error_message}"
-            )
-        
-        # Extract task ID from response
-        task_id = response.get("id") or response.get("task_id") or response.get("data", {}).get("id")
-        
-        if not task_id:
-            raise HTTPException(
-                status_code=500, 
-                detail=f"创建角色任务失败: {response.get('message', '未知错误')}"
-            )
-        
-        # 扣除算力
-        if CHECK_AUTH_TOKEN:
-            success, message, response_data = await async_make_perseids_request(
-                endpoint='user/calculate_computing_power',
-                method='POST',
-                headers=headers,
-                data={
-                    "computing_power": computing_power,
-                    "behavior": "deduct",
-                    "transaction_id": transaction_id
-                }
-            )
-            if not success:
-                logger.error(f"Character creation computing power deduction failed: {message}")
-        
-        # 创建数据库记录
-        if user_id:
-            try:
-                source_info = f"from_task: {from_task}" if from_task else f"url: {url}"
-                AIToolsModel.create(
-                    prompt=f"创建角色卡 - timestamps: {timestamps}",
-                    user_id=user_id,
-                    type=8,  # 8-创建角色卡
-                    project_id=task_id,
-                    transaction_id=transaction_id,
-                    status=AI_TOOL_STATUS_PROCESSING,
-                    message=source_info
-                )
-            except Exception as db_error:
-                logger.error(f"Failed to create database record for character creation: {db_error}")
-        
-        return JSONResponse({
-            "success": True,
-            "task_id": task_id,
-            "status": "submitted",
-            "message": "角色创建任务已提交"
-        })
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Character creation failed: {str(e)}")
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"创建角色失败: {str(e)}")
-
-
 @app.post("/api/digital-human")
 @require_permission("digital_human:create")
 async def digital_human_generate(
@@ -3940,125 +3779,6 @@ async def audio_status(request: Request, audio_id: int):
         logger.error(f"Audio status check failed: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"查询音频状态失败: {str(e)}")
-
-
-@app.get("/api/character-status/{task_id}")
-@require_permission("character:view_status")
-async def api_character_status(
-    request: Request,
-    task_id: str,
-    auth_token: Optional[str] = Query(None, description="Auth token for computing power refund")
-):
-    """
-    Check the status of a character generation task
-    
-    Response format from API:
-    {
-        "id": "task-id",
-        "state": "succeeded/processing/failed",
-        "data": {
-            "characters": [{"id": "character-username"}]
-        },
-        "progress": 100,
-        "action": "characters"
-    }
-    """
-    try:
-        response = await asyncio.to_thread(get_character_task_result, task_id)
-        
-        logger.info(f"Character status response: {response}")
-        
-        # Parse the response
-        state = response.get("state", "")
-        progress = response.get("progress", 0)
-        
-        if state == "succeeded":
-            # Get characters array from data
-            characters = response.get("data", {}).get("characters", [])
-            
-            # Update database record with character IDs
-            try:
-                # Build character IDs string like "@id1, @id2"
-                character_ids = ", ".join([f"@{c.get('id', '')}" for c in characters if c.get('id')])
-                AIToolsModel.update_by_project_id(
-                    project_id=task_id,
-                    result_url=character_ids,  # Store character IDs in result_url field
-                    status=AI_TOOL_STATUS_COMPLETED
-                )
-            except Exception as db_error:
-                logger.error(f"Failed to update character record: {db_error}")
-            
-            return JSONResponse({
-                "status": "SUCCESS",
-                "characters": characters,
-                "progress": progress,
-                "raw_response": response
-            })
-        elif state in ["failed", "error"]:
-            # Update database record as failed
-            try:
-                task_record = AIToolsModel.get_by_project_id(task_id)
-                already_failed = task_record and task_record.status == AI_TOOL_STATUS_FAILED
-                
-                if not already_failed:
-                    AIToolsModel.update_by_project_id(
-                        project_id=task_id,
-                        status=AI_TOOL_STATUS_FAILED,
-                        message=response.get("message", "任务失败")
-                    )
-                    
-                    # Refund computing power
-                    if CHECK_AUTH_TOKEN and auth_token and task_record:
-                        transaction_id = str(uuid.uuid4())
-                        headers = {'Authorization': f'Bearer {auth_token}'}
-                        #发起请求，获取用户ID
-                        success, message, response_data = await async_make_perseids_request(
-                            endpoint='user/get_user_id_by_auth_token',
-                            method='POST',
-                            headers=headers
-                        )
-                        if not success:
-                            raise HTTPException(status_code=400, detail=message)
-                        user_id_from_token = response_data.get('user_id')
-                        if task_record.user_id != user_id_from_token:
-                            raise HTTPException(status_code=400, detail="用户ID不匹配")
-                        task_config = TaskTypeRegistry.get(task_record.type)
-                        # 使用任务记录中的时长来计算正确的算力扣减（支持按时长计费的任务）
-                        computing_power = task_config.get_computing_power(duration=task_record.duration) if task_config else 0
-                        if computing_power > 0:
-                            success, message, _ = await async_make_perseids_request(
-                                endpoint='user/calculate_computing_power',
-                                method='POST',
-                                headers=headers,
-                                data={
-                                    "computing_power": computing_power,
-                                    "behavior": "increase",
-                                    "transaction_id": transaction_id
-                                }
-                            )
-                            if success:
-                                logger.info(f"Refunded {computing_power} for failed character task {task_id}")
-            except Exception as db_error:
-                logger.error(f"Failed to update failed character record: {db_error}")
-            
-            return JSONResponse({
-                "status": "FAILED",
-                "reason": response.get("message", "任务失败"),
-                "raw_response": response
-            })
-        else:
-            # Still processing (state might be "processing" or other)
-            return JSONResponse({
-                "status": "RUNNING",
-                "progress": progress,
-                "message": response.get("message", "任务处理中..."),
-                "raw_response": response
-            })
-            
-    except Exception as e:
-        logger.error(f"Character status check failed: {str(e)}")
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"查询角色状态失败: {str(e)}")
 
 
 class RechargePackage(BaseModel):
