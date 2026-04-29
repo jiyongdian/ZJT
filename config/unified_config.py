@@ -1268,7 +1268,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         provider=TaskProvider.RUNNINGHUB,
         driver_name=DriverKey.LTX2_3_IMAGE_TO_VIDEO,
         implementation=DriverImplementation.LTX2_3_RUNNINGHUB_V1,
-        computing_power=6,
+        computing_power=0,
         supported_ratios=['9:16', '16:9'],
         supported_durations=[5, 8, 10],
         default_ratio='9:16',
@@ -1922,6 +1922,16 @@ ALL_IMPLEMENTATIONS: List[ImplementationConfig] = [
         enabled=True,
         description='RunningHub LTX2.0 接口',
         sort_order=5000.0,
+        required_config_keys=['runninghub.api_key']
+    ),
+    ImplementationConfig(
+        name='ltx2.3_runninghub_v1',
+        display_name='RunningHub',
+        driver_class='Ltx2Dot3RunninghubV1Driver',
+        default_computing_power=6,
+        enabled=True,
+        description='RunningHub LTX2.3 接口',
+        sort_order=5100.0,
         required_config_keys=['runninghub.api_key']
     ),
     ImplementationConfig(

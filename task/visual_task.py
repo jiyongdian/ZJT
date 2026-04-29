@@ -90,9 +90,13 @@ def _refund_computing_power(ai_tool, reason: str):
                 get_computing_power_for_task,
                 get_implementation_for_user
             )
+            from config.unified_config import get_implementation_name
 
             context = build_context_from_task_record(ai_tool)
-            implementation = get_implementation_for_user(ai_tool_type, user_id)
+            # 优先使用任务创建时保存的实现方，回退到用户当前偏好
+            impl_id = getattr(ai_tool, 'implementation', None)
+            impl_name = get_implementation_name(impl_id) if impl_id else None
+            implementation = impl_name if impl_name and impl_name != 'unknown' else get_implementation_for_user(ai_tool_type, user_id)
 
             computing_power = get_computing_power_for_task(
                 task_type=ai_tool_type,
@@ -588,9 +592,13 @@ def _handle_task_failure(project_id, task_id, ai_tool_type, reason, user_id):
                 get_computing_power_for_task,
                 get_implementation_for_user
             )
+            from config.unified_config import get_implementation_name
 
             context = build_context_from_task_record(ai_tool)
-            implementation = get_implementation_for_user(ai_tool_type, user_id)
+            # 优先使用任务创建时保存的实现方，回退到用户当前偏好
+            impl_id = getattr(ai_tool, 'implementation', None)
+            impl_name = get_implementation_name(impl_id) if impl_id else None
+            implementation = impl_name if impl_name and impl_name != 'unknown' else get_implementation_for_user(ai_tool_type, user_id)
 
             computing_power = get_computing_power_for_task(
                 task_type=ai_tool_type,
@@ -793,9 +801,13 @@ def process_task_with_retry(task_type, process_func):
                                     get_computing_power_for_task,
                                     get_implementation_for_user
                                 )
+                                from config.unified_config import get_implementation_name
 
                                 context = build_context_from_task_record(ai_tool)
-                                implementation = get_implementation_for_user(ai_tool.type, ai_tool.user_id)
+                                # 优先使用任务创建时保存的实现方，回退到用户当前偏好
+                                impl_id = getattr(ai_tool, 'implementation', None)
+                                impl_name = get_implementation_name(impl_id) if impl_id else None
+                                implementation = impl_name if impl_name and impl_name != 'unknown' else get_implementation_for_user(ai_tool.type, ai_tool.user_id)
 
                                 computing_power = get_computing_power_for_task(
                                     task_type=ai_tool.type,
