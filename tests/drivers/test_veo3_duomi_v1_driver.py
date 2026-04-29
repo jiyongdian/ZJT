@@ -465,8 +465,8 @@ class TestVeo3CheckStatus(unittest.TestCase):
         result = self.driver.check_status('task_123')
 
         self.assertEqual(result['status'], 'FAILED')
-        self.assertEqual(result['error'], '内容违规')
-        self.assertEqual(result['error_type'], 'USER')
+        self.assertEqual(result['error'], '查询任务状态失败: 内容违规')
+        self.assertEqual(result['error_type'], 'SYSTEM')
 
     def test_check_status_processing(self):
         """任务处理中"""

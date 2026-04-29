@@ -39,7 +39,7 @@ def _create_kling_driver(token='test_duomi_token'):
 
 
 def _make_ai_tool(prompt='测试提示词', image_path='http://example.com/test.jpg',
-                  duration=5, reference_images=None):
+                  duration=5, reference_images=None, extra_config=None):
     """创建模拟的 ai_tool 对象"""
     tool = MagicMock()
     tool.id = 1002
@@ -47,6 +47,7 @@ def _make_ai_tool(prompt='测试提示词', image_path='http://example.com/test.
     tool.image_path = image_path
     tool.duration = duration
     tool.reference_images = reference_images or []
+    tool.extra_config = extra_config
     return tool
 
 
