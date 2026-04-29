@@ -186,18 +186,20 @@ async def _submit_new_task(ai_tool):
         logger.info(f"[TEST MODE] [DRIVER] Submitting task {task_id} (type: {ai_tool_type})")
 
     try:
-        # 0. 检查是否为同步模式 - 分流到进程池
+        # 0. 获取 implementation 并立即记录（确保无论后续成功/失败/异常都有记录）
         implementation_name = VideoDriverFactory.get_implementation_for_user(ai_tool_type, ai_tool.user_id)
         if implementation_name:
+            implementation_id = get_implementation_id(implementation_name)
+            if implementation_id > 0:
+                AIToolsModel.update(task_id, implementation=implementation_id)
+                logger.info(f"Recorded implementation {implementation_name} (id: {implementation_id}) for task {task_id}")
+            else:
+                logger.warning(f"Implementation name '{implementation_name}' not found in IMPLEMENTATION_TO_ID mapping for task {task_id}")
+
             impl_config = UnifiedConfigRegistry.get_implementation(implementation_name)
 
-            # 检查是否为同步模式
+            # 检查是否为同步模式 - 分流到进程池
             if impl_config and impl_config.sync_mode:
-                # 同步任务：提交到进程池
-                # 先记录 implementation
-                implementation_id = get_implementation_id(implementation_name)
-                AIToolsModel.update(task_id, implementation=implementation_id)
-
                 executor = get_sync_task_executor()
                 if executor.is_running():
                     executor.submit(task_id, ai_tool_type)
@@ -232,12 +234,6 @@ async def _submit_new_task(ai_tool):
             # 退还算力
             _refund_computing_power(ai_tool, error_message)
             return False
-
-        # 记录 implementation 到 ai_tools 表（使用 driver.driver_name 确保是实际使用的 implementation）
-        if driver.driver_name:
-            implementation_id = get_implementation_id(driver.driver_name)
-            AIToolsModel.update(task_id, implementation=implementation_id)
-            logger.info(f"Recorded implementation {driver.driver_name} (id: {implementation_id}) for task {task_id}")
 
         logger.info(f"Using driver: {driver.driver_name} for task {task_id}")
         

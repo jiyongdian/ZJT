@@ -3111,6 +3111,7 @@ async def image_upscale(
                 )
 
         # Create new database record for upscale task (type=4)
+        from config.unified_config import get_implementation_id
         new_record_id = AIToolsModel.create(
             prompt=f"高清放大: {original_record.prompt or '原始图片'}",
             user_id=user_id or original_record.user_id,
@@ -3119,7 +3120,8 @@ async def image_upscale(
             project_id=task_id,  # Use the new task_id as project_id
             ratio=original_record.ratio,
             transaction_id=transaction_id,  # Store transaction ID
-            status=AI_TOOL_STATUS_PROCESSING
+            status=AI_TOOL_STATUS_PROCESSING,
+            implementation=get_implementation_id('local_enhance')
         )
         
         logger.info(f"Created upscale record with ID: {new_record_id}, project_id: {task_id}")
@@ -3347,6 +3349,7 @@ async def video_enhance(
         # Create database record
         if user_id:
             try:
+                from config.unified_config import get_implementation_id
                 await asyncio.to_thread(
                     AIToolsModel.create,
                     prompt="视频高清修复",
@@ -3355,7 +3358,8 @@ async def video_enhance(
                     image_path=local_video_url,  # 使用本地 URL 存入数据库
                     project_id=project_id,
                     transaction_id=transaction_id,
-                    status=AI_TOOL_STATUS_PROCESSING
+                    status=AI_TOOL_STATUS_PROCESSING,
+                    implementation=get_implementation_id('local_video_enhance')
                 )
             except Exception as db_error:
                 logger.error(f"Failed to create database record: {db_error}")
@@ -3500,6 +3504,7 @@ async def video_remix(
                 # 创建数据库记录
                 if user_id:
                     try:
+                        from config.unified_config import get_implementation_id
                         AIToolsModel.create(
                             prompt=f"Remix: {prompt}",
                             user_id=user_id,
@@ -3509,7 +3514,8 @@ async def video_remix(
                             project_id=project_id,
                             transaction_id=transaction_id,
                             status=AI_TOOL_STATUS_PROCESSING,
-                            message=f"原视频ID: {video_id}"
+                            message=f"原视频ID: {video_id}",
+                            implementation=get_implementation_id('sora2_duomi_v1')
                         )
                     except Exception as db_error:
                         logger.error(f"Failed to create database record for task {i+1}: {db_error}")

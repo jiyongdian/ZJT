@@ -11,6 +11,7 @@ import traceback
 import json
 from .base_video_driver import BaseVideoDriver
 from config.config_util import get_config, get_dynamic_config_value
+from config.unified_config import DriverImplementation
 from utils.sentry_util import SentryUtil, AlertLevel
 from utils.image_upload_utils import compress_and_upload_image_sync
 
@@ -25,15 +26,16 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
     注意：不应直接实例化基类，应使用具体的子类。
     """
 
-    def __init__(self, driver_type: int, model_name: str):
+    def __init__(self, driver_type: int, model_name: str, impl_name: str = DriverImplementation.SEEDANCE_2_0_VOLCENGINE_V1):
         """
         初始化驱动
 
         Args:
             driver_type: 驱动类型（对应 TaskTypeId）
             model_name: 模型名称（如 doubao-seedance-1-5-pro-251215）
+            impl_name: 实现方名称，需与 IMPLEMENTATION_TO_ID 映射一致
         """
-        super().__init__(driver_name="seedance_volcengine_v1", driver_type=driver_type)
+        super().__init__(driver_name=impl_name, driver_type=driver_type)
 
         # 加载配置
         self._api_key = get_dynamic_config_value("volcengine", "api_key", default="")
@@ -495,18 +497,18 @@ class Seedance15ProVolcengineV1Driver(SeedanceVolcengineV1Driver):
     """Seedance 1.5 Pro 图生视频驱动"""
 
     def __init__(self):
-        super().__init__(driver_type=21, model_name="doubao-seedance-1-5-pro-251215")
+        super().__init__(driver_type=21, model_name="doubao-seedance-1-5-pro-251215", impl_name=DriverImplementation.SEEDANCE_1_5_PRO_VOLCENGINE_V1)
 
 
 class Seedance20FastVolcengineV1Driver(SeedanceVolcengineV1Driver):
     """Seedance 2.0 Fast 图生视频驱动"""
 
     def __init__(self):
-        super().__init__(driver_type=22, model_name="doubao-seedance-2-0-fast-260128")
+        super().__init__(driver_type=22, model_name="doubao-seedance-2-0-fast-260128", impl_name=DriverImplementation.SEEDANCE_2_0_FAST_VOLCENGINE_V1)
 
 
 class Seedance20VolcengineV1Driver(SeedanceVolcengineV1Driver):
     """Seedance 2.0 图生视频驱动"""
 
     def __init__(self):
-        super().__init__(driver_type=23, model_name="doubao-seedance-2-0-260128")
+        super().__init__(driver_type=23, model_name="doubao-seedance-2-0-260128", impl_name=DriverImplementation.SEEDANCE_2_0_VOLCENGINE_V1)
