@@ -3029,13 +3029,21 @@
                   <span v-if="item.model_name">模型: {{ item.model_name }}</span>
                   <span v-if="item.implementation_name">驱动: {{ item.implementation_name }}</span>
                 </div>
-                <div v-if="item.reference_images || item.image_path" style="margin-top: 8px;">
-                  <span style="font-size: 13px; color: var(--muted);">参考图片:</span>
-                  <div style="display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap;">
+                <div v-if="item.reference_images || item.image_path || item.audio_path || item.video_path" style="margin-top: 8px;">
+                  <span style="font-size: 13px; color: var(--muted);">参考素材:</span>
+                  <div style="display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; align-items: center;">
                     <template v-for="(img, idx) in (item.reference_images ? JSON.parse(item.reference_images) : (item.image_path ? item.image_path.split(',') : []))" :key="idx">
                       <img v-if="img" :src="img" style="width: 60px; height: 60px; object-fit: cover; border-radius: 4px; border: 1px solid var(--border); cursor: pointer;"
                            @click="window.open(img, '_blank')" />
                     </template>
+                    <div v-if="item.audio_path" style="padding: 4px 10px; background: #1a2530; border: 1px solid #10b981; border-radius: 4px; font-size: 12px;">
+                      <span style="color: #34d399;">🎵 音频</span>
+                      <a :href="item.audio_path" target="_blank" style="color: #60a5fa; margin-left: 4px; text-decoration: none;">查看</a>
+                    </div>
+                    <div v-if="item.video_path" style="padding: 4px 10px; background: #1a2530; border: 1px solid #f59e0b; border-radius: 4px; font-size: 12px;">
+                      <span style="color: #fbbf24;">🎬 视频</span>
+                      <a :href="item.video_path" target="_blank" style="color: #60a5fa; margin-left: 4px; text-decoration: none;">查看</a>
+                    </div>
                   </div>
                 </div>
                 <div v-if="item.result_url" style="margin-top: 8px;">
@@ -3643,7 +3651,10 @@
         configLoaded: false,  // 配置是否已加载
         // 图片模式相关
         imageMode: 'first_last_frame',  // 图片模式: first_last_frame, multi_reference, first_last_with_ref
-        referenceFiles: []  // 参考图文件（仅 first_last_with_ref 模式使用）
+        referenceFiles: [],  // 参考图文件（仅 first_last_with_ref 模式使用）
+        // 音频/视频参考
+        audioFile: null,  // 参考音频文件
+        videoFile: null   // 参考视频文件
       }
     },
     mounted() {
@@ -3696,6 +3707,8 @@
         // 模式切换时清空文件
         this.files = [];
         this.referenceFiles = [];
+        this.audioFile = null;
+        this.videoFile = null;
       }
     },
     computed: {
@@ -4011,10 +4024,36 @@
       clearAllReferenceFiles() {
         this.referenceFiles = [];
       },
-      
+
+      onAudioFile(e) {
+        const file = e.target.files?.[0];
+        if (file) {
+          this.audioFile = file;
+        }
+        e.target.value = '';
+      },
+
+      onVideoFile(e) {
+        const file = e.target.files?.[0];
+        if (file) {
+          this.videoFile = file;
+        }
+        e.target.value = '';
+      },
+
+      clearAudioFile() {
+        this.audioFile = null;
+      },
+
+      clearVideoFile() {
+        this.videoFile = null;
+      },
+
       onImageModeChange() {
         this.files = [];
         this.referenceFiles = [];
+        this.audioFile = null;
+        this.videoFile = null;
       },
       
       async submit(){
@@ -4039,7 +4078,15 @@
               form.append('reference_images', file);
             });
           }
-          
+
+          // 添加参考音频和视频
+          if (this.audioFile) {
+            form.append('audio', this.audioFile);
+          }
+          if (this.videoFile) {
+            form.append('video', this.videoFile);
+          }
+
           form.append('prompt', this.prompt);
           form.append('ratio', this.model);
           form.append('duration_seconds', this.durationSeconds);
@@ -4367,6 +4414,38 @@
                   <span style="color: #60a5fa;">参考{{ index + 1 }}: {{ file.name }}</span>
                   <button @click="removeReferenceFile(index)" style="margin-left: 8px; background: transparent; border: none; color: #ef4444; cursor: pointer; font-weight: bold;">×</button>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 参考音频上传 -->
+          <div class="field">
+            <label class="label">参考音频（可选）</label>
+            <input class="input" type="file" accept="audio/*" @change="onAudioFile" />
+            <div class="muted" style="margin-top:6px; color: var(--muted);">部分模型支持使用音频驱动视频生成</div>
+            <div v-if="audioFile" style="margin-top: 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <div style="font-size: 13px; color: var(--muted);">已选择音频:</div>
+                <button @click="clearAudioFile" class="btn secondary" style="font-size: 12px; padding: 4px 10px;">清空</button>
+              </div>
+              <div style="display: inline-block; padding: 6px 12px; background: #1a2530; border: 1px solid #10b981; border-radius: 6px; font-size: 12px;">
+                <span style="color: #34d399;">🎵 {{ audioFile.name }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 参考视频上传 -->
+          <div class="field">
+            <label class="label">参考视频（可选）</label>
+            <input class="input" type="file" accept="video/*" @change="onVideoFile" />
+            <div class="muted" style="margin-top:6px; color: var(--muted);">部分模型支持使用参考视频控制生成风格或动作</div>
+            <div v-if="videoFile" style="margin-top: 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <div style="font-size: 13px; color: var(--muted);">已选择视频:</div>
+                <button @click="clearVideoFile" class="btn secondary" style="font-size: 12px; padding: 4px 10px;">清空</button>
+              </div>
+              <div style="display: inline-block; padding: 6px 12px; background: #1a2530; border: 1px solid #f59e0b; border-radius: 6px; font-size: 12px;">
+                <span style="color: #fbbf24;">🎬 {{ videoFile.name }}</span>
               </div>
             </div>
           </div>

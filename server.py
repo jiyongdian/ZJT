@@ -1631,7 +1631,11 @@ async def ai_app_run_image(
     user_id: int = Form(None, description="User ID"),
     auth_token: str = Form(None, description="Authentication token"),
     image_mode: str = Form("first_last_frame", description="Image mode: first_last_frame, multi_reference, first_last_with_ref"),
-    reference_image_urls: str = Form(None, description="Comma-separated reference image URLs (for multi_reference or first_last_with_ref mode)")
+    reference_image_urls: str = Form(None, description="Comma-separated reference image URLs (for multi_reference or first_last_with_ref mode)"),
+    audio: UploadFile = File(None, description="Reference audio file (optional)"),
+    video: UploadFile = File(None, description="Reference video file (optional)"),
+    audio_urls: str = Form(None, description="Comma-separated reference audio URLs (alternative to uploading audio file)"),
+    video_urls: str = Form(None, description="Comma-separated reference video URLs (alternative to uploading video file)")
 ):
     """
     Submit image to video task.
@@ -1645,6 +1649,8 @@ async def ai_app_run_image(
     - Upload images via 'images' parameter
     - Provide comma-separated URLs via 'image_urls' parameter
     - For reference images, use 'reference_image_urls' parameter
+    - For reference audio, use 'audio' parameter
+    - For reference video, use 'video' parameter
     """
     try:
         # 通过 task_id 获取任务配置
@@ -1734,6 +1740,22 @@ async def ai_app_run_image(
             if all_refs:
                 reference_images_json = json.dumps(all_refs)
 
+        # 处理音频和视频文件/URL
+        audio_path = None
+        video_path = None
+        if audio_urls:
+            audio_path = audio_urls.strip()
+            logger.info(f"Using reference audio URL: {audio_path}")
+        elif audio:
+            audio_path = await asyncio.to_thread(_save_uploaded_image, audio)
+            logger.info(f"Saved reference audio: {audio_path}")
+        if video_urls:
+            video_path = video_urls.strip()
+            logger.info(f"Using reference video URL: {video_path}")
+        elif video:
+            video_path = await asyncio.to_thread(_save_uploaded_image, video)
+            logger.info(f"Saved reference video: {video_path}")
+
         # 根据 image_mode 和图片数量构建 context，用于算力修饰符计算
         context = {}
         if image_mode == 'first_last_frame' and main_image_list and len(main_image_list) > 1:
@@ -1821,7 +1843,9 @@ async def ai_app_run_image(
                             transaction_id=transaction_id,
                             status=AI_TOOL_STATUS_PENDING,
                             extra_config=extra_config_json,
-                            reference_images=reference_images_json
+                            reference_images=reference_images_json,
+                            audio_path=audio_path,
+                            video_path=video_path
                         )
                         TasksModel.create(
                             task_type=TASK_TYPE_GENERATE_VIDEO,

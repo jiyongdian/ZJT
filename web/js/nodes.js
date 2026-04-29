@@ -2837,6 +2837,8 @@
           referenceUrls: opts?.data?.referenceUrls || [],  // 多参考图模式的图片URL列表
           startUrl: opts?.data?.startUrl || '',
           endUrl: opts?.data?.endUrl || '',
+          audioUrl: opts?.data?.audioUrl || '',  // 参考音频URL
+          videoUrl: opts?.data?.videoUrl || '',  // 参考视频URL
         }
       };
       state.nodes.push(node);
@@ -2888,6 +2890,22 @@
             <input class="reference-file" type="file" accept="image/*" multiple />
             <button class="mini-btn reference-clear" type="button" style="margin-top: 4px;">清除全部</button>
             <div class="reference-preview-list" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;"></div>
+          </div>
+          <div class="field field-collapsible audio-field">
+            <div class="label">参考音频（可选）</div>
+            <input class="audio-file" type="file" accept="audio/*" />
+            <button class="mini-btn audio-clear" type="button" style="margin-top: 4px; display:none;">清除</button>
+            <div class="audio-preview" style="display:none; margin-top: 8px; font-size: 12px; color: #34d399;">
+              🎵 <span class="audio-name"></span>
+            </div>
+          </div>
+          <div class="field field-collapsible video-field">
+            <div class="label">参考视频（可选）</div>
+            <input class="video-file" type="file" accept="video/*" />
+            <button class="mini-btn video-clear" type="button" style="margin-top: 4px; display:none;">清除</button>
+            <div class="video-preview" style="display:none; margin-top: 8px; font-size: 12px; color: #fbbf24;">
+              🎬 <span class="video-name"></span>
+            </div>
           </div>
           <div class="field field-collapsible">
             <div class="label">视频长度</div>
@@ -2971,6 +2989,14 @@
       const referenceFileEl = el.querySelector('.reference-file');
       const referenceClearBtn = el.querySelector('.reference-clear');
       const referencePreviewList = el.querySelector('.reference-preview-list');
+      const audioFileEl = el.querySelector('.audio-file');
+      const audioClearBtn = el.querySelector('.audio-clear');
+      const audioPreview = el.querySelector('.audio-preview');
+      const audioName = el.querySelector('.audio-name');
+      const videoFileEl = el.querySelector('.video-file');
+      const videoClearBtn = el.querySelector('.video-clear');
+      const videoPreview = el.querySelector('.video-preview');
+      const videoName = el.querySelector('.video-name');
 
       outputPort.addEventListener('mousedown', (e) => {
         e.preventDefault();
@@ -3165,7 +3191,75 @@
         node.data.referenceUrls = [];
         renderReferencePreview();
       });
-      
+
+      // 音频上传处理
+      async function handleAudioUpload(file) {
+        const uploadedUrl = await uploadFile(file);
+        if(uploadedUrl) {
+          node.data.audioUrl = uploadedUrl;
+          audioPreview.style.display = 'block';
+          audioName.textContent = file.name;
+          audioClearBtn.style.display = '';
+          showToast('音频上传成功', 'success');
+        }
+      }
+
+      audioFileEl.addEventListener('change', () => {
+        const file = audioFileEl.files?.[0];
+        if(file) {
+          handleAudioUpload(file);
+        }
+        audioFileEl.value = '';
+      });
+
+      audioClearBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        node.data.audioUrl = '';
+        audioPreview.style.display = 'none';
+        audioName.textContent = '';
+        audioClearBtn.style.display = 'none';
+      });
+
+      // 视频上传处理
+      async function handleVideoUpload(file) {
+        const uploadedUrl = await uploadFile(file);
+        if(uploadedUrl) {
+          node.data.videoUrl = uploadedUrl;
+          videoPreview.style.display = 'block';
+          videoName.textContent = file.name;
+          videoClearBtn.style.display = '';
+          showToast('视频上传成功', 'success');
+        }
+      }
+
+      videoFileEl.addEventListener('change', () => {
+        const file = videoFileEl.files?.[0];
+        if(file) {
+          handleVideoUpload(file);
+        }
+        videoFileEl.value = '';
+      });
+
+      videoClearBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        node.data.videoUrl = '';
+        videoPreview.style.display = 'none';
+        videoName.textContent = '';
+        videoClearBtn.style.display = 'none';
+      });
+
+      // 恢复已保存的音频/视频预览
+      if(node.data.audioUrl) {
+        audioPreview.style.display = 'block';
+        audioName.textContent = node.data.audioUrl.split('/').pop() || '已上传音频';
+        audioClearBtn.style.display = '';
+      }
+      if(node.data.videoUrl) {
+        videoPreview.style.display = 'block';
+        videoName.textContent = node.data.videoUrl.split('/').pop() || '已上传视频';
+        videoClearBtn.style.display = '';
+      }
+
       // 初始化图片模式UI（必须在这里调用，确保加载保存的模式）
       updateImageModeUI();
       renderReferencePreview();
@@ -3554,7 +3648,9 @@
           console.log('[DEBUG] 生成视频参数:', { drawCount: node.data.drawCount, desiredCount, duration, prompt, ratio, videoModel, imageUrls, imageMode: currentImageMode, referenceImages });
 
           // 调用生成API
-          const result = await generateVideoFromImage(imageUrls, prompt, duration, desiredCount, ratio, videoModel, currentImageMode, referenceImages);
+          const audioUrl = node.data.audioUrl || '';
+          const videoUrl = node.data.videoUrl || '';
+          const result = await generateVideoFromImage(imageUrls, prompt, duration, desiredCount, ratio, videoModel, currentImageMode, referenceImages, audioUrl, videoUrl);
           console.log('[DEBUG] API返回:', { projectIds: result.projectIds, count: result.projectIds?.length });
           
           genStatus.textContent = '任务已提交，正在生成视频...';

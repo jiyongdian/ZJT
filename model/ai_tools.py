@@ -39,6 +39,8 @@ class AITool:
         self.reference_images = kwargs.get('reference_images')
         self.implementation = kwargs.get('implementation')
         self.media_mapping_id = kwargs.get('media_mapping_id')
+        self.audio_path = kwargs.get('audio_path')
+        self.video_path = kwargs.get('video_path')
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
@@ -69,7 +71,9 @@ class AITool:
             'implementation': self.implementation,
             'implementation_name': get_implementation_name(self.implementation),
             'model_name': model_name,
-            'media_mapping_id': self.media_mapping_id
+            'media_mapping_id': self.media_mapping_id,
+            'audio_path': self.audio_path,
+            'video_path': self.video_path
         }
 
 
@@ -93,7 +97,9 @@ class AIToolsModel:
         completed_time: Optional[datetime] = None,
         extra_config: Optional[str] = None,
         reference_images: Optional[str] = None,
-        implementation: Optional[int] = 0
+        implementation: Optional[int] = 0,
+        audio_path: Optional[str] = None,
+        video_path: Optional[str] = None
     ) -> int:
         """
         Create a new AI tool record
@@ -115,16 +121,18 @@ class AIToolsModel:
             extra_config: Extra configuration in JSON format, includes image_mode (optional)
             reference_images: Reference images as JSON array string (optional)
             implementation: Implementation ID (optional, default 0)
+            audio_path: Reference audio file path (optional)
+            video_path: Reference video file path (optional)
 
         Returns:
             Inserted record ID
         """
         sql = """
             INSERT INTO ai_tools
-            (prompt, user_id, type, image_path, duration, ratio, project_id, transaction_id, result_url, status, message, image_size, completed_time, extra_config, reference_images, implementation)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            (prompt, user_id, type, image_path, duration, ratio, project_id, transaction_id, result_url, status, message, image_size, completed_time, extra_config, reference_images, implementation, audio_path, video_path)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
-        params = (prompt, user_id, type, image_path, duration, ratio, project_id, transaction_id, result_url, status, message, image_size, completed_time, extra_config, reference_images, implementation)
+        params = (prompt, user_id, type, image_path, duration, ratio, project_id, transaction_id, result_url, status, message, image_size, completed_time, extra_config, reference_images, implementation, audio_path, video_path)
 
         try:
             record_id = execute_insert(sql, params)
@@ -309,7 +317,7 @@ class AIToolsModel:
         # Build update fields
         allowed_fields = [
             'prompt', 'type', 'image_path', 'duration', 'ratio',
-            'project_id', 'transaction_id', 'result_url', 'user_id', 'status', 'message', 'image_size', 'completed_time', 'extra_config', 'reference_images', 'implementation', 'media_mapping_id'
+            'project_id', 'transaction_id', 'result_url', 'user_id', 'status', 'message', 'image_size', 'completed_time', 'extra_config', 'reference_images', 'implementation', 'media_mapping_id', 'audio_path', 'video_path'
         ]
         
         update_fields = []
@@ -442,7 +450,7 @@ class AIToolsModel:
         """
         allowed_fields = [
             'prompt', 'type', 'image_path', 'duration', 'ratio',
-            'transaction_id', 'result_url', 'user_id', 'status', 'message', 'image_size', 'completed_time', 'extra_config', 'reference_images', 'media_mapping_id'
+            'transaction_id', 'result_url', 'user_id', 'status', 'message', 'image_size', 'completed_time', 'extra_config', 'reference_images', 'media_mapping_id', 'audio_path', 'video_path'
         ]
         
         update_fields = []
@@ -759,6 +767,8 @@ CREATE TABLE IF NOT EXISTS `ai_tools` (
   `reference_images` text COMMENT '参考图URL列表，JSON数组格式，如["url1","url2"]',
   `implementation` int unsigned NOT NULL DEFAULT '0' COMMENT '服务商实现ID，参考 DriverImplementationId',
   `media_mapping_id` int DEFAULT NULL,
+  `audio_path` text CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '参考音频路径',
+  `video_path` text CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '参考视频路径',
   PRIMARY KEY (`id`),
   KEY `idx_user_id_type_create_time` (`user_id`,`type`,`create_time`),
   KEY `idx_user_id_create_time` (`user_id`,`create_time`),
