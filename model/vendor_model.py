@@ -225,9 +225,9 @@ CREATE TABLE IF NOT EXISTS `vendor_model` (
   `vendor_id` int DEFAULT NULL COMMENT '供应商id',
   `model_id` int DEFAULT NULL COMMENT '模型id',
   `created_at` datetime DEFAULT NULL,
-  `input_token_threshold` int DEFAULT NULL COMMENT '输入token计费率：多少个input_token消耗1点算力',
-  `out_token_threshold` int DEFAULT NULL COMMENT '输出token计费率：多少个output_token消耗1点算力',
-  `cache_read_threshold` int DEFAULT NULL COMMENT '缓存读取计费率：多少个cache_read消耗1点算力',
+  `input_token_threshold` int DEFAULT NULL COMMENT '输入token计费率：多少个input_token消耗1点算力', -- 1算力=0.04元
+  `out_token_threshold` int DEFAULT NULL COMMENT '输出token计费率：多少个output_token消耗1点算力', -- 1算力=0.04元
+  `cache_read_threshold` int DEFAULT NULL COMMENT '缓存读取计费率：多少个cache_read消耗1点算力', -- 1算力=0.04元
   `raw_token_threshold` int DEFAULT NULL COMMENT '分段边界：当raw_input_token<=此值时使用本档计费率，NULL表示无上限',
   PRIMARY KEY (`id`) USING BTREE,
   KEY `vendor_id_model_id` (`vendor_id`,`model_id`) USING BTREE

@@ -19,6 +19,7 @@ test-results.xml
 uv.lock
 dist/*
 *.zip
-.claude/
 *.spec
 enterprise/
+.claude/settings.local.json
+*.spec

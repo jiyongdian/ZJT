@@ -2370,9 +2370,7 @@
                         console.warn(`[模型加载] 模型 "${modelName}" 缺少 input_token_threshold 信息`);
                     }
 
-                    option.textContent = modelDesc
-                        ? `${displayName} - ${modelDesc}`
-                        : displayName;
+                    option.textContent = displayName;
                     // model_id 用于获取 context_window 等信息
                     const dbModelId = model.model_id ?? '';
                     if (dbModelId) {

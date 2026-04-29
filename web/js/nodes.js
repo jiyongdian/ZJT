@@ -7118,15 +7118,11 @@
                 <div class="grid-merge-status"></div>
               </div>
               <div class="field field-always-visible">
-                <div class="label">分镜模型</div>
-                <select class="shot-group-model"></select>
-              </div>
-              <div class="field field-always-visible">
                 <div class="label">宫格生图模型</div>
                 <select class="shot-group-grid-model" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;"></select>
               </div>
               <div class="field field-always-visible">
-                <div class="label">宫格类型</div>
+                <div class="label" style="margin-top:5px">宫格类型</div>
                 <select class="shot-group-grid-layout" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;">
                   <option value="auto">自动选择</option>
                   <option value="4">4宫格 (2x2)</option>
@@ -7148,7 +7144,7 @@
                 <div class="label">视频模型</div>
                 <select class="shot-group-video-model"></select>
               </div>
-              <div class="field field-always-visible">
+              <div class="field field-always-visible" style="margin-top:5px">
                 <div class="label">视频时长</div>
                 <select class="shot-group-video-duration">
                   <option value="5" selected>5秒</option>
@@ -7195,12 +7191,8 @@
       const deleteBtn = el.querySelector('.icon-btn');
       const detailBtn = el.querySelector('.shot-group-detail-btn');
       const generateBtn = el.querySelector('.shot-group-generate-btn');
-      const modelSelect = el.querySelector('.shot-group-model');
       const inputPort = el.querySelector('.port.input');
       const outputPort = el.querySelector('.port.output');
-      
-      // 应用驱动状态禁用未配置的分镜模型选项
-      if(modelSelect) applyDriverStatusToSelect(modelSelect);
 
       deleteBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -7254,15 +7246,6 @@
         state.connecting = { fromId: id, startX: e.clientX, startY: e.clientY };
       });
 
-      modelSelect.addEventListener('change', () => {
-        node.data.model = modelSelect.value;
-      });
-      
-      // 恢复保存的模型选择
-      if(node.data.model){
-        modelSelect.value = node.data.model;
-      }
-
       generateBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         generateShotFramesIndependent(id, node);
@@ -7278,32 +7261,6 @@
       const gridModelSelect = el.querySelector('.shot-group-grid-model');
       const gridStatusEl = el.querySelector('.shot-group-grid-status');
       
-      // 动态填充分镜模型选项
-      const shotGroupModelEl = el.querySelector('.shot-group-model');
-      let firstShotGroupModelValue = 'gemini';
-      if(shotGroupModelEl) {
-        if(window.TaskConfig && window.TaskConfig.isLoaded()) {
-          const options = window.TaskConfig.getModelOptionsForCategory('image_edit');
-          if(options.length > 0) firstShotGroupModelValue = options[0].value;
-          options.forEach(opt => {
-            const optEl = document.createElement('option');
-            optEl.value = opt.value;
-            optEl.textContent = opt.label;
-            if(opt.value === node.data.model) optEl.selected = true;
-            shotGroupModelEl.appendChild(optEl);
-          });
-        } else {
-          shotGroupModelEl.innerHTML = `
-            <option value="gemini">标准版</option>
-            <option value="gemini_pro">加强版</option>
-            <option value="seedream-5.0">Seedream 5.0</option>
-          `;
-        }
-        if(!node.data.model) node.data.model = firstShotGroupModelValue;
-        shotGroupModelEl.value = node.data.model;
-        applyDriverStatusToSelect(shotGroupModelEl);
-      }
-
       // 动态填充宫格生图模型选项
       if(gridModelSelect) {
         gridModelSelect.innerHTML = '<option value="auto">智能模式 (自动选择)</option>';
