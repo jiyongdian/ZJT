@@ -1194,6 +1194,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         id=TaskTypeId.SORA2_TEXT_TO_VIDEO,
         key='sora2_text_to_video',
         name='Sora2文生视频',
+        category=TaskCategory.TEXT_TO_VIDEO,
         provider=TaskProvider.DUOMI,
         driver_name=DriverKey.SORA2_TEXT_TO_VIDEO,
         implementation=DriverImplementation.SORA2_DUOMI_V1,
@@ -1203,6 +1204,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         default_ratio='9:16',
         default_duration=10,
         sort_order=200,
+        hidden=True,  # 该功能已下线，隐藏但保留配置常量
     ),
 
     # ==================== 图生视频 ====================
