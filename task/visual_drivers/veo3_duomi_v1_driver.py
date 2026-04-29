@@ -190,9 +190,9 @@ class Veo3DuomiV1Driver(BaseVideoDriver):
                 image_urls = reference_images[:3]
                 generation_type = "REFERENCE"
         
-        # 如果没有图片，抛出错误
+        # 支持纯文本模式（无需图片）
         if not image_urls:
-            raise ValueError("VEO3 任务需要至少1张图片")
+            self.logger.info("未提供图片，使用纯文本模式生成视频")
         
         # 如果是本地环境，将本地图片上传到图床
         if self._is_local and image_urls:
@@ -207,9 +207,12 @@ class Veo3DuomiV1Driver(BaseVideoDriver):
             "prompt": ai_tool.prompt,
             "aspect_ratio": ai_tool.ratio or "9:16",
             "duration": 8,  # VEO3 固定8秒
-            "image_urls": image_urls,
             "generation_type": generation_type
         }
+
+        # 只有当有图片时才添加 image_urls 参数
+        if image_urls:
+            payload["image_urls"] = image_urls
 
         return {
             "url": f"{self._base_url}/v1/videos/generations",
