@@ -1,7 +1,7 @@
 """Add DeepSeek vendor and deepseek-v4-flash/deepseek-v4-pro models with billing config
 
 Revision ID: 20260427_add_deepseek
-Revises: 20260424_cleanup_qwen_stale
+Revises: 20260428_backfill_ratio
 Create Date: 2026-04-27
 """
 from typing import Sequence, Union
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 # revision identifiers, used by Alembic.
 revision: str = '20260427_add_deepseek'
-down_revision: Union[str, None] = '20260424_cleanup_qwen_stale'
+down_revision: Union[str, None] = '20260428_backfill_ratio'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
