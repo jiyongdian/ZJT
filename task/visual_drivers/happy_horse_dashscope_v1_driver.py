@@ -113,7 +113,7 @@ class HappyHorseDashscopeV1Driver(BaseVideoDriver):
         """
         params = {
             "resolution": "1080P",  # 默认值
-            "watermark": True,      # 默认添加水印
+            "watermark": False,      # 默认添加水印
             "prompt_extend": True,  # 默认开启 prompt 扩展
         }
 
