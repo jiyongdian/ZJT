@@ -73,6 +73,44 @@ volcengine:
   api_key: "your_volcengine_api_key"
 ```
 
+**注意**:
+- Seedream 是同步 API，一次请求直接返回图片 URL，无需轮询
+- 支持的图片尺寸：2K、3K、4K
+- **图片大小限制**: 输入图片不能超过 10 MB，系统会自动压缩超过限制的图片
+
+### 阿里云百炼驱动 (Happy Horse)
+
+**必需配置**: `dashscope.api_key`
+
+适用驱动：
+- `happy_horse_dashscope_v1` - Happy Horse 图生视频（任务类型 28）
+  - 模型: `happyhorse-1.0-i2v`
+  - 仅支持单张首帧图片
+  - 异步 API，创建任务后需轮询查询结果
+
+配置示例：
+```yaml
+dashscope:
+  api_key: "sk-your-dashscope-api-key"
+```
+
+**注意**:
+- Happy Horse 是异步 API，提交后返回 task_id，需轮询查询结果
+- 首帧图片限制：JPEG/JPG/PNG/WEBP，宽高不小于300像素，1:2.5 ~ 2.5:1，不超过10MB
+- 支持时长：3-15秒，默认5秒
+- 支持分辨率：720P、1080P（默认）
+- 支持驱动音频（可选）：wav/mp3，2～30秒，不超过15MB，通过 `ai_tool.audio_path` 传入
+- 支持驱动视频（可选）：通过 `ai_tool.video_path` 传入
+- 视频和音频如为本地文件，会自动上传到图床获取公网URL
+- 视频 URL 有效期24小时，获取后会自动下载保存
+- 可选参数（通过 extra_config 传入）：`resolution` (720P/1080P)、`watermark` (true/false)、`seed` (0-2147483647)
+
+配置示例：
+```yaml
+volcengine:
+  api_key: "your_volcengine_api_key"
+```
+
 **注意**: 
 - Seedream 是同步 API，一次请求直接返回图片 URL，无需轮询
 - 支持的图片尺寸：2K、3K、4K
