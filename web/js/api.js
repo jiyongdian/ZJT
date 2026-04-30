@@ -62,10 +62,10 @@
     }
 
     // 生成视频API调用
-    async function generateVideoFromImage(imageUrl, prompt, duration, count, ratio, videoModel, imageMode, referenceImages, audioUrl, videoUrl){
+    async function generateVideoFromImage(imageUrl, prompt, duration, count, ratio, videoModel, imageMode, referenceImages, audioUrls, videoUrls, mediaReferences){
       // 测试模式：模拟API响应
       if(TEST_MODE){
-        console.log('[TEST MODE] 模拟生成视频API调用', { imageUrl, prompt, duration, count, ratio, videoModel, imageMode, referenceImages, audioUrl, videoUrl });
+        console.log('[TEST MODE] 模拟生成视频API调用', { imageUrl, prompt, duration, count, ratio, videoModel, imageMode, referenceImages, audioUrls, videoUrls, mediaReferences });
         await new Promise(r => setTimeout(r, 500)); // 模拟网络延迟
         const mockIds = [];
         for(let i = 0; i < (count || 1); i++){
@@ -104,12 +104,16 @@
         form.append('reference_image_urls', referenceImages);
       }
 
-      // 参考音频和视频
-      if(audioUrl){
-        form.append('audio_urls', audioUrl);
+      // 参考音频和视频（支持多个，逗号分隔）
+      if(audioUrls){
+        form.append('audio_urls', audioUrls);
       }
-      if(videoUrl){
-        form.append('video_urls', videoUrl);
+      if(videoUrls){
+        form.append('video_urls', videoUrls);
+      }
+      // 媒体引用（用于 @ 提及解析）
+      if(mediaReferences){
+        form.append('media_references', mediaReferences);
       }
 
       if(userId){

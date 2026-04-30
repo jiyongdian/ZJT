@@ -9,7 +9,7 @@ Seedance 火山引擎供应商 v1 版本驱动实现
 from typing import Dict, Any, Optional
 import traceback
 import json
-from .base_video_driver import BaseVideoDriver
+from .base_video_driver import BaseVideoDriver, ImageMode
 from config.config_util import get_config, get_dynamic_config_value
 from config.unified_config import DriverImplementation
 from utils.sentry_util import SentryUtil, AlertLevel
@@ -132,37 +132,40 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
         """
         构建 Seedance 图生视频创建任务请求
 
-        content 数组格式:
-        [
-            { "type": "text", "text": "prompt" },
-            { "type": "image_url", "image_url": { "url": "首帧图" } },
-            { "type": "image_url", "image_url": { "url": "参考图1" }, "role": "reference_image" },
-            { "type": "image_url", "image_url": { "url": "参考图2" }, "role": "reference_image" },
-            { "type": "video_url", "video_url": { "url": "参考视频" }, "role": "reference_video" },
-            { "type": "audio_url", "audio_url": { "url": "参考音频" }, "role": "reference_audio" }
-        ]
+        三种互斥模式（不可混用）：
+        - first_last_frame: 首帧/首尾帧模式，content 中放 first_frame/last_frame
+        - multi_reference: 多模态参考模式，content 中放 reference_image + reference_video + reference_audio
+        - first_last_with_ref: 首尾帧+参考图模式（暂不支持，降级为首尾帧）
         """
-        # 1. 解析 extra_config
+        # 1. 解析 extra_config 和图片模式
         extra_config = self._parse_extra_config(ai_tool)
-
-        # 2. 获取图片信息（首帧 + 尾帧 + 参考图）
         all_images_info = self.get_all_images_by_mode(ai_tool)
+        img_mode = all_images_info['mode']
         first_frame = all_images_info.get('first_frame')
         last_frame = all_images_info.get('last_frame')
         reference_images = all_images_info.get('reference_images', [])
 
-        # 3. 处理首帧图片（multi_reference 模式下可选）
-        processed_first_frame = None
-        if first_frame:
+        prompt = ai_tool.prompt or ""
+        content = []
+
+        # 2. 根据 image_mode 分支构建 content（三种模式互斥）
+        if img_mode == ImageMode.FIRST_LAST_FRAME or img_mode == ImageMode.FIRST_LAST_WITH_REF:
+            # ---- 首帧/首尾帧模式 ----
+            self.logger.info(f"首尾帧模式: first_frame={first_frame}, last_frame={last_frame}")
+
+            if not first_frame:
+                return {
+                    "success": False,
+                    "error": "首尾帧模式需要至少1张首帧图片",
+                    "error_type": "USER",
+                    "retry": False
+                }
+
+            # 处理首帧图片
             success, processed_url, error = compress_and_upload_image_sync(
-                first_frame,
-                self._config,
-                max_size_mb=10.0,
-                is_local=True
+                first_frame, self._config, max_size_mb=10.0, is_local=True
             )
-            if success:
-                processed_first_frame = processed_url
-            else:
+            if not success:
                 self.logger.error(f"处理首帧图片失败: {error}")
                 return {
                     "success": False,
@@ -171,105 +174,134 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
                     "retry": False
                 }
 
-        # 4. 处理尾帧图片（可选）
-        processed_last_frame = None
-        if last_frame:
+            # 处理尾帧图片（可选）
+            processed_last_frame = None
+            if last_frame:
+                success_lf, url_lf, error_lf = compress_and_upload_image_sync(
+                    last_frame, self._config, max_size_mb=10.0, is_local=True
+                )
+                if success_lf:
+                    processed_last_frame = url_lf
+                else:
+                    self.logger.warning(f"处理尾帧图片失败，跳过: {error_lf}")
+
+            # 文本
+            if prompt:
+                content.append({"type": "text", "text": prompt})
+
+            # 有尾帧时：首帧带 role: "first_frame"，尾帧带 role: "last_frame"
+            # 无尾帧时：首帧不带 role 字段（API 文档规范）
+            if processed_last_frame:
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": processed_url},
+                    "role": "first_frame"
+                })
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": processed_last_frame},
+                    "role": "last_frame"
+                })
+            else:
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": processed_url}
+                })
+
+        elif img_mode == ImageMode.MULTI_REFERENCE:
+            # ---- 多模态参考模式 ----
+            self.logger.info(f"多参考图模式: reference_images={len(reference_images)}张")
+
+            if not reference_images:
+                return {
+                    "success": False,
+                    "error": "多参考图模式需要至少1张参考图",
+                    "error_type": "USER",
+                    "retry": False
+                }
+
+            # 处理参考图列表
+            processed_reference_images = []
+            for ref_img in reference_images:
+                success, new_url, error = compress_and_upload_image_sync(
+                    ref_img, self._config, max_size_mb=10.0, is_local=True
+                )
+                if success:
+                    processed_reference_images.append(new_url)
+                else:
+                    self.logger.warning(f"处理参考图失败，跳过: {error}")
+
+            if not processed_reference_images:
+                return {
+                    "success": False,
+                    "error": "所有参考图处理失败",
+                    "error_type": "USER",
+                    "retry": False
+                }
+
+            # 文本
+            if prompt:
+                content.append({"type": "text", "text": prompt})
+
+            # 参考图
+            for ref_img_url in processed_reference_images:
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": ref_img_url},
+                    "role": "reference_image"
+                })
+
+            # 参考视频（仅多参考图模式下添加）
+            reference_video = self.get_video_path(ai_tool) or extra_config.get('reference_video')
+            if reference_video:
+                content.append({
+                    "type": "video_url",
+                    "video_url": {"url": reference_video},
+                    "role": "reference_video"
+                })
+
+            # 参考音频（仅多参考图模式下添加）
+            reference_audio = self.get_audio_path(ai_tool) or extra_config.get('reference_audio')
+            if reference_audio:
+                content.append({
+                    "type": "audio_url",
+                    "audio_url": {"url": reference_audio},
+                    "role": "reference_audio"
+                })
+
+        else:
+            # ---- 未知模式，降级为首尾帧 ----
+            self.logger.warning(f"未知的 image_mode: {img_mode}，降级为首尾帧模式")
+            if not first_frame:
+                return {
+                    "success": False,
+                    "error": "未找到可用的图片",
+                    "error_type": "USER",
+                    "retry": False
+                }
             success, processed_url, error = compress_and_upload_image_sync(
-                last_frame,
-                self._config,
-                max_size_mb=10.0,
-                is_local=True
+                first_frame, self._config, max_size_mb=10.0, is_local=True
             )
-            if success:
-                processed_last_frame = processed_url
-            else:
-                self.logger.warning(f"处理尾帧图片失败，跳过: {error}")
-
-        # 5. 处理参考图列表
-        processed_reference_images = []
-        for ref_img in reference_images:
-            success, new_url, error = compress_and_upload_image_sync(
-                ref_img,
-                self._config,
-                max_size_mb=10.0,
-                is_local=True
-            )
-            if success:
-                processed_reference_images.append(new_url)
-            else:
-                self.logger.warning(f"处理参考图失败，跳过: {error}")
-                # 参考图失败不阻断流程，继续处理
-
-        # 6. 构建 content 数组
-        content = []
-
-        # 文本部分（放在最前面）
-        prompt = ai_tool.prompt or ""
-        if prompt:
-            content.append({
-                "type": "text",
-                "text": prompt
-            })
-
-        # 首帧图（role: "first_frame"，可选）
-        if processed_first_frame:
+            if not success:
+                return {
+                    "success": False,
+                    "error": f"处理图片失败: {error}",
+                    "error_type": "USER",
+                    "retry": False
+                }
+            if prompt:
+                content.append({"type": "text", "text": prompt})
             content.append({
                 "type": "image_url",
-                "image_url": {
-                    "url": processed_first_frame
-                },
-                "role": "first_frame"
+                "image_url": {"url": processed_url}
             })
 
-        # 尾帧图（role: "last_frame"，可选）
-        if processed_last_frame:
-            content.append({
-                "type": "image_url",
-                "image_url": {
-                    "url": processed_last_frame
-                },
-                "role": "last_frame"
-            })
-
-        # 参考图列表（role: "reference_image"）
-        for ref_img_url in processed_reference_images:
-            content.append({
-                "type": "image_url",
-                "image_url": {
-                    "url": ref_img_url
-                },
-                "role": "reference_image"
-            })
-
-        # 参考视频（优先从 ai_tool.video_path 获取，向后兼容 extra_config）
-        reference_video = self.get_video_path(ai_tool) or extra_config.get('reference_video')
-        if reference_video:
-            content.append({
-                "type": "video_url",
-                "video_url": {
-                    "url": reference_video
-                },
-                "role": "reference_video"
-            })
-
-        # 参考音频（优先从 ai_tool.audio_path 获取，向后兼容 extra_config）
-        reference_audio = self.get_audio_path(ai_tool) or extra_config.get('reference_audio')
-        if reference_audio:
-            content.append({
-                "type": "audio_url",
-                "audio_url": {
-                    "url": reference_audio
-                },
-                "role": "reference_audio"
-            })
-
-        # 6. 构建 payload
+        # 3. 构建 payload（所有模式通用）
         payload = {
             "model": self._model,
             "content": content
         }
 
-        # 添加可选参数
         if extra_config.get('generate_audio') is not None:
             payload["generate_audio"] = extra_config['generate_audio']
 
@@ -282,7 +314,7 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
         if ai_tool.duration:
             payload["duration"] = ai_tool.duration
 
-        self.logger.info(f"使用模型: {self._model}, driver_type: {self.driver_type}, content 元素数: {len(content)}")
+        self.logger.info(f"使用模型: {self._model}, driver_type: {self.driver_type}, 模式: {img_mode}, content 元素数: {len(content)}")
 
         headers = {
             "Content-Type": "application/json",

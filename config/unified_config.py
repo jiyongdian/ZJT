@@ -1421,7 +1421,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         sort_order=37,
         supported_image_modes=[ImageMode.FIRST_LAST_FRAME],  # 1.5 Pro 不支持多参考图
         supports_last_frame=True,  # 支持首尾帧
-        supports_ref_audio_video=True,  # 支持参考音频和视频 此处用于测试，实际1.5不支持音频和视频
+        supports_ref_audio_video=False,  # 1.5 Pro 不支持参考音频和视频
     ),
     UnifiedTaskConfig(
         id=TaskTypeId.SEEDANCE_2_0_FAST_IMAGE_TO_VIDEO,

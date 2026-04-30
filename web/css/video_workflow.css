@@ -2846,3 +2846,159 @@ textarea:focus{ border-color: var(--primary); }
   flex-direction: column;
   justify-content: center;
 }
+
+/* ===== 音频节点 ===== */
+.node.audio-node .node-header {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+}
+.node.audio-node .node-title {
+  color: #fff;
+}
+.node.audio-node .icon-btn {
+  color: #fff;
+}
+.node.audio-node .node-body {
+  min-width: 180px;
+}
+.audio-node-preview {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: #f5f3ff;
+  border: 1px solid #e9d5ff;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #6d28d9;
+  margin-top: 4px;
+}
+.audio-node-preview audio {
+  width: 100%;
+  height: 32px;
+  margin-top: 4px;
+}
+
+/* ===== 音频/视频输入端口 ===== */
+.port.audio-input-port {
+  left: -21px;
+  top: 0;
+  transform: translateY(-50%);
+  border-color: #8b5cf6;
+}
+.port.audio-input-port:hover {
+  background: #c4b5fd;
+  transform: translateY(-50%) scale(1.2);
+}
+.port.audio-input-port.can-connect {
+  background: #c4b5fd;
+  box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.3);
+  transform: translateY(-50%) scale(1.3);
+}
+.port.video-ref-input-port {
+  left: -21px;
+  top: 0;
+  transform: translateY(-50%);
+  border-color: #f59e0b;
+}
+.port.video-ref-input-port:hover {
+  background: #fcd34d;
+  transform: translateY(-50%) scale(1.2);
+}
+.port.video-ref-input-port.can-connect {
+  background: #fcd34d;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.3);
+  transform: translateY(-50%) scale(1.3);
+}
+
+/* ===== 媒体预览列表（音频/视频） ===== */
+.audio-preview-list,
+.video-preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+.media-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #374151;
+  cursor: default;
+}
+.media-item .media-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.media-item .remove-btn {
+  cursor: pointer;
+  color: #ef4444;
+  font-weight: bold;
+  padding: 0 2px;
+  flex-shrink: 0;
+}
+.media-item .remove-btn:hover {
+  color: #dc2626;
+}
+
+/* ===== @ 提及下拉菜单 ===== */
+.mention-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 100;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+  margin-bottom: 4px;
+}
+.mention-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 12px;
+}
+.mention-dropdown-item:last-child {
+  border-bottom: none;
+}
+.mention-dropdown-item:hover,
+.mention-dropdown-item.selected {
+  background: #eff6ff;
+}
+.mention-dropdown-item .mention-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+}
+.mention-dropdown-item .mention-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #111827;
+}
+.mention-dropdown-item .mention-type {
+  font-size: 10px;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 1px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.mention-hint {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 2px;
+}

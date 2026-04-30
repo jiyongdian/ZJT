@@ -153,6 +153,13 @@
       startNodePlacing(nodeId);
     });
 
+    document.getElementById('menuAddAudio').addEventListener('click', () => {
+      const nodeId = createAudioNode();
+      renderMinimap();
+      addMenu.classList.remove('show');
+      startNodePlacing(nodeId);
+    });
+
     document.getElementById('menuAddImage').addEventListener('click', () => {
       const nodeId = createImageNode();
       renderMinimap();
@@ -367,6 +374,22 @@
           const targetNode = state.nodes.find(n => n.id === conn.to);
           if(targetNode && targetNode.updateReferenceImages){
             targetNode.updateReferenceImages();
+          }
+        }
+        try{ autoSaveWorkflow(); } catch(e){}
+      } else if(state.selectedAudioConnId !== null){
+        const conn = state.audioConnections.find(c => c.id === state.selectedAudioConnId);
+        state.audioConnections = state.audioConnections.filter(c => c.id !== state.selectedAudioConnId);
+        state.selectedAudioConnId = null;
+        hideConnDeleteBtn();
+        renderAudioConnections();
+        // 从目标节点的 audioUrls 中移除对应的音频
+        if(conn){
+          const fromNode = state.nodes.find(n => n.id === conn.from);
+          const targetNode = state.nodes.find(n => n.id === conn.to);
+          if(fromNode && targetNode && targetNode.data.audioUrls){
+            const idx = targetNode.data.audioUrls.findIndex(a => a.url === fromNode.data.url);
+            if(idx >= 0) targetNode.data.audioUrls.splice(idx, 1);
           }
         }
         try{ autoSaveWorkflow(); } catch(e){}

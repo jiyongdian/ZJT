@@ -3840,8 +3840,10 @@
         return config?.supports_last_frame !== false;
       },
       supportsRefAudioVideo() {
-        // 确保配置已加载，且当前模型支持
+        // 确保配置已加载，且当前模型支持，且处于多参考图模式
         if (!this.configLoaded) return false;
+        // 参考音频/视频仅在多参考图模式下有意义，首尾帧模式下不显示
+        if (this.imageMode !== 'multi_reference') return false;
         const config = this.modelConfigs[this.videoModel];
         return config?.supports_ref_audio_video === true;
       },
@@ -4220,7 +4222,8 @@
               this.mediaItems[idx].fileUrl = res.data.data.file_url;
               this.mediaItems[idx].thumbnailUrl = res.data.data.thumbnail_url;
               this.mediaItems[idx].uploading = false;
-              this.mediaItems[idx].validating = true;
+              // 只有音频/视频需要验证时长
+              this.mediaItems[idx].validating = type !== 'image';
               // 触发 Vue 响应性
               this.mediaItems = [...this.mediaItems];
             }
@@ -4428,7 +4431,35 @@
           this.mediaValidating = false;
         }
       },
-      
+
+      handleSubmit() {
+        if (this.loading) {
+          alert('正在生成中，请稍候...');
+          return;
+        }
+        if (this.mediaItems.some(m => m.uploading)) {
+          alert('媒体文件正在上传中，请等待上传完成');
+          return;
+        }
+        if (this.mediaItems.some(m => m.validating)) {
+          alert('媒体文件正在验证中，请稍候');
+          return;
+        }
+        if (this.audioValidationError || this.videoValidationError) {
+          alert(this.audioValidationError || this.videoValidationError);
+          return;
+        }
+        if (this.imageMediaItems.length === 0) {
+          alert('请先上传至少一张图片');
+          return;
+        }
+        if (!this.prompt.trim()) {
+          alert('请输入视频提示词');
+          return;
+        }
+        this.submit();
+      },
+
       async submit(){
         if(!this.canSubmit) return;
 
@@ -4948,7 +4979,7 @@
 
           <div class="field">
             <div class="row">
-              <button class="btn" :disabled="!canSubmit" @click="submit">{{ loading ? '生成中…' : '开始生成' }}</button>
+              <button class="btn" :class="{ 'btn-disabled': !canSubmit }" @click="handleSubmit">{{ loading ? '生成中…' : '开始生成' }}</button>
               <button class="btn secondary" @click="fetchHistory" :disabled="historyLoading">{{ historyLoading ? '加载中...' : '历史记录' }}</button>
             </div>
           </div>
@@ -4962,7 +4993,7 @@
           <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px;">
             <div v-for="(result, i) in results" :key="i" style="border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: #0b1220;">
               <div style="margin-bottom: 12px; font-size: 14px; font-weight: bold; color: var(--muted);">视频 #{{ i + 1 }}</div>
-              
+
               <!-- 原视频 -->
               <div style="margin-bottom: 16px;">
                 <div style="margin-bottom: 8px; font-weight: bold; color: var(--primary); text-align: center;">原视频</div>
@@ -4990,7 +5021,7 @@
             </div>
           </div>
         </div>
-        
+
         <!-- History Modal -->
         <div class="modal-overlay" v-if="showHistory" @click.self="closeHistory">
           <div class="modal" style="max-width: 800px; max-height: 80vh; overflow-y: auto;" @scroll="handleHistoryScroll">
@@ -5005,7 +5036,7 @@
                 <button class="modal-close" @click="closeHistory">×</button>
               </div>
             </div>
-            
+
             <div v-if="historyList.length === 0" style="padding: 40px; text-align: center; color: var(--muted);">
               暂无历史记录
             </div>

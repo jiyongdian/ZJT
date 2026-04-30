@@ -100,8 +100,23 @@ header {
   filter: brightness(1.05); 
 }
 
-.btn:active { 
-  transform: translateY(1px); 
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(0.3);
+  box-shadow: none;
+}
+
+.btn-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(0.3);
+  box-shadow: none;
+  pointer-events: auto;
 }
 
 .btn.secondary { 

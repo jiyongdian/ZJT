@@ -450,6 +450,7 @@
               renderImageConnections();
               renderFirstFrameConnections();
               renderVideoConnections();
+              renderAudioConnections();
             }
           }
         }
@@ -577,6 +578,158 @@
       // 添加调试按钮
       addDebugButtonToNode(el, node);
       
+      canvasEl.appendChild(el);
+      setSelected(id);
+      return id;
+    }
+
+    // ===== 音频节点 =====
+    function createAudioNode(opts){
+      const id = state.nextNodeId++;
+      const viewportPos = getViewportNodePosition();
+      let x = opts && typeof opts.x === 'number' ? opts.x : viewportPos.x;
+      let y = Math.max(MIN_NODE_Y, opts && typeof opts.y === 'number' ? opts.y : viewportPos.y);
+
+      if (opts && opts.checkCollision) {
+        const avail = findNearestAvailablePosition(x, y, 200, 150);
+        x = avail.x;
+        y = Math.max(MIN_NODE_Y, avail.y);
+      }
+
+      const node = {
+        id,
+        type: 'audio',
+        title: opts?.title || '音频',
+        x,
+        y,
+        data: {
+          url: opts?.data?.url || '',
+          name: opts?.data?.name || '',
+          file: null,
+        }
+      };
+      state.nodes.push(node);
+
+      const el = document.createElement('div');
+      el.className = 'node audio-node';
+      el.dataset.nodeId = String(id);
+      el.style.left = node.x + 'px';
+      el.style.top = node.y + 'px';
+
+      el.innerHTML = `
+        <div class="port output" title="输出（连接到图生视频节点）"></div>
+        <div class="node-header">
+          <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${node.title}</div>
+          <button class="icon-btn" title="删除">×</button>
+        </div>
+        <div class="node-body">
+          <div class="field field-collapsible">
+            <div class="label">音频文件</div>
+            <input class="audio-file" type="file" accept="audio/*" />
+          </div>
+          <div class="field field-always-visible audio-preview-field" style="display:none;">
+            <div class="audio-node-preview">
+              <span class="audio-node-name"></span>
+            </div>
+            <audio class="audio-node-player" controls style="width: 100%; height: 32px; margin-top: 4px;"></audio>
+          </div>
+          <div class="field field-collapsible audio-preview-actions-field" style="display:none;">
+            <div class="preview-row" style="margin-top: 4px;">
+              <button class="mini-btn audio-clear" type="button">清除</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const headerEl = el.querySelector('.node-header');
+      const deleteBtn = el.querySelector('.icon-btn');
+      const fileEl = el.querySelector('.audio-file');
+      const outputPort = el.querySelector('.port.output');
+      const previewField = el.querySelector('.audio-preview-field');
+      const previewActionsField = el.querySelector('.audio-preview-actions-field');
+      const nameEl = el.querySelector('.audio-node-name');
+      const playerEl = el.querySelector('.audio-node-player');
+      const clearBtn = el.querySelector('.audio-clear');
+
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeNode(id);
+      });
+
+      el.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+        setSelected(id);
+        bringNodeToFront(id);
+      });
+
+      headerEl.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if(!state.selectedNodeIds.includes(id)){
+          setSelected(id);
+        }
+        bringNodeToFront(id);
+        initNodeDrag(id, e.clientX, e.clientY);
+      });
+
+      outputPort.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        state.connecting = { fromId: id, startX: e.clientX, startY: e.clientY };
+      });
+
+      function setAudioFromFile(file, serverUrl){
+        node.data.file = file;
+        node.data.name = file ? file.name : '';
+        node.data.url = serverUrl || (file ? URL.createObjectURL(file) : '');
+        if(node.data.url){
+          playerEl.src = serverUrl || node.data.url;
+          const displayName = node.data.name.length > 15 ? node.data.name.substring(0, 15) + '...' : node.data.name;
+          nameEl.textContent = '🎵 ' + displayName;
+          nameEl.title = node.data.name;
+          previewField.style.display = 'block';
+          previewActionsField.style.display = 'block';
+        } else {
+          playerEl.removeAttribute('src');
+          playerEl.load();
+          previewField.style.display = 'none';
+          previewActionsField.style.display = 'none';
+          nameEl.textContent = '';
+        }
+      }
+
+      fileEl.addEventListener('change', async () => {
+        const file = fileEl.files && fileEl.files[0];
+        if(!file) return;
+        setAudioFromFile(file);
+        fileEl.value = '';
+        try {
+          showToast('正在上传音频...', 'info');
+          const permanentUrl = await uploadFile(file);
+          if(permanentUrl){
+            node.data.url = permanentUrl;
+            playerEl.src = permanentUrl;
+            showToast('音频上传成功', 'success');
+            try{ autoSaveWorkflow(); } catch(e){}
+          }
+        } catch(error){
+          console.error('音频上传失败:', error);
+          showToast('音频上传失败', 'error');
+        }
+      });
+
+      clearBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        try{ playerEl.pause(); } catch(err){}
+        setAudioFromFile(null);
+      });
+
+      // 恢复已保存的数据
+      if(node.data.url){
+        setAudioFromFile(null, node.data.url);
+      }
+
+      addDebugButtonToNode(el, node);
       canvasEl.appendChild(el);
       setSelected(id);
       return id;
@@ -2605,6 +2758,114 @@
       }
     }
 
+    // ===== 渲染音频连接线 =====
+    function renderAudioConnections(){
+      try {
+        if(!connectionsSvg || !canvasEl || !canvasContainer) return;
+        if(!state.audioConnections) state.audioConnections = [];
+
+        const oldLines = document.querySelectorAll('.audio-conn-group');
+        oldLines.forEach(l => l.remove());
+
+        if(state.selectedAudioConnId !== null){
+          const stillExists = state.audioConnections.some(c => c.id === state.selectedAudioConnId);
+          if(!stillExists){
+            state.selectedAudioConnId = null;
+            if(connDeleteBtn) connDeleteBtn.style.display = 'none';
+          }
+        }
+
+        for(const conn of state.audioConnections){
+          const fromEl = canvasEl.querySelector(`.node[data-node-id="${conn.from}"]`);
+          const toEl = canvasEl.querySelector(`.node[data-node-id="${conn.to}"]`);
+          if(!fromEl || !toEl) continue;
+
+          const outputPort = fromEl.querySelector('.port.output');
+          const audioInputPort = toEl.querySelector('.port.audio-input-port');
+          if(!outputPort || !audioInputPort) continue;
+
+          const fromRect = outputPort.getBoundingClientRect();
+          const toRect = audioInputPort.getBoundingClientRect();
+          const containerRect = canvasContainer.getBoundingClientRect();
+
+          const fromX = (fromRect.left + fromRect.width/2 - containerRect.left - state.panX) / state.zoom;
+          const fromY = (fromRect.top + fromRect.height/2 - containerRect.top - state.panY) / state.zoom;
+          const toX = (toRect.left + toRect.width/2 - containerRect.left - state.panX) / state.zoom;
+          const toY = (toRect.top + toRect.height/2 - containerRect.top - state.panY) / state.zoom;
+
+          const dx = Math.abs(toX - fromX) * 0.5;
+          const pathD = `M${fromX},${fromY} C${fromX+dx},${fromY} ${toX-dx},${toY} ${toX},${toY}`;
+
+          const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+          group.setAttribute('class', 'audio-conn-group');
+          group.dataset.audioConnId = String(conn.id);
+
+          const hitbox = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          hitbox.setAttribute('d', pathD);
+          hitbox.setAttribute('class', 'hitbox');
+          hitbox.style.fill = 'none';
+          hitbox.style.stroke = 'transparent';
+          hitbox.style.strokeWidth = '20';
+          hitbox.style.cursor = 'pointer';
+
+          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          path.setAttribute('d', pathD);
+          path.setAttribute('class', 'visible');
+          path.style.fill = 'none';
+          path.style.stroke = '#8b5cf6';
+          path.style.strokeWidth = '2';
+          path.style.strokeDasharray = '6,3';
+          path.style.pointerEvents = 'none';
+
+          if(state.selectedAudioConnId === conn.id){
+            path.style.stroke = '#6d28d9';
+            path.style.strokeWidth = '3';
+            path.style.strokeDasharray = 'none';
+          }
+
+          group.appendChild(hitbox);
+          group.appendChild(path);
+          connectionsSvg.appendChild(group);
+
+          hitbox.addEventListener('click', (e) => {
+            e.stopPropagation();
+            state.selectedConnId = null;
+            state.selectedImgConnId = null;
+            state.selectedFirstFrameConnId = null;
+            state.selectedVideoConnId = null;
+            state.selectedReferenceConnId = null;
+            state.selectedAudioConnId = conn.id;
+            renderConnections();
+            renderImageConnections();
+            renderFirstFrameConnections();
+            renderVideoConnections();
+            renderReferenceConnections();
+            renderAudioConnections();
+          });
+
+          if(state.selectedAudioConnId === conn.id){
+            const cx1 = fromX + dx;
+            const cy1 = fromY;
+            const cx2 = toX - dx;
+            const cy2 = toY;
+            const t = 0.5;
+            const mt = 1 - t;
+            const bezierX = mt*mt*mt*fromX + 3*mt*mt*t*cx1 + 3*mt*t*t*cx2 + t*t*t*toX;
+            const bezierY = mt*mt*mt*fromY + 3*mt*mt*t*cy1 + 3*mt*t*t*cy2 + t*t*t*toY;
+            const screenX = bezierX * state.zoom + state.panX;
+            const screenY = bezierY * state.zoom + state.panY;
+            if(connDeleteBtn){
+              connDeleteBtn.style.display = 'flex';
+              connDeleteBtn.style.left = (screenX - 12) + 'px';
+              connDeleteBtn.style.top = (screenY - 12) + 'px';
+            }
+          }
+        }
+      } catch(error) {
+        console.error('[renderAudioConnections] Error:', error);
+      }
+    }
+
     function renderReferenceConnections(){
       // 清除旧的参考连接线
       const oldLines = document.querySelectorAll('.reference-conn-group');
@@ -2837,10 +3098,17 @@
           referenceUrls: opts?.data?.referenceUrls || [],  // 多参考图模式的图片URL列表
           startUrl: opts?.data?.startUrl || '',
           endUrl: opts?.data?.endUrl || '',
-          audioUrl: opts?.data?.audioUrl || '',  // 参考音频URL
-          videoUrl: opts?.data?.videoUrl || '',  // 参考视频URL
+          audioUrls: opts?.data?.audioUrls || [],  // [{name, url}] 参考音频列表
+          videoUrls: opts?.data?.videoUrls || [],  // [{name, url}] 参考视频列表
         }
       };
+      // 向后兼容：迁移旧格式的单值 audioUrl/videoUrl 到数组格式
+      if(opts?.data?.audioUrl && !opts?.data?.audioUrls?.length){
+        node.data.audioUrls = [{name: '已上传音频', url: opts.data.audioUrl}];
+      }
+      if(opts?.data?.videoUrl && !opts?.data?.videoUrls?.length){
+        node.data.videoUrls = [{name: '已上传视频', url: opts.data.videoUrl}];
+      }
       state.nodes.push(node);
 
       const el = document.createElement('div');
@@ -2891,21 +3159,19 @@
             <button class="mini-btn reference-clear" type="button" style="margin-top: 4px;">清除全部</button>
             <div class="reference-preview-list" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;"></div>
           </div>
-          <div class="field field-collapsible audio-field">
-            <div class="label">参考音频（可选）</div>
-            <input class="audio-file" type="file" accept="audio/*" />
-            <button class="mini-btn audio-clear" type="button" style="margin-top: 4px; display:none;">清除</button>
-            <div class="audio-preview" style="display:none; margin-top: 8px; font-size: 12px; color: #34d399;">
-              🎵 <span class="audio-name"></span>
-            </div>
+          <div class="field field-collapsible audio-field" style="position: relative;">
+            <div class="port audio-input-port" data-port-type="audio" title="连接音频节点"></div>
+            <div class="label">参考音频（可选，支持多个）</div>
+            <input class="audio-file" type="file" accept="audio/*" multiple />
+            <button class="mini-btn audio-clear-all" type="button" style="margin-top: 4px;">清除全部</button>
+            <div class="audio-preview-list"></div>
           </div>
-          <div class="field field-collapsible video-field">
-            <div class="label">参考视频（可选）</div>
-            <input class="video-file" type="file" accept="video/*" />
-            <button class="mini-btn video-clear" type="button" style="margin-top: 4px; display:none;">清除</button>
-            <div class="video-preview" style="display:none; margin-top: 8px; font-size: 12px; color: #fbbf24;">
-              🎬 <span class="video-name"></span>
-            </div>
+          <div class="field field-collapsible video-field" style="position: relative;">
+            <div class="port video-ref-input-port" data-port-type="video-ref" title="连接视频节点"></div>
+            <div class="label">参考视频（可选，支持多个）</div>
+            <input class="video-file" type="file" accept="video/*" multiple />
+            <button class="mini-btn video-clear-all" type="button" style="margin-top: 4px;">清除全部</button>
+            <div class="video-preview-list"></div>
           </div>
           <div class="field field-collapsible">
             <div class="label">视频长度</div>
@@ -2990,13 +3256,13 @@
       const referenceClearBtn = el.querySelector('.reference-clear');
       const referencePreviewList = el.querySelector('.reference-preview-list');
       const audioFileEl = el.querySelector('.audio-file');
-      const audioClearBtn = el.querySelector('.audio-clear');
-      const audioPreview = el.querySelector('.audio-preview');
-      const audioName = el.querySelector('.audio-name');
+      const audioClearAllBtn = el.querySelector('.audio-clear-all');
+      const audioPreviewList = el.querySelector('.audio-preview-list');
+      const audioInputPort = el.querySelector('.audio-input-port');
       const videoFileEl = el.querySelector('.video-file');
-      const videoClearBtn = el.querySelector('.video-clear');
-      const videoPreview = el.querySelector('.video-preview');
-      const videoName = el.querySelector('.video-name');
+      const videoClearAllBtn = el.querySelector('.video-clear-all');
+      const videoPreviewList = el.querySelector('.video-preview-list');
+      const videoRefInputPort = el.querySelector('.video-ref-input-port');
 
       outputPort.addEventListener('mousedown', (e) => {
         e.preventDefault();
@@ -3195,72 +3461,134 @@
         renderReferencePreview();
       });
 
-      // 音频上传处理
-      async function handleAudioUpload(file) {
-        const uploadedUrl = await uploadFile(file);
-        if(uploadedUrl) {
-          node.data.audioUrl = uploadedUrl;
-          audioPreview.style.display = 'block';
-          audioName.textContent = file.name;
-          audioClearBtn.style.display = '';
-          showToast('音频上传成功', 'success');
-        }
+      // ===== 音频上传处理（多文件） =====
+      function renderAudioPreview(){
+        audioPreviewList.innerHTML = '';
+        node.data.audioUrls.forEach((item, idx) => {
+          const el = document.createElement('div');
+          el.className = 'media-item';
+          el.innerHTML = `<span class="media-name" title="${item.name}">🎵 ${item.name}</span><span class="remove-btn">×</span>`;
+          el.querySelector('.remove-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            node.data.audioUrls.splice(idx, 1);
+            renderAudioPreview();
+          });
+          audioPreviewList.appendChild(el);
+        });
       }
 
-      audioFileEl.addEventListener('change', () => {
-        const file = audioFileEl.files?.[0];
-        if(file) {
-          handleAudioUpload(file);
+      audioFileEl.addEventListener('change', async () => {
+        const files = audioFileEl.files;
+        if(files && files.length > 0){
+          for(const file of files){
+            const url = await uploadFile(file);
+            if(url){
+              node.data.audioUrls.push({name: file.name, url});
+            }
+          }
+          renderAudioPreview();
+          showToast('音频上传成功', 'success');
         }
         audioFileEl.value = '';
       });
 
-      audioClearBtn.addEventListener('click', (e) => {
+      audioClearAllBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        node.data.audioUrl = '';
-        audioPreview.style.display = 'none';
-        audioName.textContent = '';
-        audioClearBtn.style.display = 'none';
+        node.data.audioUrls = [];
+        renderAudioPreview();
       });
 
-      // 视频上传处理
-      async function handleVideoUpload(file) {
-        const uploadedUrl = await uploadFile(file);
-        if(uploadedUrl) {
-          node.data.videoUrl = uploadedUrl;
-          videoPreview.style.display = 'block';
-          videoName.textContent = file.name;
-          videoClearBtn.style.display = '';
-          showToast('视频上传成功', 'success');
-        }
+      // ===== 视频上传处理（多文件） =====
+      function renderVideoPreview(){
+        videoPreviewList.innerHTML = '';
+        node.data.videoUrls.forEach((item, idx) => {
+          const el = document.createElement('div');
+          el.className = 'media-item';
+          el.innerHTML = `<span class="media-name" title="${item.name}">🎬 ${item.name}</span><span class="remove-btn">×</span>`;
+          el.querySelector('.remove-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            node.data.videoUrls.splice(idx, 1);
+            renderVideoPreview();
+          });
+          videoPreviewList.appendChild(el);
+        });
       }
 
-      videoFileEl.addEventListener('change', () => {
-        const file = videoFileEl.files?.[0];
-        if(file) {
-          handleVideoUpload(file);
+      videoFileEl.addEventListener('change', async () => {
+        const files = videoFileEl.files;
+        if(files && files.length > 0){
+          for(const file of files){
+            const url = await uploadFile(file);
+            if(url){
+              node.data.videoUrls.push({name: file.name, url});
+            }
+          }
+          renderVideoPreview();
+          showToast('视频上传成功', 'success');
         }
         videoFileEl.value = '';
       });
 
-      videoClearBtn.addEventListener('click', (e) => {
+      videoClearAllBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        node.data.videoUrl = '';
-        videoPreview.style.display = 'none';
-        videoName.textContent = '';
-        videoClearBtn.style.display = 'none';
+        node.data.videoUrls = [];
+        renderVideoPreview();
       });
 
       // 恢复已保存的音频/视频预览
-      if(node.data.audioUrl) {
-        audioPreview.style.display = 'block';
-        audioName.textContent = node.data.audioUrl.split('/').pop() || '已上传音频';
-        audioClearBtn.style.display = '';
+      renderAudioPreview();
+      renderVideoPreview();
+
+      // ===== 音频/视频输入端口连接处理 =====
+      if(audioInputPort){
+        audioInputPort.addEventListener('mouseup', (e) => {
+          if(state.connecting && state.connecting.fromId !== id){
+            const fromNode = state.nodes.find(n => n.id === state.connecting.fromId);
+            if(fromNode && fromNode.type === 'audio'){
+              const exists = state.audioConnections.some(c => c.from === fromNode.id && c.to === id);
+              if(!exists){
+                state.audioConnections.push({
+                  id: state.nextAudioConnId++,
+                  from: fromNode.id,
+                  to: id
+                });
+                // 将音频URL追加到节点数据
+                if(fromNode.data.url){
+                  node.data.audioUrls.push({name: fromNode.data.name || '连接的音频', url: fromNode.data.url});
+                  renderAudioPreview();
+                }
+                renderAudioConnections();
+              }
+            }
+          }
+          state.connecting = null;
+        });
       }
-      if(node.data.videoUrl) {
-        videoPreview.style.display = 'block';
-        videoName.textContent = node.data.videoUrl.split('/').pop() || '已上传视频';
-        videoClearBtn.style.display = '';
+
+      if(videoRefInputPort){
+        videoRefInputPort.addEventListener('mouseup', (e) => {
+          if(state.connecting && state.connecting.fromId !== id){
+            const fromNode = state.nodes.find(n => n.id === state.connecting.fromId);
+            if(fromNode && fromNode.type === 'video'){
+              const exists = state.videoConnections.some(c => c.from === fromNode.id && c.to === id && c.portType === 'video-ref');
+              if(!exists){
+                state.videoConnections.push({
+                  id: state.nextVideoConnId++,
+                  from: fromNode.id,
+                  to: id,
+                  portType: 'video-ref'
+                });
+                // 将视频URL追加到节点数据
+                if(fromNode.data.url){
+                  node.data.videoUrls.push({name: fromNode.data.name || '连接的视频', url: fromNode.data.url});
+                  renderVideoPreview();
+                }
+                renderVideoConnections();
+              }
+            }
+          }
+          state.connecting = null;
+        });
       }
 
       // 初始化图片模式UI（必须在这里调用，确保加载保存的模式）
@@ -3650,10 +3978,33 @@
           
           console.log('[DEBUG] 生成视频参数:', { drawCount: node.data.drawCount, desiredCount, duration, prompt, ratio, videoModel, imageUrls, imageMode: currentImageMode, referenceImages });
 
+          // 收集所有音频URL（上传 + 连接节点）
+          let allAudioUrls = [...(node.data.audioUrls || []).map(a => a.url)];
+          state.audioConnections.filter(c => c.to === id).forEach(c => {
+            const fromNode = state.nodes.find(n => n.id === c.from);
+            if(fromNode?.data?.url && !allAudioUrls.includes(fromNode.data.url)){
+              allAudioUrls.push(fromNode.data.url);
+            }
+          });
+
+          // 收集所有视频URL（上传 + 连接节点）
+          let allVideoUrls = [...(node.data.videoUrls || []).map(v => v.url)];
+          state.videoConnections.filter(c => c.to === id && c.portType === 'video-ref').forEach(c => {
+            const fromNode = state.nodes.find(n => n.id === c.from);
+            if(fromNode?.data?.url && !allVideoUrls.includes(fromNode.data.url)){
+              allVideoUrls.push(fromNode.data.url);
+            }
+          });
+
+          // 构建 media_references（用于 @ 提及解析）
+          const mediaReferences = getMentionableItems().map(item => ({
+            displayName: item.displayName,
+            type: item.type,
+            fileUrl: item.url
+          }));
+
           // 调用生成API
-          const audioUrl = node.data.audioUrl || '';
-          const videoUrl = node.data.videoUrl || '';
-          const result = await generateVideoFromImage(imageUrls, prompt, duration, desiredCount, ratio, videoModel, currentImageMode, referenceImages, audioUrl, videoUrl);
+          const result = await generateVideoFromImage(imageUrls, prompt, duration, desiredCount, ratio, videoModel, currentImageMode, referenceImages, allAudioUrls.join(','), allVideoUrls.join(','), JSON.stringify(mediaReferences));
           console.log('[DEBUG] API返回:', { projectIds: result.projectIds, count: result.projectIds?.length });
           
           genStatus.textContent = '任务已提交，正在生成视频...';
@@ -4013,6 +4364,129 @@
         if(promptCharCount) {
           promptCharCount.textContent = `${promptEl.value.length} 字符`;
         }
+        // @ 提及检测
+        checkMentionTrigger();
+      });
+
+      // ===== @ 提及系统 =====
+      let mentionState = { visible: false, query: '', queryStart: -1, selectedIndex: 0 };
+      let mentionDropdownEl = null;
+
+      function getMentionableItems(){
+        const items = [];
+        if(node.data.startUrl) items.push({displayName: '首帧图片', type: 'image', url: node.data.startUrl});
+        if(node.data.endUrl) items.push({displayName: '尾帧图片', type: 'image', url: node.data.endUrl});
+        (node.data.referenceUrls || []).forEach((url, i) => items.push({displayName: `参考图${i+1}`, type: 'image', url}));
+        (node.data.audioUrls || []).forEach((item, i) => items.push({displayName: item.name || `音频${i+1}`, type: 'audio', url: item.url}));
+        (node.data.videoUrls || []).forEach((item, i) => items.push({displayName: item.name || `视频${i+1}`, type: 'video', url: item.url}));
+        return items;
+      }
+
+      function checkMentionTrigger(){
+        const cursorPos = promptEl.selectionStart;
+        const textBefore = promptEl.value.substring(0, cursorPos);
+        const match = textBefore.match(/@([^@\s]*)$/);
+        if(match){
+          mentionState.visible = true;
+          mentionState.query = match[1];
+          mentionState.queryStart = cursorPos - match[0].length;
+          mentionState.selectedIndex = 0;
+          showMentionDropdown();
+        } else {
+          hideMentionDropdown();
+        }
+      }
+
+      function showMentionDropdown(){
+        const items = getMentionableItems();
+        const query = mentionState.query.toLowerCase();
+        const filtered = items.filter(item =>
+          item.displayName.toLowerCase().includes(query) ||
+          (item.type === 'image' && '图片'.includes(query)) ||
+          (item.type === 'audio' && '音频'.includes(query)) ||
+          (item.type === 'video' && '视频'.includes(query))
+        );
+        if(filtered.length === 0){
+          hideMentionDropdown();
+          return;
+        }
+        if(!mentionDropdownEl){
+          mentionDropdownEl = document.createElement('div');
+          mentionDropdownEl.className = 'mention-dropdown';
+          promptEl.parentElement.style.position = 'relative';
+          promptEl.parentElement.appendChild(mentionDropdownEl);
+        }
+        const typeIcons = {image: '🖼️', audio: '🎵', video: '🎬'};
+        const typeNames = {image: '图片', audio: '音频', video: '视频'};
+        mentionDropdownEl.innerHTML = filtered.map((item, i) =>
+          `<div class="mention-dropdown-item${i === mentionState.selectedIndex ? ' selected' : ''}" data-index="${i}">` +
+          `<span class="mention-icon">${typeIcons[item.type] || '📄'}</span>` +
+          `<span class="mention-name">${item.displayName}</span>` +
+          `<span class="mention-type">${typeNames[item.type] || item.type}</span>` +
+          `</div>`
+        ).join('');
+        mentionDropdownEl.style.display = 'block';
+        // 点击选择
+        mentionDropdownEl.querySelectorAll('.mention-dropdown-item').forEach(el => {
+          el.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            const idx = parseInt(el.dataset.index);
+            insertMention(filtered[idx]);
+          });
+        });
+      }
+
+      function hideMentionDropdown(){
+        mentionState.visible = false;
+        if(mentionDropdownEl) mentionDropdownEl.style.display = 'none';
+      }
+
+      function insertMention(item){
+        const before = promptEl.value.substring(0, mentionState.queryStart);
+        const after = promptEl.value.substring(promptEl.selectionStart);
+        promptEl.value = before + '@' + item.displayName + ' ' + after;
+        node.data.prompt = promptEl.value;
+        hideMentionDropdown();
+        promptEl.focus();
+        const newPos = mentionState.queryStart + item.displayName.length + 2;
+        promptEl.setSelectionRange(newPos, newPos);
+        if(promptPreview){
+          const preview = node.data.prompt.length > 50 ? node.data.prompt.substring(0, 50) + '...' : node.data.prompt;
+          promptPreview.textContent = preview;
+        }
+        if(promptCharCount) promptCharCount.textContent = `${promptEl.value.length} 字符`;
+      }
+
+      promptEl.addEventListener('keydown', (e) => {
+        if(!mentionState.visible) return;
+        const items = getMentionableItems();
+        const query = mentionState.query.toLowerCase();
+        const filtered = items.filter(item =>
+          item.displayName.toLowerCase().includes(query) ||
+          (item.type === 'image' && '图片'.includes(query)) ||
+          (item.type === 'audio' && '音频'.includes(query)) ||
+          (item.type === 'video' && '视频'.includes(query))
+        );
+        if(filtered.length === 0) return;
+        if(e.key === 'ArrowDown'){
+          e.preventDefault();
+          mentionState.selectedIndex = Math.min(mentionState.selectedIndex + 1, filtered.length - 1);
+          showMentionDropdown();
+        } else if(e.key === 'ArrowUp'){
+          e.preventDefault();
+          mentionState.selectedIndex = Math.max(mentionState.selectedIndex - 1, 0);
+          showMentionDropdown();
+        } else if(e.key === 'Enter' || e.key === 'Tab'){
+          e.preventDefault();
+          insertMention(filtered[mentionState.selectedIndex]);
+        } else if(e.key === 'Escape'){
+          e.preventDefault();
+          hideMentionDropdown();
+        }
+      });
+
+      promptEl.addEventListener('blur', () => {
+        setTimeout(hideMentionDropdown, 200);
       });
 
       // 放大编辑按钮点击事件
@@ -4455,6 +4929,7 @@
               renderImageConnections();
               renderFirstFrameConnections();
               renderVideoConnections();
+              renderAudioConnections();
               
               // 更新分镜节点的预览图和选择菜单
               if(fromNode.updatePreview){
@@ -5809,6 +6284,7 @@
               renderImageConnections();
               renderFirstFrameConnections();
               renderVideoConnections();
+              renderAudioConnections();
               renderMinimap();
               try{ autoSaveWorkflow(); } catch(e){}
               
@@ -6120,6 +6596,7 @@
               renderImageConnections();
               renderFirstFrameConnections();
               renderVideoConnections();
+              renderAudioConnections();
               renderMinimap();
               try{ autoSaveWorkflow(); } catch(e){}
 
@@ -7330,6 +7807,7 @@
               renderImageConnections();
               renderFirstFrameConnections();
               renderVideoConnections();
+              renderAudioConnections();
               renderReferenceConnections();
               renderMinimap();
               try{ autoSaveWorkflow(); } catch(e){}
@@ -9604,6 +10082,7 @@
               renderImageConnections();
               renderFirstFrameConnections();
               renderVideoConnections();
+              renderAudioConnections();
               
               // 如果是图片节点连接，更新预览图和选择菜单
               if(fromNode.type === 'image'){
