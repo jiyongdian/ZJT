@@ -120,6 +120,25 @@ const PROVIDER_DEFINITIONS = [
         configKeyMap: { api_key: 'llm.qwen.api_key', base_url: 'llm.qwen.base_url' },
         testEndpoint: 'qwen'
     },
+    {
+        id: 'deepseek',
+        name: 'DeepSeek',
+        description: 'DeepSeek 大模型，高性价比推理与创作',
+        category: 'llm',
+        icon: '🔍',
+        docUrl: 'https://platform.deepseek.com/api_keys',
+        lazyRecommended: false,
+        displayOrder: 7,
+        baseName: 'deepseek',
+        isOfficialAPI: false,
+        impacts: ['剧本创作', 'AI对话', '剧本拆分'],
+        fields: [
+            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 DeepSeek API Key', required: true },
+            { id: 'base_url', label: 'Base URL (可选)', type: 'url', placeholder: 'https://api.deepseek.com', required: false, helpText: '可使用第三方代理服务，留空使用默认值' }
+        ],
+        configKeyMap: { api_key: 'llm.deepseek.api_key', base_url: 'llm.deepseek.base_url' },
+        testEndpoint: null
+    },
 
     // ===== 生图服务商 =====
     {

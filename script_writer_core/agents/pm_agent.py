@@ -251,8 +251,13 @@ class PMAgent(BaseAgent):
                     self._handle_tool_calls(message, task, session_data)
                 else:
                     content = message.content or ""
-                    logger.info(f"{self.agent_id}: Adding assistant response to history (length: {len(content)} chars)")
-                    self.add_to_history("assistant", content)
+                    reasoning_content = getattr(message, 'reasoning_content', None)
+                    if reasoning_content:
+                        history_content = {"text": content, "reasoning_content": reasoning_content}
+                    else:
+                        history_content = content
+                    logger.info(f"{self.agent_id}: Adding assistant response to history (length: {len(content)} chars, has_reasoning={reasoning_content is not None})")
+                    self.add_to_history("assistant", history_content)
                     logger.info(f"{self.agent_id}: conversation_history now has {len(self.conversation_history)} messages")
                     
                     logger.warning(f"[DUPLICATE-DEBUG] About to push PM message: task_id={task.task_id}, content_preview={content[:100]}...")
@@ -299,6 +304,11 @@ class PMAgent(BaseAgent):
         # 根据 Gemini 文档：并行函数调用时，只有第一个函数调用包含 thought_signature
         if hasattr(message, 'thought_signature') and message.thought_signature:
             history_entry["thought_signature"] = message.thought_signature
+        
+        # 提取 reasoning_content（如果存在）
+        # DeepSeek 等推理模型要求在后续请求中回传 reasoning_content
+        if hasattr(message, 'reasoning_content') and message.reasoning_content:
+            history_entry["reasoning_content"] = message.reasoning_content
         
         self.add_to_history("assistant", history_entry)
         
@@ -712,6 +722,18 @@ class PMAgent(BaseAgent):
                 if "thought_signature" in content:
                     assistant_msg["thought_signature"] = content["thought_signature"]
                 
+                # 如果有 reasoning_content，也要传递给 API
+                if "reasoning_content" in content:
+                    assistant_msg["reasoning_content"] = content["reasoning_content"]
+                
+                messages.append(assistant_msg)
+            elif role == "assistant" and isinstance(content, dict) and "reasoning_content" in content:
+                # 纯文本 assistant 消息但包含 reasoning_content（DeepSeek 推理模型要求回传）
+                assistant_msg = {
+                    "role": "assistant",
+                    "content": content.get("text", ""),
+                    "reasoning_content": content["reasoning_content"]
+                }
                 messages.append(assistant_msg)
             else:
                 messages.append({

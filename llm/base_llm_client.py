@@ -15,10 +15,11 @@ class BaseLLMClient(ABC):
 
     # 响应格式类 - 所有 driver 返回统一格式
     class Message:
-        def __init__(self, content: str, tool_calls: Optional[List] = None, thought_signature: Optional[str] = None):
+        def __init__(self, content: str, tool_calls: Optional[List] = None, thought_signature: Optional[str] = None, reasoning_content: Optional[str] = None):
             self.content = content
             self.tool_calls = tool_calls
             self.thought_signature = thought_signature
+            self.reasoning_content = reasoning_content
 
     class Choice:
         def __init__(self, message: 'BaseLLMClient.Message'):
@@ -63,9 +64,9 @@ class BaseLLMClient(ABC):
         """
         pass
 
-    def _create_response(self, content: str, tool_calls: Optional[List] = None, usage: Optional[Dict] = None) -> 'Response':
+    def _create_response(self, content: str, tool_calls: Optional[List] = None, usage: Optional[Dict] = None, reasoning_content: Optional[str] = None) -> 'Response':
         """创建标准响应格式"""
-        message = self.Message(content, tool_calls)
+        message = self.Message(content, tool_calls, reasoning_content=reasoning_content)
         return self.Response([self.Choice(message)], usage)
 
     def _log_token_usage(self, usage: Dict, auth_token: str, vendor_id: int, model_id: int):

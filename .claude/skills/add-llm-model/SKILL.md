@@ -256,6 +256,44 @@ def downgrade() -> None:
     logger.info("[Migration] Deleted vendor")
 ```
 
+### 第五步：配置文件与热更新
+
+新增供应商后，必须在配置文件和热更新定义中添加对应条目，否则管理后台无法配置该供应商。
+
+**1. `config.example.yml` 和 `config_prod.base.yaml`** — 在 `llm` 节点下新增供应商配置段（两个文件格式一致）：
+
+```yaml
+llm:
+  # ... 已有供应商
+  {vendor}:
+    api_key: ""                    # 必填，空字符串表示未配置
+    base_url: "https://api.{vendor}.com"  # 可选，有默认值时填写
+```
+
+**2. `config/default_configs.py`** — 在 `DEFAULT_CONFIGS` 列表中添加热更新配置项：
+
+```python
+# ==================== {Vendor} 配置 ====================
+{
+    'key': 'llm.{vendor}.api_key',
+    'value_type': 'string',
+    'description': '{Vendor} API Key',
+    'editable': True,
+    'is_sensitive': True,
+    'quick_config': True
+},
+{
+    'key': 'llm.{vendor}.base_url',
+    'value_type': 'string',
+    'description': '{Vendor} API 基础URL（默认 https://api.{vendor}.com）',
+    'editable': True,
+    'is_sensitive': False,
+    'quick_config': True
+},
+```
+
+> **注意**：`quick_config: True` 使配置项出现在管理后台的快速配置弹窗中，方便用户快速填入 API Key。
+
 ## 计费阈值计算公式
 
 **核心公式**：`threshold = 0.04 × 10^6 / 单价(元/百万token)`
@@ -300,6 +338,11 @@ llm:
 - [ ] `alembic/versions/` - 已创建迁移脚本（vendor + model + vendor_model 计费）
 - [ ] 计费阈值计算正确
 - [ ] 迁移脚本 revision ≤ 32 字符
+
+**第五步：配置文件与热更新**
+- [ ] `config.example.yml` - 已在 `llm` 节点下新增 `{vendor}` 配置段（api_key + base_url）
+- [ ] `config_prod.base.yaml` - 已在 `llm` 节点下新增 `{vendor}` 配置段（与 config.example.yml 一致）
+- [ ] `config/default_configs.py` - 已在 `DEFAULT_CONFIGS` 中新增 `llm.{vendor}.api_key` 和 `llm.{vendor}.base_url` 热更新项
 
 ## 常见问题
 
