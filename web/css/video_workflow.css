@@ -1039,6 +1039,16 @@ body.tour-add-to-timeline-locked .node:has(.video-add-timeline) .field-collapsib
   gap: 6px !important;
 }
 
+/* 图生视频节点始终展开字段（不自动折叠） */
+.node:has(.video-model-select) .field-collapsible {
+  max-height: 500px !important;
+  overflow: visible !important;
+  opacity: 1 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  gap: 6px !important;
+}
+
 .field-row{
   display: flex;
   gap: 12px;
@@ -2833,6 +2843,51 @@ textarea:focus{ border-color: var(--primary); }
   overflow: visible;
   opacity: 1;
   gap: 6px !important;
+}
+
+/* ============ 图生视频节点横屏布局 ============ */
+
+/* 节点宽度调整 - 使用自适应方案 */
+.node:has(.video-node-body) {
+  width: auto;
+  min-width: 280px;
+  max-width: 720px;
+}
+
+/* 二栏布局容器 */
+.video-node-body {
+  display: flex;
+  flex-direction: row;
+  gap: 0; /* 使用边框分割 */
+  align-items: stretch;
+}
+
+/* 列基础样式 */
+.video-section {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 列之间的分割线 */
+.video-section + .video-section {
+  border-left: 1px solid #e5e7eb;
+}
+
+/* 首尾帧上下排列 */
+.video-frame-content.active {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 禁用图生视频节点的字段折叠 */
+.node:has(.video-node-body) .field-collapsible {
+  max-height: 500px;
+  overflow: visible;
+  opacity: 1;
 }
 
 /* 第3部分：按钮纵向均匀分布 */

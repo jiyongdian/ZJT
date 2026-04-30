@@ -191,10 +191,13 @@ async function generateShotFrameVideo(nodeId, node){
     const createdVideoNodeIds = [];
     const videoCount = projectIds.length;
     
+    // 使用源节点实际宽度计算偏移
+    const sourceNodeEl = document.querySelector(`.node[data-node-id="${nodeId}"]`);
+    const sourceWidth = sourceNodeEl ? sourceNodeEl.offsetWidth : 300;
     for(let i = 0; i < videoCount; i++){
       const offsetY = i * 280;
       const newVideoNodeId = createVideoNode({
-        x: node.x + 380,
+        x: node.x + sourceWidth + 60,
         y: node.y + offsetY,
         checkCollision: true
       });
@@ -228,7 +231,6 @@ async function generateShotFrameVideo(nodeId, node){
       }
     }
     
-    // 重新渲染连接线
     renderConnections();
     renderImageConnections();
     renderFirstFrameConnections();

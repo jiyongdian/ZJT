@@ -350,16 +350,10 @@
               if(fromNode && targetNode.data.referenceUrls){
                 const idx = targetNode.data.referenceUrls.indexOf(fromNode.data.url);
                 if(idx >= 0) targetNode.data.referenceUrls.splice(idx, 1);
-                // 重新渲染参考图预览
-                const refPreviewList = document.querySelector(`.node[data-node-id="${conn.to}"] .reference-preview-list`);
-                if(refPreviewList){
-                  refPreviewList.innerHTML = '';
-                  targetNode.data.referenceUrls.forEach((url, i) => {
-                    const item = document.createElement('div');
-                    item.style.cssText = 'position: relative; width: 50px; height: 50px;';
-                    item.innerHTML = `<img src="${url}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;" />`;
-                    refPreviewList.appendChild(item);
-                  });
+                // 使用节点注册的预览更新函数（包含计数器更新）
+                const targetEl = document.querySelector(`.node[data-node-id="${conn.to}"]`);
+                if(targetEl && typeof targetEl._updateReferencePreview === 'function') {
+                  targetEl._updateReferencePreview();
                 }
               }
             }
@@ -460,6 +454,11 @@
                 if(fromNode && targetNode.data.referenceUrls){
                   const idx = targetNode.data.referenceUrls.indexOf(fromNode.data.url);
                   if(idx >= 0) targetNode.data.referenceUrls.splice(idx, 1);
+                  // 使用节点注册的预览更新函数（包含计数器更新）
+                  const targetEl = document.querySelector(`.node[data-node-id="${conn.to}"]`);
+                  if(targetEl && typeof targetEl._updateReferencePreview === 'function') {
+                    targetEl._updateReferencePreview();
+                  }
                 }
               }
               console.log(`[键盘删除图片连接] 清除图生视频节点 ${conn.to} 的 ${conn.portType} URL，准备更新算力`);
@@ -626,6 +625,7 @@
         renderImageConnections();
         renderFirstFrameConnections();
         renderVideoConnections();
+        renderAudioConnections();
         renderReferenceConnections();
         // 更新删除按钮位置（如果有选中的连接线）
         if(state.selectedConnId !== null){
@@ -633,6 +633,7 @@
           renderImageConnections();
           renderFirstFrameConnections();
           renderVideoConnections();
+          renderAudioConnections();
           renderReferenceConnections();
         }
       }
@@ -674,6 +675,7 @@
         renderImageConnections();
         renderFirstFrameConnections();
         renderVideoConnections();
+        renderAudioConnections();
         renderReferenceConnections();
       }
       // 拖拽创建连接线时显示虚线预览
@@ -683,7 +685,6 @@
         const containerRect = canvasContainer.getBoundingClientRect();
         const toX = (e.clientX - containerRect.left - state.panX) / state.zoom;
         const toY = (e.clientY - containerRect.top - state.panY) / state.zoom;
-        
         let nearestPort = null;
         let nearestImgPort = null;
         let nearestDist = 50;
@@ -806,23 +807,63 @@
           }
         }
         
-        // 如果从视频节点拖拽，查找对话组节点的视频输入端口
+        // 如果从视频节点拖拽，查找对话组节点和图生视频节点的视频输入端口
         let nearestVideoInputPort = null;
+        let nearestVideoRefPort = null;
         if(fromNode && fromNode.type === 'video'){
           let nearestVideoDist = 50;
+          let nearestVideoRefDist = 50;
           for(const node of state.nodes){
-            if(node.type !== 'dialogue_group') continue;
             const toEl = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
             if(!toEl) continue;
-            const portEl = toEl.querySelector('.port.video-input-port');
-            if(!portEl || portEl.classList.contains('disabled')) continue;
+            // 对话组节点的视频输入端口
+            if(node.type === 'dialogue_group'){
+              const portEl = toEl.querySelector('.port.video-input-port');
+              if(portEl && !portEl.classList.contains('disabled')){
+                const rect = portEl.getBoundingClientRect();
+                const portX = (rect.left + rect.width/2 - containerRect.left - state.panX) / state.zoom;
+                const portY = (rect.top + rect.height/2 - containerRect.top - state.panY) / state.zoom;
+                const dist = Math.sqrt(Math.pow(toX - portX, 2) + Math.pow(toY - portY, 2));
+                if(dist < nearestVideoDist){
+                  nearestVideoDist = dist;
+                  nearestVideoInputPort = { nodeId: node.id, x: portX, y: portY };
+                }
+              }
+            }
+            // 图生视频节点的视频参考端口
+            if(node.type === 'image_to_video'){
+              const portEl = toEl.querySelector('.video-ref-input-port');
+              if(portEl){
+                const rect = portEl.getBoundingClientRect();
+                const portX = (rect.left + rect.width/2 - containerRect.left - state.panX) / state.zoom;
+                const portY = (rect.top + rect.height/2 - containerRect.top - state.panY) / state.zoom;
+                const dist = Math.sqrt(Math.pow(toX - portX, 2) + Math.pow(toY - portY, 2));
+                if(dist < nearestVideoRefDist){
+                  nearestVideoRefDist = dist;
+                  nearestVideoRefPort = { nodeId: node.id, x: portX, y: portY };
+                }
+              }
+            }
+          }
+        }
+
+        // 如果从音频节点拖拽，查找图生视频节点的音频输入端口
+        let nearestAudioInputPort = null;
+        if(fromNode && fromNode.type === 'audio'){
+          let nearestAudioDist = 50;
+          for(const node of state.nodes){
+            if(node.type !== 'image_to_video') continue;
+            const toEl = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
+            if(!toEl) continue;
+            const portEl = toEl.querySelector('.audio-input-port');
+            if(!portEl) continue;
             const rect = portEl.getBoundingClientRect();
             const portX = (rect.left + rect.width/2 - containerRect.left - state.panX) / state.zoom;
             const portY = (rect.top + rect.height/2 - containerRect.top - state.panY) / state.zoom;
             const dist = Math.sqrt(Math.pow(toX - portX, 2) + Math.pow(toY - portY, 2));
-            if(dist < nearestVideoDist){
-              nearestVideoDist = dist;
-              nearestVideoInputPort = { nodeId: node.id, x: portX, y: portY };
+            if(dist < nearestAudioDist){
+              nearestAudioDist = dist;
+              nearestAudioInputPort = { nodeId: node.id, x: portX, y: portY };
             }
           }
         }
@@ -862,6 +903,22 @@
           const isNearest = nearestVideoInputPort && nearestVideoInputPort.nodeId === nodeId;
           portEl.classList.toggle('can-connect', isNearest);
         }
+
+        // 更新视频参考输入端口高亮状态（图生视频节点）
+        for(const portEl of canvasEl.querySelectorAll('.video-ref-input-port')){
+          const nodeEl = portEl.closest('.node');
+          const nodeId = nodeEl ? Number(nodeEl.dataset.nodeId) : null;
+          const isNearest = nearestVideoRefPort && nearestVideoRefPort.nodeId === nodeId;
+          portEl.classList.toggle('can-connect', isNearest);
+        }
+
+        // 更新音频输入端口高亮状态（图生视频节点）
+        for(const portEl of canvasEl.querySelectorAll('.audio-input-port')){
+          const nodeEl = portEl.closest('.node');
+          const nodeId = nodeEl ? Number(nodeEl.dataset.nodeId) : null;
+          const isNearest = nearestAudioInputPort && nearestAudioInputPort.nodeId === nodeId;
+          portEl.classList.toggle('can-connect', isNearest);
+        }
         
         // 更新参考端口高亮状态（角色/场景/道具拖拽时）
         for(const portEl of canvasEl.querySelectorAll('.port.reference')){
@@ -889,6 +946,14 @@
           targetX = nearestVideoInputPort.x;
           targetY = nearestVideoInputPort.y;
         }
+        if(nearestVideoRefPort){
+          targetX = nearestVideoRefPort.x;
+          targetY = nearestVideoRefPort.y;
+        }
+        if(nearestAudioInputPort){
+          targetX = nearestAudioInputPort.x;
+          targetY = nearestAudioInputPort.y;
+        }
         if(nearestRefPort){
           targetX = nearestRefPort.x;
           targetY = nearestRefPort.y;
@@ -903,6 +968,7 @@
         renderImageConnections();
         renderFirstFrameConnections();
         renderVideoConnections();
+        renderAudioConnections();
         renderReferenceConnections();
       }
     });
@@ -961,199 +1027,153 @@
         const containerRect = canvasContainer.getBoundingClientRect();
         const mouseX = (e.clientX - containerRect.left - state.panX) / state.zoom;
         const mouseY = (e.clientY - containerRect.top - state.panY) / state.zoom;
-        
-        // 如果从图片节点拖拽，查找图片输入端口、分镜节点输入端口和参考端口
-        if(fromNode && fromNode.type === 'image'){
-          let nearestImgPort = null;
-          let nearestShotFramePort = null;
-          let nearestReferencePort = null;
-          let nearestImgDist = 50;
-          let nearestShotFrameDist = 50;
-          let nearestReferenceDist = 50;
-          
-          // 查找其他图片节点的参考端口
-          for(const node of state.nodes){
-            if(node.type !== 'image' || node.id === fromNode.id) continue;
-            const toEl = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
-            if(!toEl) continue;
-            const portEl = toEl.querySelector('.port.reference');
-            if(!portEl) continue;
-            const rect = portEl.getBoundingClientRect();
-            const portX = (rect.left + rect.width/2 - containerRect.left - state.panX) / state.zoom;
-            const portY = (rect.top + rect.height/2 - containerRect.top - state.panY) / state.zoom;
-            const dist = Math.sqrt(Math.pow(mouseX - portX, 2) + Math.pow(mouseY - portY, 2));
-            if(dist < nearestReferenceDist){
-              nearestReferenceDist = dist;
-              nearestReferencePort = { nodeId: node.id, node: node };
-            }
-          }
-          
-          // 查找图生视频节点的图片端口
+        const PROXIMITY_DIST = 50;
+
+        // 辅助：计算鼠标到端口中心的距离
+        function distToPort(portEl){
+          const rect = portEl.getBoundingClientRect();
+          const px = (rect.left + rect.width/2 - containerRect.left - state.panX) / state.zoom;
+          const py = (rect.top + rect.height/2 - containerRect.top - state.panY) / state.zoom;
+          return { dist: Math.sqrt(Math.pow(mouseX - px, 2) + Math.pow(mouseY - py, 2)), x: px, y: py };
+        }
+
+        // 辅助：在 image_to_video 节点中查找最近的可见端口
+        function findNearestI2VPort(fromType, portSelectors){
+          let best = null;
+          let bestDist = PROXIMITY_DIST;
           for(const node of state.nodes){
             if(node.type !== 'image_to_video') continue;
             const toEl = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
             if(!toEl) continue;
-            
-            // 检查首帧端口
-            if(!node.data.startFile){
-              const startPort = toEl.querySelector('.start-image-port');
-              if(startPort){
-                const rect = startPort.getBoundingClientRect();
-                const portX = (rect.left + rect.width/2 - containerRect.left - state.panX) / state.zoom;
-                const portY = (rect.top + rect.height/2 - containerRect.top - state.panY) / state.zoom;
-                const dist = Math.sqrt(Math.pow(mouseX - portX, 2) + Math.pow(mouseY - portY, 2));
-                if(dist < nearestImgDist){
-                  nearestImgDist = dist;
-                  nearestImgPort = { nodeId: node.id, portType: 'start' };
-                }
+            for(const { selector, portType, guard } of portSelectors){
+              if(guard && !guard(node)) continue;
+              const portEl = toEl.querySelector(selector);
+              if(!portEl) continue;
+              const { dist } = distToPort(portEl);
+              if(dist < bestDist){
+                bestDist = dist;
+                best = { nodeId: node.id, portType, node };
               }
             }
-            // 检查尾帧端口
-            if(!node.data.endFile){
-              const endPort = toEl.querySelector('.end-image-port');
-              if(endPort){
-                const rect = endPort.getBoundingClientRect();
-                const portX = (rect.left + rect.width/2 - containerRect.left - state.panX) / state.zoom;
-                const portY = (rect.top + rect.height/2 - containerRect.top - state.panY) / state.zoom;
-                const dist = Math.sqrt(Math.pow(mouseX - portX, 2) + Math.pow(mouseY - portY, 2));
-                if(dist < nearestImgDist){
-                  nearestImgDist = dist;
-                  nearestImgPort = { nodeId: node.id, portType: 'end' };
+          }
+          return best;
+        }
+
+        if(fromNode && fromNode.type === 'image'){
+          // 图生视频节点端口
+          let imgConnected = false;
+          {
+            const i2vPort = findNearestI2VPort('image', [
+              { selector: '.start-image-port', portType: 'start', guard: n => !n.data.startFile },
+              { selector: '.end-image-port', portType: 'end', guard: n => !n.data.endFile },
+              { selector: '.ref-image-input-port', portType: 'ref-image', guard: n => {
+                if(n.data.imageMode !== 'multi_reference') return false;
+                // 检查是否已达到最大参考图数量
+                if(window.TaskConfig && window.TaskConfig.isLoaded()) {
+                  const modelConfigs = window.TaskConfig.getModelConfigs();
+                  const maxCount = modelConfigs[n.data.videoModel]?.max_multi_ref_images || 5;
+                  return (n.data.referenceUrls || []).length < maxCount;
                 }
-              }
-            }
-            // 检查参考图端口（多参考图模式）
-            if(node.data.imageMode === 'multi_reference'){
-              const refImgPort = toEl.querySelector('.ref-image-input-port');
-              if(refImgPort){
-                const rect = refImgPort.getBoundingClientRect();
-                const portX = (rect.left + rect.width/2 - containerRect.left - state.panX) / state.zoom;
-                const portY = (rect.top + rect.height/2 - containerRect.top - state.panY) / state.zoom;
-                const dist = Math.sqrt(Math.pow(mouseX - portX, 2) + Math.pow(mouseY - portY, 2));
-                if(dist < nearestImgDist){
-                  nearestImgDist = dist;
-                  nearestImgPort = { nodeId: node.id, portType: 'ref-image' };
+                return true;
+              }},
+            ]);
+            if(i2vPort){
+              // ref-image 允许多个连接（guard 已限制数量），其他端口类型检查重复
+              const shouldConnect = i2vPort.portType === 'ref-image'
+                ? true
+                : !state.imageConnections.some(c => c.to === i2vPort.nodeId && c.portType === i2vPort.portType);
+              if(shouldConnect){
+                state.imageConnections.push({ id: state.nextImgConnId++, from: fromNode.id, to: i2vPort.nodeId, portType: i2vPort.portType });
+                const tn = state.nodes.find(n => n.id === i2vPort.nodeId);
+                if(i2vPort.portType === 'start'){
+                  if(tn){
+                    tn.data.startUrl = fromNode.data.url || '';
+                    tn.data.startPreview = fromNode.data.preview || fromNode.data.url || '';
+                  }
+                } else if(i2vPort.portType === 'end'){
+                  if(tn){
+                    tn.data.endUrl = fromNode.data.url || '';
+                    tn.data.endPreview = fromNode.data.preview || fromNode.data.url || '';
+                  }
+                } else if(i2vPort.portType === 'ref-image'){
+                  if(tn && fromNode.data.url){
+                    if(!tn.data.referenceUrls) tn.data.referenceUrls = [];
+                    tn.data.referenceUrls.push(fromNode.data.url);
+                  }
                 }
+                renderImageConnections();
+                // 更新预览显示
+                if(tn){
+                  const targetEl = canvasEl.querySelector(`.node[data-node-id="${tn.id}"]`);
+                  if(i2vPort.portType === 'start' && typeof targetEl?._updateStartFrame === 'function'){
+                    targetEl._updateStartFrame();
+                  } else if(i2vPort.portType === 'end' && typeof targetEl?._updateEndFrame === 'function'){
+                    targetEl._updateEndFrame();
+                  } else if(i2vPort.portType === 'ref-image' && typeof targetEl?._updateReferencePreview === 'function'){
+                    targetEl._updateReferencePreview();
+                  }
+                }
+                try{ autoSaveWorkflow(); } catch(e){}
+                imgConnected = true;
               }
             }
           }
 
-          // 查找分镜节点的首帧端口（蓝色端口）
-          let nearestFirstFramePort = null;
-          let nearestFirstFrameDist = 50;
-          for(const node of state.nodes){
-            if(node.type !== 'shot_frame') continue;
-            const toEl = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
-            if(!toEl) continue;
-            const portEl = toEl.querySelector('.first-frame-port');
-            if(!portEl) continue;
-            const rect = portEl.getBoundingClientRect();
-            const portX = (rect.left + rect.width/2 - containerRect.left - state.panX) / state.zoom;
-            const portY = (rect.top + rect.height/2 - containerRect.top - state.panY) / state.zoom;
-            const dist = Math.sqrt(Math.pow(mouseX - portX, 2) + Math.pow(mouseY - portY, 2));
-            if(dist < nearestFirstFrameDist){
-              nearestFirstFrameDist = dist;
-              nearestFirstFramePort = { nodeId: node.id, node: node };
+          // 图片节点参考端口
+          if(!imgConnected){
+            let nearestRefPort = null;
+            let nearestRefDist = PROXIMITY_DIST;
+            for(const node of state.nodes){
+              if(node.type !== 'image' || node.id === fromNode.id) continue;
+              const toEl = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
+              if(!toEl) continue;
+              const portEl = toEl.querySelector('.port.reference');
+              if(!portEl) continue;
+              const { dist } = distToPort(portEl);
+              if(dist < nearestRefDist){
+                nearestRefDist = dist;
+                nearestRefPort = node;
+              }
+            }
+            if(nearestRefPort){
+              const exists = state.referenceConnections.some(c => c.from === fromNode.id && c.to === nearestRefPort.id);
+              if(!exists){
+                state.referenceConnections.push({ id: state.nextReferenceConnId++, from: fromNode.id, to: nearestRefPort.id });
+                if(nearestRefPort.updateReferenceImages) nearestRefPort.updateReferenceImages();
+                renderReferenceConnections();
+                imgConnected = true;
+              }
             }
           }
-          
-          // 优先连接到最近的端口
-          const minDist = Math.min(nearestImgDist, nearestFirstFrameDist, nearestReferenceDist);
-          
-          if(nearestReferencePort && nearestReferenceDist === minDist){
-            // 连接到图片节点的参考端口
-            const exists = state.referenceConnections.some(c => c.from === state.connecting.fromId && c.to === nearestReferencePort.nodeId);
-            if(!exists){
-              // 检查循环引用
-              function hasCircularReference(fromId, toId){
-                const visited = new Set();
-                function dfs(currentId){
-                  if(currentId === fromId) return true;
-                  if(visited.has(currentId)) return false;
-                  visited.add(currentId);
-                  const outgoing = state.referenceConnections.filter(c => c.from === currentId);
-                  for(const conn of outgoing){
-                    if(dfs(conn.to)) return true;
-                  }
-                  return false;
-                }
-                return dfs(toId);
-              }
-              
-              if(hasCircularReference(state.connecting.fromId, nearestReferencePort.nodeId)){
-                showToast('不能创建循环参考', 'error');
-              } else {
-                // 检查参考图数量限制
-                const currentRefCount = state.referenceConnections.filter(c => c.to === nearestReferencePort.nodeId).length;
-                const maxRefs = nearestReferencePort.node.data.model === 'gemini-3-pro-image-preview' ? 13 : 5;
-                if(currentRefCount >= maxRefs){
-                  showToast(`最多支持${maxRefs}张参考图`, 'error');
-                } else {
-                  state.referenceConnections.push({
-                    id: state.nextReferenceConnId++,
-                    from: state.connecting.fromId,
-                    to: nearestReferencePort.nodeId
-                  });
-                  // 更新目标节点的参考图显示
-                  if(nearestReferencePort.node.updateReferenceImages){
-                    nearestReferencePort.node.updateReferenceImages();
-                  }
-                  renderReferenceConnections();
-                  try{ autoSaveWorkflow(); } catch(e){}
-                }
+
+          // 分镜节点首帧端口
+          if(!imgConnected){
+            let nearestSF = null;
+            let nearestSFDist = PROXIMITY_DIST;
+            for(const node of state.nodes){
+              if(node.type !== 'shot_frame') continue;
+              const toEl = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
+              if(!toEl) continue;
+              const portEl = toEl.querySelector('.first-frame-port');
+              if(!portEl) continue;
+              const { dist } = distToPort(portEl);
+              if(dist < nearestSFDist){
+                nearestSFDist = dist;
+                nearestSF = node;
               }
             }
-          } else if(nearestImgPort && nearestImgDist === minDist){
-            // 连接到图生视频节点
-            const exists = state.imageConnections.some(c => c.to === nearestImgPort.nodeId && c.portType === nearestImgPort.portType);
-            if(!exists){
-              state.imageConnections.push({
-                id: state.nextImgConnId++,
-                from: state.connecting.fromId,
-                to: nearestImgPort.nodeId,
-                portType: nearestImgPort.portType
-              });
-              // 参考图连接：将图片URL追加到目标节点的 referenceUrls
-              if(nearestImgPort.portType === 'ref-image'){
-                const targetNode = state.nodes.find(n => n.id === nearestImgPort.nodeId);
-                const sourceNode = state.nodes.find(n => n.id === state.connecting.fromId);
-                if(targetNode && sourceNode && sourceNode.data.url){
-                  if(!targetNode.data.referenceUrls) targetNode.data.referenceUrls = [];
-                  targetNode.data.referenceUrls.push(sourceNode.data.url);
-                }
-              }
-            }
-          } else if(nearestFirstFramePort && nearestFirstFrameDist === minDist){
-            // 连接到分镜节点的首帧端口
-            const fromNode = state.nodes.find(n => n.id === state.connecting.fromId);
-            if(fromNode && fromNode.data.url){
-              // 删除该分镜节点的旧首帧连接
-              state.firstFrameConnections = state.firstFrameConnections.filter(c => c.to !== nearestFirstFramePort.nodeId);
-              
-              // 创建新的首帧连接
-              state.firstFrameConnections.push({
-                id: state.nextFirstFrameConnId++,
-                from: state.connecting.fromId,
-                to: nearestFirstFramePort.nodeId
-              });
-              
-              // 更新视频首帧
-              nearestFirstFramePort.node.data.previewImageUrl = fromNode.data.url;
-              const nodeEl = canvasEl.querySelector(`.node[data-node-id="${nearestFirstFramePort.nodeId}"]`);
+            if(nearestSF && fromNode.data.url){
+              state.firstFrameConnections = state.firstFrameConnections.filter(c => c.to !== nearestSF.id);
+              state.firstFrameConnections.push({ id: state.nextFirstFrameConnId++, from: fromNode.id, to: nearestSF.id });
+              nearestSF.data.previewImageUrl = fromNode.data.url;
+              const nodeEl = canvasEl.querySelector(`.node[data-node-id="${nearestSF.id}"]`);
               if(nodeEl){
-                const previewImageEl = nodeEl.querySelector('.shot-frame-preview-image');
-                const previewFieldEl = nodeEl.querySelector('.shot-frame-preview-field');
-                if(previewImageEl){
-                  previewImageEl.src = proxyImageUrl(fromNode.data.url);
-                  previewImageEl.style.display = 'block';
-                }
-                if(previewFieldEl){
-                  previewFieldEl.style.display = 'block';
-                }
+                const img = nodeEl.querySelector('.shot-frame-preview-image');
+                const field = nodeEl.querySelector('.shot-frame-preview-field');
+                if(img){ img.src = proxyImageUrl(fromNode.data.url); img.style.display = 'block'; }
+                if(field) field.style.display = 'block';
               }
-              
               renderFirstFrameConnections();
-              try{ autoSaveWorkflow(); } catch(e){}
             }
           }
         }
@@ -1161,18 +1181,15 @@
         // 如果从角色/场景/道具节点拖拽，查找图片节点的参考端口
         if(fromNode && (fromNode.type === 'character' || fromNode.type === 'location' || fromNode.type === 'props')){
           let nearestReferencePort = null;
-          let nearestReferenceDist = 50;
-          
+          let nearestReferenceDist = PROXIMITY_DIST;
+
           for(const node of state.nodes){
             if(node.type !== 'image') continue;
             const toEl = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
             if(!toEl) continue;
             const portEl = toEl.querySelector('.port.reference');
             if(!portEl) continue;
-            const rect = portEl.getBoundingClientRect();
-            const portX = (rect.left + rect.width/2 - containerRect.left - state.panX) / state.zoom;
-            const portY = (rect.top + rect.height/2 - containerRect.top - state.panY) / state.zoom;
-            const dist = Math.sqrt(Math.pow(mouseX - portX, 2) + Math.pow(mouseY - portY, 2));
+            const { dist } = distToPort(portEl);
             if(dist < nearestReferenceDist){
               nearestReferenceDist = dist;
               nearestReferencePort = { nodeId: node.id, node: node };
@@ -1207,17 +1224,14 @@
         // 如果从图生视频节点拖拽，查找视频节点输入端口
         if(fromNode && fromNode.type === 'image_to_video'){
           let nearestPort = null;
-          let nearestDist = 50;
+          let nearestDist = PROXIMITY_DIST;
           for(const node of state.nodes){
             if(node.type !== 'video') continue;
             const toEl = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
             if(!toEl) continue;
             const portEl = toEl.querySelector('.port.input');
             if(!portEl) continue;
-            const rect = portEl.getBoundingClientRect();
-            const portX = (rect.left + rect.width/2 - containerRect.left - state.panX) / state.zoom;
-            const portY = (rect.top + rect.height/2 - containerRect.top - state.panY) / state.zoom;
-            const dist = Math.sqrt(Math.pow(mouseX - portX, 2) + Math.pow(mouseY - portY, 2));
+            const { dist } = distToPort(portEl);
             if(dist < nearestDist){
               nearestDist = dist;
               nearestPort = { nodeId: node.id };
@@ -1236,60 +1250,146 @@
           }
         }
         
-        // 如果从视频节点拖拽，查找对话组节点的视频输入端口
+        // 如果从视频节点拖拽，查找对话组节点和图生视频节点的视频输入端口
         if(fromNode && fromNode.type === 'video'){
-          let nearestVideoInputPort = null;
-          let nearestVideoDist = 50;
-          for(const node of state.nodes){
-            if(node.type !== 'dialogue_group') continue;
-            const toEl = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
-            if(!toEl) continue;
-            const portEl = toEl.querySelector('.port.video-input-port');
-            if(!portEl || portEl.classList.contains('disabled')) continue;
-            const rect = portEl.getBoundingClientRect();
-            const portX = (rect.left + rect.width/2 - containerRect.left - state.panX) / state.zoom;
-            const portY = (rect.top + rect.height/2 - containerRect.top - state.panY) / state.zoom;
-            const dist = Math.sqrt(Math.pow(mouseX - portX, 2) + Math.pow(mouseY - portY, 2));
-            if(dist < nearestVideoDist){
-              nearestVideoDist = dist;
-              nearestVideoInputPort = { nodeId: node.id };
-            }
-          }
-          
-          if(nearestVideoInputPort){
-            const exists = state.videoConnections.some(c => c.from === state.connecting.fromId && c.to === nearestVideoInputPort.nodeId);
-            if(!exists){
-              // 检查目标对话组节点是否已经有视频连接
-              const existingConn = state.videoConnections.find(c => c.to === nearestVideoInputPort.nodeId);
-              if(existingConn){
-                showToast('该对话组节点已有视频连接，一个对话组只能连接一个情感参考视频', 'warning');
-              } else {
-                state.videoConnections.push({
-                  id: state.nextVideoConnId++,
-                  from: state.connecting.fromId,
-                  to: nearestVideoInputPort.nodeId
-                });
-                renderVideoConnections();
-                showToast('视频已连接作为情感参考', 'success');
-                try{ autoSaveWorkflow(); } catch(e){}
+          {
+            let nearestVideoInputPort = null;
+            let nearestVideoRefPort = null;
+            let nearestVideoDist = PROXIMITY_DIST;
+            let nearestVideoRefDist = PROXIMITY_DIST;
+            for(const node of state.nodes){
+              const toEl = canvasEl.querySelector(`.node[data-node-id=”${node.id}”]`);
+              if(!toEl) continue;
+              // 对话组节点的视频输入端口
+              if(node.type === 'dialogue_group'){
+                const portEl = toEl.querySelector('.port.video-input-port');
+                if(portEl && !portEl.classList.contains('disabled')){
+                  const { dist } = distToPort(portEl);
+                  if(dist < nearestVideoDist){
+                    nearestVideoDist = dist;
+                    nearestVideoInputPort = { nodeId: node.id };
+                  }
+                }
+              }
+              // 图生视频节点的视频参考端口
+              if(node.type === 'image_to_video'){
+                const portEl = toEl.querySelector('.video-ref-input-port');
+                if(portEl && !portEl.classList.contains('disabled')){
+                  const { dist } = distToPort(portEl);
+                  if(dist < nearestVideoRefDist){
+                    nearestVideoRefDist = dist;
+                    nearestVideoRefPort = { nodeId: node.id };
+                  }
+                }
               }
             }
-          } else {
-            // 检查是否有对话组节点但端口被禁用
-            const hasDisabledPort = state.nodes.some(node => {
-              if(node.type !== 'dialogue_group') return false;
-              const toEl = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
-              if(!toEl) return false;
-              const portEl = toEl.querySelector('.port.video-input-port');
-              return portEl && portEl.classList.contains('disabled');
-            });
-            if(hasDisabledPort){
-              showToast('请先将对话组节点的“情感控制方式”切换为“使用情感参考音频”', 'warning');
+
+            // 优先连接到图生视频节点的视频参考端口
+            if(nearestVideoRefPort && (!nearestVideoInputPort || nearestVideoRefDist <= nearestVideoDist)){
+              const exists = state.videoConnections.some(c =>
+                c.from === fromNode.id && c.to === nearestVideoRefPort.nodeId && c.portType === 'video-ref'
+              );
+              if(!exists){
+                state.videoConnections.push({
+                  id: state.nextVideoConnId++,
+                  from: fromNode.id,
+                  to: nearestVideoRefPort.nodeId,
+                  portType: 'video-ref'
+                });
+                const targetNode = state.nodes.find(n => n.id === nearestVideoRefPort.nodeId);
+                if(targetNode && fromNode.data.url){
+                  if(!targetNode.data.videoUrls) targetNode.data.videoUrls = [];
+                  targetNode.data.videoUrls.push({name: fromNode.data.name || '连接的视频', url: fromNode.data.url});
+                }
+                renderVideoConnections();
+                // 更新目标节点的视频预览显示
+                if(targetNode){
+                  const targetEl = canvasEl.querySelector(`.node[data-node-id="${targetNode.id}"]`);
+                  if(targetEl && typeof targetEl._updateVideoPreview === 'function') {
+                    targetEl._updateVideoPreview();
+                  }
+                }
+                try{ autoSaveWorkflow(); } catch(e){}
+              }
+            } else if(nearestVideoInputPort){
+              const exists = state.videoConnections.some(c => c.from === fromNode.id && c.to === nearestVideoInputPort.nodeId);
+              if(!exists){
+                const existingConn = state.videoConnections.find(c => c.to === nearestVideoInputPort.nodeId);
+                if(existingConn){
+                  showToast('该对话组节点已有视频连接，一个对话组只能连接一个情感参考视频', 'warning');
+                } else {
+                  state.videoConnections.push({
+                    id: state.nextVideoConnId++,
+                    from: fromNode.id,
+                    to: nearestVideoInputPort.nodeId
+                  });
+                  renderVideoConnections();
+                  showToast('视频已连接作为情感参考', 'success');
+                  try{ autoSaveWorkflow(); } catch(e){}
+                }
+              }
+            } else {
+              const hasDisabledPort = state.nodes.some(node => {
+                if(node.type !== 'dialogue_group') return false;
+                const toEl = canvasEl.querySelector(`.node[data-node-id=”${node.id}”]`);
+                if(!toEl) return false;
+                const portEl = toEl.querySelector('.port.video-input-port');
+                return portEl && portEl.classList.contains('disabled');
+              });
+              if(hasDisabledPort){
+                showToast('请先将对话组节点的”情感控制方式”切换为”使用情感参考音频”', 'warning');
+              }
             }
           }
         }
 
-        
+        // 如果从音频节点拖拽，查找图生视频节点的音频输入端口
+        if(fromNode && fromNode.type === 'audio'){
+          {
+            let nearestAudioInputPort = null;
+            let nearestAudioDist = PROXIMITY_DIST;
+            for(const node of state.nodes){
+              if(node.type !== 'image_to_video') continue;
+              const toEl = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
+              if(!toEl) continue;
+              const portEl = toEl.querySelector('.audio-input-port');
+              if(!portEl || portEl.classList.contains('disabled')) continue;
+              const { dist } = distToPort(portEl);
+              if(dist < nearestAudioDist){
+                nearestAudioDist = dist;
+                nearestAudioInputPort = { nodeId: node.id };
+              }
+            }
+
+            if(nearestAudioInputPort){
+              const exists = state.audioConnections.some(c =>
+                c.from === fromNode.id && c.to === nearestAudioInputPort.nodeId
+              );
+              if(!exists){
+                state.audioConnections.push({
+                  id: state.nextAudioConnId++,
+                  from: fromNode.id,
+                  to: nearestAudioInputPort.nodeId
+                });
+                const targetNode = state.nodes.find(n => n.id === nearestAudioInputPort.nodeId);
+                if(targetNode && fromNode.data.url){
+                  if(!targetNode.data.audioUrls) targetNode.data.audioUrls = [];
+                  targetNode.data.audioUrls.push({name: fromNode.data.name || '连接的音频', url: fromNode.data.url});
+                }
+                renderAudioConnections();
+                // 更新目标节点的音频预览显示
+                if(targetNode){
+                  const targetEl = canvasEl.querySelector(`.node[data-node-id="${targetNode.id}"]`);
+                  if(targetEl && typeof targetEl._updateAudioPreview === 'function') {
+                    targetEl._updateAudioPreview();
+                  }
+                }
+                try{ autoSaveWorkflow(); } catch(e){}
+              }
+            }
+          }
+        }
+
         // 清除所有端口高亮
         for(const portEl of canvasEl.querySelectorAll('.can-connect')){
           portEl.classList.remove('can-connect');
@@ -1301,6 +1401,7 @@
         renderFirstFrameConnections();
         renderVideoConnections();
         renderReferenceConnections();
+        renderAudioConnections();
       }
     });
 

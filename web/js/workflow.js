@@ -1577,10 +1577,16 @@
             field.style.display = imageMode === 'first_last_frame' ? '' : 'none';
           });
           if(referenceFields) referenceFields.style.display = imageMode === 'multi_reference' ? '' : 'none';
-          
+
           // 显示/隐藏端口
           if(startImagePort) startImagePort.style.display = imageMode === 'first_last_frame' ? '' : 'none';
           if(endImagePort2) endImagePort2.style.display = imageMode === 'first_last_frame' ? '' : 'none';
+
+          // 显示/隐藏参考音频和参考视频字段（仅在多参考图模式下显示）
+          const audioField = el.querySelector('.audio-field');
+          const videoField = el.querySelector('.video-field');
+          if(audioField) audioField.style.display = imageMode === 'multi_reference' ? '' : 'none';
+          if(videoField) videoField.style.display = imageMode === 'multi_reference' ? '' : 'none';
 
           // 根据 supports_last_frame 控制尾帧输入框的可用性
           if(imageMode === 'first_last_frame') {
@@ -1622,11 +1628,12 @@
               item.style.cssText = 'position: relative; width: 50px; height: 50px;';
               item.innerHTML = `
                 <img src="${url}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px; cursor: pointer;" />
+                <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.6); color: white; font-size: 10px; text-align: center; border-radius: 0 0 4px 4px; padding: 1px 0;">图${idx + 1}</div>
                 <button class="ref-remove-btn" data-idx="${idx}" style="position: absolute; top: -4px; right: -4px; width: 16px; height: 16px; border-radius: 50%; background: #ef4444; border: none; color: white; font-size: 10px; cursor: pointer; line-height: 1;">×</button>
               `;
               item.querySelector('img').addEventListener('click', (e) => {
                 e.stopPropagation();
-                openImageModal(url, `参考图 ${idx + 1}`);
+                openImageModal(url, `图${idx + 1}`);
               });
               item.querySelector('.ref-remove-btn').addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -1638,12 +1645,26 @@
                   node.data.referenceUrls.forEach((u, i) => {
                     const newItem = document.createElement('div');
                     newItem.style.cssText = 'position: relative; width: 50px; height: 50px;';
-                    newItem.innerHTML = `<img src="${u}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;" />`;
+                    newItem.innerHTML = `<img src="${u}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;" /><div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.6); color: white; font-size: 10px; text-align: center; border-radius: 0 0 4px 4px; padding: 1px 0;">图${i + 1}</div>`;
                     newList.appendChild(newItem);
                   });
                 }
               });
               referencePreviewList.appendChild(item);
+            });
+
+            // 恢复参考图连接线
+            node.data.referenceUrls.forEach(refUrl => {
+              // 查找对应的图片节点
+              const imageNode = state.nodes.find(n => n.type === 'image' && n.data.url === refUrl);
+              if(imageNode && !state.imageConnections.some(c => c.from === imageNode.id && c.to === node.id && c.portType === 'ref-image')){
+                state.imageConnections.push({
+                  id: state.nextImgConnId++,
+                  from: imageNode.id,
+                  to: node.id,
+                  portType: 'ref-image'
+                });
+              }
             });
           }
 
@@ -1654,10 +1675,19 @@
             node.data.audioUrls.forEach((item, idx) => {
               const mediaEl = document.createElement('div');
               mediaEl.className = 'media-item';
-              mediaEl.innerHTML = `🎵 ${(item.name || '').length > 12 ? item.name.substring(0, 12) + '...' : (item.name || '音频')} <span class="remove-btn" title="删除">×</span>`;
+              mediaEl.innerHTML = `🎵 音频${idx + 1} <span class="remove-btn" title="删除">×</span>`;
               mediaEl.querySelector('.remove-btn').addEventListener('click', (e) => {
                 e.stopPropagation();
+                const removedUrl = item.url;
                 node.data.audioUrls.splice(idx, 1);
+                // 清理对应的连接线
+                state.audioConnections = state.audioConnections.filter(c => {
+                  if(c.to === node.id){
+                    const fromNode = state.nodes.find(n => n.id === c.from);
+                    if(fromNode && fromNode.data.url === removedUrl) return false;
+                  }
+                  return true;
+                });
                 // 重新渲染
                 const newList = el.querySelector('.audio-preview-list');
                 if(newList){
@@ -1665,14 +1695,24 @@
                   node.data.audioUrls.forEach((a, i) => {
                     const newEl = document.createElement('div');
                     newEl.className = 'media-item';
-                    newEl.innerHTML = `🎵 ${(a.name || '').length > 12 ? a.name.substring(0, 12) + '...' : (a.name || '音频')} <span class="remove-btn">×</span>`;
+                    newEl.innerHTML = `🎵 音频${i + 1} <span class="remove-btn">×</span>`;
                     newEl.querySelector('.remove-btn').addEventListener('click', () => {
+                      const removedUrl2 = a.url;
                       node.data.audioUrls.splice(i, 1);
+                      // 清理对应的连接线
+                      state.audioConnections = state.audioConnections.filter(c => {
+                        if(c.to === node.id){
+                          const fromNode = state.nodes.find(n => n.id === c.from);
+                          if(fromNode && fromNode.data.url === removedUrl2) return false;
+                        }
+                        return true;
+                      });
                       newEl.remove();
                     });
                     newList.appendChild(newEl);
                   });
                 }
+                renderAudioConnections();
               });
               audioPreviewList.appendChild(mediaEl);
             });
@@ -1685,10 +1725,19 @@
             node.data.videoUrls.forEach((item, idx) => {
               const mediaEl = document.createElement('div');
               mediaEl.className = 'media-item';
-              mediaEl.innerHTML = `🎬 ${(item.name || '').length > 12 ? item.name.substring(0, 12) + '...' : (item.name || '视频')} <span class="remove-btn" title="删除">×</span>`;
+              mediaEl.innerHTML = `🎬 视频${idx + 1} <span class="remove-btn" title="删除">×</span>`;
               mediaEl.querySelector('.remove-btn').addEventListener('click', (e) => {
                 e.stopPropagation();
+                const removedUrl = item.url;
                 node.data.videoUrls.splice(idx, 1);
+                // 清理对应的连接线
+                state.videoConnections = state.videoConnections.filter(c => {
+                  if(c.to === node.id){
+                    const fromNode = state.nodes.find(n => n.id === c.from);
+                    if(fromNode && fromNode.data.url === removedUrl) return false;
+                  }
+                  return true;
+                });
                 // 重新渲染
                 const newList = el.querySelector('.video-preview-list');
                 if(newList){
@@ -1696,20 +1745,66 @@
                   node.data.videoUrls.forEach((v, i) => {
                     const newEl = document.createElement('div');
                     newEl.className = 'media-item';
-                    newEl.innerHTML = `🎬 ${(v.name || '').length > 12 ? v.name.substring(0, 12) + '...' : (v.name || '视频')} <span class="remove-btn">×</span>`;
+                    newEl.innerHTML = `🎬 视频${i + 1} <span class="remove-btn">×</span>`;
                     newEl.querySelector('.remove-btn').addEventListener('click', () => {
+                      const removedUrl2 = v.url;
                       node.data.videoUrls.splice(i, 1);
+                      // 清理对应的连接线
+                      state.videoConnections = state.videoConnections.filter(c => {
+                        if(c.to === node.id){
+                          const fromNode = state.nodes.find(n => n.id === c.from);
+                          if(fromNode && fromNode.data.url === removedUrl2) return false;
+                        }
+                        return true;
+                      });
                       newEl.remove();
                     });
                     newList.appendChild(newEl);
                   });
                 }
+                renderVideoConnections();
               });
               videoPreviewList.appendChild(mediaEl);
             });
           }
+
+          // 恢复音频连接线
+          if(Array.isArray(node.data.audioUrls)){
+            node.data.audioUrls.forEach(audioItem => {
+              // 查找对应的音频节点
+              const audioNode = state.nodes.find(n => n.type === 'audio' && n.data.url === audioItem.url);
+              if(audioNode && !state.audioConnections.some(c => c.from === audioNode.id && c.to === node.id)){
+                state.audioConnections.push({
+                  id: state.nextAudioConnId++,
+                  from: audioNode.id,
+                  to: node.id
+                });
+              }
+            });
+          }
+
+          // 恢复视频连接线
+          if(Array.isArray(node.data.videoUrls)){
+            node.data.videoUrls.forEach(videoItem => {
+              // 查找对应的视频节点
+              const videoNode = state.nodes.find(n => n.type === 'video' && n.data.url === videoItem.url);
+              if(videoNode && !state.videoConnections.some(c => c.from === videoNode.id && c.to === node.id && c.portType === 'video-ref')){
+                state.videoConnections.push({
+                  id: state.nextVideoConnId++,
+                  from: videoNode.id,
+                  to: node.id,
+                  portType: 'video-ref'
+                });
+              }
+            });
+          }
         }
       }
+
+      // 重新渲染所有连接线
+      if(typeof renderImageConnections === 'function') renderImageConnections();
+      if(typeof renderAudioConnections === 'function') renderAudioConnections();
+      if(typeof renderVideoConnections === 'function') renderVideoConnections();
     }
 
     // 带数据创建视频节点（复用createVideoNode的逻辑）
@@ -1901,8 +1996,8 @@
           const el = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
           if(el){
             const previewField = el.querySelector('.audio-preview-field');
-            const audioPlayer = el.querySelector('.audio-player');
-            const nameEl = el.querySelector('.audio-name');
+            const audioPlayer = el.querySelector('.audio-node-player');
+            const nameEl = el.querySelector('.audio-node-name');
             if(previewField && audioPlayer){
               audioPlayer.src = proxyDownloadUrl(node.data.url);
               if(nameEl){
