@@ -283,14 +283,21 @@ class ExpertAgent(BaseAgent):
             logger.error(f"{self.agent_id}: {error_msg}", exc_info=True)
             return {"error": error_msg}
     
+    def _is_deepseek_model(self) -> bool:
+        """判断当前模型是否为 DeepSeek 模型"""
+        return 'deepseek' in (self.model or '').lower()
+
     def _format_messages_for_api(self) -> List[Dict[str, Any]]:
         """格式化消息用于 API 调用"""
         messages = [{"role": "system", "content": self.system_prompt}]
-        
+
+        # 判断是否为 DeepSeek 模型，如果是则需要为历史 assistant 消息补充 reasoning_content
+        is_deepseek = self._is_deepseek_model()
+
         for msg in self.conversation_history:
             role = msg.get("role")
             content = msg.get("content")
-            
+
             if role == "tool":
                 messages.append({
                     "role": "tool",
@@ -304,15 +311,18 @@ class ExpertAgent(BaseAgent):
                     "content": None,
                     "tool_calls": content["tool_calls"]
                 }
-                
+
                 # 如果有 thought_signature，也要传递给 API（Gemini 3 要求）
                 if "thought_signature" in content:
                     assistant_msg["thought_signature"] = content["thought_signature"]
-                
+
                 # 如果有 reasoning_content，也要传递给 API
                 if "reasoning_content" in content:
                     assistant_msg["reasoning_content"] = content["reasoning_content"]
-                
+                elif is_deepseek:
+                    # DeepSeek 要求回传 reasoning_content，历史记录中没有时补充空字符串
+                    assistant_msg["reasoning_content"] = ""
+
                 messages.append(assistant_msg)
             elif role == "assistant" and isinstance(content, dict) and "reasoning_content" in content:
                 # 纯文本 assistant 消息但包含 reasoning_content（DeepSeek 推理模型要求回传）
@@ -322,12 +332,20 @@ class ExpertAgent(BaseAgent):
                     "reasoning_content": content["reasoning_content"]
                 }
                 messages.append(assistant_msg)
+            elif role == "assistant" and is_deepseek:
+                # DeepSeek 模型下，普通 assistant 消息也需要补充 reasoning_content
+                assistant_msg = {
+                    "role": "assistant",
+                    "content": content if isinstance(content, str) else str(content),
+                    "reasoning_content": ""
+                }
+                messages.append(assistant_msg)
             else:
                 messages.append({
                     "role": role,
                     "content": content if isinstance(content, str) else str(content)
                 })
-        
+
         return messages
     
     def _get_tool_definitions(self) -> List[Dict[str, Any]]:
