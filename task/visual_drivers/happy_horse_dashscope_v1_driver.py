@@ -231,10 +231,12 @@ class HappyHorseDashscopeV1Driver(BaseVideoDriver):
     def build_create_request(self, ai_tool) -> Dict[str, Any]:
         """
         构建创建 Happy Horse 任务的完整请求参数
-        根据 driver_type 自动分发到 i2v 或 r2v 模式
+        根据 driver_type 自动分发到 i2v / r2v / t2v 模式
         """
         if self.driver_type == 29:
             return self._build_r2v_request(ai_tool)
+        if self.driver_type == 30:
+            return self._build_t2v_request(ai_tool)
         return self._build_i2v_request(ai_tool)
 
     def _build_i2v_request(self, ai_tool) -> Dict[str, Any]:
@@ -339,6 +341,28 @@ class HappyHorseDashscopeV1Driver(BaseVideoDriver):
             "timeout": self._timeout
         }
 
+    def _get_r2v_image_urls(self, ai_tool) -> List[str]:
+        """
+        获取 r2v 模式的参考图像 URL 列表
+        兼容 image_path（逗号分隔）和 reference_images（JSON 数组）两种存储方式
+        """
+        image_urls = []
+
+        # 优先从 image_path 读取（逗号分隔）
+        if ai_tool.image_path:
+            image_urls = [url.strip() for url in ai_tool.image_path.split(',') if url.strip()]
+
+        # 如果 image_path 为空，尝试从 reference_images 读取（JSON 数组）
+        if not image_urls and ai_tool.reference_images:
+            try:
+                refs = json.loads(ai_tool.reference_images) if isinstance(ai_tool.reference_images, str) else ai_tool.reference_images
+                if isinstance(refs, list):
+                    image_urls = [str(url).strip() for url in refs if str(url).strip()]
+            except (json.JSONDecodeError, TypeError):
+                self.logger.warning(f"无法解析 reference_images: {ai_tool.reference_images}")
+
+        return image_urls
+
     def _build_r2v_request(self, ai_tool) -> Dict[str, Any]:
         """
         构建 r2v（参考生视频）请求
@@ -348,16 +372,8 @@ class HappyHorseDashscopeV1Driver(BaseVideoDriver):
         - 文本提示词中通过 [Image 1]、[Image 2] 指代参考图像
         - 支持 ratio 参数
         """
-        # 获取参考图像（从 image_path 获取，逗号分隔）
-        if not ai_tool.image_path:
-            return {
-                "success": False,
-                "error": "缺少参考图片",
-                "error_type": "USER",
-                "retry": False
-            }
-
-        image_urls = [url.strip() for url in ai_tool.image_path.split(',') if url.strip()]
+        # 获取参考图像
+        image_urls = self._get_r2v_image_urls(ai_tool)
         if not image_urls:
             return {
                 "success": False,
@@ -434,6 +450,53 @@ class HappyHorseDashscopeV1Driver(BaseVideoDriver):
             "timeout": self._timeout
         }
 
+    def _build_t2v_request(self, ai_tool) -> Dict[str, Any]:
+        """
+        构建 t2v（文生视频）请求
+
+        仅需要文本提示词，不需要任何图片/音频/视频
+        """
+        # 解析 extra_config 中的可选参数
+        extra_params = self._parse_extra_params(ai_tool)
+
+        # 构建请求体
+        duration = ai_tool.duration or 5
+        if not (3 <= duration <= 15):
+            duration = 5
+
+        ratio = ai_tool.ratio or '16:9'
+        if ratio not in ('16:9', '9:16', '1:1', '4:3', '3:4'):
+            ratio = '16:9'
+
+        payload = {
+            "model": self.MODEL,
+            "input": {
+                "prompt": ai_tool.prompt or ""
+            },
+            "parameters": {
+                "resolution": extra_params["resolution"],
+                "ratio": ratio,
+                "duration": duration,
+                "watermark": extra_params["watermark"]
+            }
+        }
+
+        # 可选参数：seed
+        if "seed" in extra_params:
+            payload["parameters"]["seed"] = extra_params["seed"]
+
+        return {
+            "url": f"{self._base_url}/services/aigc/video-generation/video-synthesis",
+            "method": "POST",
+            "json": payload,
+            "headers": {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self._api_key}",
+                "X-DashScope-Async": "enable"
+            },
+            "timeout": self._timeout
+        }
+
     def build_check_query(self, project_id: str) -> Dict[str, Any]:
         """
         构建查询 Happy Horse 任务状态的完整请求参数
@@ -452,9 +515,22 @@ class HappyHorseDashscopeV1Driver(BaseVideoDriver):
         提交 Happy Horse 视频生成任务
         """
         try:
-            if self.driver_type == 29:
+            if self.driver_type == 30:
+                # t2v 模式：只需要 prompt
+                if not ai_tool.prompt or not ai_tool.prompt.strip():
+                    return {
+                        "success": False,
+                        "error": "提示词不能为空",
+                        "error_type": "USER",
+                        "retry": False
+                    }
+                self.logger.info(
+                    f"Submitting Happy Horse t2v task: prompt='{(ai_tool.prompt or '')[:50]}...', "
+                    f"duration={ai_tool.duration}"
+                )
+            elif self.driver_type == 29:
                 # r2v 模式：验证参考图片
-                image_urls = [url.strip() for url in (ai_tool.image_path or '').split(',') if url.strip()]
+                image_urls = self._get_r2v_image_urls(ai_tool)
                 if not image_urls:
                     return {
                         "success": False,
@@ -724,3 +800,14 @@ class HappyHorseDashscopeR2VV1Driver(HappyHorseDashscopeV1Driver):
 
     def __init__(self):
         super().__init__(driver_name="happy_horse_dashscope_r2v_v1", driver_type=29)
+
+
+class HappyHorseDashscopeT2VV1Driver(HappyHorseDashscopeV1Driver):
+    """
+    Happy Horse 文生视频驱动（t2v）
+    仅需要文本提示词生成视频
+    """
+    MODEL = "happyhorse-1.0-t2v"
+
+    def __init__(self):
+        super().__init__(driver_name="happy_horse_dashscope_t2v_v1", driver_type=30)

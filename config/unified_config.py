@@ -821,6 +821,7 @@ class DriverImplementation:
     # Happy Horse
     HAPPY_HORSE_DASHSCOPE_V1 = 'happy_horse_dashscope_v1'
     HAPPY_HORSE_DASHSCOPE_R2V_V1 = 'happy_horse_dashscope_r2v_v1'
+    HAPPY_HORSE_DASHSCOPE_T2V_V1 = 'happy_horse_dashscope_t2v_v1'
 
 
 # ============ 驱动实现 ID 常量（用于数据库存储） ============
@@ -880,6 +881,7 @@ class DriverImplementationId:
     GROK_DUOMI_V1 = 48
     HAPPY_HORSE_DASHSCOPE_V1 = 49
     HAPPY_HORSE_DASHSCOPE_R2V_V1 = 50
+    HAPPY_HORSE_DASHSCOPE_T2V_V1 = 51
 
 
 # implementation 字符串到 ID 的映射
@@ -934,6 +936,7 @@ IMPLEMENTATION_TO_ID = {
     'grok_duomi_v1': DriverImplementationId.GROK_DUOMI_V1,
     'happy_horse_dashscope_v1': DriverImplementationId.HAPPY_HORSE_DASHSCOPE_V1,
     'happy_horse_dashscope_r2v_v1': DriverImplementationId.HAPPY_HORSE_DASHSCOPE_R2V_V1,
+    'happy_horse_dashscope_t2v_v1': DriverImplementationId.HAPPY_HORSE_DASHSCOPE_T2V_V1,
 }
 
 # implementation ID 到字符串的映射
@@ -1003,6 +1006,9 @@ class DriverKey:
     # Happy Horse 参考生视频
     HAPPY_HORSE_REFERENCE_TO_VIDEO = 'happy_horse_reference_to_video'
 
+    # Happy Horse 文生视频
+    HAPPY_HORSE_TEXT_TO_VIDEO = 'happy_horse_text_to_video'
+
 
 # ============ 任务类型 ID 常量 ============
 class TaskTypeId:
@@ -1035,6 +1041,7 @@ class TaskTypeId:
     GROK_IMAGE_TO_VIDEO = 27             # Grok 图生视频
     HAPPY_HORSE_IMAGE_TO_VIDEO = 28      # Happy Horse 图生视频
     HAPPY_HORSE_REFERENCE_TO_VIDEO = 29  # Happy Horse 参考生视频
+    HAPPY_HORSE_TEXT_TO_VIDEO = 30       # Happy Horse 文生视频
 
     # 图片/视频 增强
     IMAGE_ENHANCE = 4                   # 图片高清放大
@@ -1511,6 +1518,20 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         supports_last_frame=False,  # 不支持尾帧
         supports_ref_audio_video=False,  # 不支持参考音频和视频
         max_multi_ref_images=9,
+    ),
+    UnifiedTaskConfig(
+        id=TaskTypeId.HAPPY_HORSE_TEXT_TO_VIDEO,
+        key='happy_horse_text_to_video',
+        name='文生视频 (Happy Horse)',
+        category=TaskCategory.TEXT_TO_VIDEO,
+        provider=TaskProvider.DUOMI,
+        driver_name=DriverKey.HAPPY_HORSE_TEXT_TO_VIDEO,
+        implementation=DriverImplementation.HAPPY_HORSE_DASHSCOPE_T2V_V1,
+        supported_ratios=['16:9', '9:16', '1:1', '4:3', '3:4'],
+        supported_durations=[3, 5, 8, 10, 15],
+        default_ratio='16:9',
+        default_duration=5,
+        sort_order=43,
     ),
 
     # ==================== 数字人 ====================
@@ -2109,6 +2130,16 @@ ALL_IMPLEMENTATIONS: List[ImplementationConfig] = [
         enabled=True,
         description='阿里云百炼 Happy Horse 参考生视频接口',
         sort_order=10810.0,
+        required_config_keys=['llm.qwen.api_key']
+    ),
+    ImplementationConfig(
+        name='happy_horse_dashscope_t2v_v1',
+        display_name='阿里云百炼',
+        driver_class='HappyHorseDashscopeT2VV1Driver',
+        default_computing_power=15,
+        enabled=True,
+        description='阿里云百炼 Happy Horse 文生视频接口',
+        sort_order=10820.0,
         required_config_keys=['llm.qwen.api_key']
     ),
 

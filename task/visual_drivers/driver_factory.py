@@ -742,4 +742,13 @@ def register_all_drivers():
     except ImportError as e:
         logger.warning(f"Failed to import HappyHorseDashscopeR2VV1Driver: {e}")
 
+    try:
+        from .happy_horse_dashscope_v1_driver import HappyHorseDashscopeT2VV1Driver
+        VideoDriverFactory.register_driver(
+            DriverImplementation.HAPPY_HORSE_DASHSCOPE_T2V_V1,
+            HappyHorseDashscopeT2VV1Driver
+        )
+    except ImportError as e:
+        logger.warning(f"Failed to import HappyHorseDashscopeT2VV1Driver: {e}")
+
     logger.info(f"Registered {len(VideoDriverFactory.get_supported_drivers())} video drivers")
