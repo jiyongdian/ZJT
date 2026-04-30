@@ -1097,12 +1097,10 @@
 
         const LOGIN_URL = window.location.origin + '/?login=1&redirect_url=video-workflow-list';
 
-        // LLM 供应商常量
-        const LLMVendor = {
-            JIEKOU: 'jiekou',      // 接口供应商（Gemini 模型）
-            ALIYUN: 'aliyun',      // 阿里云供应商（Qwen 模型）
-            OLLAMA: 'ollama'       // 本地运行供应商（Ollama 模型）
-        };
+        // LLM 供应商常量（从 /api/vendors 动态加载）
+        const LLMVendor = {};
+        // 供应商图标映射（从 /api/vendors 动态加载）
+        const vendorIcons = {};
 
         // LLM 模型名称常量
         const LLMModel = {
@@ -1238,6 +1236,7 @@
             } catch (e) {
                 isCommunityEdition = true;
             }
+            await loadVendors();
             await loadAvailableModels();
             await loadDriverStatus();
             await loadTextToImageModels();
@@ -2267,6 +2266,23 @@
             }
         }
 
+        async function loadVendors() {
+            try {
+                const response = await fetch('/api/vendors');
+                const data = await response.json();
+                if (data.success && data.vendors) {
+                    data.vendors.forEach(v => {
+                        const key = v.vendor_name.toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+                        LLMVendor[key] = v.vendor_name;
+                        vendorIcons[v.vendor_name.toLowerCase()] = v.icon || '📦';
+                    });
+                    console.log('[供应商加载] LLMVendor:', LLMVendor, 'vendorIcons:', vendorIcons);
+                }
+            } catch (e) {
+                console.warn('[供应商加载] 失败，使用空映射:', e);
+            }
+        }
+
         async function loadAvailableModels() {
             try {
                 const response = await fetch('/api/models', {
@@ -2333,15 +2349,6 @@
                         : '不可用';
                     console.log(`  ${m.model_name} (vendor: ${m.vendor_name}): threshold=${threshold}, multiplier=${multiplier}x`);
                 });
-
-                // 供应商图标映射
-                const vendorIcons = {
-                    'jiekou': '☁️',
-                    'aliyun': '🌐',
-                    'ollama': '🖥️',
-                    'volcengine': '🌋',
-                    'zjt_api': '🚀'
-                };
 
                 // 记录排序后的第一个作为默认选中
                 let firstEnabledModel = null;

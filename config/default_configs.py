@@ -492,6 +492,24 @@ DEFAULT_CONFIGS: List[Dict[str, Any]] = [
         'quick_config': True
     },
 
+    # ==================== DeepSeek 配置 ====================
+    {
+        'key': 'llm.deepseek.api_key',
+        'value_type': 'string',
+        'description': 'DeepSeek API Key',
+        'editable': True,
+        'is_sensitive': True,
+        'quick_config': True
+    },
+    {
+        'key': 'llm.deepseek.base_url',
+        'value_type': 'string',
+        'description': 'DeepSeek API 基础URL（默认 https://api.deepseek.com）',
+        'editable': True,
+        'is_sensitive': False,
+        'quick_config': True
+    },
+
     # ==================== 七牛云存储配置 ====================
     {
         'key': 'file_storage.qiniu.access_key',

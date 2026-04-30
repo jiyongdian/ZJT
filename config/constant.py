@@ -506,6 +506,16 @@ class LLMModel:
     DEEPSEEK_V4_PRO = 'deepseek-v4-pro'
 
 
+# 供应商图标映射（前端显示用）
+VENDOR_ICONS = {
+    'jiekou': '☁️',
+    'aliyun': '🌐',
+    'ollama': '🖥️',
+    'volcengine': '🌋',
+    'zjt_api': '🚀',
+    'deepseek': '🔍',
+}
+
 # 模型前缀 -> 供应商映射（用于 LLMClientFactory 路由）
 MODEL_PREFIX_VENDOR_MAP = {
     'gemini': LLMVendor.JIEKOU,
