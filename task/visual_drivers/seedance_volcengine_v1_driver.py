@@ -9,12 +9,15 @@ Seedance 火山引擎供应商 v1 版本驱动实现
 from typing import Dict, Any, Optional
 import traceback
 import json
+import uuid
 from .base_video_driver import BaseVideoDriver, ImageMode
 from config.config_util import get_config, get_dynamic_config_value
 from config.unified_config import DriverImplementation
 from utils.sentry_util import SentryUtil, AlertLevel
-from utils.image_upload_utils import compress_and_upload_image_sync
+from utils.image_upload_utils import compress_and_upload_image_sync, upload_media_to_cdn_sync
 
+
+# 接口文档 https://www.volcengine.com/docs/82379/1520757?lang=zh
 
 class SeedanceVolcengineV1Driver(BaseVideoDriver):
     """
@@ -48,6 +51,10 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
         # 是否为本地环境
         self._is_local = get_dynamic_config_value("server", "is_local", default=False)
         self._config = get_config()
+
+        # 测试模式配置
+        self._test_mode_enabled = get_dynamic_config_value("test_mode", "enabled", default=False)
+        self._mock_video_url = get_dynamic_config_value("test_mode", "mock_videos", default={}).get("image_to_video")
 
         self._validate_required({
             "Volcengine API Key": self._api_key,
@@ -101,7 +108,7 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
         期望格式:
         {
             "id": "cgt-xxx",
-            "status": "processing"|"succeeded"|"failed",
+            "status": "queued"|"running"|"succeeded"|"failed",
             "content": { "video_url": "https://..." },  # succeeded 时
             ...
         }
@@ -116,7 +123,7 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
             return False, f"响应缺少 'status' 字段，实际字段: {list(result.keys())}"
 
         status = result.get("status")
-        if status not in ("running", "succeeded", "failed"):
+        if status not in ("queued", "running", "succeeded", "failed"):
             return False, f"'status' 值无效: {status}"
 
         if status == "succeeded":
@@ -251,23 +258,31 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
                     "role": "reference_image"
                 })
 
-            # 参考视频（仅多参考图模式下添加）
+            # 参考视频（仅多参考图模式下添加，需上传到 CDN）
             reference_video = self.get_video_path(ai_tool) or extra_config.get('reference_video')
             if reference_video:
-                content.append({
-                    "type": "video_url",
-                    "video_url": {"url": reference_video},
-                    "role": "reference_video"
-                })
+                success, cdn_url, error = upload_media_to_cdn_sync(reference_video, self._config)
+                if success and cdn_url:
+                    content.append({
+                        "type": "video_url",
+                        "video_url": {"url": cdn_url},
+                        "role": "reference_video"
+                    })
+                else:
+                    self.logger.warning(f"参考视频上传 CDN 失败，跳过: {error}")
 
-            # 参考音频（仅多参考图模式下添加）
+            # 参考音频（仅多参考图模式下添加，需上传到 CDN）
             reference_audio = self.get_audio_path(ai_tool) or extra_config.get('reference_audio')
             if reference_audio:
-                content.append({
-                    "type": "audio_url",
-                    "audio_url": {"url": reference_audio},
-                    "role": "reference_audio"
-                })
+                success, cdn_url, error = upload_media_to_cdn_sync(reference_audio, self._config)
+                if success and cdn_url:
+                    content.append({
+                        "type": "audio_url",
+                        "audio_url": {"url": cdn_url},
+                        "role": "reference_audio"
+                    })
+                else:
+                    self.logger.warning(f"参考音频上传 CDN 失败，跳过: {error}")
 
         else:
             # ---- 未知模式，降级为首尾帧 ----
@@ -357,6 +372,15 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
             # build_create_request 可能返回错误（如图片处理失败）
             if "success" in request_params and not request_params["success"]:
                 return request_params
+
+            # 测试模式：返回mock数据，避免实际API调用和费用
+            if self._test_mode_enabled:
+                mock_project_id = f"test-{uuid.uuid4().hex[:8]}"
+                self.logger.info(f"[TEST MODE] 返回模拟task_id: {mock_project_id}")
+                return {
+                    "success": True,
+                    "project_id": mock_project_id
+                }
 
             # 2. 发送请求
             try:
@@ -449,6 +473,14 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
         """
         try:
             self.logger.info(f"Checking Seedance task status: project_id={project_id}")
+
+            # 测试模式：返回mock数据，避免实际API调用
+            if self._test_mode_enabled and self._mock_video_url:
+                self.logger.info(f"[TEST MODE] 返回模拟视频结果: {self._mock_video_url}")
+                return {
+                    "status": "SUCCESS",
+                    "result_url": self._mock_video_url
+                }
 
             # 1. 构建请求并发送
             request_params = self.build_check_query(project_id)

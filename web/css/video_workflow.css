@@ -2909,6 +2909,21 @@ textarea:focus{ border-color: var(--primary); }
   box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.3);
   transform: translateY(-50%) scale(1.3);
 }
+.port.ref-image-input-port {
+  left: -21px;
+  top: 0;
+  transform: translateY(-50%);
+  border-color: #10b981;
+}
+.port.ref-image-input-port:hover {
+  background: #6ee7b7;
+  transform: translateY(-50%) scale(1.2);
+}
+.port.ref-image-input-port.can-connect {
+  background: #6ee7b7;
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.3);
+  transform: translateY(-50%) scale(1.3);
+}
 
 /* ===== 媒体预览列表（音频/视频） ===== */
 .audio-preview-list,

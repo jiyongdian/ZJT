@@ -2550,8 +2550,11 @@
         if(conn.portType === 'extracted'){
           // extracted 类型连接到图片节点的 input 端口
           imagePort = toEl.querySelector('.port.input');
+        } else if(conn.portType === 'ref-image'){
+          // 参考图连接到图生视频节点的 ref-image-input-port
+          imagePort = toEl.querySelector('.ref-image-input-port');
         } else {
-          // 其他类型使用特定端口
+          // 其他类型使用特定端口（start-image-port / end-image-port）
           imagePort = toEl.querySelector(`.${conn.portType}-image-port`);
         }
         if(!outputPort || !imagePort) continue;
@@ -3153,7 +3156,8 @@
               <img class="preview end-preview" />
             </div>
           </div>
-          <div class="field field-collapsible reference-fields" style="display:none;">
+          <div class="field field-collapsible reference-fields" style="display:none; position: relative;">
+            <div class="port ref-image-input-port" data-port-type="ref-image" title="连接图片节点（参考图）"></div>
             <div class="label">参考图片 (1-5张)<span class="req">*</span></div>
             <input class="reference-file" type="file" accept="image/*" multiple />
             <button class="mini-btn reference-clear" type="button" style="margin-top: 4px;">清除全部</button>
@@ -3199,7 +3203,8 @@
               <div class="label" style="margin: 0;">提示词</div>
               <button class="mini-btn prompt-expand-btn" type="button" style="font-size: 11px; padding: 4px 8px;" title="放大编辑">⤢</button>
             </div>
-            <textarea class="prompt" placeholder="请输入提示词..." rows="3" style="resize: vertical; min-height: 60px;"></textarea>
+            <textarea class="prompt" placeholder="请输入提示词，输入 @ 引用媒体文件..." rows="3" style="resize: vertical; min-height: 60px;"></textarea>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">💡 输入 <b>@</b> 可引用已上传的图片、视频、音频</div>
             <div class="prompt-char-count" style="text-align: right; font-size: 11px; color: var(--muted); margin-top: 4px;">0 字符</div>
           </div>
           <div class="field field-collapsible computing-power-field" style="padding: 6px; border-radius: 6px;">
@@ -3255,6 +3260,7 @@
       const referenceFileEl = el.querySelector('.reference-file');
       const referenceClearBtn = el.querySelector('.reference-clear');
       const referencePreviewList = el.querySelector('.reference-preview-list');
+      const refImageInputPort = el.querySelector('.ref-image-input-port');
       const audioFileEl = el.querySelector('.audio-file');
       const audioClearAllBtn = el.querySelector('.audio-clear-all');
       const audioPreviewList = el.querySelector('.audio-preview-list');
@@ -3584,6 +3590,39 @@
                   renderVideoPreview();
                 }
                 renderVideoConnections();
+              }
+            }
+          }
+          state.connecting = null;
+        });
+      }
+
+      // ===== 参考图输入端口连接处理 =====
+      if(refImageInputPort){
+        refImageInputPort.addEventListener('mouseup', (e) => {
+          if(state.connecting && state.connecting.fromId !== id){
+            const fromNode = state.nodes.find(n => n.id === state.connecting.fromId);
+            if(fromNode && fromNode.type === 'image'){
+              const exists = state.imageConnections.some(c => c.from === fromNode.id && c.to === id && c.portType === 'ref-image');
+              if(!exists){
+                const currentRefCount = state.imageConnections.filter(c => c.to === id && c.portType === 'ref-image').length;
+                const maxRefs = 5;
+                if(currentRefCount >= maxRefs){
+                  showToast(`最多支持${maxRefs}张参考图`, 'error');
+                } else {
+                  state.imageConnections.push({
+                    id: state.nextImgConnId++,
+                    from: fromNode.id,
+                    to: id,
+                    portType: 'ref-image'
+                  });
+                  if(fromNode.data.url){
+                    if(!node.data.referenceUrls) node.data.referenceUrls = [];
+                    node.data.referenceUrls.push(fromNode.data.url);
+                    renderReferencePreview();
+                  }
+                  renderImageConnections();
+                }
               }
             }
           }
@@ -5211,6 +5250,7 @@
         imagePreviewImg.src = localPreview;
         imagePreviewRow.style.display = 'flex';
 
+        const previousUrl = node.data.url;
         const uploadedUrl = await uploadFile(file);
         if(uploadedUrl){
           node.data.url = uploadedUrl;
@@ -5230,6 +5270,13 @@
                   targetNode.data.startUrl = uploadedUrl;
                 } else if(conn.portType === 'end'){
                   targetNode.data.endUrl = uploadedUrl;
+                } else if(conn.portType === 'ref-image'){
+                  // 更新 referenceUrls 中对应的URL
+                  if(!targetNode.data.referenceUrls) targetNode.data.referenceUrls = [];
+                  const idx = targetNode.data.referenceUrls.indexOf(previousUrl);
+                  if(idx >= 0){
+                    targetNode.data.referenceUrls[idx] = uploadedUrl;
+                  }
                 }
 
                 // 触发目标节点的算力更新

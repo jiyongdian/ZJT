@@ -345,6 +345,23 @@
               targetNode.data.startUrl = '';
             } else if(conn.portType === 'end') {
               targetNode.data.endUrl = '';
+            } else if(conn.portType === 'ref-image') {
+              const fromNode = state.nodes.find(n => n.id === conn.from);
+              if(fromNode && targetNode.data.referenceUrls){
+                const idx = targetNode.data.referenceUrls.indexOf(fromNode.data.url);
+                if(idx >= 0) targetNode.data.referenceUrls.splice(idx, 1);
+                // 重新渲染参考图预览
+                const refPreviewList = document.querySelector(`.node[data-node-id="${conn.to}"] .reference-preview-list`);
+                if(refPreviewList){
+                  refPreviewList.innerHTML = '';
+                  targetNode.data.referenceUrls.forEach((url, i) => {
+                    const item = document.createElement('div');
+                    item.style.cssText = 'position: relative; width: 50px; height: 50px;';
+                    item.innerHTML = `<img src="${url}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;" />`;
+                    refPreviewList.appendChild(item);
+                  });
+                }
+              }
             }
             console.log(`[删除图片连接] 清除图生视频节点 ${conn.to} 的 ${conn.portType} URL，准备更新算力`);
             // 更新目标节点的算力显示（使用canvas.js中定义的函数）
@@ -438,6 +455,12 @@
                 targetNode.data.startUrl = '';
               } else if(conn.portType === 'end') {
                 targetNode.data.endUrl = '';
+              } else if(conn.portType === 'ref-image') {
+                const fromNode = state.nodes.find(n => n.id === conn.from);
+                if(fromNode && targetNode.data.referenceUrls){
+                  const idx = targetNode.data.referenceUrls.indexOf(fromNode.data.url);
+                  if(idx >= 0) targetNode.data.referenceUrls.splice(idx, 1);
+                }
               }
               console.log(`[键盘删除图片连接] 清除图生视频节点 ${conn.to} 的 ${conn.portType} URL，准备更新算力`);
               // 更新目标节点的算力显示（使用canvas.js中定义的函数）
@@ -702,6 +725,20 @@
                 }
               }
             }
+            // 检查参考图端口（多参考图模式）
+            if(node.data.imageMode === 'multi_reference'){
+              const refImgPort = toEl.querySelector('.ref-image-input-port');
+              if(refImgPort){
+                const rect = refImgPort.getBoundingClientRect();
+                const portX = (rect.left + rect.width/2 - containerRect.left - state.panX) / state.zoom;
+                const portY = (rect.top + rect.height/2 - containerRect.top - state.panY) / state.zoom;
+                const dist = Math.sqrt(Math.pow(toX - portX, 2) + Math.pow(toY - portY, 2));
+                if(dist < nearestDist){
+                  nearestDist = dist;
+                  nearestImgPort = { nodeId: node.id, portType: 'ref-image', x: portX, y: portY };
+                }
+              }
+            }
           }
           
           // 查找分镜节点的首帧端口
@@ -791,10 +828,13 @@
         }
         
         // 更新图片端口高亮状态
-        for(const portEl of canvasEl.querySelectorAll('.start-image-port, .end-image-port')){
+        for(const portEl of canvasEl.querySelectorAll('.start-image-port, .end-image-port, .ref-image-input-port')){
           const nodeEl = portEl.closest('.node');
           const nodeId = nodeEl ? Number(nodeEl.dataset.nodeId) : null;
-          const portType = portEl.classList.contains('start-image-port') ? 'start' : 'end';
+          let portType;
+          if(portEl.classList.contains('start-image-port')) portType = 'start';
+          else if(portEl.classList.contains('end-image-port')) portType = 'end';
+          else portType = 'ref-image';
           const isNearest = nearestImgPort && nearestImgPort.nodeId === nodeId && nearestImgPort.portType === portType;
           portEl.classList.toggle('can-connect', isNearest);
         }
@@ -982,8 +1022,22 @@
                 }
               }
             }
+            // 检查参考图端口（多参考图模式）
+            if(node.data.imageMode === 'multi_reference'){
+              const refImgPort = toEl.querySelector('.ref-image-input-port');
+              if(refImgPort){
+                const rect = refImgPort.getBoundingClientRect();
+                const portX = (rect.left + rect.width/2 - containerRect.left - state.panX) / state.zoom;
+                const portY = (rect.top + rect.height/2 - containerRect.top - state.panY) / state.zoom;
+                const dist = Math.sqrt(Math.pow(mouseX - portX, 2) + Math.pow(mouseY - portY, 2));
+                if(dist < nearestImgDist){
+                  nearestImgDist = dist;
+                  nearestImgPort = { nodeId: node.id, portType: 'ref-image' };
+                }
+              }
+            }
           }
-          
+
           // 查找分镜节点的首帧端口（蓝色端口）
           let nearestFirstFramePort = null;
           let nearestFirstFrameDist = 50;
@@ -1059,6 +1113,15 @@
                 to: nearestImgPort.nodeId,
                 portType: nearestImgPort.portType
               });
+              // 参考图连接：将图片URL追加到目标节点的 referenceUrls
+              if(nearestImgPort.portType === 'ref-image'){
+                const targetNode = state.nodes.find(n => n.id === nearestImgPort.nodeId);
+                const sourceNode = state.nodes.find(n => n.id === state.connecting.fromId);
+                if(targetNode && sourceNode && sourceNode.data.url){
+                  if(!targetNode.data.referenceUrls) targetNode.data.referenceUrls = [];
+                  targetNode.data.referenceUrls.push(sourceNode.data.url);
+                }
+              }
             }
           } else if(nearestFirstFramePort && nearestFirstFrameDist === minDist){
             // 连接到分镜节点的首帧端口
