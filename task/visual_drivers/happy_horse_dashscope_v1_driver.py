@@ -3,9 +3,11 @@ Happy Horse 阿里云百炼驱动实现
 模型: happyhorse-1.0-i2v
 支持图生视频（基于首帧），异步任务模式
 """
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
+import os
 import traceback
 import json
+from pathlib import Path
 from .base_video_driver import BaseVideoDriver, ImageMode
 from config.config_util import get_config, get_dynamic_config_value
 from utils.sentry_util import SentryUtil, AlertLevel
@@ -18,11 +20,13 @@ class HappyHorseDashscopeV1Driver(BaseVideoDriver):
     支持单张首帧图片 + 可选的驱动音频和驱动视频
     """
 
-    def __init__(self):
-        super().__init__(driver_name="happy_horse_dashscope_v1", driver_type=28)
+    MODEL = "happyhorse-1.0-i2v"
 
-        # 加载配置
-        self._api_key = get_dynamic_config_value("dashscope", "api_key", default="")
+    def __init__(self, driver_name: str = "happy_horse_dashscope_v1", driver_type: int = 28):
+        super().__init__(driver_name=driver_name, driver_type=driver_type)
+
+        # 加载配置（复用 LLM 配置的阿里云 Qwen API Key）
+        self._api_key = get_dynamic_config_value("llm", "qwen", "api_key", default="")
         self._base_url = "https://dashscope.aliyuncs.com/api/v1"
         self._timeout = get_dynamic_config_value("timeout", "request_timeout", default=30)
 
@@ -105,11 +109,12 @@ class HappyHorseDashscopeV1Driver(BaseVideoDriver):
     def _parse_extra_params(self, ai_tool) -> Dict[str, Any]:
         """
         从 extra_config 解析可选参数
-        支持: resolution (720P/1080P), watermark (true/false), seed (int)
+        支持: resolution (720P/1080P), watermark (true/false), seed (int), prompt_extend (bool)
         """
         params = {
             "resolution": "1080P",  # 默认值
             "watermark": True,      # 默认添加水印
+            "prompt_extend": True,  # 默认开启 prompt 扩展
         }
 
         if not ai_tool.extra_config:
@@ -126,10 +131,80 @@ class HappyHorseDashscopeV1Driver(BaseVideoDriver):
                     seed = config["seed"]
                     if isinstance(seed, int) and 0 <= seed <= 2147483647:
                         params["seed"] = seed
+                if "prompt_extend" in config:
+                    params["prompt_extend"] = bool(config["prompt_extend"])
         except (json.JSONDecodeError, TypeError, ValueError):
             self.logger.warning(f"无法解析 extra_config: {ai_tool.extra_config}")
 
         return params
+
+    def _get_audio_duration(self, audio_path: str) -> Optional[float]:
+        """
+        获取音频文件时长（秒），使用 ffprobe（与 api/media.py 保持一致）
+        """
+        if not audio_path or not os.path.exists(audio_path):
+            return None
+
+        try:
+            import subprocess
+            cmd = [
+                "ffprobe", "-v", "quiet",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                audio_path
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            if result.returncode == 0 and result.stdout.strip():
+                return float(result.stdout.strip())
+        except Exception:
+            pass
+
+        return None
+
+    def _validate_audio(self, audio_path: str, video_duration: int) -> tuple[bool, Optional[str]]:
+        """
+        校验音频文件是否符合 Happy Horse API 要求
+
+        返回: (是否通过, 错误信息)
+        """
+        if not audio_path:
+            return True, None
+
+        # 1. 格式校验
+        ext = Path(audio_path).suffix.lower()
+        if ext not in (".wav", ".mp3"):
+            return False, f"音频格式不支持: {ext}，仅支持 wav、mp3"
+
+        # 2. 文件大小校验（≤15MB）
+        try:
+            if os.path.exists(audio_path):
+                size_mb = os.path.getsize(audio_path) / (1024 * 1024)
+                if size_mb > 15:
+                    return False, f"音频文件过大: {size_mb:.1f}MB，限制 15MB"
+        except OSError:
+            pass
+
+        # 3. 时长校验（2-30秒）
+        duration = self._get_audio_duration(audio_path)
+        if duration is not None:
+            if duration < 2:
+                return False, f"音频时长过短: {duration:.1f}秒，要求 2-30 秒"
+            if duration > 30:
+                return False, f"音频时长过长: {duration:.1f}秒，要求 2-30 秒"
+
+            # 4. 截断提示（API 会自动截断，但提醒用户）
+            if duration > video_duration:
+                self.logger.info(
+                    f"音频时长({duration:.1f}s)超过视频时长({video_duration}s)，"
+                    f"API 将自动截取前 {video_duration} 秒"
+                )
+            elif duration < video_duration:
+                self.logger.info(
+                    f"音频时长({duration:.1f}s)短于视频时长({video_duration}s)，"
+                    f"超出部分为无声视频"
+                )
+
+        return True, None
 
     def _upload_media_to_cdn(self, media_urls: List[str], media_type: str = "媒体") -> List[str]:
         """
@@ -156,6 +231,15 @@ class HappyHorseDashscopeV1Driver(BaseVideoDriver):
     def build_create_request(self, ai_tool) -> Dict[str, Any]:
         """
         构建创建 Happy Horse 任务的完整请求参数
+        根据 driver_type 自动分发到 i2v 或 r2v 模式
+        """
+        if self.driver_type == 29:
+            return self._build_r2v_request(ai_tool)
+        return self._build_i2v_request(ai_tool)
+
+    def _build_i2v_request(self, ai_tool) -> Dict[str, Any]:
+        """
+        构建 i2v（图生视频）请求
 
         支持：
         - 首帧图片（有且仅有1张，必须）
@@ -186,9 +270,26 @@ class HappyHorseDashscopeV1Driver(BaseVideoDriver):
             }
         ]
 
+        # 解析 extra_config 中的可选参数
+        extra_params = self._parse_extra_params(ai_tool)
+
+        # 确定视频时长（音频校验需要）
+        duration = ai_tool.duration or 5
+        if not (3 <= duration <= 15):
+            duration = 5
+
         # 处理驱动音频
         audio_path = self.get_audio_path(ai_tool)
         if audio_path:
+            # 校验音频文件
+            is_valid, error_msg = self._validate_audio(audio_path, duration)
+            if not is_valid:
+                return {
+                    "success": False,
+                    "error": error_msg,
+                    "error_type": "USER",
+                    "retry": False
+                }
             audio_urls = self._upload_media_to_cdn([audio_path], "音频")
             if audio_urls and audio_urls[0]:
                 media_list.append({
@@ -208,6 +309,89 @@ class HappyHorseDashscopeV1Driver(BaseVideoDriver):
                 })
                 self.logger.info(f"已添加驱动视频: {video_urls[0]}")
 
+        payload = {
+            "model": self.MODEL,
+            "input": {
+                "prompt": ai_tool.prompt or "",
+                "media": media_list
+            },
+            "parameters": {
+                "resolution": extra_params["resolution"],
+                "duration": duration,
+                "watermark": extra_params["watermark"],
+                "prompt_extend": extra_params["prompt_extend"]
+            }
+        }
+
+        # 可选参数：seed
+        if "seed" in extra_params:
+            payload["parameters"]["seed"] = extra_params["seed"]
+
+        return {
+            "url": f"{self._base_url}/services/aigc/video-generation/video-synthesis",
+            "method": "POST",
+            "json": payload,
+            "headers": {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self._api_key}",
+                "X-DashScope-Async": "enable"
+            },
+            "timeout": self._timeout
+        }
+
+    def _build_r2v_request(self, ai_tool) -> Dict[str, Any]:
+        """
+        构建 r2v（参考生视频）请求
+
+        支持：
+        - 多张参考图像（1-9张，必须）
+        - 文本提示词中通过 [Image 1]、[Image 2] 指代参考图像
+        - 支持 ratio 参数
+        """
+        # 获取参考图像（从 image_path 获取，逗号分隔）
+        if not ai_tool.image_path:
+            return {
+                "success": False,
+                "error": "缺少参考图片",
+                "error_type": "USER",
+                "retry": False
+            }
+
+        image_urls = [url.strip() for url in ai_tool.image_path.split(',') if url.strip()]
+        if not image_urls:
+            return {
+                "success": False,
+                "error": "缺少参考图片",
+                "error_type": "USER",
+                "retry": False
+            }
+
+        if len(image_urls) > 9:
+            self.logger.warning(f"参考图数量超过9张，已截取前9张")
+            image_urls = image_urls[:9]
+
+        # 上传所有参考图
+        uploaded_urls = self._upload_media_to_cdn(image_urls, "参考图")
+
+        # 构建 media 列表
+        media_list = []
+        for url in uploaded_urls:
+            if url:
+                media_list.append({
+                    "type": "reference_image",
+                    "url": url
+                })
+
+        if not media_list:
+            return {
+                "success": False,
+                "error": "参考图片上传失败",
+                "error_type": "SYSTEM",
+                "retry": True
+            }
+
+        self.logger.info(f"已添加 {len(media_list)} 张参考图")
+
         # 解析 extra_config 中的可选参数
         extra_params = self._parse_extra_params(ai_tool)
 
@@ -216,14 +400,19 @@ class HappyHorseDashscopeV1Driver(BaseVideoDriver):
         if not (3 <= duration <= 15):
             duration = 5
 
+        ratio = ai_tool.ratio or '16:9'
+        if ratio not in ('16:9', '9:16', '3:4', '4:3', '1:1'):
+            ratio = '16:9'
+
         payload = {
-            "model": "happyhorse-1.0-i2v",
+            "model": self.MODEL,
             "input": {
                 "prompt": ai_tool.prompt or "",
                 "media": media_list
             },
             "parameters": {
                 "resolution": extra_params["resolution"],
+                "ratio": ratio,
                 "duration": duration,
                 "watermark": extra_params["watermark"]
             }
@@ -263,23 +452,38 @@ class HappyHorseDashscopeV1Driver(BaseVideoDriver):
         提交 Happy Horse 视频生成任务
         """
         try:
-            # 验证首帧图片
-            first_frame, _ = self.get_first_last_frames(ai_tool)
-            if not first_frame:
-                return {
-                    "success": False,
-                    "error": "缺少首帧图片",
-                    "error_type": "USER",
-                    "retry": False
-                }
+            if self.driver_type == 29:
+                # r2v 模式：验证参考图片
+                image_urls = [url.strip() for url in (ai_tool.image_path or '').split(',') if url.strip()]
+                if not image_urls:
+                    return {
+                        "success": False,
+                        "error": "缺少参考图片",
+                        "error_type": "USER",
+                        "retry": False
+                    }
+                self.logger.info(
+                    f"Submitting Happy Horse r2v task: prompt='{(ai_tool.prompt or '')[:50]}...', "
+                    f"duration={ai_tool.duration}, ref_images={len(image_urls)}"
+                )
+            else:
+                # i2v 模式：验证首帧图片
+                first_frame, _ = self.get_first_last_frames(ai_tool)
+                if not first_frame:
+                    return {
+                        "success": False,
+                        "error": "缺少首帧图片",
+                        "error_type": "USER",
+                        "retry": False
+                    }
 
-            audio_path = self.get_audio_path(ai_tool)
-            video_path = self.get_video_path(ai_tool)
-            self.logger.info(
-                f"Submitting Happy Horse task: prompt='{(ai_tool.prompt or '')[:50]}...', "
-                f"duration={ai_tool.duration}, first_frame={first_frame}, "
-                f"audio={audio_path is not None}, video={video_path is not None}"
-            )
+                audio_path = self.get_audio_path(ai_tool)
+                video_path = self.get_video_path(ai_tool)
+                self.logger.info(
+                    f"Submitting Happy Horse i2v task: prompt='{(ai_tool.prompt or '')[:50]}...', "
+                    f"duration={ai_tool.duration}, first_frame={first_frame}, "
+                    f"audio={audio_path is not None}, video={video_path is not None}"
+                )
 
             # 构建请求参数
             request_params = self.build_create_request(ai_tool)
@@ -509,3 +713,14 @@ class HappyHorseDashscopeV1Driver(BaseVideoDriver):
                 "error_type": "SYSTEM",
                 "error_detail": f"未预期异常: {str(e)}"
             }
+
+
+class HappyHorseDashscopeR2VV1Driver(HappyHorseDashscopeV1Driver):
+    """
+    Happy Horse 参考生视频驱动（r2v）
+    支持多张参考图像 + 文本提示词生成视频
+    """
+    MODEL = "happyhorse-1.0-r2v"
+
+    def __init__(self):
+        super().__init__(driver_name="happy_horse_dashscope_r2v_v1", driver_type=29)
