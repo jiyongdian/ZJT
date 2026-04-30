@@ -315,6 +315,10 @@ app.include_router(admin_router)
 # 注册系统状态 API 路由
 app.include_router(system_router)
 
+# 导入并注册媒体验证 API 路由
+from api.media import router as media_router
+app.include_router(media_router)
+
 # 尝试加载 enterprise 模块，未加载时注册主仓库的用户路由（演示模式）
 try:
     from utils.enterprise_loader import enterprise_loader
@@ -1635,7 +1639,8 @@ async def ai_app_run_image(
     audio: UploadFile = File(None, description="Reference audio file (optional)"),
     video: UploadFile = File(None, description="Reference video file (optional)"),
     audio_urls: str = Form(None, description="Comma-separated reference audio URLs (alternative to uploading audio file)"),
-    video_urls: str = Form(None, description="Comma-separated reference video URLs (alternative to uploading video file)")
+    video_urls: str = Form(None, description="Comma-separated reference video URLs (alternative to uploading video file)"),
+    media_references: Optional[str] = Form(None, description="JSON array of media references for @ mention resolution")
 ):
     """
     Submit image to video task.
@@ -1670,6 +1675,15 @@ async def ai_app_run_image(
 
         # 记录输入的图片信息
         logger.info(f"AI app run image request - prompt: {prompt}, task_id: {task_id}, ratio: {ratio}, duration: {duration_seconds}, count: {count}, user_id: {user_id}, image_mode: {image_mode}")
+
+        # 解析 @ 引用（如果有 media_references）
+        if media_references:
+            try:
+                refs = json.loads(media_references)
+                if isinstance(refs, list):
+                    logger.info(f"Media references: {[r.get('displayName') for r in refs]}")
+            except (json.JSONDecodeError, TypeError):
+                pass
         
         if image_urls:
             url_list = [url.strip() for url in image_urls.split(',') if url.strip()]
@@ -4786,6 +4800,141 @@ async def extract_video_frame(
             status_code=500,
             content={"code": -1, "message": f"提取帧失败: {str(e)}"}
         )
+
+
+def _generate_thumbnail(file_path: str, media_type: str, thumb_dir: str, thumb_filename: str) -> Optional[str]:
+    """
+    生成媒体文件缩略图。
+    - 图片: PIL 缩放到最大 200x200，保存为 JPEG
+    - 视频: ffmpeg 抽取第一帧，然后 PIL 缩放
+    - 音频: 不生成，返回 None
+    """
+    os.makedirs(thumb_dir, exist_ok=True)
+    thumb_path = os.path.join(thumb_dir, thumb_filename)
+
+    if media_type == "audio":
+        return None
+
+    if media_type == "image":
+        try:
+            with Image.open(file_path) as img:
+                img.thumbnail((200, 200), Image.LANCZOS)
+                if img.mode in ("RGBA", "P"):
+                    img = img.convert("RGB")
+                img.save(thumb_path, "JPEG", quality=75)
+            return thumb_path
+        except Exception as e:
+            logger.error(f"生成图片缩略图失败: {e}")
+            return None
+
+    if media_type == "video":
+        try:
+            ffmpeg_path = resolve_bin_path(get_config_value("bin", "ffmpeg", default="ffmpeg"), APP_DIR)
+            ffmpeg_timeout = get_config_value("bin", "ffmpeg_timeout", default=30)
+
+            # 先抽取第一帧到临时文件
+            temp_frame = thumb_path + ".tmp_frame.jpg"
+            ffmpeg_cmd = [
+                ffmpeg_path, "-i", file_path,
+                "-vframes", "1", "-q:v", "2", "-y", temp_frame
+            ]
+            process = subprocess.run(
+                ffmpeg_cmd, capture_output=True, text=True, timeout=ffmpeg_timeout
+            )
+            if process.returncode != 0 or not os.path.exists(temp_frame):
+                logger.error(f"ffmpeg 抽帧失败: {process.stderr}")
+                return None
+
+            # 缩放为缩略图
+            with Image.open(temp_frame) as img:
+                img.thumbnail((200, 200), Image.LANCZOS)
+                if img.mode in ("RGBA", "P"):
+                    img = img.convert("RGB")
+                img.save(thumb_path, "JPEG", quality=75)
+
+            # 清理临时帧
+            try:
+                os.remove(temp_frame)
+            except Exception:
+                pass
+            return thumb_path
+        except Exception as e:
+            logger.error(f"生成视频缩略图失败: {e}")
+            return None
+
+    return None
+
+
+@app.post('/api/image-to-video/upload-media')
+@require_permission("image_to_video:upload_media")
+async def upload_image_to_video_media(
+    request: Request,
+    file: UploadFile = File(..., description="要上传的媒体文件（图片、视频或音频）"),
+    media_type: str = Form(..., description="媒体类型: image, video, audio"),
+    auth_token: str = Header(None, alias="Authorization"),
+    user_id: Optional[int] = Header(None, alias="X-User-Id")
+):
+    """
+    图生视频页面上传媒体文件，自动生成缩略图。
+    返回文件URL和缩略图URL。
+    """
+    try:
+        user_id = _get_user_id_from_header(user_id)
+
+        # 验证 media_type
+        if media_type not in ("image", "video", "audio"):
+            return JSONResponse(status_code=400, content={"code": -1, "message": "media_type 必须是 image, video 或 audio"})
+
+        # 验证文件类型
+        content_type = file.content_type or ""
+        type_prefix_map = {"image": "image/", "video": "video/", "audio": "audio/"}
+        if not content_type.startswith(type_prefix_map[media_type]):
+            return JSONResponse(status_code=400, content={"code": -1, "message": f"文件类型与 media_type({media_type}) 不匹配"})
+
+        # 获取配置的上传子目录
+        upload_subdir = get_dynamic_config_value("upload", "image_to_video", "subdir", default="image_to_video")
+
+        # 保存原始文件
+        request_host = _get_request_host(request)
+        date_str = datetime.now().strftime("%Y%m%d")
+        asset_dir = os.path.join(UPLOAD_DIR, upload_subdir, str(user_id), date_str)
+        os.makedirs(asset_dir, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        unique_id = uuid.uuid4().hex[:8]
+        original_ext = os.path.splitext(file.filename or "file")[1] or ".bin"
+        filename = f"media_{timestamp}_{unique_id}{original_ext}"
+        file_path = os.path.join(asset_dir, filename)
+
+        content = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(content)
+
+        # 生成缩略图
+        thumb_filename = f"thumb_{timestamp}_{unique_id}.jpg"
+        thumb_path = await asyncio.to_thread(
+            _generate_thumbnail, file_path, media_type, asset_dir, thumb_filename
+        )
+
+        # 构建返回 URL
+        relative_base = f"{upload_subdir}/{user_id}/{date_str}"
+        file_url = f"{request_host}/upload/{relative_base}/{filename}"
+        thumbnail_url = None
+        if thumb_path and os.path.exists(thumb_path):
+            thumbnail_url = f"{request_host}/upload/{relative_base}/{thumb_filename}"
+
+        return JSONResponse({
+            "code": 0,
+            "message": "上传成功",
+            "data": {
+                "file_url": file_url,
+                "thumbnail_url": thumbnail_url
+            }
+        })
+    except Exception as e:
+        logger.error(f"Failed to upload image-to-video media: {str(e)}")
+        logger.error(traceback.format_exc())
+        return JSONResponse(status_code=500, content={"code": -1, "message": f"上传失败: {str(e)}"})
 
 
 @app.get('/api/ai-tools/{ai_tools_id}/grid-split')

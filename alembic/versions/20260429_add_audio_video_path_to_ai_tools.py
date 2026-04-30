@@ -1,7 +1,7 @@
 """add_audio_video_path_to_ai_tools
 
 Revision ID: 20260429_audio_video_path
-Revises: 20260428_add_zjt_api_gpt55_model
+Revises: 20260428_zjt_api_gpt55
 Create Date: 2026-04-29
 
 为 ai_tools 表添加 audio_path 和 video_path 字段，用于存储参考音频和参考视频路径
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '20260429_audio_video_path'
-down_revision: Union[str, None] = '20260428_add_zjt_api_gpt55_model'
+down_revision: Union[str, None] = '20260428_zjt_api_gpt55'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

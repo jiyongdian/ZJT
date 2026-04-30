@@ -75,6 +75,44 @@ async function generateShotFrameVideo(nodeId, node){
     errorEl.textContent = '';
   }
 
+  // 验证参考音频和视频的总时长
+  if(node.data.refAudioFile || node.data.refVideoFile) {
+    const validationForm = new FormData();
+    if(node.data.refAudioFile) {
+      validationForm.append('audio_files', node.data.refAudioFile);
+    }
+    if(node.data.refVideoFile) {
+      validationForm.append('video_files', node.data.refVideoFile);
+    }
+    validationForm.append('max_duration_seconds', 15);
+
+    try {
+      const validationRes = await fetch('/api/media/validate-duration', {
+        method: 'POST',
+        body: validationForm
+      });
+      const validationData = await validationRes.json();
+      if(!validationData.data.valid) {
+        const errorMsg = validationData.data.message || '时长超过限制';
+        showToast(errorMsg, 'error');
+        if(errorEl){
+          errorEl.textContent = errorMsg;
+          errorEl.style.display = 'block';
+        }
+        return;
+      }
+    } catch(err) {
+      console.error('媒体验证失败:', err);
+      const errorMsg = '媒体验证失败，请检查上传的文件';
+      showToast(errorMsg, 'error');
+      if(errorEl){
+        errorEl.textContent = errorMsg;
+        errorEl.style.display = 'block';
+      }
+      return;
+    }
+  }
+
   try {
     generateBtn.disabled = true;
     generateBtn.textContent = '生成中...';
@@ -118,7 +156,15 @@ async function generateShotFrameVideo(nodeId, node){
     form.append('count', count);
     form.append('ratio', state.ratio || '9:16');
     form.append('task_id', taskId);
-    
+
+    // 添加参考音频和视频文件
+    if(node.data.refAudioFile) {
+      form.append('audio_files', node.data.refAudioFile);
+    }
+    if(node.data.refVideoFile) {
+      form.append('video_files', node.data.refVideoFile);
+    }
+
     if(userId){
       form.append('user_id', userId);
     }

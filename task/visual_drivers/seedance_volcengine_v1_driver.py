@@ -241,8 +241,8 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
                 "role": "reference_image"
             })
 
-        # 参考视频（role: "reference_video"）
-        reference_video = extra_config.get('reference_video')
+        # 参考视频（优先从 ai_tool.video_path 获取，向后兼容 extra_config）
+        reference_video = self.get_video_path(ai_tool) or extra_config.get('reference_video')
         if reference_video:
             content.append({
                 "type": "video_url",
@@ -252,8 +252,8 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
                 "role": "reference_video"
             })
 
-        # 参考音频（role: "reference_audio"）
-        reference_audio = extra_config.get('reference_audio')
+        # 参考音频（优先从 ai_tool.audio_path 获取，向后兼容 extra_config）
+        reference_audio = self.get_audio_path(ai_tool) or extra_config.get('reference_audio')
         if reference_audio:
             content.append({
                 "type": "audio_url",

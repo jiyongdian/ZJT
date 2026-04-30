@@ -3162,11 +3162,14 @@
         if(!files || files.length === 0) return;
         
         const currentCount = (node.data.referenceUrls || []).length;
-        const maxCount = 5;
+        const modelConfig = TaskConfig.getModelConfigs();
+        const videoModelEl = node.el.querySelector('.shot-video-model');
+        const modelKey = videoModelEl?.value;
+        const maxCount = modelConfig[modelKey]?.max_multi_ref_images || 5;
         const canAdd = maxCount - currentCount;
-        
+
         if(canAdd <= 0) {
-          showToast('最多上传5张参考图', 'error');
+          showToast(`最多上传${maxCount}张参考图`, 'error');
           referenceFileEl.value = '';
           return;
         }
@@ -8372,6 +8375,16 @@
                   <option value="10">10秒</option>
                 </select>
               </div>
+              <div class="shot-ref-audio-field field field-always-visible" style="margin-top: 8px; display: none;">
+                <div class="label">参考音频（可选）</div>
+                <input type="file" class="shot-ref-audio-input" accept="audio/*" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" />
+                <div class="shot-ref-audio-name" style="margin-top: 4px; font-size: 11px; color: #666;"></div>
+              </div>
+              <div class="shot-ref-video-field field field-always-visible" style="margin-top: 8px; display: none;">
+                <div class="label">参考视频（可选）</div>
+                <input type="file" class="shot-ref-video-input" accept="video/*" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" />
+                <div class="shot-ref-video-name" style="margin-top: 4px; font-size: 11px; color: #666;"></div>
+              </div>
               <div class="field field-always-visible" style="margin-top: 12px;">
                 <div class="gen-container" style="width: 100%;">
                   <button class="gen-btn gen-btn-main shot-frame-generate-video-btn" type="button" style="background: #22c55e; color: white; flex: 1; padding: 10px;">生成视频</button>
@@ -8487,6 +8500,63 @@
         }
         videoModelEl.value = node.data.videoModel || firstVideoModelValue;
         applyDriverStatusToSelect(videoModelEl);
+
+        // 初始化参考音视频字段可见性
+        function updateRefAudioVideoVisibility() {
+          const videoModel = videoModelEl.value;
+          const refAudioField = el.querySelector('.shot-ref-audio-field');
+          const refVideoField = el.querySelector('.shot-ref-video-field');
+
+          if(window.TaskConfig && window.TaskConfig.isLoaded()) {
+            const modelConfig = window.TaskConfig.getModelConfigs()[videoModel];
+            const supportsRefAudioVideo = modelConfig && modelConfig.supports_ref_audio_video === true;
+
+            if(refAudioField) refAudioField.style.display = supportsRefAudioVideo ? 'block' : 'none';
+            if(refVideoField) refVideoField.style.display = supportsRefAudioVideo ? 'block' : 'none';
+          } else {
+            // 如果配置未加载，默认隐藏
+            if(refAudioField) refAudioField.style.display = 'none';
+            if(refVideoField) refVideoField.style.display = 'none';
+          }
+        }
+
+        // 初始更新
+        updateRefAudioVideoVisibility();
+
+        // 监听视频模型变化
+        videoModelEl.addEventListener('change', () => {
+          node.data.videoModel = videoModelEl.value;
+          updateRefAudioVideoVisibility();
+          try{ autoSaveWorkflow(); } catch(e){}
+        });
+
+        // 参考音频输入事件
+        const refAudioInput = el.querySelector('.shot-ref-audio-input');
+        if(refAudioInput) {
+          refAudioInput.addEventListener('change', (e) => {
+            const file = e.target.files?.[0];
+            if(file) {
+              node.data.refAudioFile = file;
+              const nameEl = el.querySelector('.shot-ref-audio-name');
+              if(nameEl) nameEl.textContent = '✓ ' + file.name;
+            }
+            try{ autoSaveWorkflow(); } catch(e){}
+          });
+        }
+
+        // 参考视频输入事件
+        const refVideoInput = el.querySelector('.shot-ref-video-input');
+        if(refVideoInput) {
+          refVideoInput.addEventListener('change', (e) => {
+            const file = e.target.files?.[0];
+            if(file) {
+              node.data.refVideoFile = file;
+              const nameEl = el.querySelector('.shot-ref-video-name');
+              if(nameEl) nameEl.textContent = '✓ ' + file.name;
+            }
+            try{ autoSaveWorkflow(); } catch(e){}
+          });
+        }
       }
 
       // ============ 引用匹配与显示逻辑 ============

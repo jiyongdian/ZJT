@@ -286,7 +286,11 @@
         supported_image_modes: task.supported_image_modes || ['first_last_frame'],
         default_image_mode: task.default_image_mode || 'first_last_frame',
         // 是否支持尾帧（图生视频任务）
-        supports_last_frame: task.supports_last_frame !== false  // 默认为 true
+        supports_last_frame: task.supports_last_frame !== false,  // 默认为 true
+        // 是否支持参考音频和视频
+        supports_ref_audio_video: task.supports_ref_audio_video === true,
+        // 多参考图模式最大图片数量
+        max_multi_ref_images: task.max_multi_ref_images || 5
       };
     });
     return result;
