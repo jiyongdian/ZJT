@@ -118,16 +118,20 @@
    * @returns {number|null} 任务类型ID
    */
   function getTaskIdByKey(modelKey, category) {
-    const task = getTaskByKey(modelKey);
-    if (!task) return null;
-    if (category) {
-      // 如果指定了分类，检查匹配到的任务是否符合
-      if (task.category === category || (task.categories && task.categories.includes(category))) {
-        return task.id;
-      }
-      return null;
+    if (!category) {
+      const task = getTaskByKey(modelKey);
+      return task ? task.id : null;
     }
-    return task.id;
+    // 指定了分类时，在所有任务中查找 key 匹配且分类匹配的任务
+    const tasks = getAllTasks();
+    // 先精确匹配
+    const exact = tasks.find(t => t.key === modelKey &&
+      (t.category === category || (t.categories && t.categories.includes(category))));
+    if (exact) return exact.id;
+    // 前缀匹配：找所有以 modelKey_ 开头的任务中分类匹配的
+    const prefixMatches = tasks.filter(t => t.key.startsWith(modelKey + '_') &&
+      (t.category === category || (t.categories && t.categories.includes(category))));
+    return prefixMatches.length > 0 ? prefixMatches[0].id : null;
   }
 
   /**
