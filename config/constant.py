@@ -225,6 +225,11 @@ DRIVER_IMPLEMENTATION_MAPPING = {
         DriverImplementation.GROK_COMMON_SITE5_V1,  # 通用聚合站点 5
     ],
 
+    # Happy Horse 相关驱动
+    DriverKey.HAPPY_HORSE_IMAGE_TO_VIDEO: DriverImplementation.HAPPY_HORSE_DASHSCOPE_V1,
+    DriverKey.HAPPY_HORSE_REFERENCE_TO_VIDEO: DriverImplementation.HAPPY_HORSE_DASHSCOPE_R2V_V1,
+    DriverKey.HAPPY_HORSE_TEXT_TO_VIDEO: DriverImplementation.HAPPY_HORSE_DASHSCOPE_T2V_V1,
+
 }
 
 # 视频模型时长选项配置
