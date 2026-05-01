@@ -1499,7 +1499,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         sort_order=41,
         supported_image_modes=[ImageMode.FIRST_LAST_FRAME],  # 仅支持首帧（API限制有且仅有1张）
         supports_last_frame=False,  # 不支持尾帧
-        supports_ref_audio_video=True,  # 支持参考音频和视频
+        supports_ref_audio_video=False,  # 支持参考音频和视频
     ),
     UnifiedTaskConfig(
         id=TaskTypeId.HAPPY_HORSE_REFERENCE_TO_VIDEO,

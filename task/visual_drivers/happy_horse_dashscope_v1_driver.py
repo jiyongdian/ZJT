@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 from .base_video_driver import BaseVideoDriver, ImageMode
 from config.config_util import get_config, get_dynamic_config_value
+from api.media import _get_media_duration_seconds
 from utils.sentry_util import SentryUtil, AlertLevel
 from utils.image_upload_utils import upload_local_images_to_cdn_sync
 
@@ -140,26 +141,15 @@ class HappyHorseDashscopeV1Driver(BaseVideoDriver):
 
     def _get_audio_duration(self, audio_path: str) -> Optional[float]:
         """
-        获取音频文件时长（秒），使用 ffprobe（与 api/media.py 保持一致）
+        获取音频文件时长（秒），复用 api/media.py 的 ffprobe 逻辑
         """
         if not audio_path or not os.path.exists(audio_path):
             return None
 
         try:
-            import subprocess
-            cmd = [
-                "ffprobe", "-v", "quiet",
-                "-show_entries", "format=duration",
-                "-of", "default=noprint_wrappers=1:nokey=1",
-                audio_path
-            ]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-            if result.returncode == 0 and result.stdout.strip():
-                return float(result.stdout.strip())
+            return _get_media_duration_seconds(audio_path)
         except Exception:
-            pass
-
-        return None
+            return None
 
     def _validate_audio(self, audio_path: str, video_duration: int) -> tuple[bool, Optional[str]]:
         """
