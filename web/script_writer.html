@@ -2413,21 +2413,45 @@
                     }
                 });
 
-                // 设置默认选中模型：优先选择 aliyun 供应商的 qwen3.5-plus，否则选择第一个启用的模型
+                // 设置默认选中模型：deepseek-v4-flash (deepseek) → deepseek-v4-flash (zjt_api) → qwen3.5-plus → 第一个启用的模型
                 let defaultModel = null;
 
                 const allOptions = selector.querySelectorAll('option');
-                // 第一轮：优先查找 aliyun 供应商下的 qwen3.5-plus
+                // 第一轮：优先查找 deepseek 供应商下的 deepseek-v4-flash
                 for (let i = 0; i < allOptions.length; i++) {
                     const option = allOptions[i];
-                    if (!option.disabled && option.value && option.value.includes('qwen3.5-plus')
-                        && option.dataset.vendorName === LLMVendor.ALIYUN) {
+                    if (!option.disabled && option.value && option.value.includes('deepseek-v4-flash')
+                        && option.dataset.vendorName === LLMVendor.DEEPSEEK) {
                         defaultModel = option;
-                        console.log('[模型选择] 选择默认模型: qwen3.5-plus (aliyun)');
+                        console.log('[模型选择] 选择默认模型: deepseek-v4-flash (deepseek)');
                         break;
                     }
                 }
-                // 第二轮：如果 aliyun 下没有，再查找其他供应商的 qwen3.5-plus
+                // 第二轮：查找 zjt_api 供应商下的 deepseek-v4-flash
+                if (!defaultModel) {
+                    for (let i = 0; i < allOptions.length; i++) {
+                        const option = allOptions[i];
+                        if (!option.disabled && option.value && option.value.includes('deepseek-v4-flash')
+                            && option.dataset.vendorName === LLMVendor.ZJT_API) {
+                            defaultModel = option;
+                            console.log('[模型选择] 选择默认模型: deepseek-v4-flash (zjt_api)');
+                            break;
+                        }
+                    }
+                }
+                // 第三轮：查找 aliyun 供应商下的 qwen3.5-plus
+                if (!defaultModel) {
+                    for (let i = 0; i < allOptions.length; i++) {
+                        const option = allOptions[i];
+                        if (!option.disabled && option.value && option.value.includes('qwen3.5-plus')
+                            && option.dataset.vendorName === LLMVendor.ALIYUN) {
+                            defaultModel = option;
+                            console.log('[模型选择] 选择默认模型: qwen3.5-plus (aliyun)');
+                            break;
+                        }
+                    }
+                }
+                // 第四轮：查找其他供应商的 qwen3.5-plus
                 if (!defaultModel) {
                     for (let i = 0; i < allOptions.length; i++) {
                         const option = allOptions[i];
@@ -2439,10 +2463,10 @@
                     }
                 }
 
-                // 如果没找到 qwen3.5-plus，则使用第一个启用的模型
+                // 最终回退：使用第一个启用的模型
                 if (!defaultModel && firstEnabledModel) {
                     defaultModel = firstEnabledModel;
-                    console.log(`[模型选择] 未找到 qwen3.5-plus，选择第一个启用的模型: ${firstEnabledModel.value}`);
+                    console.log(`[模型选择] 未找到推荐模型，选择第一个启用的模型: ${firstEnabledModel.value}`);
                 }
 
                 if (defaultModel) {
