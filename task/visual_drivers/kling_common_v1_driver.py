@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional
 import traceback
 from .base_video_driver import BaseVideoDriver, ImageMode
 from config.config_util import get_config, get_dynamic_config_value
+from config.unified_config import DriverImplementation
 from utils.sentry_util import SentryUtil, AlertLevel
 from utils.image_upload_utils import upload_local_images_to_cdn_sync
 
@@ -23,16 +24,17 @@ class KlingCommonV1Driver(BaseVideoDriver):
     注意：这是基类，不应该直接实例化，应该使用具体的站点类
     """
 
-    def __init__(self, site_id: str):
+    def __init__(self, site_id: str, impl_name: str = None):
         """
         初始化驱动（基类）
 
         Args:
             site_id: API 聚合站点ID（如 site_0, site_1, ... site_5）
                      对应配置 api_aggregator.site_X
+            impl_name: 实现方名称，需与 IMPLEMENTATION_TO_ID 映射一致
         """
         self._site_id = site_id
-        driver_name = f"kling_common_{site_id}"
+        driver_name = impl_name or f"kling_common_{site_id}"
         super().__init__(driver_name=driver_name, driver_type=12)
 
         # 从 api_aggregator.{site_id} 加载配置
@@ -455,39 +457,39 @@ class KlingCommonSite0V1Driver(KlingCommonV1Driver):
     """
 
     def __init__(self):
-        super().__init__(site_id="site_0")
+        super().__init__(site_id="site_0", impl_name=DriverImplementation.KLING_COMMON_SITE0_V1)
 
 
 class KlingCommonSite1V1Driver(KlingCommonV1Driver):
     """Kling 通用聚合 Site 1 v1 版本驱动"""
 
     def __init__(self):
-        super().__init__(site_id="site_1")
+        super().__init__(site_id="site_1", impl_name=DriverImplementation.KLING_COMMON_SITE1_V1)
 
 
 class KlingCommonSite2V1Driver(KlingCommonV1Driver):
     """Kling 通用聚合 Site 2 v1 版本驱动"""
 
     def __init__(self):
-        super().__init__(site_id="site_2")
+        super().__init__(site_id="site_2", impl_name=DriverImplementation.KLING_COMMON_SITE2_V1)
 
 
 class KlingCommonSite3V1Driver(KlingCommonV1Driver):
     """Kling 通用聚合 Site 3 v1 版本驱动"""
 
     def __init__(self):
-        super().__init__(site_id="site_3")
+        super().__init__(site_id="site_3", impl_name=DriverImplementation.KLING_COMMON_SITE3_V1)
 
 
 class KlingCommonSite4V1Driver(KlingCommonV1Driver):
     """Kling 通用聚合 Site 4 v1 版本驱动"""
 
     def __init__(self):
-        super().__init__(site_id="site_4")
+        super().__init__(site_id="site_4", impl_name=DriverImplementation.KLING_COMMON_SITE4_V1)
 
 
 class KlingCommonSite5V1Driver(KlingCommonV1Driver):
     """Kling 通用聚合 Site 5 v1 版本驱动"""
 
     def __init__(self):
-        super().__init__(site_id="site_5")
+        super().__init__(site_id="site_5", impl_name=DriverImplementation.KLING_COMMON_SITE5_V1)

@@ -2330,6 +2330,8 @@
         count: 1,
         model: 'gemini',  // 简短 key，对应 gemini_image_edit
         imageSize: '1K',
+        refAudioFiles: [],
+        refVideoFiles: [],
         loading: false,
         error: '',
         results: [],
@@ -2435,6 +2437,14 @@
           case 'FAILED': return '任务失败';
           default: return '';
         }
+      },
+      currentModelConfig() {
+        return this.modelConfigs[this.model] || {};
+      },
+      supportsRefAudioVideo() {
+        // 确保配置已加载，且当前模型支持
+        if (!this.configLoaded) return false;
+        return this.currentModelConfig.supports_ref_audio_video === true;
       }
     },
     watch: {
@@ -2523,7 +2533,35 @@
       clearAllFiles() {
         this.files = [];
       },
-      
+
+      onRefAudioFile(e) {
+        const selectedFiles = Array.from(e.target.files || []);
+        this.refAudioFiles = [...this.refAudioFiles, ...selectedFiles];
+        e.target.value = '';
+      },
+
+      onRefVideoFile(e) {
+        const selectedFiles = Array.from(e.target.files || []);
+        this.refVideoFiles = [...this.refVideoFiles, ...selectedFiles];
+        e.target.value = '';
+      },
+
+      removeRefAudioFile(index) {
+        this.refAudioFiles.splice(index, 1);
+      },
+
+      removeRefVideoFile(index) {
+        this.refVideoFiles.splice(index, 1);
+      },
+
+      clearAllRefAudioFiles() {
+        this.refAudioFiles = [];
+      },
+
+      clearAllRefVideoFiles() {
+        this.refVideoFiles = [];
+      },
+
       async submit(){
         if(!this.canSubmit) return;
         this.loading = true; this.error=''; this.results=[]; this.projectIds=[]; this.projectId=''; this.status='';
@@ -2539,7 +2577,23 @@
           form.append('ratio', this.ratio);
           form.append('count', this.count);
           form.append('image_size', this.imageSize);
-          
+
+          // 添加参考音频和视频（仅当模型支持时）
+          if (this.supportsRefAudioVideo) {
+            // 添加参考音频文件
+            if (this.refAudioFiles && this.refAudioFiles.length > 0) {
+              this.refAudioFiles.forEach(file => {
+                form.append('audio_files', file);
+              });
+            }
+            // 添加参考视频文件
+            if (this.refVideoFiles && this.refVideoFiles.length > 0) {
+              this.refVideoFiles.forEach(file => {
+                form.append('video_files', file);
+              });
+            }
+          }
+
           // 根据 model 获取 task_id
           const taskId = TaskConfig.getTaskIdByKey(this.model, 'image_edit');
           if (!taskId) {
@@ -2950,6 +3004,42 @@
             </select>
           </div>
 
+          <div class="field" v-if="supportsRefAudioVideo">
+            <label class="label">参考音频（可选）</label>
+            <input type="file" @change="onRefAudioFile" accept="audio/*" multiple class="input" :disabled="loading">
+            <div class="muted" style="margin-top: 4px;">可上传多个参考音频文件</div>
+            <div v-if="refAudioFiles.length > 0" style="margin-top: 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <div style="font-size: 13px; color: var(--muted);">已选择 {{ refAudioFiles.length }} 个音频:</div>
+                <button @click="clearAllRefAudioFiles" class="btn secondary" style="font-size: 12px; padding: 4px 10px;">清空全部</button>
+              </div>
+              <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                <div v-for="(file, index) in refAudioFiles" :key="index" style="position: relative; display: inline-block; padding: 6px 12px; background: #0b1220; border: 1px solid var(--border); border-radius: 6px; font-size: 12px;">
+                  <span>{{ file.name }}</span>
+                  <button @click="removeRefAudioFile(index)" style="margin-left: 8px; background: transparent; border: none; color: #ef4444; cursor: pointer; font-weight: bold;">×</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="field" v-if="supportsRefAudioVideo">
+            <label class="label">参考视频（可选）</label>
+            <input type="file" @change="onRefVideoFile" accept="video/*" multiple class="input" :disabled="loading">
+            <div class="muted" style="margin-top: 4px;">可上传多个参考视频文件</div>
+            <div v-if="refVideoFiles.length > 0" style="margin-top: 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <div style="font-size: 13px; color: var(--muted);">已选择 {{ refVideoFiles.length }} 个视频:</div>
+                <button @click="clearAllRefVideoFiles" class="btn secondary" style="font-size: 12px; padding: 4px 10px;">清空全部</button>
+              </div>
+              <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                <div v-for="(file, index) in refVideoFiles" :key="index" style="position: relative; display: inline-block; padding: 6px 12px; background: #0b1220; border: 1px solid var(--border); border-radius: 6px; font-size: 12px;">
+                  <span>{{ file.name }}</span>
+                  <button @click="removeRefVideoFile(index)" style="margin-left: 8px; background: transparent; border: none; color: #ef4444; cursor: pointer; font-weight: bold;">×</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="field">
             <div class="row">
               <button class="btn" :disabled="!canSubmit" @click="submit">{{ loading ? '提交中…' : '提交任务' }}</button>
@@ -3029,13 +3119,21 @@
                   <span v-if="item.model_name">模型: {{ item.model_name }}</span>
                   <span v-if="item.implementation_name">驱动: {{ item.implementation_name }}</span>
                 </div>
-                <div v-if="item.reference_images || item.image_path" style="margin-top: 8px;">
-                  <span style="font-size: 13px; color: var(--muted);">参考图片:</span>
-                  <div style="display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap;">
+                <div v-if="item.reference_images || item.image_path || item.audio_path || item.video_path" style="margin-top: 8px;">
+                  <span style="font-size: 13px; color: var(--muted);">参考素材:</span>
+                  <div style="display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; align-items: center;">
                     <template v-for="(img, idx) in (item.reference_images ? JSON.parse(item.reference_images) : (item.image_path ? item.image_path.split(',') : []))" :key="idx">
                       <img v-if="img" :src="img" style="width: 60px; height: 60px; object-fit: cover; border-radius: 4px; border: 1px solid var(--border); cursor: pointer;"
                            @click="window.open(img, '_blank')" />
                     </template>
+                    <div v-if="item.audio_path" style="padding: 4px 10px; background: #1a2530; border: 1px solid #10b981; border-radius: 4px; font-size: 12px;">
+                      <span style="color: #34d399;">🎵 音频</span>
+                      <a :href="item.audio_path" target="_blank" style="color: #60a5fa; margin-left: 4px; text-decoration: none;">查看</a>
+                    </div>
+                    <div v-if="item.video_path" style="padding: 4px 10px; background: #1a2530; border: 1px solid #f59e0b; border-radius: 4px; font-size: 12px;">
+                      <span style="color: #fbbf24;">🎬 视频</span>
+                      <a :href="item.video_path" target="_blank" style="color: #60a5fa; margin-left: 4px; text-decoration: none;">查看</a>
+                    </div>
                   </div>
                 </div>
                 <div v-if="item.result_url" style="margin-top: 8px;">
@@ -3643,7 +3741,16 @@
         configLoaded: false,  // 配置是否已加载
         // 图片模式相关
         imageMode: 'first_last_frame',  // 图片模式: first_last_frame, multi_reference, first_last_with_ref
-        referenceFiles: []  // 参考图文件（仅 first_last_with_ref 模式使用）
+        referenceFiles: [],  // 参考图文件（仅 first_last_with_ref 模式使用）
+        // 统一媒体管理（替代 audioFiles/videoFiles，files 保留用于图片）
+        mediaItems: [],  // { id, displayName, type, fileUrl, thumbnailUrl, originalFile, uploading }
+        mediaCounters: { image: 0, video: 0, audio: 0 },
+        // @ 引用下拉框状态
+        mentionDropdown: { visible: false, query: '', queryStart: -1, selectedIndex: 0 },
+        // 媒体验证相关
+        audioValidationError: '',  // 音频验证错误信息
+        videoValidationError: '',  // 视频验证错误信息
+        mediaValidating: false  // 正在验证媒体文件
       }
     },
     mounted() {
@@ -3672,8 +3779,11 @@
         }
         // 如果不支持尾帧且当前有2张图片，移除尾帧
         const supportsLastFrame = config?.supports_last_frame !== false;
-        if (!supportsLastFrame && this.files.length > 1) {
-          this.files = [this.files[0]];
+        if (!supportsLastFrame && this.imageMediaItems.length > 1) {
+          // 只保留第一张图片
+          const firstImageId = this.imageMediaItems[0].id;
+          this.mediaItems = this.mediaItems.filter(m => m.type !== 'image' || m.id === firstImageId);
+          this.mediaItems = [...this.mediaItems];
         }
       },
       imageMode(newMode, oldMode) {
@@ -3694,27 +3804,68 @@
           }
         }
         // 模式切换时清空文件
-        this.files = [];
+        this.mediaItems = [];
+        this.mediaCounters = { image: 0, video: 0, audio: 0 };
         this.referenceFiles = [];
+        this.audioFiles = [];
+        this.videoFiles = [];
       }
     },
     computed: {
+      imageMediaItems() { return this.mediaItems.filter(m => m.type === 'image'); },
+      audioMediaItems() { return this.mediaItems.filter(m => m.type === 'audio'); },
+      videoMediaItems() { return this.mediaItems.filter(m => m.type === 'video'); },
+      // 向后兼容：files 用于图片数量检查和 submit
+      audioFiles() { return this.audioMediaItems; },
+      videoFiles() { return this.videoMediaItems; },
+      // @ 引用可选项
+      mentionableItems() {
+        return this.mediaItems.filter(m => m.fileUrl && !m.uploading).map(m => ({
+          id: m.id,
+          displayName: m.displayName,
+          type: m.type,
+          thumbnailUrl: m.thumbnailUrl
+        }));
+      },
+      filteredMentionItems() {
+        if (!this.mentionDropdown.query) return this.mentionableItems;
+        const q = this.mentionDropdown.query.toLowerCase();
+        return this.mentionableItems.filter(item =>
+          item.displayName.toLowerCase().includes(q) ||
+          (item.type === 'image' ? '图片' : item.type === 'video' ? '视频' : '音频').includes(q)
+        );
+      },
       supportsLastFrame() {
         const config = this.modelConfigs[this.videoModel];
         return config?.supports_last_frame !== false;
       },
+      supportsRefAudioVideo() {
+        // 确保配置已加载，且当前模型支持，且处于多参考图模式
+        if (!this.configLoaded) return false;
+        // 参考音频/视频仅在多参考图模式下有意义，首尾帧模式下不显示
+        if (this.imageMode !== 'multi_reference') return false;
+        const config = this.modelConfigs[this.videoModel];
+        return config?.supports_ref_audio_video === true;
+      },
       canSubmit() {
+        // 如果有媒体验证错误，不允许提交
+        if (this.audioValidationError || this.videoValidationError) {
+          return false;
+        }
+        // 如果有媒体正在上传或验证中，不允许提交
+        if (this.mediaItems.some(m => m.uploading || m.validating)) {
+          return false;
+        }
+
         // 根据模式验证图片数量
+        const imgCount = this.imageMediaItems.length;
         if (this.imageMode === 'first_last_frame') {
-          // 首尾帧模式：1-2张图片（不支持尾帧时最多1张）
           const maxFiles = this.supportsLastFrame ? 2 : 1;
-          return this.files.length >= 1 && this.files.length <= maxFiles && !!this.prompt.trim() && !this.loading;
+          return imgCount >= 1 && imgCount <= maxFiles && !!this.prompt.trim() && !this.loading;
         } else if (this.imageMode === 'multi_reference') {
-          // 多参考图模式：1-5张图片
-          return this.files.length >= 1 && this.files.length <= 5 && !!this.prompt.trim() && !this.loading;
+          return imgCount >= 1 && imgCount <= this.maxFilesForMode && !!this.prompt.trim() && !this.loading;
         } else if (this.imageMode === 'first_last_with_ref') {
-          // 首尾帧+参考图模式：首尾帧1-2张，参考图0-3张
-          return this.files.length >= 1 && this.files.length <= 2 && this.referenceFiles.length <= 3 && !!this.prompt.trim() && !this.loading;
+          return imgCount >= 1 && imgCount <= 2 && this.referenceFiles.length <= 3 && !!this.prompt.trim() && !this.loading;
         }
         return false;
       },
@@ -3728,13 +3879,16 @@
       },
       maxFilesForMode() {
         if (this.imageMode === 'first_last_frame') return this.supportsLastFrame ? 2 : 1;
-        if (this.imageMode === 'multi_reference') return 5;
+        if (this.imageMode === 'multi_reference') {
+          const config = this.modelConfigs[this.videoModel];
+          return config?.max_multi_ref_images || 5;
+        }
         if (this.imageMode === 'first_last_with_ref') return 2;
         return 5;
       },
       filesLabel() {
         if (this.imageMode === 'first_last_frame') return this.supportsLastFrame ? '上传首尾帧图片 (1-2张)' : '上传首帧图片 (1张)';
-        if (this.imageMode === 'multi_reference') return '上传参考图片 (1-5张)';
+        if (this.imageMode === 'multi_reference') return `上传参考图片 (1-${this.maxFilesForMode}张)`;
         if (this.imageMode === 'first_last_with_ref') return '上传首尾帧图片 (1-2张)';
         return '上传图片';
       },
@@ -3823,7 +3977,7 @@
         const context = {};
         if (this.imageMode) {
           // 首尾帧模式且有2张图时，使用 first_last_with_tail
-          if (this.imageMode === 'first_last_frame' && this.files.length > 1) {
+          if (this.imageMode === 'first_last_frame' && this.imageMediaItems.length > 1) {
             context['image_mode'] = 'first_last_with_tail';
           } else {
             context['image_mode'] = this.imageMode;
@@ -3954,24 +4108,27 @@
       }
   },
 
-      onFile(e){ 
+      onFile(e){
         const selectedFiles = Array.from(e.target.files || []);
         const maxFiles = this.maxFilesForMode;
-        const remainingSlots = maxFiles - this.files.length;
-        
+        const remainingSlots = maxFiles - this.imageMediaItems.length;
+
         if (remainingSlots <= 0) {
           alert(`已达到最大数量${maxFiles}张图片，请先删除一些图片`);
           e.target.value = '';
           return;
         }
-        
+
+        const filesToAdd = selectedFiles.slice(0, remainingSlots);
         if (selectedFiles.length > remainingSlots) {
           alert(`最多还能添加${remainingSlots}张图片，已自动截取前${remainingSlots}张`);
-          this.files = [...this.files, ...selectedFiles.slice(0, remainingSlots)];
-        } else {
-          this.files = [...this.files, ...selectedFiles];
         }
-        
+
+        // 即时上传每张图片
+        filesToAdd.forEach(file => {
+          this.uploadAndAddMedia(file, 'image');
+        });
+
         e.target.value = '';
       },
       
@@ -3992,73 +4149,398 @@
         } else {
           this.referenceFiles = [...this.referenceFiles, ...selectedFiles];
         }
-        
+
         e.target.value = '';
       },
-      
+
       removeFile(index) {
-        this.files.splice(index, 1);
+        const item = this.imageMediaItems[index];
+        if (item) this.removeMediaItem(item.id);
       },
-      
+
       removeReferenceFile(index) {
         this.referenceFiles.splice(index, 1);
-      },
-      
-      clearAllFiles() {
-        this.files = [];
       },
       
       clearAllReferenceFiles() {
         this.referenceFiles = [];
       },
-      
-      onImageModeChange() {
-        this.files = [];
-        this.referenceFiles = [];
+
+      onAudioFile(e) {
+        const selectedFiles = Array.from(e.target.files || []);
+        selectedFiles.forEach(file => {
+          this.uploadAndAddMedia(file, 'audio');
+        });
+        e.target.value = '';
       },
-      
-      async submit(){
-        if(!this.canSubmit) return;
-        this.loading = true; 
-        this.error=''; 
-        this.results=[]; 
-        this.projectIds=[];
-        this.projectId=''; 
-        this.status='';
-        
+
+      onVideoFile(e) {
+        const selectedFiles = Array.from(e.target.files || []);
+        selectedFiles.forEach(file => {
+          this.uploadAndAddMedia(file, 'video');
+        });
+        e.target.value = '';
+      },
+
+      async uploadAndAddMedia(file, type) {
+        const typeLabel = type === 'image' ? '图片' : type === 'video' ? '视频' : '音频';
+        const existingCount = this.mediaItems.filter(m => m.type === type).length;
+        const displayName = `${typeLabel}${existingCount + 1}`;
+        const id = `${type[0]}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+
+        const mediaItem = {
+          id,
+          displayName,
+          type,
+          fileUrl: null,
+          thumbnailUrl: null,
+          originalFile: file,
+          uploading: true
+        };
+        this.mediaItems.push(mediaItem);
+
+        // 音频/视频添加后验证
+        if (type !== 'image') {
+          // 上传完成后再验证
+        }
+
         try {
           const form = new FormData();
-          // Append all images (首尾帧图片)
-          this.files.forEach(file => {
-            form.append('images', file);
+          form.append('file', file);
+          form.append('media_type', type);
+
+          const headers = { 'Content-Type': 'multipart/form-data' };
+          const userId = localStorage.getItem('user_id');
+          if (userId) headers['X-User-Id'] = userId;
+          if (this.authToken) headers['Authorization'] = this.authToken;
+
+          const res = await axios.post('/api/image-to-video/upload-media', form, { headers });
+
+          if (res.data.code === 0) {
+            const idx = this.mediaItems.findIndex(m => m.id === id);
+            if (idx >= 0) {
+              this.mediaItems[idx].fileUrl = res.data.data.file_url;
+              this.mediaItems[idx].thumbnailUrl = res.data.data.thumbnail_url;
+              this.mediaItems[idx].uploading = false;
+              // 只有音频/视频需要验证时长
+              this.mediaItems[idx].validating = type !== 'image';
+              // 触发 Vue 响应性
+              this.mediaItems = [...this.mediaItems];
+            }
+            // 上传完成后，如果是音频/视频，验证时长
+            if (type !== 'image') {
+              const valid = await this.validateMediaDuration();
+              // 验证不通过，移除刚上传的文件
+              const currentIdx = this.mediaItems.findIndex(m => m.id === id);
+              if (currentIdx >= 0) {
+                if (valid) {
+                  this.mediaItems[currentIdx].validating = false;
+                  this.mediaItems = [...this.mediaItems];
+                } else {
+                  // 验证失败，从列表中删除该文件
+                  this.mediaItems.splice(currentIdx, 1);
+                  this.mediaItems = [...this.mediaItems];
+                }
+              }
+            }
+          } else {
+            throw new Error(res.data.message || '上传失败');
+          }
+        } catch (err) {
+          console.error('媒体上传失败:', err);
+          const idx = this.mediaItems.findIndex(m => m.id === id);
+          if (idx >= 0) this.mediaItems.splice(idx, 1);
+          alert(`${displayName} 上传失败: ${err?.response?.data?.detail || err.message}`);
+        }
+      },
+
+      removeMediaItem(itemId) {
+        const idx = this.mediaItems.findIndex(m => m.id === itemId);
+        if (idx >= 0) {
+          const item = this.mediaItems[idx];
+          this.mediaItems.splice(idx, 1);
+          this.mediaItems = [...this.mediaItems];
+          if (item.type === 'audio' || item.type === 'video') {
+            this.validateMediaDuration();
+          }
+        }
+      },
+
+      removeAudioFile(index) {
+        const item = this.audioMediaItems[index];
+        if (item) this.removeMediaItem(item.id);
+      },
+
+      removeVideoFile(index) {
+        const item = this.videoMediaItems[index];
+        if (item) this.removeMediaItem(item.id);
+      },
+
+      clearAllAudioFiles() {
+        this.mediaItems = this.mediaItems.filter(m => m.type !== 'audio');
+        this.mediaItems = [...this.mediaItems];
+        this.validateMediaDuration();
+      },
+
+      clearAllVideoFiles() {
+        this.mediaItems = this.mediaItems.filter(m => m.type !== 'video');
+        this.mediaItems = [...this.mediaItems];
+        this.validateMediaDuration();
+      },
+
+      clearAllFiles() {
+        this.mediaItems = this.mediaItems.filter(m => m.type !== 'image');
+        this.mediaItems = [...this.mediaItems];
+      },
+
+      onImageModeChange() {
+        this.mediaItems = [];
+        this.mediaCounters = { image: 0, video: 0, audio: 0 };
+        this.referenceFiles = [];
+      },
+
+      // @ 引用相关方法
+      onPromptInput(e) {
+        const textarea = e.target;
+        const cursorPos = textarea.selectionStart;
+        const text = this.prompt;
+        const textBeforeCursor = text.substring(0, cursorPos);
+        const atMatch = textBeforeCursor.match(/@([^@\s]*)$/);
+
+        if (atMatch) {
+          this.mentionDropdown.visible = true;
+          this.mentionDropdown.query = atMatch[1];
+          this.mentionDropdown.queryStart = cursorPos - atMatch[0].length;
+          this.mentionDropdown.selectedIndex = 0;
+        } else {
+          this.mentionDropdown.visible = false;
+        }
+      },
+
+      onPromptKeydown(e) {
+        if (!this.mentionDropdown.visible) return;
+
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          const max = this.filteredMentionItems.length - 1;
+          this.mentionDropdown.selectedIndex = Math.min(this.mentionDropdown.selectedIndex + 1, max);
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          this.mentionDropdown.selectedIndex = Math.max(this.mentionDropdown.selectedIndex - 1, 0);
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+          e.preventDefault();
+          if (this.filteredMentionItems.length > 0) {
+            this.insertMention(this.filteredMentionItems[this.mentionDropdown.selectedIndex]);
+          }
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          this.mentionDropdown.visible = false;
+        }
+      },
+
+      onPromptBlur() {
+        setTimeout(() => { this.mentionDropdown.visible = false; }, 200);
+      },
+
+      insertMention(item) {
+        const textarea = this.$refs.promptTextarea;
+        const start = this.mentionDropdown.queryStart;
+        const end = start + 1 + this.mentionDropdown.query.length;
+        const before = this.prompt.substring(0, start);
+        const after = this.prompt.substring(end);
+        const insertText = `@${item.displayName}`;
+
+        this.prompt = before + insertText + ' ' + after;
+        this.mentionDropdown.visible = false;
+
+        this.$nextTick(() => {
+          const newCursorPos = start + insertText.length + 1;
+          textarea.setSelectionRange(newCursorPos, newCursorPos);
+          textarea.focus();
+        });
+      },
+
+      async validateMediaDuration() {
+        // 如果没有音频或视频文件，清除错误
+        if (this.audioMediaItems.length === 0 && this.videoMediaItems.length === 0) {
+          this.audioValidationError = '';
+          this.videoValidationError = '';
+          return true;
+        }
+
+        // 检查是否都上传完成
+        const allUploaded = [...this.audioMediaItems, ...this.videoMediaItems].every(m => m.fileUrl);
+        if (!allUploaded) {
+          // 不设置错误，等待上传完成
+          return false;
+        }
+
+        this.mediaValidating = true;
+        try {
+          const form = new FormData();
+
+          // 优先使用 URL，回退到文件
+          const audioUrls = this.audioMediaItems.map(m => m.fileUrl).filter(Boolean);
+          const videoUrls = this.videoMediaItems.map(m => m.fileUrl).filter(Boolean);
+
+          if (audioUrls.length > 0) {
+            form.append('audio_urls', audioUrls.join(','));
+          } else {
+            this.audioMediaItems.forEach(m => {
+              if (m.originalFile) form.append('audio_files', m.originalFile);
+            });
+          }
+
+          if (videoUrls.length > 0) {
+            form.append('video_urls', videoUrls.join(','));
+          } else {
+            this.videoMediaItems.forEach(m => {
+              if (m.originalFile) form.append('video_files', m.originalFile);
+            });
+          }
+
+          form.append('max_duration_seconds', 15);
+
+          const res = await axios.post('/api/media/validate-duration', form, {
+            headers: { 'Content-Type': 'multipart/form-data' }
           });
-          
+
+          const data = res.data.data;
+          if (data.valid) {
+            this.audioValidationError = '';
+            this.videoValidationError = '';
+            return true;
+          } else {
+            // 根据后端返回的数据，分别设置音频和视频的错误
+            this.audioValidationError = data.audio_duration > data.max_duration
+              ? `音频总时长 ${data.audio_duration}秒，超过限制 ${data.max_duration}秒`
+              : '';
+            this.videoValidationError = data.video_duration > data.max_duration
+              ? `视频总时长 ${data.video_duration}秒，超过限制 ${data.max_duration}秒`
+              : '';
+            return false;
+          }
+        } catch (err) {
+          console.error('媒体验证失败:', err);
+          const errMsg = err?.response?.data?.detail || '媒体验证失败';
+          // 无法区分时，两个都设上
+          this.audioValidationError = this.audioMediaItems.length > 0 ? errMsg : '';
+          this.videoValidationError = this.videoMediaItems.length > 0 ? errMsg : '';
+          return false;
+        } finally {
+          this.mediaValidating = false;
+        }
+      },
+
+      handleSubmit() {
+        if (this.loading) {
+          alert('正在生成中，请稍候...');
+          return;
+        }
+        if (this.mediaItems.some(m => m.uploading)) {
+          alert('媒体文件正在上传中，请等待上传完成');
+          return;
+        }
+        if (this.mediaItems.some(m => m.validating)) {
+          alert('媒体文件正在验证中，请稍候');
+          return;
+        }
+        if (this.audioValidationError || this.videoValidationError) {
+          alert(this.audioValidationError || this.videoValidationError);
+          return;
+        }
+        if (this.imageMediaItems.length === 0) {
+          alert('请先上传至少一张图片');
+          return;
+        }
+        if (!this.prompt.trim()) {
+          alert('请输入视频提示词');
+          return;
+        }
+        this.submit();
+      },
+
+      async submit(){
+        if(!this.canSubmit) return;
+
+        // 在提交前，如果有音频或视频文件，再次进行验证
+        if (this.audioMediaItems.length > 0 || this.videoMediaItems.length > 0) {
+          const isValid = await this.validateMediaDuration();
+          if (!isValid) {
+            return;
+          }
+        }
+
+        this.loading = true;
+        this.error='';
+        this.results=[];
+        this.projectIds=[];
+        this.projectId='';
+        this.status='';
+
+        try {
+          const form = new FormData();
+
+          // 优先使用已上传的图片URL
+          const imageUrls = this.imageMediaItems.map(m => m.fileUrl).filter(Boolean);
+          if (imageUrls.length > 0) {
+            form.append('image_urls', imageUrls.join(','));
+          } else {
+            // 回退：发送原始文件
+            this.imageMediaItems.forEach(m => {
+              if (m.originalFile) form.append('images', m.originalFile);
+            });
+          }
+
           // 添加参考图（仅 first_last_with_ref 模式）
           if (this.imageMode === 'first_last_with_ref' && this.referenceFiles.length > 0) {
             this.referenceFiles.forEach(file => {
               form.append('reference_images', file);
             });
           }
-          
+
+          // 添加参考音频和视频（仅当模型支持且已选择时）
+          if (this.supportsRefAudioVideo) {
+            // 优先使用URL
+            const audioUrls = this.audioMediaItems.map(m => m.fileUrl).filter(Boolean);
+            if (audioUrls.length > 0) {
+              form.append('audio_urls', audioUrls.join(','));
+            }
+            const videoUrls = this.videoMediaItems.map(m => m.fileUrl).filter(Boolean);
+            if (videoUrls.length > 0) {
+              form.append('video_urls', videoUrls.join(','));
+            }
+          }
+
           form.append('prompt', this.prompt);
           form.append('ratio', this.model);
           form.append('duration_seconds', this.durationSeconds);
           form.append('count', this.count);
           form.append('image_mode', this.imageMode);
-          
+
+          // 发送媒体引用映射（用于 @ 引用解析）
+          const mediaReferences = this.mediaItems.filter(m => m.fileUrl).map(m => ({
+            displayName: m.displayName,
+            fileUrl: m.fileUrl,
+            type: m.type
+          }));
+          if (mediaReferences.length > 0) {
+            form.append('media_references', JSON.stringify(mediaReferences));
+          }
+
           // 根据 videoModel 获取 task_id
           const taskId = TaskConfig.getTaskIdByKey(this.videoModel, 'image_to_video');
           if (!taskId) {
             throw new Error(`未找到视频模型 ${this.videoModel} 对应的任务配置`);
           }
           form.append('task_id', taskId);
-          
+
           // Add user_id from localStorage
           const userId = localStorage.getItem('user_id');
           if (userId) {
             form.append('user_id', userId);
           }
-          
+
           // Add auth_token if available
           if (this.authToken) {
             form.append('auth_token', this.authToken);
@@ -4338,17 +4820,73 @@
             <input class="input" type="file" accept="image/*" multiple @change="onFile" />
             <div class="muted" v-if="videoModel === 'sora2'" style="margin-top:6px; color: #fca5a5;">⚠️ 注意：请勿上传真人图片</div>
             <div class="muted" style="margin-top:6px; color: var(--muted);">{{ filesHint }}</div>
-            <div v-if="files.length > 0" style="margin-top: 10px;">
+            <div v-if="imageMediaItems.length > 0" style="margin-top: 10px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <div style="font-size: 13px; color: var(--muted);">已选择 {{ files.length }}/{{ maxFilesForMode }} 张图片:</div>
+                <div style="font-size: 13px; color: var(--muted);">已选择 {{ imageMediaItems.length }}/{{ maxFilesForMode }} 张图片:</div>
                 <button @click="clearAllFiles" class="btn secondary" style="font-size: 12px; padding: 4px 10px;">清空全部</button>
               </div>
               <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                <div v-for="(file, index) in files" :key="index" style="position: relative; display: inline-block; padding: 6px 12px; background: #0b1220; border: 1px solid var(--border); border-radius: 6px; font-size: 12px;">
-                  <span>{{ imageMode === 'first_last_frame' ? (index === 0 ? '首帧: ' : (index === 1 ? '尾帧: ' : '')) : '' }}{{ file.name }}</span>
-                  <button @click="removeFile(index)" style="margin-left: 8px; background: transparent; border: none; color: #ef4444; cursor: pointer; font-weight: bold;">×</button>
+                <div v-for="(item, index) in imageMediaItems" :key="item.id" style="position: relative; display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; background: #0b1220; border: 1px solid var(--border); border-radius: 8px; font-size: 12px;">
+                  <div v-if="item.uploading" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: #1a2530; border-radius: 4px;">
+                    <span style="color: var(--muted); font-size: 14px;">...</span>
+                  </div>
+                  <img v-else-if="item.thumbnailUrl" :src="item.thumbnailUrl" style="width: 32px; height: 32px; border-radius: 4px; object-fit: cover;" />
+                  <div v-else style="width: 32px; height: 32px; background: #1a2530; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 14px;">🖼</div>
+                  <span>{{ imageMode === 'first_last_frame' ? (index === 0 ? '首帧: ' : (index === 1 ? '尾帧: ' : '')) : '' }}{{ item.displayName }}</span>
+                  <button @click="removeFile(index)" style="margin-left: 4px; background: transparent; border: none; color: #ef4444; cursor: pointer; font-weight: bold;">×</button>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <!-- 参考音频上传 -->
+          <div class="field" v-if="supportsRefAudioVideo">
+            <label class="label">参考音频（可选）</label>
+            <input type="file" @change="onAudioFile" accept="audio/*" multiple class="input" :disabled="loading">
+            <div class="muted" style="margin-top: 4px;">可上传多个参考音频文件</div>
+            <div v-if="audioMediaItems.length > 0" style="margin-top: 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <div style="font-size: 13px; color: var(--muted);">已选择 {{ audioMediaItems.length }} 个音频:</div>
+                <button @click="clearAllAudioFiles" class="btn secondary" style="font-size: 12px; padding: 4px 10px;">清空全部</button>
+              </div>
+              <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                <div v-for="(item, index) in audioMediaItems" :key="item.id" :style="{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: '#0b1220', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px', opacity: item.validating ? 0.6 : 1 }">
+                  <div v-if="item.uploading" style="width: 32px; height: 32px; background: #1a2530; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 14px;">...</div>
+                  <div v-else style="width: 32px; height: 32px; background: #1a2530; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 14px;">🎵</div>
+                  <span>{{ item.displayName }}{{ item.validating ? ' (验证中...)' : '' }}</span>
+                  <button @click="removeAudioFile(index)" style="margin-left: 4px; background: transparent; border: none; color: #ef4444; cursor: pointer; font-weight: bold;">×</button>
+                </div>
+              </div>
+            </div>
+            <div v-if="audioValidationError" style="margin-top: 8px; padding: 8px 12px; background: #7f1d1d; border: 1px solid #dc2626; border-radius: 6px; color: #fca5a5; font-size: 13px;">
+              ⚠️ {{ audioValidationError }}
+            </div>
+          </div>
+
+          <!-- 参考视频上传 -->
+          <div class="field" v-if="supportsRefAudioVideo">
+            <label class="label">参考视频（可选）</label>
+            <input type="file" @change="onVideoFile" accept="video/*" multiple class="input" :disabled="loading">
+            <div class="muted" style="margin-top: 4px;">可上传多个参考视频文件</div>
+            <div v-if="videoMediaItems.length > 0" style="margin-top: 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <div style="font-size: 13px; color: var(--muted);">已选择 {{ videoMediaItems.length }} 个视频:</div>
+                <button @click="clearAllVideoFiles" class="btn secondary" style="font-size: 12px; padding: 4px 10px;">清空全部</button>
+              </div>
+              <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                <div v-for="(item, index) in videoMediaItems" :key="item.id" :style="{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: '#0b1220', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px', opacity: item.validating ? 0.6 : 1 }">
+                  <div v-if="item.uploading" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: #1a2530; border-radius: 4px;">
+                    <span style="color: var(--muted); font-size: 14px;">...</span>
+                  </div>
+                  <img v-else-if="item.thumbnailUrl" :src="item.thumbnailUrl" style="width: 32px; height: 32px; border-radius: 4px; object-fit: cover;" />
+                  <div v-else style="width: 32px; height: 32px; background: #1a2530; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 14px;">🎬</div>
+                  <span>{{ item.displayName }}{{ item.validating ? ' (验证中...)' : '' }}</span>
+                  <button @click="removeVideoFile(index)" style="margin-left: 4px; background: transparent; border: none; color: #ef4444; cursor: pointer; font-weight: bold;">×</button>
+                </div>
+              </div>
+            </div>
+            <div v-if="videoValidationError" style="margin-top: 8px; padding: 8px 12px; background: #7f1d1d; border: 1px solid #dc2626; border-radius: 6px; color: #fca5a5; font-size: 13px;">
+              ⚠️ {{ videoValidationError }}
             </div>
           </div>
 
@@ -4371,9 +4909,25 @@
             </div>
           </div>
 
-          <div class="field">
+          <div class="field" style="position: relative;">
             <label class="label">视频提示词</label>
-            <textarea class="textarea" v-model.trim="prompt" placeholder="请输入视频内容描述，例如：让图片中的人物动起来..."></textarea>
+            <div style="position: relative;">
+              <textarea ref="promptTextarea" class="textarea" v-model.trim="prompt" placeholder="请输入视频内容描述，输入 @ 引用媒体文件..." @input="onPromptInput" @keydown="onPromptKeydown" @blur="onPromptBlur"></textarea>
+              <!-- @ 引用下拉框 -->
+              <div v-if="mentionDropdown.visible && filteredMentionItems.length > 0" class="mention-dropdown" @mousedown.prevent>
+                <div v-for="(item, idx) in filteredMentionItems" :key="item.id"
+                     class="mention-dropdown-item"
+                     :class="{ selected: idx === mentionDropdown.selectedIndex }"
+                     @click="insertMention(item)"
+                     @mouseenter="mentionDropdown.selectedIndex = idx">
+                  <img v-if="item.thumbnailUrl" :src="item.thumbnailUrl" style="width: 28px; height: 28px; border-radius: 4px; object-fit: cover; flex-shrink: 0;" />
+                  <div v-else style="width: 28px; height: 28px; border-radius: 4px; background: #1a2530; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0;">🎵</div>
+                  <span style="flex: 1; font-size: 13px; color: #e2e8f0;">{{ item.displayName }}</span>
+                  <span style="font-size: 11px; color: var(--muted); padding: 2px 6px; border-radius: 3px; background: rgba(255,255,255,0.05);">{{ item.type === 'image' ? '图片' : item.type === 'video' ? '视频' : '音频' }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="muted" style="margin-top:6px; color: var(--muted); font-size: 12px;">💡 输入 <b>@</b> 可引用已上传的图片、视频、音频文件</div>
             <div class="muted" v-if="videoModel === 'sora2'" style="margin-top:6px; color: #fca5a5;">⚠️ 注意：1 不要有 有拟人化的内容  2 不要侵犯版权</div>
           </div>
 
@@ -4426,7 +4980,7 @@
 
           <div class="field">
             <div class="row">
-              <button class="btn" :disabled="!canSubmit" @click="submit">{{ loading ? '生成中…' : '开始生成' }}</button>
+              <button class="btn" :class="{ 'btn-disabled': !canSubmit }" @click="handleSubmit">{{ loading ? '生成中…' : '开始生成' }}</button>
               <button class="btn secondary" @click="fetchHistory" :disabled="historyLoading">{{ historyLoading ? '加载中...' : '历史记录' }}</button>
             </div>
           </div>
@@ -4440,7 +4994,7 @@
           <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px;">
             <div v-for="(result, i) in results" :key="i" style="border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: #0b1220;">
               <div style="margin-bottom: 12px; font-size: 14px; font-weight: bold; color: var(--muted);">视频 #{{ i + 1 }}</div>
-              
+
               <!-- 原视频 -->
               <div style="margin-bottom: 16px;">
                 <div style="margin-bottom: 8px; font-weight: bold; color: var(--primary); text-align: center;">原视频</div>
@@ -4468,7 +5022,7 @@
             </div>
           </div>
         </div>
-        
+
         <!-- History Modal -->
         <div class="modal-overlay" v-if="showHistory" @click.self="closeHistory">
           <div class="modal" style="max-width: 800px; max-height: 80vh; overflow-y: auto;" @scroll="handleHistoryScroll">
@@ -4483,7 +5037,7 @@
                 <button class="modal-close" @click="closeHistory">×</button>
               </div>
             </div>
-            
+
             <div v-if="historyList.length === 0" style="padding: 40px; text-align: center; color: var(--muted);">
               暂无历史记录
             </div>

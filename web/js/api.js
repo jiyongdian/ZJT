@@ -62,10 +62,10 @@
     }
 
     // 生成视频API调用
-    async function generateVideoFromImage(imageUrl, prompt, duration, count, ratio, videoModel, imageMode, referenceImages){
+    async function generateVideoFromImage(imageUrl, prompt, duration, count, ratio, videoModel, imageMode, referenceImages, audioUrls, videoUrls, mediaReferences){
       // 测试模式：模拟API响应
       if(TEST_MODE){
-        console.log('[TEST MODE] 模拟生成视频API调用', { imageUrl, prompt, duration, count, ratio, videoModel, imageMode, referenceImages });
+        console.log('[TEST MODE] 模拟生成视频API调用', { imageUrl, prompt, duration, count, ratio, videoModel, imageMode, referenceImages, audioUrls, videoUrls, mediaReferences });
         await new Promise(r => setTimeout(r, 500)); // 模拟网络延迟
         const mockIds = [];
         for(let i = 0; i < (count || 1); i++){
@@ -79,15 +79,15 @@
 
       const userId = localStorage.getItem('user_id');
       const authToken = getAuthToken();
-      
+
       // 根据 videoModel 获取 task_id
       const taskId = TaskConfig.getTaskIdByKey(videoModel || 'wan22', 'image_to_video');
       if(!taskId){
         throw new Error(`未找到视频模型 ${videoModel} 对应的任务配置`);
       }
-      
+
       const form = new FormData();
-      
+
       // 直接使用image_urls，不需要重新上传
       form.append('image_urls', imageUrl || '');
       form.append('prompt', prompt || '');
@@ -95,7 +95,7 @@
       form.append('duration_seconds', duration || 5);
       form.append('count', count || 1);
       form.append('task_id', taskId);
-      
+
       // 图片模式和参考图
       if(imageMode){
         form.append('image_mode', imageMode);
@@ -103,7 +103,19 @@
       if(referenceImages){
         form.append('reference_image_urls', referenceImages);
       }
-      
+
+      // 参考音频和视频（支持多个，逗号分隔）
+      if(audioUrls){
+        form.append('audio_urls', audioUrls);
+      }
+      if(videoUrls){
+        form.append('video_urls', videoUrls);
+      }
+      // 媒体引用（用于 @ 提及解析）
+      if(mediaReferences){
+        form.append('media_references', mediaReferences);
+      }
+
       if(userId){
         form.append('user_id', userId);
       }
@@ -115,7 +127,7 @@
         method: 'POST',
         body: form
       });
-      
+
       const data = await res.json();
       if(data.project_ids && data.project_ids.length > 0){
         return {

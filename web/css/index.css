@@ -100,8 +100,23 @@ header {
   filter: brightness(1.05); 
 }
 
-.btn:active { 
-  transform: translateY(1px); 
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(0.3);
+  box-shadow: none;
+}
+
+.btn-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(0.3);
+  box-shadow: none;
+  pointer-events: auto;
 }
 
 .btn.secondary { 
@@ -1475,4 +1490,38 @@ header {
   color: #fca5a5;
   background: rgba(239, 68, 68, 0.1);
   border-radius: 8px;
+}
+
+/* @ Mention Dropdown */
+.mention-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  background: #0f1a2e;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  max-height: 240px;
+  overflow-y: auto;
+  z-index: 100;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
+  margin-bottom: 4px;
+}
+
+.mention-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.mention-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.mention-dropdown-item:hover,
+.mention-dropdown-item.selected {
+  background: rgba(59, 130, 246, 0.15);
 }

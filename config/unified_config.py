@@ -248,6 +248,8 @@ class UnifiedTaskConfig:
     supports_last_frame: bool = True  # 是否支持尾帧（某些模型虽然支持首尾帧模式，但只使用首帧，忽略尾帧）
     hidden: bool = False  # 是否隐藏（隐藏的任务不在前端模型选择器中显示，仅通过API调用）
     power_modifiers: List[PowerModifier] = field(default_factory=list)  # 算力修饰符列表
+    supports_ref_audio_video: bool = False  # 是否支持参考音频和视频
+    max_multi_ref_images: int = 5  # 多参考图模式最大图片数量
 
     def get_computing_power(self, duration: Optional[int] = None, implementation: Optional[str] = None, context: Optional[Dict[str, Any]] = None) -> int:
         """
@@ -340,10 +342,14 @@ class UnifiedTaskConfig:
             result['default_image_mode'] = self.default_image_mode
             result['supports_grid_merge'] = self.supports_grid_merge
             result['supports_last_frame'] = self.supports_last_frame
+            result['max_multi_ref_images'] = self.max_multi_ref_images
 
         # 文生图任务添加宫格生图配置
         if TaskCategory.TEXT_TO_IMAGE in [self.category] + self.categories:
             result['supports_grid_image'] = self.supports_grid_image
+
+        # 添加参考音频和视频支持标记
+        result['supports_ref_audio_video'] = self.supports_ref_audio_video
 
         # 添加算力修饰符
         if self.power_modifiers:
@@ -1415,6 +1421,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         sort_order=37,
         supported_image_modes=[ImageMode.FIRST_LAST_FRAME],  # 1.5 Pro 不支持多参考图
         supports_last_frame=True,  # 支持首尾帧
+        supports_ref_audio_video=False,  # 1.5 Pro 不支持参考音频和视频
     ),
     UnifiedTaskConfig(
         id=TaskTypeId.SEEDANCE_2_0_FAST_IMAGE_TO_VIDEO,
@@ -1432,6 +1439,8 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         sort_order=38,
         supported_image_modes=[ImageMode.FIRST_LAST_FRAME, ImageMode.MULTI_REFERENCE],
         supports_last_frame=True,  # 支持首尾帧
+        supports_ref_audio_video=True,  # 支持参考音频和视频
+        max_multi_ref_images=9,
     ),
     UnifiedTaskConfig(
         id=TaskTypeId.SEEDANCE_2_0_IMAGE_TO_VIDEO,
@@ -1449,6 +1458,8 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         sort_order=39,
         supported_image_modes=[ImageMode.FIRST_LAST_FRAME, ImageMode.MULTI_REFERENCE],
         supports_last_frame=True,  # 支持首尾帧
+        supports_ref_audio_video=True,  # 支持参考音频和视频
+        max_multi_ref_images=9,
     ),
 
     # ==================== 数字人 ====================

@@ -29,7 +29,7 @@ class TestGeminiImagePreviewCommonDriver(BaseVideoDriverTest):
     def test_driver_initialization(self):
         """测试驱动初始化"""
         self.assertIsNotNone(self.driver)
-        self.assertEqual(self.driver.driver_name, 'gemini_common_site_1')
+        self.assertEqual(self.driver.driver_name, 'gemini_image_preview_site1_v1')
         self.assertEqual(self.driver.DEFAULT_MODEL, 'gemini-2.5-flash-image')
 
     def test_model_mapping(self):

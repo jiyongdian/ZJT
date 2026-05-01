@@ -14,6 +14,7 @@ import re
 import requests
 from .base_video_driver import BaseVideoDriver
 from config.config_util import get_config, get_dynamic_config_value
+from config.unified_config import DriverImplementation
 from utils.sentry_util import SentryUtil, AlertLevel
 from utils.network_utils import is_local_file_path
 from utils.image_upload_utils import try_map_url_to_local_file, upload_local_images_to_cdn_sync
@@ -62,16 +63,17 @@ class GptImageCommonV1Driver(BaseVideoDriver):
     # 默认模型
     DEFAULT_MODEL = "gpt-image-2"
 
-    def __init__(self, site_id: str):
+    def __init__(self, site_id: str, impl_name: str = None):
         """
         初始化驱动（基类）
 
         Args:
             site_id: API 聚合站点ID（如 site_1, site_2, ... site_5）
                      对应配置 api_aggregator.site_X
+            impl_name: 实现方名称，需与 IMPLEMENTATION_TO_ID 映射一致
         """
         self._site_id = site_id
-        driver_name = f"gpt_image_common_{site_id}"
+        driver_name = impl_name or f"gpt_image_common_{site_id}"
         super().__init__(driver_name=driver_name, driver_type=25)
 
         # 从 api_aggregator.{site_id} 加载配置
@@ -631,14 +633,14 @@ class GptImageCommonSite0V1Driver(GptImageCommonV1Driver):
     """
 
     def __init__(self):
-        super().__init__(site_id="site_0")
+        super().__init__(site_id="site_0", impl_name=DriverImplementation.GPT_IMAGE_COMMON_SITE0_V1)
 
 
 class GptImageCommonSite1V1Driver(GptImageCommonV1Driver):
     """GPT Image Common Site 1 v1 版本驱动"""
 
     def __init__(self):
-        super().__init__(site_id="site_1")
+        super().__init__(site_id="site_1", impl_name=DriverImplementation.GPT_IMAGE_COMMON_SITE1_V1)
 
 
 class GptImageCommonSite2V1Driver(GptImageCommonV1Driver):
@@ -656,7 +658,7 @@ class GptImageCommonSite2V1Driver(GptImageCommonV1Driver):
     VALID_QUALITIES = {"low", "medium", "high", "auto"}
 
     def __init__(self):
-        super().__init__(site_id="site_2")
+        super().__init__(site_id="site_2", impl_name=DriverImplementation.GPT_IMAGE_COMMON_SITE2_V1)
 
     def build_edit_request(self, ai_tool) -> Dict[str, Any]:
         """
@@ -739,18 +741,18 @@ class GptImageCommonSite3V1Driver(GptImageCommonV1Driver):
     """GPT Image Common Site 3 v1 版本驱动"""
 
     def __init__(self):
-        super().__init__(site_id="site_3")
+        super().__init__(site_id="site_3", impl_name=DriverImplementation.GPT_IMAGE_COMMON_SITE3_V1)
 
 
 class GptImageCommonSite4V1Driver(GptImageCommonV1Driver):
     """GPT Image Common Site 4 v1 版本驱动"""
 
     def __init__(self):
-        super().__init__(site_id="site_4")
+        super().__init__(site_id="site_4", impl_name=DriverImplementation.GPT_IMAGE_COMMON_SITE4_V1)
 
 
 class GptImageCommonSite5V1Driver(GptImageCommonV1Driver):
     """GPT Image Common Site 5 v1 版本驱动"""
 
     def __init__(self):
-        super().__init__(site_id="site_5")
+        super().__init__(site_id="site_5", impl_name=DriverImplementation.GPT_IMAGE_COMMON_SITE5_V1)

@@ -658,31 +658,31 @@ class TestVeo3CommonSiteDrivers(unittest.TestCase):
     def test_site1_driver(self):
         """Site1 驱动"""
         driver = _create_site_driver('site_1')
-        self.assertIn('site_1', driver.driver_name)
+        self.assertIn('site1', driver.driver_name)
         self.assertEqual(driver._site_id, 'site_1')
 
     def test_site2_driver(self):
         """Site2 驱动"""
         driver = _create_site_driver('site_2')
-        self.assertIn('site_2', driver.driver_name)
+        self.assertIn('site2', driver.driver_name)
         self.assertEqual(driver._site_id, 'site_2')
 
     def test_site3_driver(self):
         """Site3 驱动"""
         driver = _create_site_driver('site_3')
-        self.assertIn('site_3', driver.driver_name)
+        self.assertIn('site3', driver.driver_name)
         self.assertEqual(driver._site_id, 'site_3')
 
     def test_site4_driver(self):
         """Site4 驱动"""
         driver = _create_site_driver('site_4')
-        self.assertIn('site_4', driver.driver_name)
+        self.assertIn('site4', driver.driver_name)
         self.assertEqual(driver._site_id, 'site_4')
 
     def test_site5_driver(self):
         """Site5 驱动"""
         driver = _create_site_driver('site_5')
-        self.assertIn('site_5', driver.driver_name)
+        self.assertIn('site5', driver.driver_name)
         self.assertEqual(driver._site_id, 'site_5')
 
 

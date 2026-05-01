@@ -1,5 +1,36 @@
     // ============ 驱动状态检查 ============
-    
+
+    // 截断过长的错误信息，提取关键错误内容
+    function truncateErrorMessage(errorMsg, maxLength = 120) {
+      if(!errorMsg) return errorMsg;
+      let msg = String(errorMsg);
+      // 如果包含 JSON 错误响应，尝试提取关键错误信息
+      if(msg.includes('"error"') || msg.includes('"message"')) {
+        try {
+          // 尝试提取 JSON 中的 message 或 failureReasons
+          const messageMatch = msg.match(/"message"\s*:\s*"([^"]+)"/);
+          if(messageMatch) {
+            const failureMatch = msg.match(/"failureReasons"\s*:\s*\[("[^"]+")\]/);
+            if(failureMatch) {
+              return `${messageMatch[1]} (${failureMatch[1].replace(/"/g, '')})`;
+            }
+            return messageMatch[1];
+          }
+        } catch(e) {
+          // 解析失败，继续截断
+        }
+      }
+      // 如果包含 "check status failed:" 前缀，移除它
+      if(msg.toLowerCase().startsWith('check status failed:')) {
+        msg = msg.substring(20).trim();
+      }
+      // 截断过长的信息
+      if(msg.length > maxLength) {
+        return msg.substring(0, maxLength) + '...';
+      }
+      return msg;
+    }
+
     // 通用函数：根据 driver 状态禁用 select 选项
     function applyDriverStatusToSelect(selectEl) {
       if(!selectEl) return;
@@ -450,6 +481,7 @@
               renderImageConnections();
               renderFirstFrameConnections();
               renderVideoConnections();
+              renderAudioConnections();
             }
           }
         }
@@ -577,6 +609,158 @@
       // 添加调试按钮
       addDebugButtonToNode(el, node);
       
+      canvasEl.appendChild(el);
+      setSelected(id);
+      return id;
+    }
+
+    // ===== 音频节点 =====
+    function createAudioNode(opts){
+      const id = state.nextNodeId++;
+      const viewportPos = getViewportNodePosition();
+      let x = opts && typeof opts.x === 'number' ? opts.x : viewportPos.x;
+      let y = Math.max(MIN_NODE_Y, opts && typeof opts.y === 'number' ? opts.y : viewportPos.y);
+
+      if (opts && opts.checkCollision) {
+        const avail = findNearestAvailablePosition(x, y, 200, 150);
+        x = avail.x;
+        y = Math.max(MIN_NODE_Y, avail.y);
+      }
+
+      const node = {
+        id,
+        type: 'audio',
+        title: opts?.title || '音频',
+        x,
+        y,
+        data: {
+          url: opts?.data?.url || '',
+          name: opts?.data?.name || '',
+          file: null,
+        }
+      };
+      state.nodes.push(node);
+
+      const el = document.createElement('div');
+      el.className = 'node audio-node';
+      el.dataset.nodeId = String(id);
+      el.style.left = node.x + 'px';
+      el.style.top = node.y + 'px';
+
+      el.innerHTML = `
+        <div class="port output" title="输出（连接到图生视频节点）"></div>
+        <div class="node-header">
+          <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${node.title}</div>
+          <button class="icon-btn" title="删除">×</button>
+        </div>
+        <div class="node-body">
+          <div class="field field-collapsible">
+            <div class="label">音频文件</div>
+            <input class="audio-file" type="file" accept="audio/*" />
+          </div>
+          <div class="field field-always-visible audio-preview-field" style="display:none;">
+            <div class="audio-node-preview">
+              <span class="audio-node-name"></span>
+            </div>
+            <audio class="audio-node-player" controls style="width: 100%; height: 32px; margin-top: 4px;"></audio>
+          </div>
+          <div class="field field-collapsible audio-preview-actions-field" style="display:none;">
+            <div class="preview-row" style="margin-top: 4px;">
+              <button class="mini-btn audio-clear" type="button">清除</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const headerEl = el.querySelector('.node-header');
+      const deleteBtn = el.querySelector('.icon-btn');
+      const fileEl = el.querySelector('.audio-file');
+      const outputPort = el.querySelector('.port.output');
+      const previewField = el.querySelector('.audio-preview-field');
+      const previewActionsField = el.querySelector('.audio-preview-actions-field');
+      const nameEl = el.querySelector('.audio-node-name');
+      const playerEl = el.querySelector('.audio-node-player');
+      const clearBtn = el.querySelector('.audio-clear');
+
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeNode(id);
+      });
+
+      el.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+        setSelected(id);
+        bringNodeToFront(id);
+      });
+
+      headerEl.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if(!state.selectedNodeIds.includes(id)){
+          setSelected(id);
+        }
+        bringNodeToFront(id);
+        initNodeDrag(id, e.clientX, e.clientY);
+      });
+
+      outputPort.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        state.connecting = { fromId: id, startX: e.clientX, startY: e.clientY };
+      });
+
+      function setAudioFromFile(file, serverUrl){
+        node.data.file = file;
+        node.data.name = file ? file.name : '';
+        node.data.url = serverUrl || (file ? URL.createObjectURL(file) : '');
+        if(node.data.url){
+          playerEl.src = serverUrl || node.data.url;
+          const displayName = node.data.name.length > 15 ? node.data.name.substring(0, 15) + '...' : node.data.name;
+          nameEl.textContent = '🎵 ' + displayName;
+          nameEl.title = node.data.name;
+          previewField.style.display = 'block';
+          previewActionsField.style.display = 'block';
+        } else {
+          playerEl.removeAttribute('src');
+          playerEl.load();
+          previewField.style.display = 'none';
+          previewActionsField.style.display = 'none';
+          nameEl.textContent = '';
+        }
+      }
+
+      fileEl.addEventListener('change', async () => {
+        const file = fileEl.files && fileEl.files[0];
+        if(!file) return;
+        setAudioFromFile(file);
+        fileEl.value = '';
+        try {
+          showToast('正在上传音频...', 'info');
+          const permanentUrl = await uploadFile(file);
+          if(permanentUrl){
+            node.data.url = permanentUrl;
+            playerEl.src = permanentUrl;
+            showToast('音频上传成功', 'success');
+            try{ autoSaveWorkflow(); } catch(e){}
+          }
+        } catch(error){
+          console.error('音频上传失败:', error);
+          showToast('音频上传失败', 'error');
+        }
+      });
+
+      clearBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        try{ playerEl.pause(); } catch(err){}
+        setAudioFromFile(null);
+      });
+
+      // 恢复已保存的数据
+      if(node.data.url){
+        setAudioFromFile(null, node.data.url);
+      }
+
+      addDebugButtonToNode(el, node);
       canvasEl.appendChild(el);
       setSelected(id);
       return id;
@@ -2316,13 +2500,18 @@
 
     function renderConnections(tempLine){
       updateCanvasSize();
-      
+
+      // 只清除普通连接线，保留其他类型的连接线（视频、音频、参考图等）
+      const oldNormalLines = connectionsSvg.querySelectorAll('path.hitbox, path.line, path.temp');
+      oldNormalLines.forEach(l => l.remove());
+
       let pathsHtml = '';
       for(const conn of state.connections){
         const from = getOutputPortPos(conn.from);
         const to = getInputPortPos(conn.to);
         const dx = Math.abs(to.x - from.x) * 0.5;
         const pathD = `M${from.x},${from.y} C${from.x+dx},${from.y} ${to.x-dx},${to.y} ${to.x},${to.y}`;
+        //console.log(`[renderConnections] 连接 ${conn.id}: from=(${from.x},${from.y}) to=(${to.x},${to.y}) path=${pathD}`);
         const selected = state.selectedConnId === conn.id ? ' selected' : '';
         // 透明的hitbox用于点击
         pathsHtml += `<path class="hitbox" d="${pathD}" data-conn-id="${conn.id}"/>`;
@@ -2334,13 +2523,21 @@
         const dx = Math.abs(tempLine.toX - tempLine.fromX) * 0.5;
         pathsHtml += `<path class="temp" d="M${tempLine.fromX},${tempLine.fromY} C${tempLine.fromX+dx},${tempLine.fromY} ${tempLine.toX-dx},${tempLine.toY} ${tempLine.toX},${tempLine.toY}"/>`;
       }
-      connectionsSvg.innerHTML = pathsHtml;
-      
+
+      // 使用临时SVG元素解析，确保path元素在SVG命名空间下（div元素会在HTML命名空间解析，导致不渲染）
+      if(pathsHtml){
+        const tempSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        tempSvg.innerHTML = pathsHtml;
+        while(tempSvg.firstChild){
+          connectionsSvg.appendChild(tempSvg.firstChild);
+        }
+      }
+
       // 重新绑定hitbox事件
       for(const hitbox of connectionsSvg.querySelectorAll('path.hitbox')){
         const connId = Number(hitbox.dataset.connId);
         const line = connectionsSvg.querySelector(`path.line[data-conn-id="${connId}"]`);
-        
+
         hitbox.addEventListener('click', (e) => {
           e.stopPropagation();
           selectConnection(connId);
@@ -2397,8 +2594,11 @@
         if(conn.portType === 'extracted'){
           // extracted 类型连接到图片节点的 input 端口
           imagePort = toEl.querySelector('.port.input');
+        } else if(conn.portType === 'ref-image'){
+          // 参考图连接到图生视频节点的 ref-image-input-port
+          imagePort = toEl.querySelector('.ref-image-input-port');
         } else {
-          // 其他类型使用特定端口
+          // 其他类型使用特定端口（start-image-port / end-image-port）
           imagePort = toEl.querySelector(`.${conn.portType}-image-port`);
         }
         if(!outputPort || !imagePort) continue;
@@ -2517,9 +2717,9 @@
         const fromEl = canvasEl.querySelector(`.node[data-node-id="${conn.from}"]`);
         const toEl = canvasEl.querySelector(`.node[data-node-id="${conn.to}"]`);
         if(!fromEl || !toEl) continue;
-        
+
         const outputPort = fromEl.querySelector('.port.output');
-        const videoInputPort = toEl.querySelector('.port.video-input-port');
+        const videoInputPort = toEl.querySelector('.port.video-ref-input-port');
         if(!outputPort || !videoInputPort) continue;
         
         const fromRect = outputPort.getBoundingClientRect();
@@ -2602,6 +2802,114 @@
       }
       } catch(error) {
         console.error('[renderVideoConnections] Error:', error);
+      }
+    }
+
+    // ===== 渲染音频连接线 =====
+    function renderAudioConnections(){
+      try {
+        if(!connectionsSvg || !canvasEl || !canvasContainer) return;
+        if(!state.audioConnections) state.audioConnections = [];
+
+        const oldLines = document.querySelectorAll('.audio-conn-group');
+        oldLines.forEach(l => l.remove());
+
+        if(state.selectedAudioConnId !== null){
+          const stillExists = state.audioConnections.some(c => c.id === state.selectedAudioConnId);
+          if(!stillExists){
+            state.selectedAudioConnId = null;
+            if(connDeleteBtn) connDeleteBtn.style.display = 'none';
+          }
+        }
+
+        for(const conn of state.audioConnections){
+          const fromEl = canvasEl.querySelector(`.node[data-node-id="${conn.from}"]`);
+          const toEl = canvasEl.querySelector(`.node[data-node-id="${conn.to}"]`);
+          if(!fromEl || !toEl) continue;
+
+          const outputPort = fromEl.querySelector('.port.output');
+          const audioInputPort = toEl.querySelector('.port.audio-input-port');
+          if(!outputPort || !audioInputPort) continue;
+
+          const fromRect = outputPort.getBoundingClientRect();
+          const toRect = audioInputPort.getBoundingClientRect();
+          const containerRect = canvasContainer.getBoundingClientRect();
+
+          const fromX = (fromRect.left + fromRect.width/2 - containerRect.left - state.panX) / state.zoom;
+          const fromY = (fromRect.top + fromRect.height/2 - containerRect.top - state.panY) / state.zoom;
+          const toX = (toRect.left + toRect.width/2 - containerRect.left - state.panX) / state.zoom;
+          const toY = (toRect.top + toRect.height/2 - containerRect.top - state.panY) / state.zoom;
+
+          const dx = Math.abs(toX - fromX) * 0.5;
+          const pathD = `M${fromX},${fromY} C${fromX+dx},${fromY} ${toX-dx},${toY} ${toX},${toY}`;
+
+          const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+          group.setAttribute('class', 'audio-conn-group');
+          group.dataset.audioConnId = String(conn.id);
+
+          const hitbox = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          hitbox.setAttribute('d', pathD);
+          hitbox.setAttribute('class', 'hitbox');
+          hitbox.style.fill = 'none';
+          hitbox.style.stroke = 'transparent';
+          hitbox.style.strokeWidth = '20';
+          hitbox.style.cursor = 'pointer';
+
+          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          path.setAttribute('d', pathD);
+          path.setAttribute('class', 'visible');
+          path.style.fill = 'none';
+          path.style.stroke = '#8b5cf6';
+          path.style.strokeWidth = '2';
+          path.style.strokeDasharray = '6,3';
+          path.style.pointerEvents = 'none';
+
+          if(state.selectedAudioConnId === conn.id){
+            path.style.stroke = '#6d28d9';
+            path.style.strokeWidth = '3';
+            path.style.strokeDasharray = 'none';
+          }
+
+          group.appendChild(hitbox);
+          group.appendChild(path);
+          connectionsSvg.appendChild(group);
+
+          hitbox.addEventListener('click', (e) => {
+            e.stopPropagation();
+            state.selectedConnId = null;
+            state.selectedImgConnId = null;
+            state.selectedFirstFrameConnId = null;
+            state.selectedVideoConnId = null;
+            state.selectedReferenceConnId = null;
+            state.selectedAudioConnId = conn.id;
+            renderConnections();
+            renderImageConnections();
+            renderFirstFrameConnections();
+            renderVideoConnections();
+            renderReferenceConnections();
+            renderAudioConnections();
+          });
+
+          if(state.selectedAudioConnId === conn.id){
+            const cx1 = fromX + dx;
+            const cy1 = fromY;
+            const cx2 = toX - dx;
+            const cy2 = toY;
+            const t = 0.5;
+            const mt = 1 - t;
+            const bezierX = mt*mt*mt*fromX + 3*mt*mt*t*cx1 + 3*mt*t*t*cx2 + t*t*t*toX;
+            const bezierY = mt*mt*mt*fromY + 3*mt*mt*t*cy1 + 3*mt*t*t*cy2 + t*t*t*toY;
+            const screenX = bezierX * state.zoom + state.panX;
+            const screenY = bezierY * state.zoom + state.panY;
+            if(connDeleteBtn){
+              connDeleteBtn.style.display = 'flex';
+              connDeleteBtn.style.left = (screenX - 12) + 'px';
+              connDeleteBtn.style.top = (screenY - 12) + 'px';
+            }
+          }
+        }
+      } catch(error) {
+        console.error('[renderAudioConnections] Error:', error);
       }
     }
 
@@ -2837,8 +3145,17 @@
           referenceUrls: opts?.data?.referenceUrls || [],  // 多参考图模式的图片URL列表
           startUrl: opts?.data?.startUrl || '',
           endUrl: opts?.data?.endUrl || '',
+          audioUrls: opts?.data?.audioUrls || [],  // [{name, url}] 参考音频列表
+          videoUrls: opts?.data?.videoUrls || [],  // [{name, url}] 参考视频列表
         }
       };
+      // 向后兼容：迁移旧格式的单值 audioUrl/videoUrl 到数组格式
+      if(opts?.data?.audioUrl && !opts?.data?.audioUrls?.length){
+        node.data.audioUrls = [{name: '已上传音频', url: opts.data.audioUrl}];
+      }
+      if(opts?.data?.videoUrl && !opts?.data?.videoUrls?.length){
+        node.data.videoUrls = [{name: '已上传视频', url: opts.data.videoUrl}];
+      }
       state.nodes.push(node);
 
       const el = document.createElement('div');
@@ -2854,93 +3171,122 @@
           <button class="icon-btn" title="删除">×</button>
         </div>
         <div class="node-body">
-          <div class="field field-always-visible">
-            <div class="gen-meta prompt-preview" style="font-size: 12px; color: #666;"></div>
-          </div>
-          <div class="field field-collapsible image-mode-field">
-            <div class="label">图片模式</div>
-            <select class="image-mode-select">
-              <option value="first_last_frame">首尾帧模式</option>
-              <option value="multi_reference">多参考图模式</option>
-            </select>
-            <div class="image-mode-hint" style="font-size: 11px; color: #6b7280; margin-top: 4px;"></div>
-          </div>
-          <div class="field field-collapsible first-last-fields port-anchor-start">
-            <div class="port start-image-port" data-port-type="start" title="连接图片节点（首帧）"></div>
-            <div class="label">首帧画面<span class="req">*</span></div>
-            <input class="start-file" type="file" accept="image/*" />
-            <button class="mini-btn start-clear" type="button" style="margin-top: 4px;">清除</button>
-            <div class="preview-row start-preview-row" style="display:none; margin-top: 8px;">
-              <img class="preview start-preview" />
-            </div>
-          </div>
-          <div class="field field-collapsible first-last-fields port-anchor-end">
-            <div class="port end-image-port" data-port-type="end" title="连接图片节点（尾帧）"></div>
-            <div class="label">尾帧画面（可选）</div>
-            <input class="end-file" type="file" accept="image/*" />
-            <button class="mini-btn end-clear" type="button" style="margin-top: 4px;">清除</button>
-            <div class="preview-row end-preview-row" style="display:none; margin-top: 8px;">
-              <img class="preview end-preview" />
-            </div>
-          </div>
-          <div class="field field-collapsible reference-fields" style="display:none;">
-            <div class="label">参考图片 (1-5张)<span class="req">*</span></div>
-            <input class="reference-file" type="file" accept="image/*" multiple />
-            <button class="mini-btn reference-clear" type="button" style="margin-top: 4px;">清除全部</button>
-            <div class="reference-preview-list" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;"></div>
-          </div>
-          <div class="field field-collapsible">
-            <div class="label">视频长度</div>
-            <select class="duration-select">
-              <option value="5" selected>5秒</option>
-              <option value="10">10秒</option>
-            </select>
-          </div>
-          <div class="field field-collapsible">
-            <div class="label">视频比例</div>
-            <select class="ratio-select">
-              <option value="9:16">9:16</option>
-              <option value="3:4">3:4</option>
-              <option value="1:1">1:1</option>
-              <option value="4:3">4:3</option>
-              <option value="16:9">16:9</option>
-            </select>
-          </div>
-          <div class="field field-collapsible">
-            <div class="label">视频模型</div>
-            <select class="video-model-select"></select>
-          </div>
-          <div class="field field-collapsible">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-              <div class="label" style="margin: 0;">提示词</div>
-              <button class="mini-btn prompt-expand-btn" type="button" style="font-size: 11px; padding: 4px 8px;" title="放大编辑">⤢</button>
-            </div>
-            <textarea class="prompt" placeholder="请输入提示词..." rows="3" style="resize: vertical; min-height: 60px;"></textarea>
-            <div class="prompt-char-count" style="text-align: right; font-size: 11px; color: var(--muted); margin-top: 4px;">0 字符</div>
-          </div>
-          <div class="field field-collapsible computing-power-field" style="padding: 6px; border-radius: 6px;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="color: #9ca3af; font-size: 12px;">算力消耗：</span>
-              <span class="computing-power-value" style="color: #60a5fa; font-weight: bold; font-size: 14px;">0 算力</span>
-            </div>
-            <div class="computing-power-detail" style="margin-top: 4px; font-size: 11px; color: #6b7280;">
-              单个 0 算力 × 1 个 = 0 算力
-            </div>
-          </div>
-          <div class="field field-collapsible">
-            <div class="label">生成视频</div>
-            <div class="gen-container">
-              <button class="gen-btn gen-btn-main" type="button">生成视频</button>
-              <button class="gen-btn gen-btn-caret" type="button" aria-label="选择抽卡次数">▾</button>
-              <div class="gen-menu">
-                <div class="gen-item" data-count="1">X1</div>
-                <div class="gen-item" data-count="2">X2</div>
-                <div class="gen-item" data-count="3">X3</div>
-                <div class="gen-item" data-count="4">X4</div>
+          <div class="video-node-body">
+            <!-- 左栏：输入源 -->
+            <div class="video-section">
+              <div class="field field-collapsible image-mode-field">
+                <div class="label">图片模式</div>
+                <select class="image-mode-select">
+                  <option value="first_last_frame">首尾帧模式</option>
+                  <option value="multi_reference">多参考图模式</option>
+                </select>
+                <div class="image-mode-hint" style="font-size: 11px; color: #6b7280; margin-top: 4px;"></div>
+              </div>
+              <!-- 首尾帧上下排列 -->
+              <div class="field field-collapsible first-last-frame-tabs-container" style="display: none;">
+                <!-- 首帧 -->
+                <div class="video-frame-content active" data-frame="start">
+                  <div class="label" style="margin-bottom: 4px;">首帧</div>
+                  <div class="port start-image-port port-anchor-start" data-port-type="start" title="连接图片节点（首帧）" style="position: relative; margin-bottom: 4px;"></div>
+                  <input class="start-file" type="file" accept="image/*" />
+                  <button class="mini-btn start-clear" type="button">清除</button>
+                  <div class="preview-row start-preview-row" style="display:none; margin-top: 8px;">
+                    <img class="preview start-preview" />
+                  </div>
+                </div>
+                <!-- 尾帧 -->
+                <div class="video-frame-content active" data-frame="end" style="margin-top: 8px;">
+                  <div class="label" style="margin-bottom: 4px;">尾帧</div>
+                  <div class="port end-image-port port-anchor-end" data-port-type="end" title="连接图片节点（尾帧）" style="position: relative; margin-bottom: 4px;"></div>
+                  <input class="end-file" type="file" accept="image/*" />
+                  <button class="mini-btn end-clear" type="button">清除</button>
+                  <div class="preview-row end-preview-row" style="display:none; margin-top: 8px;">
+                    <img class="preview end-preview" />
+                  </div>
+                </div>
+              </div>
+              <!-- 参考图片（多参考模式） -->
+              <div class="field field-collapsible reference-fields" style="display:none; position: relative;">
+                <div class="port ref-image-input-port" data-port-type="ref-image" title="连接图片节点（参考图）"></div>
+                <div class="label ref-images-label">参考图片 (1-5张)<span class="req">*</span></div>
+                <input class="reference-file" type="file" accept="image/*" multiple />
+                <button class="mini-btn reference-clear" type="button" style="margin-top: 4px;">清除全部</button>
+                <div class="ref-images-counter" style="font-size: 11px; color: var(--muted); margin-top: 4px; display: none;"></div>
+                <div class="reference-preview-list" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;"></div>
+              </div>
+              <!-- 参考音频 -->
+              <div class="field field-collapsible audio-field" style="position: relative;">
+                <div class="port audio-input-port" data-port-type="audio" title="连接音频节点"></div>
+                <div class="label">参考音频（可选，支持多个）</div>
+                <input class="audio-file" type="file" accept="audio/*" multiple />
+                <button class="mini-btn audio-clear-all" type="button" style="margin-top: 4px;">清除全部</button>
+                <div class="audio-preview-list"></div>
+              </div>
+              <!-- 参考视频 -->
+              <div class="field field-collapsible video-field" style="position: relative;">
+                <div class="port video-ref-input-port" data-port-type="video-ref" title="连接视频节点"></div>
+                <div class="label">参考视频（可选，支持多个）</div>
+                <input class="video-file" type="file" accept="video/*" multiple />
+                <button class="mini-btn video-clear-all" type="button" style="margin-top: 4px;">清除全部</button>
+                <div class="video-preview-list"></div>
               </div>
             </div>
-            <div class="gen-meta gen-count-label"></div>
-            <div class="gen-meta gen-status" style="display:none;"></div>
+            <!-- 右栏：配置参数与执行 -->
+            <div class="video-section">
+              <div class="field field-collapsible">
+                <div class="label">视频长度</div>
+                <select class="duration-select">
+                  <option value="5" selected>5秒</option>
+                  <option value="10">10秒</option>
+                </select>
+              </div>
+              <div class="field field-collapsible">
+                <div class="label">视频比例</div>
+                <select class="ratio-select">
+                  <option value="9:16">9:16</option>
+                  <option value="3:4">3:4</option>
+                  <option value="1:1">1:1</option>
+                  <option value="4:3">4:3</option>
+                  <option value="16:9">16:9</option>
+                </select>
+              </div>
+              <div class="field field-collapsible">
+                <div class="label">视频模型</div>
+                <select class="video-model-select"></select>
+              </div>
+              <div class="field field-collapsible">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                  <div class="label" style="margin: 0;">提示词</div>
+                  <button class="mini-btn prompt-expand-btn" type="button" style="font-size: 11px; padding: 4px 8px;" title="放大编辑">⤢</button>
+                </div>
+                <textarea class="prompt" placeholder="请输入提示词，输入 @ 引用媒体文件..." rows="6" style="resize: vertical; min-height: 120px; font-size: 11px;"></textarea>
+                <div style="font-size: 10px; color: var(--muted); margin-top: 4px;">💡 输入 @ 引用资源</div>
+                <div class="prompt-char-count" style="text-align: right; font-size: 11px; color: var(--muted); margin-top: 2px;">0 字符</div>
+              </div>
+              <div class="field field-collapsible computing-power-field" style="padding: 6px; border-radius: 6px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="color: #9ca3af; font-size: 12px;">算力消耗：</span>
+                  <span class="computing-power-value" style="color: #60a5fa; font-weight: bold; font-size: 14px;">0 算力</span>
+                </div>
+                <div class="computing-power-detail" style="margin-top: 4px; font-size: 11px; color: #6b7280;">
+                  单个 0 算力 × 1 个 = 0 算力
+                </div>
+              </div>
+              <div class="field field-collapsible">
+                <div class="gen-container">
+                  <button class="gen-btn gen-btn-main" type="button">生成视频</button>
+                  <button class="gen-btn gen-btn-caret" type="button" aria-label="选择抽卡次数">▾</button>
+                  <div class="gen-menu">
+                    <div class="gen-item" data-count="1">X1</div>
+                    <div class="gen-item" data-count="2">X2</div>
+                    <div class="gen-item" data-count="3">X3</div>
+                    <div class="gen-item" data-count="4">X4</div>
+                  </div>
+                </div>
+                <div class="gen-meta gen-count-label"></div>
+                <div class="gen-meta gen-status" style="display:none;"></div>
+              </div>
+            </div>
           </div>
         </div>
       `;
@@ -2966,11 +3312,22 @@
       const endImagePort = el.querySelector('.end-image-port');
       const imageModeSelect = el.querySelector('.image-mode-select');
       const imageModeHint = el.querySelector('.image-mode-hint');
-      const firstLastFields = el.querySelectorAll('.first-last-fields');
+      const firstLastFrameTabsContainer = el.querySelector('.first-last-frame-tabs-container');
       const referenceFields = el.querySelector('.reference-fields');
       const referenceFileEl = el.querySelector('.reference-file');
       const referenceClearBtn = el.querySelector('.reference-clear');
       const referencePreviewList = el.querySelector('.reference-preview-list');
+      const refImagesLabel = el.querySelector('.ref-images-label');
+      const refImagesCounter = el.querySelector('.ref-images-counter');
+      const refImageInputPort = el.querySelector('.ref-image-input-port');
+      const audioFileEl = el.querySelector('.audio-file');
+      const audioClearAllBtn = el.querySelector('.audio-clear-all');
+      const audioPreviewList = el.querySelector('.audio-preview-list');
+      const audioInputPort = el.querySelector('.audio-input-port');
+      const videoFileEl = el.querySelector('.video-file');
+      const videoClearAllBtn = el.querySelector('.video-clear-all');
+      const videoPreviewList = el.querySelector('.video-preview-list');
+      const videoRefInputPort = el.querySelector('.video-ref-input-port');
 
       outputPort.addEventListener('mousedown', (e) => {
         e.preventDefault();
@@ -3044,12 +3401,39 @@
       // 先填充一次视频模型选项（使用默认的 first_last_frame 模式）
       populateVideoModelOptions();
       
+      // 定义首尾帧字段选择器
+      const firstLastFields = el.querySelectorAll('.video-frame-content');
+
       // 图片模式切换逻辑
       const imageModeHints = {
         'first_last_frame': '第一张为首帧，第二张（可选）为尾帧',
-        'multi_reference': '所有图片作为风格参考'
+        'multi_reference': '所有图片作为参考'
       };
-      
+
+      // 获取当前模型的最大参考图数量
+      function getMaxRefImages() {
+        const modelConfigs = getModelConfigs();
+        const modelKey = videoModelSelect.value;
+        return modelConfigs[modelKey]?.max_multi_ref_images || 5;
+      }
+
+      // 更新参考图片标签和计数器显示
+      function updateRefImagesLabel() {
+        const maxCount = getMaxRefImages();
+        const currentCount = (node.data.referenceUrls || []).length;
+        if (refImagesLabel) {
+          refImagesLabel.innerHTML = `参考图片 (1-${maxCount}张)<span class="req">*</span>`;
+        }
+        if (refImagesCounter) {
+          if (currentCount > 0) {
+            refImagesCounter.textContent = `已选择 ${currentCount}/${maxCount} 张图片`;
+            refImagesCounter.style.display = '';
+          } else {
+            refImagesCounter.style.display = 'none';
+          }
+        }
+      }
+
       function updateImageModeUI() {
         const mode = node.data.imageMode || 'first_last_frame';
         const modelConfigs = getModelConfigs();
@@ -3059,15 +3443,21 @@
         imageModeSelect.value = mode;
         imageModeHint.textContent = imageModeHints[mode] || '';
 
-        // 显示/隐藏对应的上传区域
-        firstLastFields.forEach(field => {
-          field.style.display = mode === 'first_last_frame' ? '' : 'none';
-        });
+        // 显示/隐藏首尾帧 Tab 容器
+        firstLastFrameTabsContainer.style.display = mode === 'first_last_frame' ? '' : 'none';
+
+        // 显示/隐藏参考图字段
         referenceFields.style.display = mode === 'multi_reference' ? '' : 'none';
 
         // 显示/隐藏端口
         startImagePort.style.display = mode === 'first_last_frame' ? '' : 'none';
         endImagePort.style.display = mode === 'first_last_frame' ? '' : 'none';
+
+        // 显示/隐藏参考音频和参考视频字段（仅在多参考图模式下显示）
+        const audioField = el.querySelector('.audio-field');
+        const videoField = el.querySelector('.video-field');
+        if(audioField) audioField.style.display = mode === 'multi_reference' ? '' : 'none';
+        if(videoField) videoField.style.display = mode === 'multi_reference' ? '' : 'none';
 
         // 根据 supports_last_frame 控制尾帧输入框的可用性
         const endFileInput = el.querySelector('.end-file');
@@ -3096,6 +3486,7 @@
             if (endLabel) endLabel.textContent = '尾帧画面（可选）';
           }
         }
+        updateRefImagesLabel();
       }
       
       // 渲染参考图预览
@@ -3106,66 +3497,275 @@
           item.style.cssText = 'position: relative; width: 50px; height: 50px;';
           item.innerHTML = `
             <img src="${url}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px; cursor: pointer;" />
+            <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.6); color: white; font-size: 10px; text-align: center; border-radius: 0 0 4px 4px; padding: 1px 0;">图${idx + 1}</div>
             <button class="ref-remove-btn" data-idx="${idx}" style="position: absolute; top: -4px; right: -4px; width: 16px; height: 16px; border-radius: 50%; background: #ef4444; border: none; color: white; font-size: 10px; cursor: pointer; line-height: 1;">×</button>
           `;
           item.querySelector('img').addEventListener('click', (e) => {
             e.stopPropagation();
-            openImageModal(url, `参考图 ${idx + 1}`);
+            openImageModal(url, `图${idx + 1}`);
           });
           item.querySelector('.ref-remove-btn').addEventListener('click', (e) => {
             e.stopPropagation();
+            const removedUrl = node.data.referenceUrls[idx];
             node.data.referenceUrls.splice(idx, 1);
+            // 同步删除对应的连接线
+            const connIdx = state.imageConnections.findIndex(c =>
+              c.to === id && c.portType === 'ref-image' &&
+              state.nodes.find(n => n.id === c.from)?.data?.url === removedUrl
+            );
+            if(connIdx >= 0){
+              state.imageConnections.splice(connIdx, 1);
+              renderImageConnections();
+            }
             renderReferencePreview();
           });
           referencePreviewList.appendChild(item);
         });
+        updateRefImagesLabel();
       }
       
       imageModeSelect.addEventListener('change', () => {
-        node.data.imageMode = imageModeSelect.value;
+        const oldMode = node.data.imageMode || 'first_last_frame';
+        const newMode = imageModeSelect.value;
+        node.data.imageMode = newMode;
+
+        // 当模式切换时，清除不属于新模式的连接线和对应数据
+        if(oldMode !== newMode){
+          if(newMode === 'multi_reference'){
+            // 从首位帧切换到多参考图：删除首尾帧的连接线和数据
+            state.imageConnections = state.imageConnections.filter(c => {
+              if(c.to === id && (c.portType === 'start' || c.portType === 'end')){
+                return false;  // 删除
+              }
+              return true;
+            });
+            // 清除首尾帧数据
+            node.data.startFile = null;
+            node.data.startUrl = '';
+            node.data.startPreview = '';
+            node.data.endFile = null;
+            node.data.endUrl = '';
+            node.data.endPreview = '';
+
+            // 隐藏首尾帧预览
+            const startPreviewRow = el.querySelector('.start-preview-row');
+            const endPreviewRow = el.querySelector('.end-preview-row');
+            if(startPreviewRow) startPreviewRow.style.display = 'none';
+            if(endPreviewRow) endPreviewRow.style.display = 'none';
+            const startPreviewImg = el.querySelector('.start-preview-img');
+            const endPreviewImg = el.querySelector('.end-preview-img');
+            if(startPreviewImg) startPreviewImg.removeAttribute('src');
+            if(endPreviewImg) endPreviewImg.removeAttribute('src');
+            startImagePort.classList.remove('disabled');
+            endImagePort.classList.remove('disabled');
+          } else {
+            // 从多参考图切换到首位帧：删除参考图、音频、视频的连接线和所有多参考数据
+            state.imageConnections = state.imageConnections.filter(c => {
+              if(c.to === id && c.portType === 'ref-image'){
+                return false;  // 删除
+              }
+              return true;
+            });
+            // 清除音频连接线
+            state.audioConnections = state.audioConnections.filter(c => c.to !== id);
+            // 清除视频连接线
+            state.videoConnections = state.videoConnections.filter(c => c.to !== id);
+
+            // 清除多参考图模式的所有数据
+            node.data.referenceUrls = [];
+            node.data.audioUrls = [];
+            node.data.videoUrls = [];
+
+            // 清除预览显示
+            referencePreviewList.innerHTML = '';
+            audioPreviewList.innerHTML = '';
+            videoPreviewList.innerHTML = '';
+
+            // 清除端口禁用状态
+            refImageInputPort.classList.remove('disabled');
+            audioInputPort.classList.remove('disabled');
+            videoRefInputPort.classList.remove('disabled');
+          }
+        }
+
         updateImageModeUI();
         // 重新填充视频模型选项（根据新的图片模式筛选）
         populateVideoModelOptions();
         // 更新算力显示
         updateComputingPowerDisplay();
+        // 重新渲染连接线
+        renderImageConnections();
+        renderAudioConnections();
+        renderVideoConnections();
       });
       
       // 多参考图上传处理
       referenceFileEl.addEventListener('change', async () => {
         const files = referenceFileEl.files;
         if(!files || files.length === 0) return;
-        
+
         const currentCount = (node.data.referenceUrls || []).length;
-        const maxCount = 5;
+        const maxCount = getMaxRefImages();
         const canAdd = maxCount - currentCount;
-        
+
         if(canAdd <= 0) {
-          showToast('最多上传5张参考图', 'error');
+          showToast(`已达到最大数量${maxCount}张参考图，请先删除一些图片`, 'error');
           referenceFileEl.value = '';
           return;
         }
-        
-        const filesToUpload = Array.from(files).slice(0, canAdd);
-        
+
+        const selectedFiles = Array.from(files);
+
+        // 超出限制时提示还能添加几张
+        if(selectedFiles.length > canAdd) {
+          showToast(`最多还能添加${canAdd}张参考图，已自动截取前${canAdd}张`, 'info');
+        }
+
+        const filesToUpload = selectedFiles.slice(0, canAdd);
+        const totalToUpload = filesToUpload.length;
+
+        // 上传过程中禁用文件输入并显示进度
+        referenceFileEl.disabled = true;
+        showToast(`正在上传参考图 (0/${totalToUpload})...`, 'info');
+
+        let uploadedCount = 0;
         for(const file of filesToUpload) {
           const uploadedUrl = await uploadFile(file);
           if(uploadedUrl) {
             if(!node.data.referenceUrls) node.data.referenceUrls = [];
             node.data.referenceUrls.push(uploadedUrl);
           }
+          uploadedCount++;
+          if(totalToUpload > 1 && uploadedCount < totalToUpload) {
+            showToast(`正在上传参考图 (${uploadedCount}/${totalToUpload})...`, 'info');
+          }
         }
-        
+
+        referenceFileEl.disabled = false;
         renderReferencePreview();
         referenceFileEl.value = '';
-        showToast(`已上传 ${filesToUpload.length} 张参考图`, 'success');
+
+        const totalCount = (node.data.referenceUrls || []).length;
+        showToast(`已上传 ${uploadedCount} 张参考图，当前共 ${totalCount}/${maxCount} 张`, 'success');
       });
       
       referenceClearBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         node.data.referenceUrls = [];
+        // 清理所有连接到该节点的参考图片连接
+        state.imageConnections = state.imageConnections.filter(c =>
+          !(c.to === id && c.portType === 'ref-image')
+        );
         renderReferencePreview();
+        renderImageConnections();
       });
-      
+
+      // ===== 音频上传处理（多文件） =====
+      function renderAudioPreview(){
+        audioPreviewList.innerHTML = '';
+        node.data.audioUrls.forEach((item, idx) => {
+          const el = document.createElement('div');
+          el.className = 'media-item';
+          el.innerHTML = `<span class="media-name" title="${item.name}">🎵 音频${idx + 1}</span><span class="remove-btn">×</span>`;
+          el.querySelector('.remove-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const removedUrl = item.url;
+            node.data.audioUrls.splice(idx, 1);
+            // 清理对应的连接线
+            state.audioConnections = state.audioConnections.filter(c => {
+              if(c.to === id){
+                const fromNode = state.nodes.find(n => n.id === c.from);
+                if(fromNode && fromNode.data.url === removedUrl) return false;
+              }
+              return true;
+            });
+            renderAudioPreview();
+            renderAudioConnections();
+          });
+          audioPreviewList.appendChild(el);
+        });
+      }
+
+      audioFileEl.addEventListener('change', async () => {
+        const files = audioFileEl.files;
+        if(files && files.length > 0){
+          for(const file of files){
+            const url = await uploadFile(file);
+            if(url){
+              node.data.audioUrls.push({name: file.name, url});
+            }
+          }
+          renderAudioPreview();
+          showToast('音频上传成功', 'success');
+        }
+        audioFileEl.value = '';
+      });
+
+      audioClearAllBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        node.data.audioUrls = [];
+        // 清理所有连接到该节点的音频连接
+        state.audioConnections = state.audioConnections.filter(c => c.to !== id);
+        renderAudioPreview();
+        renderAudioConnections();
+      });
+
+      // ===== 视频上传处理（多文件） =====
+      function renderVideoPreview(){
+        videoPreviewList.innerHTML = '';
+        node.data.videoUrls.forEach((item, idx) => {
+          const el = document.createElement('div');
+          el.className = 'media-item';
+          el.innerHTML = `<span class="media-name" title="${item.name}">🎬 视频${idx + 1}</span><span class="remove-btn">×</span>`;
+          el.querySelector('.remove-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const removedUrl = item.url;
+            node.data.videoUrls.splice(idx, 1);
+            // 清理对应的连接线
+            state.videoConnections = state.videoConnections.filter(c => {
+              if(c.to === id){
+                const fromNode = state.nodes.find(n => n.id === c.from);
+                if(fromNode && fromNode.data.url === removedUrl) return false;
+              }
+              return true;
+            });
+            renderVideoPreview();
+            renderVideoConnections();
+          });
+          videoPreviewList.appendChild(el);
+        });
+      }
+
+      videoFileEl.addEventListener('change', async () => {
+        const files = videoFileEl.files;
+        if(files && files.length > 0){
+          for(const file of files){
+            const url = await uploadFile(file);
+            if(url){
+              node.data.videoUrls.push({name: file.name, url});
+            }
+          }
+          renderVideoPreview();
+          showToast('视频上传成功', 'success');
+        }
+        videoFileEl.value = '';
+      });
+
+      videoClearAllBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        node.data.videoUrls = [];
+        // 清理所有连接到该节点的视频连接
+        state.videoConnections = state.videoConnections.filter(c => c.to !== id);
+        renderVideoPreview();
+        renderVideoConnections();
+      });
+
+      // 恢复已保存的音频/视频预览
+      renderAudioPreview();
+      renderVideoPreview();
+
+      // ===== 音频/视频/参考图输入端口：连接逻辑由全局 mouseup handler 统一处理（events.js） =====
+
       // 初始化图片模式UI（必须在这里调用，确保加载保存的模式）
       updateImageModeUI();
       renderReferencePreview();
@@ -3173,6 +3773,13 @@
       // 根据加载的图片模式重新填充视频模型选项
       if(opts && opts.data && opts.data.imageMode) {
         populateVideoModelOptions();
+      }
+
+      // TaskConfig 延迟加载时，更新参考图片标签
+      if(window.TaskConfig) {
+        window.TaskConfig.onLoaded(() => {
+          updateRefImagesLabel();
+        });
       }
       
       // 计算算力消耗
@@ -3232,7 +3839,50 @@
       if(!el._updateComputingPowerDisplay) {
         el._updateComputingPowerDisplay = updateComputingPowerDisplay;
       }
-      
+
+      // 首帧预览更新函数
+      function updateStartFrameDisplay(){
+        if(node.data.startUrl && node.data.startPreview){
+          startPreviewImg.src = node.data.startPreview;
+          startPreviewRow.style.display = 'flex';
+          startImagePort.classList.add('disabled');
+        } else {
+          startPreviewRow.style.display = 'none';
+          startPreviewImg.removeAttribute('src');
+          startImagePort.classList.remove('disabled');
+        }
+      }
+
+      // 尾帧预览更新函数
+      function updateEndFrameDisplay(){
+        if(node.data.endUrl && node.data.endPreview){
+          endPreviewImg.src = node.data.endPreview;
+          endPreviewRow.style.display = 'flex';
+          endImagePort.classList.add('disabled');
+        } else {
+          endPreviewRow.style.display = 'none';
+          endPreviewImg.removeAttribute('src');
+          endImagePort.classList.remove('disabled');
+        }
+      }
+
+      // 保存预览更新函数的引用到元素上，便于外部调用
+      if(!el._updateAudioPreview) {
+        el._updateAudioPreview = renderAudioPreview;
+      }
+      if(!el._updateVideoPreview) {
+        el._updateVideoPreview = renderVideoPreview;
+      }
+      if(!el._updateReferencePreview) {
+        el._updateReferencePreview = renderReferencePreview;
+      }
+      if(!el._updateStartFrame) {
+        el._updateStartFrame = updateStartFrameDisplay;
+      }
+      if(!el._updateEndFrame) {
+        el._updateEndFrame = updateEndFrameDisplay;
+      }
+
       durationSelect.addEventListener('change', () => {
         node.data.duration = Number(durationSelect.value);
         updateComputingPowerDisplay();
@@ -3553,58 +4203,79 @@
           
           console.log('[DEBUG] 生成视频参数:', { drawCount: node.data.drawCount, desiredCount, duration, prompt, ratio, videoModel, imageUrls, imageMode: currentImageMode, referenceImages });
 
+          // 收集所有音频URL（上传 + 连接节点）
+          let allAudioUrls = [...(node.data.audioUrls || []).map(a => a.url)];
+          state.audioConnections.filter(c => c.to === id).forEach(c => {
+            const fromNode = state.nodes.find(n => n.id === c.from);
+            if(fromNode?.data?.url && !allAudioUrls.includes(fromNode.data.url)){
+              allAudioUrls.push(fromNode.data.url);
+            }
+          });
+
+          // 收集所有视频URL（上传 + 连接节点）
+          let allVideoUrls = [...(node.data.videoUrls || []).map(v => v.url)];
+          state.videoConnections.filter(c => c.to === id && c.portType === 'video-ref').forEach(c => {
+            const fromNode = state.nodes.find(n => n.id === c.from);
+            if(fromNode?.data?.url && !allVideoUrls.includes(fromNode.data.url)){
+              allVideoUrls.push(fromNode.data.url);
+            }
+          });
+
+          // 构建 media_references（用于 @ 提及解析）
+          const mediaReferences = getMentionableItems().map(item => ({
+            displayName: item.displayName,
+            type: item.type,
+            fileUrl: item.url
+          }));
+
           // 调用生成API
-          const result = await generateVideoFromImage(imageUrls, prompt, duration, desiredCount, ratio, videoModel, currentImageMode, referenceImages);
+          const result = await generateVideoFromImage(imageUrls, prompt, duration, desiredCount, ratio, videoModel, currentImageMode, referenceImages, allAudioUrls.join(','), allVideoUrls.join(','), JSON.stringify(mediaReferences));
           console.log('[DEBUG] API返回:', { projectIds: result.projectIds, count: result.projectIds?.length });
           
           genStatus.textContent = '任务已提交，正在生成视频...';
           node.data.projectIds = result.projectIds;
 
-          // 创建对应数量的视频节点
-          const connectedVideoIds = Array.from(new Set(
-            state.connections
-              .filter(c => c.from === id)
-              .map(c => c.to)
-              .filter(toId => {
-                const toNode = state.nodes.find(n => n.id === toId);
-                return toNode && toNode.type === 'video';
-              })
-          ));
-          const missingCount = Math.max(0, desiredCount - connectedVideoIds.length);
-          console.log('[DEBUG] 视频节点:', { connectedVideoIds, desiredCount, missingCount });
-          const newVideoNodeIds = [];
+          // 创建对应数量的视频节点：每次生成都新建节点，旧节点断开连接但保留
+          // 先断开旧连接到图生视频节点的视频节点
+          state.connections = state.connections.filter(c => {
+            if(c.from === id) {
+              const toNode = state.nodes.find(n => n.id === c.to);
+              return toNode && toNode.type !== 'video';
+            }
+            return true;
+          });
 
-          for(let i = 0; i < missingCount; i++){
-            const newVideoId = createVideoNode({ x: node.x + 380, y: node.y + i * 260, checkCollision: true });
-            state.connections.push({ id: state.nextConnId++, from: id, to: newVideoId });
+          const newVideoNodeIds = [];
+          // 使用源节点实际宽度计算偏移，避免宽节点下视频节点被遮挡
+          const sourceEl = canvasEl.querySelector(`.node[data-node-id="${id}"]`);
+          const offsetX = (sourceEl ? sourceEl.offsetWidth : 300) + 60;
+          for(let i = 0; i < desiredCount; i++){
+            const newVideoId = createVideoNode({ x: node.x + offsetX, y: node.y + i * 260, checkCollision: true });
+            const connId = state.nextConnId++;
+            state.connections.push({ id: connId, from: id, to: newVideoId });
+            console.log(`[图生视频] 添加连接: from=${id} to=${newVideoId} connId=${connId}`, {
+              from: getOutputPortPos(id),
+              to: getInputPortPos(newVideoId)
+            });
             newVideoNodeIds.push(newVideoId);
-            
+
             // 立即为新创建的视频节点绑定 project_id
             const newVideoNode = state.nodes.find(n => n.id === newVideoId);
             if(newVideoNode && result.projectIds){
-              const projectIdIndex = connectedVideoIds.length + i;
-              newVideoNode.data.project_id = result.projectIds[projectIdIndex] || result.projectIds[0];
+              newVideoNode.data.project_id = result.projectIds[i] || result.projectIds[0];
               console.log(`[图生视频] 新建视频节点 ${newVideoId} 绑定 project_id:`, newVideoNode.data.project_id);
             }
           }
           
-          // 为已存在的连接视频节点也绑定 project_id
-          connectedVideoIds.forEach((videoNodeId, idx) => {
-            const videoNode = state.nodes.find(n => n.id === videoNodeId);
-            if(videoNode && result.projectIds){
-              videoNode.data.project_id = result.projectIds[idx] || result.projectIds[0];
-              console.log(`[图生视频] 已存在视频节点 ${videoNodeId} 绑定 project_id:`, videoNode.data.project_id);
-            }
-          });
-          
-          // 合并所有视频节点ID
-          const allVideoNodeIds = [...connectedVideoIds, ...newVideoNodeIds];
-          
+          // 所有视频节点ID（只包含新创建的节点）
+          const allVideoNodeIds = [...newVideoNodeIds];
+
           renderConnections();
           renderImageConnections();
           renderFirstFrameConnections();
           renderVideoConnections();
           renderMinimap();
+          try{ autoSaveWorkflow(); } catch(e){}
 
           // 为每个视频节点初始化状态显示
           allVideoNodeIds.forEach((videoNodeId, idx) => {
@@ -3732,7 +4403,14 @@
                 genStatus.textContent = '生成完成但未获取到有效结果';
                 showToast('生成完成但未获取到有效结果', 'error');
               }
-              
+
+              // 视频节点内容已更新，重新渲染连接线
+              renderConnections();
+              renderImageConnections();
+              renderFirstFrameConnections();
+              renderVideoConnections();
+              renderMinimap();
+
               // 刷新用户算力显示
               if(typeof fetchComputingPower === 'function'){
                 fetchComputingPower();
@@ -3740,8 +4418,10 @@
             },
             (errorMsg) => {
               // 轮询或请求失败
+              // 截断过长的错误信息
+              const truncatedError = truncateErrorMessage(errorMsg);
               genStatus.style.color = '#dc2626';
-              genStatus.textContent = errorMsg;
+              genStatus.textContent = truncatedError;
               genBtnMain.disabled = false;
               genBtnMain.textContent = '生成视频';
               
@@ -3754,12 +4434,16 @@
                   if(statusField && statusEl){
                     statusField.style.display = 'block';
                     statusEl.style.color = '#dc2626';
-                    statusEl.textContent = `✗ ${errorMsg}`;
+                    statusEl.textContent = `✗ ${truncatedError}`;
                   }
                 }
               });
-              
-              showToast('视频生成失败: ' + errorMsg, 'error');
+
+              showToast('视频生成失败: ' + truncatedError, 'error');
+
+              // 重新渲染连接线
+              renderConnections();
+              renderMinimap();
             },
             // 实时更新每个任务的状态（新增的回调）
             (tasks) => {
@@ -3780,7 +4464,7 @@
                 if(task.status === 'FAILED'){
                   statusField.style.display = 'block';
                   statusEl.style.color = '#dc2626';
-                  statusEl.textContent = `✗ 生成失败: ${task.error || '未知错误'}`;
+                  statusEl.textContent = `✗ 生成失败: ${truncateErrorMessage(task.error) || '未知错误'}`;
                 } else if(task.status === 'SUCCESS' && task.result){
                   // 成功的任务在这里只更新状态文本，视频加载留给onComplete处理
                   statusField.style.display = 'block';
@@ -3798,11 +4482,12 @@
 
         } catch(err){
           console.error('Generate error:', err);
+          const truncatedErr = truncateErrorMessage(err.message);
           genStatus.style.color = '#dc2626';
-          genStatus.textContent = err.message || '生成失败';
+          genStatus.textContent = truncatedErr || '生成失败';
           genBtnMain.disabled = false;
           genBtnMain.textContent = '生成视频';
-          showToast('视频生成失败: ' + err.message, 'error');
+          showToast('视频生成失败: ' + truncatedErr, 'error');
         }
       });
 
@@ -3827,72 +4512,7 @@
         initNodeDrag(id, e.clientX, e.clientY);
       });
 
-      // 图片端口接收连接
-      startImagePort.addEventListener('mouseup', (e) => {
-        if(state.connecting && state.connecting.fromId !== id){
-          const fromNode = state.nodes.find(n => n.id === state.connecting.fromId);
-          if(fromNode && fromNode.type === 'image' && !node.data.startFile){
-            const exists = state.imageConnections.some(c => c.to === id && c.portType === 'start');
-            if(!exists){
-              state.imageConnections.push({
-                id: state.nextImgConnId++,
-                from: state.connecting.fromId,
-                to: id,
-                portType: 'start'
-              });
-              // 从源图片节点获取URL并设置到目标节点（即使URL为空也要设置）
-              node.data.startUrl = fromNode.data.url || '';
-              renderImageConnections();
-              renderVideoConnections();
-              updateComputingPowerDisplay();  // 更新算力显示
-            }
-          }
-        }
-
-        // 如果从图生视频节点拖拽，查找视频节点输入端口
-        const fromNodeForI2V = state.connecting ? state.nodes.find(n => n.id === state.connecting.fromId) : null;
-        if(fromNodeForI2V && fromNodeForI2V.type === 'image_to_video'){
-          for(const node of state.nodes){
-            if(node.type !== 'video') continue;
-            const toEl = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
-            if(!toEl) continue;
-            const portEl = toEl.querySelector('.port.input');
-            if(!portEl) continue;
-            const rect = portEl.getBoundingClientRect();
-            const portX = (rect.left + rect.width/2 - containerRect.left - state.panX) / state.zoom;
-            const portY = (rect.top + rect.height/2 - containerRect.top - state.panY) / state.zoom;
-            const dist = Math.sqrt(Math.pow(toX - portX, 2) + Math.pow(toY - portY, 2));
-            if(dist < nearestDist){
-              nearestDist = dist;
-              nearestPort = { nodeId: node.id, x: portX, y: portY };
-            }
-          }
-        }
-        state.connecting = null;
-      });
-
-      endImagePort.addEventListener('mouseup', (e) => {
-        if(state.connecting && state.connecting.fromId !== id){
-          const fromNode = state.nodes.find(n => n.id === state.connecting.fromId);
-          if(fromNode && fromNode.type === 'image' && !node.data.endFile){
-            const exists = state.imageConnections.some(c => c.to === id && c.portType === 'end');
-            if(!exists){
-              state.imageConnections.push({
-                id: state.nextImgConnId++,
-                from: state.connecting.fromId,
-                to: id,
-                portType: 'end'
-              });
-              // 从源图片节点获取URL并设置到目标节点（即使URL为空也要设置）
-              node.data.endUrl = fromNode.data.url || '';
-              renderImageConnections();
-              renderVideoConnections();
-              updateComputingPowerDisplay();  // 更新算力显示
-            }
-          }
-        }
-        state.connecting = null;
-      });
+      // 图片端口：连接逻辑由全局 mouseup handler 统一处理（events.js）
 
       // 初始化提示词
       if(node.data.prompt) {
@@ -3914,6 +4534,132 @@
         if(promptCharCount) {
           promptCharCount.textContent = `${promptEl.value.length} 字符`;
         }
+        // @ 提及检测
+        checkMentionTrigger();
+      });
+
+      // ===== @ 提及系统 =====
+      let mentionState = { visible: false, query: '', queryStart: -1, selectedIndex: 0 };
+      let mentionDropdownEl = null;
+
+      function getMentionableItems(){
+        const items = [];
+        if(node.data.startUrl) items.push({displayName: '首帧图片', type: 'image', url: node.data.startUrl});
+        if(node.data.endUrl) items.push({displayName: '尾帧图片', type: 'image', url: node.data.endUrl});
+        (node.data.referenceUrls || []).forEach((url, i) => items.push({displayName: `参考图${i+1}`, type: 'image', url}));
+        (node.data.audioUrls || []).forEach((item, i) => items.push({displayName: `音频${i+1}`, type: 'audio', url: item.url}));
+        (node.data.videoUrls || []).forEach((item, i) => items.push({displayName: `视频${i+1}`, type: 'video', url: item.url}));
+        return items;
+      }
+
+      function checkMentionTrigger(){
+        const cursorPos = promptEl.selectionStart;
+        const textBefore = promptEl.value.substring(0, cursorPos);
+        const match = textBefore.match(/@([^@\s]*)$/);
+        if(match){
+          mentionState.visible = true;
+          mentionState.query = match[1];
+          mentionState.queryStart = cursorPos - match[0].length;
+          mentionState.selectedIndex = 0;
+          showMentionDropdown();
+        } else {
+          hideMentionDropdown();
+        }
+      }
+
+      function showMentionDropdown(){
+        const items = getMentionableItems();
+        const query = mentionState.query.toLowerCase();
+        const filtered = items.filter(item =>
+          item.displayName.toLowerCase().includes(query) ||
+          (item.type === 'image' && '图片'.includes(query)) ||
+          (item.type === 'audio' && '音频'.includes(query)) ||
+          (item.type === 'video' && '视频'.includes(query))
+        );
+        if(filtered.length === 0){
+          hideMentionDropdown();
+          return;
+        }
+        if(!mentionDropdownEl){
+          mentionDropdownEl = document.createElement('div');
+          mentionDropdownEl.className = 'mention-dropdown';
+          promptEl.parentElement.style.position = 'relative';
+          promptEl.parentElement.appendChild(mentionDropdownEl);
+        }
+        const typeIcons = {image: '🖼️', audio: '🎵', video: '🎬'};
+        const typeNames = {image: '图片', audio: '音频', video: '视频'};
+        mentionDropdownEl.innerHTML = filtered.map((item, i) => {
+          const isImage = item.type === 'image';
+          const thumbHtml = isImage && item.url ? `<img src="${item.url}" class="mention-thumb" style="width:32px;height:32px;object-fit:cover;border-radius:4px;margin-right:8px;flex-shrink:0;" />` : '';
+          return `<div class="mention-dropdown-item${i === mentionState.selectedIndex ? ' selected' : ''}" data-index="${i}" style="display:flex;align-items:center;padding:6px 10px;cursor:pointer;">` +
+            thumbHtml +
+            `<span class="mention-icon" style="margin-right:6px;">${typeIcons[item.type] || '📄'}</span>` +
+            `<span class="mention-name" style="flex:1;">${item.displayName}</span>` +
+            `<span class="mention-type" style="font-size:11px;color:#9ca3af;margin-left:8px;">${typeNames[item.type] || item.type}</span>` +
+            `</div>`;
+        }).join('');
+        mentionDropdownEl.style.display = 'block';
+        // 点击选择
+        mentionDropdownEl.querySelectorAll('.mention-dropdown-item').forEach(el => {
+          el.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            const idx = parseInt(el.dataset.index);
+            insertMention(filtered[idx]);
+          });
+        });
+      }
+
+      function hideMentionDropdown(){
+        mentionState.visible = false;
+        if(mentionDropdownEl) mentionDropdownEl.style.display = 'none';
+      }
+
+      function insertMention(item){
+        const before = promptEl.value.substring(0, mentionState.queryStart);
+        const after = promptEl.value.substring(promptEl.selectionStart);
+        promptEl.value = before + '@' + item.displayName + ' ' + after;
+        node.data.prompt = promptEl.value;
+        hideMentionDropdown();
+        promptEl.focus();
+        const newPos = mentionState.queryStart + item.displayName.length + 2;
+        promptEl.setSelectionRange(newPos, newPos);
+        if(promptPreview){
+          const preview = node.data.prompt.length > 50 ? node.data.prompt.substring(0, 50) + '...' : node.data.prompt;
+          promptPreview.textContent = preview;
+        }
+        if(promptCharCount) promptCharCount.textContent = `${promptEl.value.length} 字符`;
+      }
+
+      promptEl.addEventListener('keydown', (e) => {
+        if(!mentionState.visible) return;
+        const items = getMentionableItems();
+        const query = mentionState.query.toLowerCase();
+        const filtered = items.filter(item =>
+          item.displayName.toLowerCase().includes(query) ||
+          (item.type === 'image' && '图片'.includes(query)) ||
+          (item.type === 'audio' && '音频'.includes(query)) ||
+          (item.type === 'video' && '视频'.includes(query))
+        );
+        if(filtered.length === 0) return;
+        if(e.key === 'ArrowDown'){
+          e.preventDefault();
+          mentionState.selectedIndex = Math.min(mentionState.selectedIndex + 1, filtered.length - 1);
+          showMentionDropdown();
+        } else if(e.key === 'ArrowUp'){
+          e.preventDefault();
+          mentionState.selectedIndex = Math.max(mentionState.selectedIndex - 1, 0);
+          showMentionDropdown();
+        } else if(e.key === 'Enter' || e.key === 'Tab'){
+          e.preventDefault();
+          insertMention(filtered[mentionState.selectedIndex]);
+        } else if(e.key === 'Escape'){
+          e.preventDefault();
+          hideMentionDropdown();
+        }
+      });
+
+      promptEl.addEventListener('blur', () => {
+        setTimeout(hideMentionDropdown, 200);
       });
 
       // 放大编辑按钮点击事件
@@ -4021,10 +4767,14 @@
         node.data.startFile = null;
         node.data.startUrl = '';
         node.data.startPreview = '';
+        // 清理对应的连接线
+        state.imageConnections = state.imageConnections.filter(c => !(c.to === id && c.portType === 'start'));
         startPreviewRow.style.display = 'none';
         startPreviewImg.removeAttribute('src');
         startImagePort.classList.remove('disabled');
+        renderImageConnections();
         updateComputingPowerDisplay();  // 更新算力显示
+        try{ autoSaveWorkflow(); } catch(e){}
       });
 
       endClearBtn.addEventListener('click', (e) => {
@@ -4032,10 +4782,14 @@
         node.data.endFile = null;
         node.data.endUrl = '';
         node.data.endPreview = '';
+        // 清理对应的连接线
+        state.imageConnections = state.imageConnections.filter(c => !(c.to === id && c.portType === 'end'));
         endPreviewRow.style.display = 'none';
         endPreviewImg.removeAttribute('src');
         endImagePort.classList.remove('disabled');
+        renderImageConnections();
         updateComputingPowerDisplay();  // 更新算力显示
+        try{ autoSaveWorkflow(); } catch(e){}
       });
 
       // 初始化：恢复已保存的图片预览
@@ -4356,6 +5110,7 @@
               renderImageConnections();
               renderFirstFrameConnections();
               renderVideoConnections();
+              renderAudioConnections();
               
               // 更新分镜节点的预览图和选择菜单
               if(fromNode.updatePreview){
@@ -4637,6 +5392,7 @@
         imagePreviewImg.src = localPreview;
         imagePreviewRow.style.display = 'flex';
 
+        const previousUrl = node.data.url;
         const uploadedUrl = await uploadFile(file);
         if(uploadedUrl){
           node.data.url = uploadedUrl;
@@ -4656,6 +5412,13 @@
                   targetNode.data.startUrl = uploadedUrl;
                 } else if(conn.portType === 'end'){
                   targetNode.data.endUrl = uploadedUrl;
+                } else if(conn.portType === 'ref-image'){
+                  // 更新 referenceUrls 中对应的URL
+                  if(!targetNode.data.referenceUrls) targetNode.data.referenceUrls = [];
+                  const idx = targetNode.data.referenceUrls.indexOf(previousUrl);
+                  if(idx >= 0){
+                    targetNode.data.referenceUrls[idx] = uploadedUrl;
+                  }
                 }
 
                 // 触发目标节点的算力更新
@@ -4784,15 +5547,15 @@
             }
           }
 
-          // 立即渲染连接线
+
           renderConnections();
           renderImageConnections();
           renderFirstFrameConnections();
           renderVideoConnections();
           renderReferenceConnections();
+          renderMinimap();
 
           try{ autoSaveWorkflow(); } catch(e){}
-          renderMinimap();
 
           pollVideoStatus(
             submitRes.projectIds,
@@ -5710,6 +6473,7 @@
               renderImageConnections();
               renderFirstFrameConnections();
               renderVideoConnections();
+              renderAudioConnections();
               renderMinimap();
               try{ autoSaveWorkflow(); } catch(e){}
               
@@ -6017,11 +6781,14 @@
                 });
               });
 
+
               renderConnections();
               renderImageConnections();
               renderFirstFrameConnections();
               renderVideoConnections();
+              renderAudioConnections();
               renderMinimap();
+
               try{ autoSaveWorkflow(); } catch(e){}
 
               gridStatusEl.style.color = '#16a34a';
@@ -6874,13 +7641,13 @@
           renderVideoConnections();
           renderMinimap();
           try{ autoSaveWorkflow(); } catch(e){}
-          
+
           gridOnlyStatusEl.style.color = '#16a34a';
           gridOnlyStatusEl.textContent = `已提交${imageCount}张宫格图片生成任务，正在轮询状态...`;
           showToast(`已提交${imageCount}张宫格图片生成任务`, 'success');
-          
+
           const allAiToolsIds = completedTasks.map(t => t.aiToolsId);
-          
+
           pollVideoStatus(
             allAiToolsIds,
             (progressText) => {
@@ -7231,6 +7998,7 @@
               renderImageConnections();
               renderFirstFrameConnections();
               renderVideoConnections();
+              renderAudioConnections();
               renderReferenceConnections();
               renderMinimap();
               try{ autoSaveWorkflow(); } catch(e){}
@@ -7753,17 +8521,19 @@
           });
         });
         
+
         renderConnections();
         renderImageConnections();
         renderFirstFrameConnections();
         renderVideoConnections();
         renderMinimap();
-        
+
+
         if(!state.aiToolsMap) {
           state.aiToolsMap = {};
         }
         Object.assign(state.aiToolsMap, aiToolsMap);
-        
+
         gridStatusEl.style.color = '#22c55e';
         gridStatusEl.textContent = `已提交${imageCount}张宫格图片生成任务，等待AI生成...`;
         showToast(`已提交${imageCount}张宫格图片生成任务`, 'success');
@@ -8276,6 +9046,16 @@
                   <option value="10">10秒</option>
                 </select>
               </div>
+              <div class="shot-ref-audio-field field field-always-visible" style="margin-top: 8px; display: none;">
+                <div class="label">参考音频（可选）</div>
+                <input type="file" class="shot-ref-audio-input" accept="audio/*" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" />
+                <div class="shot-ref-audio-name" style="margin-top: 4px; font-size: 11px; color: #666;"></div>
+              </div>
+              <div class="shot-ref-video-field field field-always-visible" style="margin-top: 8px; display: none;">
+                <div class="label">参考视频（可选）</div>
+                <input type="file" class="shot-ref-video-input" accept="video/*" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" />
+                <div class="shot-ref-video-name" style="margin-top: 4px; font-size: 11px; color: #666;"></div>
+              </div>
               <div class="field field-always-visible" style="margin-top: 12px;">
                 <div class="gen-container" style="width: 100%;">
                   <button class="gen-btn gen-btn-main shot-frame-generate-video-btn" type="button" style="background: #22c55e; color: white; flex: 1; padding: 10px;">生成视频</button>
@@ -8391,6 +9171,63 @@
         }
         videoModelEl.value = node.data.videoModel || firstVideoModelValue;
         applyDriverStatusToSelect(videoModelEl);
+
+        // 初始化参考音视频字段可见性
+        function updateRefAudioVideoVisibility() {
+          const videoModel = videoModelEl.value;
+          const refAudioField = el.querySelector('.shot-ref-audio-field');
+          const refVideoField = el.querySelector('.shot-ref-video-field');
+
+          if(window.TaskConfig && window.TaskConfig.isLoaded()) {
+            const modelConfig = window.TaskConfig.getModelConfigs()[videoModel];
+            const supportsRefAudioVideo = modelConfig && modelConfig.supports_ref_audio_video === true;
+
+            if(refAudioField) refAudioField.style.display = supportsRefAudioVideo ? 'block' : 'none';
+            if(refVideoField) refVideoField.style.display = supportsRefAudioVideo ? 'block' : 'none';
+          } else {
+            // 如果配置未加载，默认隐藏
+            if(refAudioField) refAudioField.style.display = 'none';
+            if(refVideoField) refVideoField.style.display = 'none';
+          }
+        }
+
+        // 初始更新
+        updateRefAudioVideoVisibility();
+
+        // 监听视频模型变化
+        videoModelEl.addEventListener('change', () => {
+          node.data.videoModel = videoModelEl.value;
+          updateRefAudioVideoVisibility();
+          try{ autoSaveWorkflow(); } catch(e){}
+        });
+
+        // 参考音频输入事件
+        const refAudioInput = el.querySelector('.shot-ref-audio-input');
+        if(refAudioInput) {
+          refAudioInput.addEventListener('change', (e) => {
+            const file = e.target.files?.[0];
+            if(file) {
+              node.data.refAudioFile = file;
+              const nameEl = el.querySelector('.shot-ref-audio-name');
+              if(nameEl) nameEl.textContent = '✓ ' + file.name;
+            }
+            try{ autoSaveWorkflow(); } catch(e){}
+          });
+        }
+
+        // 参考视频输入事件
+        const refVideoInput = el.querySelector('.shot-ref-video-input');
+        if(refVideoInput) {
+          refVideoInput.addEventListener('change', (e) => {
+            const file = e.target.files?.[0];
+            if(file) {
+              node.data.refVideoFile = file;
+              const nameEl = el.querySelector('.shot-ref-video-name');
+              if(nameEl) nameEl.textContent = '✓ ' + file.name;
+            }
+            try{ autoSaveWorkflow(); } catch(e){}
+          });
+        }
       }
 
       // ============ 引用匹配与显示逻辑 ============
@@ -9438,6 +10275,7 @@
               renderImageConnections();
               renderFirstFrameConnections();
               renderVideoConnections();
+              renderAudioConnections();
               
               // 如果是图片节点连接，更新预览图和选择菜单
               if(fromNode.type === 'image'){
@@ -9970,10 +10808,13 @@
         const createdVideoNodeIds = [];
         const videoCount = projectIds.length;
         
+        // 使用源节点实际宽度计算偏移
+        const firstShotFrameEl = canvasEl.querySelector(`.node[data-node-id="${firstShotFrame.id}"]`);
+        const firstShotFrameWidth = firstShotFrameEl ? firstShotFrameEl.offsetWidth : 300;
         for(let i = 0; i < videoCount; i++){
           const offsetY = i * 280;
           const newVideoNodeId = createVideoNode({
-            x: firstShotFrame.x + 380,
+            x: firstShotFrame.x + firstShotFrameWidth + 60,
             y: firstShotFrame.y + offsetY,
             checkCollision: true
           });
@@ -10006,14 +10847,13 @@
             console.log(`[分镜组视频] 创建视频节点 ${newVideoNodeId} 并绑定 project_id:`, newVideoNode.data.project_id);
           }
         }
-        
-        // 重新渲染连接线
+
         renderConnections();
         renderImageConnections();
         renderFirstFrameConnections();
         renderVideoConnections();
         renderMinimap();
-        
+
         // 轮询视频生成状态,更新视频URL
         pollVideoStatus(
           projectIds,

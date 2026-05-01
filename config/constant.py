@@ -410,6 +410,23 @@ class FilePathConstants:
         os.makedirs(path, exist_ok=True)
         return path
 
+
+class UploadPathConstants:
+    """上传路径相关常量"""
+
+    # 上传根目录名
+    UPLOAD_ROOT = "upload"
+
+    # 子目录名
+    TEMP_DIR = "temp"           # 临时目录（每天定时清理，由 media_cache.cleanup_temp_dir 执行）
+    DRAFT_DIR = "draft"         # 草稿目录
+
+    # 文件名前缀
+    MEDIA_PREFIX = "media"      # 媒体文件前缀（图生视频上传）
+    UPLOAD_PREFIX = "upload"    # 通用上传文件前缀
+    CONCAT_PREFIX = "concat"    # 拼接图片文件前缀
+
+
 RECHARGE_PACKAGES = [
     {
         "package_id": 1,
