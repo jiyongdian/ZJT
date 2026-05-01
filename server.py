@@ -61,9 +61,14 @@ from config.constant import (
     GRID_DEFAULT_SIZE_BY_TYPE,
     GRID_LOCK_TIMEOUT_SECONDS,
     GRID_IMAGE_DOWNLOAD_TIMEOUT,
-    FilePathConstants
+    FilePathConstants,
+    UploadPathConstants
 )
 from utils.wechat_pay_util import WechatPayUtil
+from utils.project_path import (
+    get_upload_dir, get_upload_subdir, get_upload_temp_dir,
+    generate_upload_filename, build_upload_url, resolve_upload_url_to_local_path,
+)
 from config.constant import Edition, Action
 from utils.image_grid_splitter import ImageGridSplitter
 from utils.image_grid_merger import ImageGridMerger
@@ -191,7 +196,7 @@ def _ensure_world_access(world_id: int, user_id: int, action: str = Action.VIEW)
     return _ensure_resource_access(world, user_id, action, "世界")
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOAD_DIR = os.path.join(APP_DIR, "upload")
+UPLOAD_DIR = get_upload_dir()
 CHECK_AUTH_TOKEN = True
 
 # 前端静态资源版本号 - 从 pyproject.toml 读取版本号并生成 hash
@@ -570,27 +575,18 @@ def _save_uploaded_image(upload_file: UploadFile) -> str:
     """
     Save uploaded image to upload/temp/date directory and return the file URL
     """
-    # Get current date for directory name
     date_str = datetime.now().strftime("%Y%m%d")
-    
-    # Create upload/temp/date directory structure
-    temp_dir = os.path.join(UPLOAD_DIR, "temp", date_str)
-    os.makedirs(temp_dir, exist_ok=True)
-    
-    # Generate unique filename
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    unique_id = str(uuid.uuid4())[:8]
+    temp_dir = get_upload_temp_dir(date_str)
+
     file_extension = os.path.splitext(upload_file.filename or "image.png")[1]
-    filename = f"upload_{timestamp}_{unique_id}{file_extension}"
-    
-    # Save file
-    file_path = os.path.join(temp_dir, filename)
+    info = generate_upload_filename(UploadPathConstants.UPLOAD_PREFIX, file_extension)
+
+    file_path = os.path.join(temp_dir, info.filename)
     with open(file_path, "wb") as f:
         content = upload_file.file.read()
         f.write(content)
-    
-    # Return URL that can be accessed via static file serving
-    return f"{SERVER_HOST}/upload/temp/{date_str}/{filename}"
+
+    return build_upload_url(UploadPathConstants.TEMP_DIR, date_str, info.filename, host=SERVER_HOST)
 
 def _get_request_host(request: Request) -> str:
     """
@@ -614,23 +610,19 @@ def _save_user_asset(
     """
     Save a user-specific asset (image/video) under a scoped directory.
     """
-    asset_dir = os.path.join(UPLOAD_DIR, category, str(user_id))
-    os.makedirs(asset_dir, exist_ok=True)
+    asset_dir = get_upload_subdir(category, str(user_id))
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    unique_id = uuid.uuid4().hex[:8]
     original_name = upload_file.filename or "asset"
     file_extension = os.path.splitext(original_name)[1] or ".bin"
-    filename = f"{category}_{timestamp}_{unique_id}{file_extension}"
+    info = generate_upload_filename(category, file_extension)
 
-    file_path = os.path.join(asset_dir, filename)
+    file_path = os.path.join(asset_dir, info.filename)
     with open(file_path, "wb") as f:
         content = upload_file.file.read()
         f.write(content)
 
-    relative_path = f"{category}/{user_id}/{filename}"
     host = (base_host or SERVER_HOST).rstrip("/")
-    return f"{host}/upload/{relative_path}"
+    return build_upload_url(category, str(user_id), info.filename, host=host)
 
 
 def _normalize_origin(origin: Optional[str]) -> Optional[str]:
@@ -657,8 +649,7 @@ def _get_local_upload_file(asset_url: Optional[str], origin: Optional[str]) -> O
     try:
         # Support relative URLs like /upload/...
         if asset_url.startswith("/upload/"):
-            relative_path = asset_url[len("/upload/"):]
-            local_path = os.path.join(UPLOAD_DIR, *relative_path.split("/"))
+            local_path = resolve_upload_url_to_local_path(asset_url)
             return local_path if os.path.exists(local_path) else None
 
         parsed = urlparse(asset_url)
@@ -670,10 +661,7 @@ def _get_local_upload_file(asset_url: Optional[str], origin: Optional[str]) -> O
         asset_path = parsed.path or ""
         if not asset_path.startswith("/upload/"):
             return None
-        relative_path = asset_path[len("/upload/"):]
-        if not relative_path:
-            return None
-        local_path = os.path.join(UPLOAD_DIR, *relative_path.split("/"))
+        local_path = resolve_upload_url_to_local_path(asset_url)
         return local_path if os.path.exists(local_path) else None
     except Exception:
         return None
@@ -980,7 +968,7 @@ def _concatenate_images(upload_files: List[UploadFile]) -> str:
         raise ValueError("Maximum 5 images allowed")
     
     # Ensure upload directory exists
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    os.makedirs(get_upload_dir(), exist_ok=True)
     
     # Load all images
     images = []
@@ -1030,10 +1018,10 @@ def _concatenate_images(upload_files: List[UploadFile]) -> str:
             x_offset += spacing
     
     # Generate unique filename
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    unique_id = str(uuid.uuid4())[:8]
-    filename = f"concat_{timestamp}_{unique_id}.jpg"
-    file_path = os.path.join(UPLOAD_DIR, filename)
+    # Generate unique filename
+    info = generate_upload_filename(UploadPathConstants.CONCAT_PREFIX, ".jpg")
+    filename = info.filename
+    file_path = os.path.join(get_upload_dir(), filename)
     
     # Save concatenated image
     concatenated.save(file_path, 'JPEG', quality=95)
@@ -3292,13 +3280,13 @@ async def video_enhance(
             filename = video.filename or "video.mp4"
             ext = os.path.splitext(filename)[1].lower()
             video_filename = f"{uuid.uuid4()}{ext}"
-            local_video_path = os.path.join(UPLOAD_DIR, video_filename)
-            os.makedirs(UPLOAD_DIR, exist_ok=True)
-            
+            local_video_path = os.path.join(get_upload_dir(), video_filename)
+            os.makedirs(get_upload_dir(), exist_ok=True)
+
             await asyncio.to_thread(_sync_write_file, local_video_path, file_bytes)
-            
+
             # Create accessible URL for frontend
-            local_video_url = f"{SERVER_HOST}/upload/{video_filename}"
+            local_video_url = build_upload_url(video_filename, host=SERVER_HOST)
             logger.info(f"Video saved to local: {local_video_url}")
             
             # 2. 上传到 RunningHub 获取 fileName
@@ -4312,7 +4300,7 @@ async def wechat_payment_callback(request: Request):
 
 
 # Serve upload directory for static file access
-upload_dir = os.path.join(APP_DIR, "upload")
+upload_dir = os.path.join(APP_DIR, UploadPathConstants.UPLOAD_ROOT)
 if not os.path.exists(upload_dir):
     os.makedirs(upload_dir, exist_ok=True)
 app.mount("/upload", StaticFiles(directory=upload_dir), name="uploads")
@@ -4647,8 +4635,7 @@ async def extract_video_frame(
             )
 
         request_host = _get_request_host(request)
-        temp_dir = os.path.join(UPLOAD_DIR, "temp", datetime.now().strftime("%Y%m%d"))
-        os.makedirs(temp_dir, exist_ok=True)
+        temp_dir = get_upload_temp_dir()
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         unique_id = str(uuid.uuid4())[:8]
@@ -4661,20 +4648,8 @@ async def extract_video_frame(
             # 从URL获取视频路径（本地服务器上的文件）
             # URL格式: http://host/upload/temp/20250101/video_xxx.mp4 或 /upload/xxx
             if video_url.startswith("/upload/") or "/upload/" in video_url:
-                # 提取相对路径
-                if video_url.startswith("http"):
-                    # 完整URL，提取路径部分
-                    from urllib.parse import urlparse
-                    parsed = urlparse(video_url)
-                    relative_path = parsed.path
-                else:
-                    relative_path = video_url
-
                 # 转换为本地文件路径
-                # /upload/temp/20250101/xxx.mp4 -> UPLOAD_DIR/temp/20250101/xxx.mp4
-                if relative_path.startswith("/upload/"):
-                    relative_path = relative_path[8:]  # 移除 /upload/
-                video_path = os.path.join(UPLOAD_DIR, relative_path)
+                video_path = resolve_upload_url_to_local_path(video_url)
                 video_filename = os.path.basename(video_path)
 
                 if not os.path.exists(video_path):
@@ -4897,31 +4872,27 @@ async def upload_image_to_video_media(
         # 保存原始文件
         request_host = _get_request_host(request)
         date_str = datetime.now().strftime("%Y%m%d")
-        asset_dir = os.path.join(UPLOAD_DIR, upload_subdir, str(user_id), date_str)
-        os.makedirs(asset_dir, exist_ok=True)
+        asset_dir = get_upload_subdir(upload_subdir, str(user_id), date_str)
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        unique_id = uuid.uuid4().hex[:8]
         original_ext = os.path.splitext(file.filename or "file")[1] or ".bin"
-        filename = f"media_{timestamp}_{unique_id}{original_ext}"
-        file_path = os.path.join(asset_dir, filename)
+        info = generate_upload_filename(UploadPathConstants.MEDIA_PREFIX, original_ext)
+        file_path = os.path.join(asset_dir, info.filename)
 
         content = await file.read()
-        with open(file_path, "wb") as f:
-            f.write(content)
+        # 异步写入文件（避免在 async 函数中执行同步 I/O 阻塞事件循环）
+        await asyncio.to_thread(_sync_write_file, file_path, content)
 
         # 生成缩略图
-        thumb_filename = f"thumb_{timestamp}_{unique_id}.jpg"
+        thumb_filename = f"thumb_{info.timestamp}_{info.unique_id}.jpg"
         thumb_path = await asyncio.to_thread(
             _generate_thumbnail, file_path, media_type, asset_dir, thumb_filename
         )
 
         # 构建返回 URL
-        relative_base = f"{upload_subdir}/{user_id}/{date_str}"
-        file_url = f"{request_host}/upload/{relative_base}/{filename}"
+        file_url = build_upload_url(upload_subdir, str(user_id), date_str, info.filename, host=request_host)
         thumbnail_url = None
         if thumb_path and os.path.exists(thumb_path):
-            thumbnail_url = f"{request_host}/upload/{relative_base}/{thumb_filename}"
+            thumbnail_url = build_upload_url(upload_subdir, str(user_id), date_str, thumb_filename, host=request_host)
 
         return JSONResponse({
             "code": 0,
@@ -5016,8 +4987,8 @@ async def get_grid_split_image(
             )
         
         # 准备目录
-        cache_dir = os.path.join(os.getcwd(), "upload", "workflow", str(user_id), "grid_cache", str(ai_tools_id))
-        output_dir = os.path.join(os.getcwd(), "upload", "workflow", str(user_id), "grid_split", str(ai_tools_id))
+        cache_dir = get_upload_subdir("workflow", str(user_id), "grid_cache", str(ai_tools_id))
+        output_dir = get_upload_subdir("workflow", str(user_id), "grid_split", str(ai_tools_id))
         os.makedirs(cache_dir, exist_ok=True)
         os.makedirs(output_dir, exist_ok=True)
         
@@ -5184,7 +5155,7 @@ async def merge_grid_images(
     """
     try:
 
-        merger = ImageGridMerger(upload_dir=UPLOAD_DIR, server_host=SERVER_HOST)
+        merger = ImageGridMerger(upload_dir=get_upload_dir(), server_host=SERVER_HOST)
         result = await merger.merge_images(
             image_urls=request.image_urls,
             grid_size=request.grid_size,
@@ -5587,7 +5558,7 @@ async def delete_video_workflow(
 
 
 # Serve upload directory for static file access
-upload_dir = os.path.join(APP_DIR, "upload")
+upload_dir = os.path.join(APP_DIR, UploadPathConstants.UPLOAD_ROOT)
 if not os.path.exists(upload_dir):
     os.makedirs(upload_dir, exist_ok=True)
 app.mount("/upload", StaticFiles(directory=upload_dir), name="uploads")
@@ -7995,8 +7966,7 @@ async def export_timeline_draft(
         # 创建草稿压缩包
         logger.info("开始创建草稿压缩包...")
         # 使用日期分组目录
-        draft_upload_dir = os.path.join(UPLOAD_DIR, 'draft', date_folder)
-        os.makedirs(draft_upload_dir, exist_ok=True)
+        draft_upload_dir = get_upload_subdir(UploadPathConstants.DRAFT_DIR, date_folder)
         
         zip_filename = f"{draft_name}.zip"
         zip_path = os.path.join(draft_upload_dir, zip_filename)

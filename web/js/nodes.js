@@ -5547,15 +5547,13 @@
             }
           }
 
-          // setTimeout 在 async 上下文中比 requestAnimationFrame 更可靠
-          setTimeout(() => {
-            renderConnections();
-            renderImageConnections();
-            renderFirstFrameConnections();
-            renderVideoConnections();
-            renderReferenceConnections();
-            renderMinimap();
-          }, 50);
+
+          renderConnections();
+          renderImageConnections();
+          renderFirstFrameConnections();
+          renderVideoConnections();
+          renderReferenceConnections();
+          renderMinimap();
 
           try{ autoSaveWorkflow(); } catch(e){}
 
@@ -6783,15 +6781,14 @@
                 });
               });
 
-              // setTimeout 在 async 上下文中比 requestAnimationFrame 更可靠
-              setTimeout(() => {
-                renderConnections();
-                renderImageConnections();
-                renderFirstFrameConnections();
-                renderVideoConnections();
-                renderAudioConnections();
-                renderMinimap();
-              }, 50);
+
+              renderConnections();
+              renderImageConnections();
+              renderFirstFrameConnections();
+              renderVideoConnections();
+              renderAudioConnections();
+              renderMinimap();
+
               try{ autoSaveWorkflow(); } catch(e){}
 
               gridStatusEl.style.color = '#16a34a';
@@ -8524,14 +8521,13 @@
           });
         });
         
-        // setTimeout 在 async 上下文中比 requestAnimationFrame 更可靠
-        setTimeout(() => {
-          renderConnections();
-          renderImageConnections();
-          renderFirstFrameConnections();
-          renderVideoConnections();
-          renderMinimap();
-        }, 50);
+
+        renderConnections();
+        renderImageConnections();
+        renderFirstFrameConnections();
+        renderVideoConnections();
+        renderMinimap();
+
 
         if(!state.aiToolsMap) {
           state.aiToolsMap = {};
@@ -10851,15 +10847,12 @@
             console.log(`[分镜组视频] 创建视频节点 ${newVideoNodeId} 并绑定 project_id:`, newVideoNode.data.project_id);
           }
         }
-        
-        // setTimeout 在 async 上下文中比 requestAnimationFrame 更可靠
-        setTimeout(() => {
-          renderConnections();
-          renderImageConnections();
-          renderFirstFrameConnections();
-          renderVideoConnections();
-          renderMinimap();
-        }, 50);
+
+        renderConnections();
+        renderImageConnections();
+        renderFirstFrameConnections();
+        renderVideoConnections();
+        renderMinimap();
 
         // 轮询视频生成状态,更新视频URL
         pollVideoStatus(
