@@ -115,6 +115,9 @@
         if(typeof renderConnections === 'function') renderConnections();
         if(typeof renderImageConnections === 'function') renderImageConnections();
         if(typeof renderReferenceConnections === 'function') renderReferenceConnections();
+        if(typeof renderFirstFrameConnections === 'function') renderFirstFrameConnections();
+        if(typeof renderVideoConnections === 'function') renderVideoConnections();
+        if(typeof renderMinimap === 'function') renderMinimap();
       }, 250);
     }
 
@@ -453,7 +456,34 @@
       state.firstFrameConnections = state.firstFrameConnections.filter(c => c.from !== id && c.to !== id);
 
       // 清除该节点相关的视频连接
+      // 如果删除的是视频节点，需要清除连接的图生视频节点的videoUrls
+      if(node && node.type === 'video') {
+        const videoConns = state.videoConnections.filter(c => c.from === id);
+        for(const conn of videoConns) {
+          const targetNode = state.nodes.find(n => n.id === conn.to);
+          if(targetNode && targetNode.type === 'image_to_video') {
+            if(!targetNode.data.videoUrls) targetNode.data.videoUrls = [];
+            targetNode.data.videoUrls = targetNode.data.videoUrls.filter(v => v.url !== node.data.url);
+            console.log(`[删除视频节点 ${id}] 清除图生视频节点 ${conn.to} 的视频URL`);
+          }
+        }
+      }
       state.videoConnections = state.videoConnections.filter(c => c.from !== id && c.to !== id);
+
+      // 清除该节点相关的音频连接
+      // 如果删除的是音频节点，需要清除连接的图生视频节点的audioUrls
+      if(node && node.type === 'audio') {
+        const audioConns = state.audioConnections.filter(c => c.from === id);
+        for(const conn of audioConns) {
+          const targetNode = state.nodes.find(n => n.id === conn.to);
+          if(targetNode && targetNode.type === 'image_to_video') {
+            if(!targetNode.data.audioUrls) targetNode.data.audioUrls = [];
+            targetNode.data.audioUrls = targetNode.data.audioUrls.filter(a => a.url !== node.data.url);
+            console.log(`[删除音频节点 ${id}] 清除图生视频节点 ${conn.to} 的音频URL`);
+          }
+        }
+      }
+      state.audioConnections = state.audioConnections.filter(c => c.from !== id && c.to !== id);
 
       // 清除该节点相关的参考连接
       const affectedNodes = new Set();
@@ -481,8 +511,9 @@
       renderImageConnections();
       renderFirstFrameConnections();
       renderVideoConnections();
+      renderAudioConnections();
       renderReferenceConnections();
-      
+
       // 自动保存
       try{ autoSaveWorkflow(); } catch(e){}
     }

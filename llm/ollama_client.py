@@ -170,6 +170,7 @@ class OllamaClient(BaseLLMClient):
                     tool_calls.append(tool_call)
 
             content = message.content or ""
+            reasoning_content = getattr(message, 'reasoning_content', None)
 
             # 提取 token 使用量（Ollama 可能不返回完整的 usage 信息）
             usage_info = {}
@@ -200,7 +201,7 @@ class OllamaClient(BaseLLMClient):
             if auth_token and model_id:
                 self._log_token_usage(usage_info, auth_token, vendor_id, model_id)
 
-            return self._create_response(content, tool_calls, usage_info)
+            return self._create_response(content, tool_calls, usage_info, reasoning_content)
 
         except Exception as e:
             logger.error(f"Ollama API call failed: {e}")

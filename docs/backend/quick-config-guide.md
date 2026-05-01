@@ -73,6 +73,20 @@
 
 **获取方式：** 访问 [runninghub.cn](https://www.runninghub.cn) 注册账号获取 API Key
 
+### 4. DeepSeek 配置
+
+| 配置项 | 必填 | 说明 |
+|--------|------|------|
+| API Key | ✅ | DeepSeek API 密钥 |
+| Base URL | ❌ | API 代理地址（可选，默认 `https://api.deepseek.com`） |
+
+**影响的服务：**
+- 剧本创作（AI 剧本生成）
+- AI 对话交互
+- 剧本拆分
+
+**获取方式：** 访问 [DeepSeek 开放平台](https://platform.deepseek.com/api_keys) 获取 API Key
+
 ---
 
 ## 使用步骤

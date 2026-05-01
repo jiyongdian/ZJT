@@ -194,15 +194,18 @@ class OpenAIBaseClient(BaseLLMClient):
                     tool_calls.append(tool_call)
 
             content = message.content or ""
+            reasoning_content = getattr(message, 'reasoning_content', None)
             usage_info = self._extract_usage(completion)
 
-            logger.info(f"{self.vendor_name} API response: content_length={len(content)}, tool_calls={len(tool_calls) if tool_calls else 0}")
+            logger.info(f"{self.vendor_name} API response: content_length={len(content)}, tool_calls={len(tool_calls) if tool_calls else 0}, has_reasoning_content={reasoning_content is not None}")
 
             llm_logger.info("=" * 80)
             llm_logger.info(f"{self.vendor_name.upper()} API RESPONSE:")
             llm_logger.info(f"  Content length: {len(content)} chars")
             if content:
                 llm_logger.info(f"  Content:\n{content}")
+            if reasoning_content:
+                llm_logger.info(f"  Reasoning content length: {len(reasoning_content)} chars")
             if tool_calls:
                 llm_logger.info(f"  Tool calls count: {len(tool_calls)}")
                 for i, tc in enumerate(tool_calls):
@@ -214,7 +217,7 @@ class OpenAIBaseClient(BaseLLMClient):
             if auth_token and model_id:
                 self._log_token_usage(usage_info, auth_token, vendor_id, model_id)
 
-            return self._create_response(content, tool_calls, usage_info)
+            return self._create_response(content, tool_calls, usage_info, reasoning_content)
 
         except Exception as e:
             logger.error(f"{self.vendor_name} API call failed: {e}")

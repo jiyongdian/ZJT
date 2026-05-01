@@ -1179,6 +1179,27 @@ async def list_sessions(
 
 # ==================== 模型和算力 API ====================
 
+@router.get('/vendors')
+async def get_vendors():
+    """获取所有供应商列表（含图标），供前端动态加载"""
+    try:
+        from model.vendor import VendorDAO
+        from config.constant import VENDOR_ICONS
+        vendors = VendorDAO.get_all()
+        result = []
+        for v in vendors:
+            result.append({
+                'id': v.id,
+                'vendor_name': v.vendor_name,
+                'note': v.note,
+                'icon': VENDOR_ICONS.get(v.vendor_name, '📦')
+            })
+        return JSONResponse({'success': True, 'vendors': result})
+    except Exception as e:
+        logger.error(f'获取供应商列表失败: {str(e)}')
+        return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
+
+
 @router.get('/models')
 async def get_available_models():
     """获取可用的 AI 模型列表，根据 vendor 表分组"""

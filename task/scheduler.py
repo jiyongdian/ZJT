@@ -35,6 +35,58 @@ def _run_async_task(async_func, *args, **kwargs):
         logger.error(traceback.format_exc())
 
 
+def _is_stale_lock():
+    """检查锁文件是否来自已死亡的进程"""
+    if not _LOCK_FILE or not os.path.exists(_LOCK_FILE):
+        return False
+    try:
+        with open(_LOCK_FILE, 'r') as f:
+            pid_str = f.read().strip()
+        if not pid_str:
+            # 空文件 = 锁写入失败残留
+            return True
+        pid = int(pid_str)
+        # 检查 PID 是否存活
+        if sys.platform == 'win32':
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            handle = kernel32.OpenProcess(0x100000, False, pid)
+            if handle:
+                kernel32.CloseHandle(handle)
+                return False
+            return True
+        else:
+            # Linux: os.kill(pid, 0) 不发送信号，只检查进程是否存在
+            try:
+                os.kill(pid, 0)
+                return False  # 进程存活，锁有效
+            except (ProcessLookupError, PermissionError):
+                return True   # 进程已死，锁无效
+    except (ValueError, OSError):
+        return True  # 文件内容异常，视为残留
+
+
+def _force_acquire_lock():
+    """强制获取锁（清除残留锁后重新获取）"""
+    global _lock_fd, _LOCK_FILE
+    # 删除残留锁文件
+    if os.path.exists(_LOCK_FILE):
+        os.remove(_LOCK_FILE)
+    # 重新创建
+    _lock_fd = open(_LOCK_FILE, 'w')
+    if sys.platform == 'win32':
+        import msvcrt
+        _lock_fd.write(str(os.getpid()))
+        _lock_fd.flush()
+        msvcrt.locking(_lock_fd.fileno(), msvcrt.LK_NBLCK, 1)
+    else:
+        import fcntl
+        fcntl.flock(_lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _lock_fd.write(str(os.getpid()))
+        _lock_fd.flush()
+    logger.info(f"Scheduler lock force-acquired after clearing stale lock. PID: {os.getpid()}")
+
+
 def _acquire_scheduler_lock():
     """获取调度器文件锁，防止多个进程重复运行"""
     global _lock_fd, _LOCK_FILE
@@ -47,15 +99,24 @@ def _acquire_scheduler_lock():
         _lock_fd = open(_LOCK_FILE, 'w')
         if sys.platform == 'win32':
             import msvcrt
+            _lock_fd.write(str(os.getpid()))
+            _lock_fd.flush()
             msvcrt.locking(_lock_fd.fileno(), msvcrt.LK_NBLCK, 1)
         else:
             import fcntl
             fcntl.flock(_lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        _lock_fd.write(str(os.getpid()))
-        _lock_fd.flush()
+            _lock_fd.write(str(os.getpid()))
+            _lock_fd.flush()
         logger.info(f"Scheduler lock acquired. PID: {os.getpid()}")
         return True
     except (IOError, OSError):
+        # 锁获取失败，检查是否为残留死锁
+        _lock_fd.close()
+        _lock_fd = None
+        if _is_stale_lock():
+            logger.warning("Detected stale scheduler lock from dead process. Clearing and retrying...")
+            _force_acquire_lock()
+            return True
         logger.warning("Another scheduler instance is already running. Skipping scheduler initialization.")
         return False
 

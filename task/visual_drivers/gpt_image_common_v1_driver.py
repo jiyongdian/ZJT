@@ -8,11 +8,13 @@ API 文档: https://platform.openai.com/docs/api-reference/images/create
 from typing import Dict, Any, Optional
 import traceback
 import base64
+import json
 import os
 import re
 import requests
 from .base_video_driver import BaseVideoDriver
 from config.config_util import get_config, get_dynamic_config_value
+from config.unified_config import DriverImplementation
 from utils.sentry_util import SentryUtil, AlertLevel
 from utils.network_utils import is_local_file_path
 from utils.image_upload_utils import try_map_url_to_local_file, upload_local_images_to_cdn_sync
@@ -61,16 +63,17 @@ class GptImageCommonV1Driver(BaseVideoDriver):
     # 默认模型
     DEFAULT_MODEL = "gpt-image-2"
 
-    def __init__(self, site_id: str):
+    def __init__(self, site_id: str, impl_name: str = None):
         """
         初始化驱动（基类）
 
         Args:
             site_id: API 聚合站点ID（如 site_1, site_2, ... site_5）
                      对应配置 api_aggregator.site_X
+            impl_name: 实现方名称，需与 IMPLEMENTATION_TO_ID 映射一致
         """
         self._site_id = site_id
-        driver_name = f"gpt_image_common_{site_id}"
+        driver_name = impl_name or f"gpt_image_common_{site_id}"
         super().__init__(driver_name=driver_name, driver_type=25)
 
         # 从 api_aggregator.{site_id} 加载配置
@@ -421,8 +424,8 @@ class GptImageCommonV1Driver(BaseVideoDriver):
             if data and isinstance(data, list) and len(data) > 0:
                 first_item = data[0]
                 if isinstance(first_item, dict):
-                    # 优先获取 url 字段
-                    if "url" in first_item:
+                    # 优先获取 url 字段（需非空，部分 API 会返回 url=""）
+                    if first_item.get("url"):
                         return first_item["url"]
                     # 其次获取 b64_json 字段
                     if "b64_json" in first_item:
@@ -630,39 +633,126 @@ class GptImageCommonSite0V1Driver(GptImageCommonV1Driver):
     """
 
     def __init__(self):
-        super().__init__(site_id="site_0")
+        super().__init__(site_id="site_0", impl_name=DriverImplementation.GPT_IMAGE_COMMON_SITE0_V1)
 
 
 class GptImageCommonSite1V1Driver(GptImageCommonV1Driver):
     """GPT Image Common Site 1 v1 版本驱动"""
 
     def __init__(self):
-        super().__init__(site_id="site_1")
+        super().__init__(site_id="site_1", impl_name=DriverImplementation.GPT_IMAGE_COMMON_SITE1_V1)
 
 
 class GptImageCommonSite2V1Driver(GptImageCommonV1Driver):
-    """GPT Image Common Site 2 v1 版本驱动"""
+    """GPT Image Common Site 2 v1 版本驱动
+
+    针对 comfly.chat 反代站点，使用标准 OpenAI /v1/images/edits API 格式。
+    与基类的差异：
+    - 使用 gpt-image-2 模型（非 gpt-image-2-all）
+    - 支持 quality 参数（从 extra_config 解析）
+    - 添加 response_format=b64_json
+    - 移除 n 参数（非官方 API 规范）
+    """
+
+    EDIT_MODEL = "gpt-image-2"
+    VALID_QUALITIES = {"low", "medium", "high", "auto"}
 
     def __init__(self):
-        super().__init__(site_id="site_2")
+        super().__init__(site_id="site_2", impl_name=DriverImplementation.GPT_IMAGE_COMMON_SITE2_V1)
+
+    def build_edit_request(self, ai_tool) -> Dict[str, Any]:
+        """
+        构建图片编辑请求参数（Site2 专用，符合 OpenAI /v1/images/edits 规范）
+
+        与基类的差异：
+        - model: gpt-image-2（非 gpt-image-2-all）
+        - 移除 n 参数
+        - 添加 quality 参数（从 extra_config 解析，默认 auto）
+        - 添加 response_format=b64_json
+
+        Args:
+            ai_tool: AITool 对象
+                - prompt: 文本描述
+                - image_path: 输入图片路径（支持多张，逗号分隔）
+                - ratio: 图片比例
+                - image_size: 图片分辨率
+                - extra_config: JSON 字符串，可包含 quality 字段
+
+        Returns:
+            Dict[str, Any]: 请求参数字典，包含 files 和 data
+        """
+        # 获取分辨率和比例
+        image_size = getattr(ai_tool, 'image_size', None) or '1k'
+        ratio = ai_tool.ratio or '1:1'
+        size = self._map_size(image_size, ratio)
+
+        # 解析 extra_config 中的 quality
+        quality = "auto"
+        if ai_tool.extra_config:
+            try:
+                config = ai_tool.extra_config if isinstance(ai_tool.extra_config, dict) else json.loads(ai_tool.extra_config)
+                if isinstance(config, dict):
+                    q = config.get("quality")
+                    if q:
+                        if q in self.VALID_QUALITIES:
+                            quality = q
+                        else:
+                            self.logger.warning(f"无效的 quality 值: {q}，有效值: {self.VALID_QUALITIES}，使用默认值 auto")
+            except (json.JSONDecodeError, TypeError):
+                self.logger.warning(f"无法解析 extra_config: {ai_tool.extra_config}")
+
+        # 解析图片路径列表
+        image_paths = [path.strip() for path in ai_tool.image_path.split(',') if path.strip()]
+        if not image_paths:
+            raise ValueError("图片编辑模式需要至少一张输入图片")
+
+        # 准备文件上传列表
+        files = []
+        for i, img_path in enumerate(image_paths):
+            try:
+                file_content, filename, mime_type = self._prepare_image_file(img_path)
+                files.append(('image', (filename, file_content, mime_type)))
+                self.logger.info(f"已准备上传图片 [{i+1}/{len(image_paths)}]: {filename}")
+            except Exception as e:
+                self.logger.error(f"准备图片文件失败: {img_path}, error: {str(e)}")
+                raise
+
+        # 构建表单数据 - 符合 OpenAI /v1/images/edits 规范
+        form_data = {
+            "prompt": ai_tool.prompt or "",
+            "model": self.EDIT_MODEL,
+            "size": size,
+            "quality": quality,
+            "response_format": "b64_json",
+        }
+
+        return {
+            "url": f"{self._base_url}/v1/images/edits",
+            "method": "POST",
+            "files": files,
+            "data": form_data,
+            "headers": {
+                "Authorization": f"Bearer {self._api_key}"
+            }
+        }
 
 
 class GptImageCommonSite3V1Driver(GptImageCommonV1Driver):
     """GPT Image Common Site 3 v1 版本驱动"""
 
     def __init__(self):
-        super().__init__(site_id="site_3")
+        super().__init__(site_id="site_3", impl_name=DriverImplementation.GPT_IMAGE_COMMON_SITE3_V1)
 
 
 class GptImageCommonSite4V1Driver(GptImageCommonV1Driver):
     """GPT Image Common Site 4 v1 版本驱动"""
 
     def __init__(self):
-        super().__init__(site_id="site_4")
+        super().__init__(site_id="site_4", impl_name=DriverImplementation.GPT_IMAGE_COMMON_SITE4_V1)
 
 
 class GptImageCommonSite5V1Driver(GptImageCommonV1Driver):
     """GPT Image Common Site 5 v1 版本驱动"""
 
     def __init__(self):
-        super().__init__(site_id="site_5")
+        super().__init__(site_id="site_5", impl_name=DriverImplementation.GPT_IMAGE_COMMON_SITE5_V1)

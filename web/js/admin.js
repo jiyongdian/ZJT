@@ -53,7 +53,8 @@ const PROVIDER_DEFINITIONS = [
         displayOrder: 2,
         baseName: 'ywapi',
         isOfficialAPI: true,
-        impacts: ['剧本创作', 'AI对话'],
+        showInCategories: ['llm', 'image', 'video'],  // 在所有三个分类中显示
+        impacts: ['剧本创作', 'AI对话', 'Nano Banana图片编辑', '生视频模型'],
         fields: [
             { id: 'name', label: '站点名称', type: 'text', placeholder: '智剧通API', required: false, readOnly: true, defaultValue: '智剧通API' },
             { id: 'base_url', label: 'Base URL', type: 'text', placeholder: 'https://yw.perseids.cn', required: true, readOnly: true, defaultValue: 'https://yw.perseids.cn' },
@@ -119,27 +120,27 @@ const PROVIDER_DEFINITIONS = [
         configKeyMap: { api_key: 'llm.qwen.api_key', base_url: 'llm.qwen.base_url' },
         testEndpoint: 'qwen'
     },
+    {
+        id: 'deepseek',
+        name: 'DeepSeek',
+        description: 'DeepSeek 大模型，高性价比推理与创作',
+        category: 'llm',
+        icon: '🔍',
+        docUrl: 'https://platform.deepseek.com/api_keys',
+        lazyRecommended: false,
+        displayOrder: 7,
+        baseName: 'deepseek',
+        isOfficialAPI: false,
+        impacts: ['剧本创作', 'AI对话', '剧本拆分'],
+        fields: [
+            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 DeepSeek API Key', required: true },
+            { id: 'base_url', label: 'Base URL (可选)', type: 'url', placeholder: 'https://api.deepseek.com', required: false, helpText: '可使用第三方代理服务，留空使用默认值' }
+        ],
+        configKeyMap: { api_key: 'llm.deepseek.api_key', base_url: 'llm.deepseek.base_url' },
+        testEndpoint: null
+    },
 
     // ===== 生图服务商 =====
-    {
-        id: 'ywapi_image',
-        name: '智剧通API',
-        description: '智剧通API 生图服务',
-        category: 'image',
-        icon: '☁️',
-        docUrl: 'https://yw.perseids.cn/register?aff=hE0h',
-        lazyRecommended: true,
-        displayOrder: 2,
-        baseName: 'ywapi',
-        isOfficialAPI: true,
-        impacts: ['Nano Banana图片编辑'],
-        fields: [
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true }
-        ],
-        configKeyMap: { api_key: 'api_aggregator.site_0.api_key' },
-        testEndpoint: null,
-        _sharedWith: 'ywapi'
-    },
     {
         id: 'duomi',
         name: '多米',
@@ -314,25 +315,6 @@ const PROVIDER_DEFINITIONS = [
         ],
         configKeyMap: { api_key: 'runninghub.api_key' },
         testEndpoint: null
-    },
-    {
-        id: 'ywapi_video',
-        name: '智剧通API',
-        description: '智剧通API 生视频服务',
-        category: 'video',
-        icon: '☁️',
-        docUrl: 'https://yw.perseids.cn/register?aff=hE0h',
-        lazyRecommended: true,
-        displayOrder: 3,
-        baseName: 'ywapi',
-        isOfficialAPI: true,
-        impacts: ['生视频模型'],
-        fields: [
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true }
-        ],
-        configKeyMap: { api_key: 'api_aggregator.site_0.api_key' },
-        testEndpoint: null,
-        _sharedWith: 'ywapi'
     },
     {
         id: 'huoshan_video',
@@ -707,7 +689,10 @@ const AdminApp = {
             const sortByOrder = (items) => [...items].sort((a, b) => (a.displayOrder || 999) - (b.displayOrder || 999));
             const result = {};
             Object.keys(CATEGORY_LABELS).forEach(cat => {
-                result[cat] = sortByOrder(PROVIDER_DEFINITIONS.filter(p => p.category === cat));
+                // 支持 showInCategories 属性，让一个 provider 可以在多个分类中显示
+                result[cat] = sortByOrder(PROVIDER_DEFINITIONS.filter(p => 
+                    p.category === cat || (p.showInCategories && p.showInCategories.includes(cat))
+                ));
             });
             return result;
         },
@@ -756,8 +741,15 @@ const AdminApp = {
             Object.keys(CATEGORY_LABELS).forEach(cat => { status[cat] = false; });
             this.quickConfigModal.selectedProviderIds.forEach(id => {
                 const provider = PROVIDER_DEFINITIONS.find(p => p.id === id);
-                if (provider && provider.category !== 'other') {
-                    status[provider.category] = true;
+                if (provider) {
+                    // 支持 showInCategories 属性
+                    if (provider.showInCategories && provider.showInCategories.length > 0) {
+                        provider.showInCategories.forEach(cat => {
+                            if (cat !== 'other') status[cat] = true;
+                        });
+                    } else if (provider.category !== 'other') {
+                        status[provider.category] = true;
+                    }
                 }
             });
             return status;
@@ -1796,22 +1788,18 @@ const AdminApp = {
             }
         },
 
-        // 快速设置：自动选择推荐的服务商
+        // 快速设置：只选择智剧通API
         handleQuickSetup() {
-            const recommendedIds = this.lazyRecommendedProviderIds;
-            this.quickConfigModal.selectedProviderIds = [...recommendedIds];
+            this.quickConfigModal.selectedProviderIds = ['ywapi'];
             this.quickConfigModal.providerFormData = {};
             this.quickConfigModal.originalValues = this.quickConfigModal.originalValues || {};
-            recommendedIds.forEach(id => {
-                if (!this.quickConfigModal.providerFormData[id]) {
-                    this.quickConfigModal.providerFormData[id] = {};
-                }
-                // 保留已加载的原始值
-                if (!this.quickConfigModal.originalValues[id]) {
-                    this.quickConfigModal.originalValues[id] = {};
-                }
-            });
-            this.showToast(`已自动选择 ${recommendedIds.length} 个推荐服务商`, 'success');
+            if (!this.quickConfigModal.providerFormData['ywapi']) {
+                this.quickConfigModal.providerFormData['ywapi'] = {};
+            }
+            if (!this.quickConfigModal.originalValues['ywapi']) {
+                this.quickConfigModal.originalValues['ywapi'] = {};
+            }
+            this.showToast('已自动选择智剧通API', 'success');
         },
 
         // 移除已选服务商
@@ -1857,6 +1845,15 @@ const AdminApp = {
             const configs = [];
             const formData = this.quickConfigModal.providerFormData[providerId] || {};
             const origData = this.quickConfigModal.originalValues[providerId] || {};
+
+            // ai.comfly.chat 只允许填在聚合站2中
+            const baseUrl = (formData['base_url'] || '').trim().toLowerCase();
+            if (baseUrl.includes('ai.comfly.chat')) {
+                if (provider.baseName !== 'site_2') {
+                    this.showToast('ai.comfly.chat 只允许配置在聚合站2中', 'error');
+                    return;
+                }
+            }
 
             provider.fields.forEach(field => {
                 if (field.readOnly) return;

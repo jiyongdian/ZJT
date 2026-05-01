@@ -118,16 +118,20 @@
    * @returns {number|null} 任务类型ID
    */
   function getTaskIdByKey(modelKey, category) {
-    const task = getTaskByKey(modelKey);
-    if (!task) return null;
-    if (category) {
-      // 如果指定了分类，检查匹配到的任务是否符合
-      if (task.category === category || (task.categories && task.categories.includes(category))) {
-        return task.id;
-      }
-      return null;
+    if (!category) {
+      const task = getTaskByKey(modelKey);
+      return task ? task.id : null;
     }
-    return task.id;
+    // 指定了分类时，在所有任务中查找 key 匹配且分类匹配的任务
+    const tasks = getAllTasks();
+    // 先精确匹配
+    const exact = tasks.find(t => t.key === modelKey &&
+      (t.category === category || (t.categories && t.categories.includes(category))));
+    if (exact) return exact.id;
+    // 前缀匹配：找所有以 modelKey_ 开头的任务中分类匹配的
+    const prefixMatches = tasks.filter(t => t.key.startsWith(modelKey + '_') &&
+      (t.category === category || (t.categories && t.categories.includes(category))));
+    return prefixMatches.length > 0 ? prefixMatches[0].id : null;
   }
 
   /**
@@ -286,7 +290,11 @@
         supported_image_modes: task.supported_image_modes || ['first_last_frame'],
         default_image_mode: task.default_image_mode || 'first_last_frame',
         // 是否支持尾帧（图生视频任务）
-        supports_last_frame: task.supports_last_frame !== false  // 默认为 true
+        supports_last_frame: task.supports_last_frame !== false,  // 默认为 true
+        // 是否支持参考音频和视频
+        supports_ref_audio_video: task.supports_ref_audio_video === true,
+        // 多参考图模式最大图片数量
+        max_multi_ref_images: task.max_multi_ref_images || 5
       };
     });
     return result;
