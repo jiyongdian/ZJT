@@ -485,7 +485,7 @@ class TaskManager:
             })
 
         # 推送到数据库，让 SSE 可见（无论 task 是否存在）
-        self.push_message(verification.task_id, 'human_verification_required', verification_dict)
+        self.push_message(verification.task_id, 'human_verification_required', {"verification": verification_dict})
 
         # 更新任务状态为 waiting_human
         try:
@@ -523,7 +523,9 @@ class TaskManager:
                     except Exception as e:
                         logger.error(f"Failed to restore task status to running: {e}")
 
-                    return db_verification.result or {"success": False, "error": "未知错误"}
+                    result = db_verification.result or {}
+                    result["success"] = db_verification.status == "approved"
+                    return result
             except Exception as e:
                 logger.error(f"Error polling verification {verification.verification_id}: {e}")
 

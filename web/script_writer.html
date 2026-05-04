@@ -1090,6 +1090,7 @@
         let isProcessing = false;
         let pendingVerificationId = null;
         let pendingVerificationData = null;
+        let needsNewMessageDiv = false;
         const urlParams = new URLSearchParams(window.location.search);
         
         // 全局参数：从URL获取并存储，供所有接口使用
@@ -1409,6 +1410,27 @@
                                     }
                                 }
                             }
+                            return;
+                        }
+
+                        // 显示历史中的 verification 问题（样式与对话中保持一致）
+                        if (msg.role === 'verification') {
+                            const vContent = msg.content;
+                            const desc = vContent.description || '';
+                            const options = vContent.options || [];
+
+                            let vHtml = `<div class="verification-question history-mode">`;
+                            vHtml += `<strong class="verification-title">${escapeHtml(vContent.title || 'AI 提问')}</strong>`;
+                            vHtml += `<p class="verification-description">${escapeHtml(desc)}</p>`;
+                            if (options.length > 0) {
+                                vHtml += `<div class="verification-options">`;
+                                options.forEach(opt => {
+                                    vHtml += `<span class="option-btn">${escapeHtml(opt)}</span>`;
+                                });
+                                vHtml += `</div>`;
+                            }
+                            vHtml += `</div>`;
+                            addMessage('assistant', vHtml);
                             return;
                         }
 
@@ -1950,8 +1972,8 @@
         });
 
         async function sendMessage(customMessage = null, isSystemMessage = false) {
-            console.log('sendMessage called, isProcessing:', isProcessing);
-            
+            console.log('sendMessage called, isProcessing:', isProcessing, 'pendingVerificationId:', pendingVerificationId);
+
             // Disable send button immediately to prevent multiple clicks
             const sendBtn = document.getElementById('send-btn');
             if (sendBtn) {
@@ -1966,6 +1988,29 @@
                     sendBtn.disabled = false;
                     sendBtn.classList.remove('sending');
                 }
+                return;
+            }
+
+            // 如果有待处理的验证，优先走验证提交路由（不受 isProcessing 限制）
+            if (pendingVerificationId) {
+                let message;
+                if (customMessage) {
+                    message = customMessage;
+                } else {
+                    const input = document.getElementById('message-input');
+                    message = input.value.trim();
+                    if (!message) {
+                        if (sendBtn) {
+                            sendBtn.disabled = false;
+                            sendBtn.classList.remove('sending');
+                        }
+                        return;
+                    }
+                    input.value = '';
+                    input.style.height = 'auto';
+                }
+                // 保持 isProcessing = true，Expert 仍在处理中
+                await submitVerificationAnswer(message);
                 return;
             }
 
@@ -1997,13 +2042,6 @@
                 }
                 input.value = '';
                 input.style.height = 'auto';
-            }
-
-            // 如果有待处理的验证，走验证提交路由
-            if (pendingVerificationId && message) {
-                // 保持 isProcessing = true，Expert 仍在处理中
-                await submitVerificationAnswer(message);
-                return;
             }
 
             if (isSystemMessage) {
@@ -2085,7 +2123,7 @@
                 const eventSource = new EventSource(`/api/task/${taskId}/stream`);
                 hideTypingIndicator();
                 const messageDiv = addMessage('assistant', '');
-                const contentDiv = messageDiv.querySelector('.message-content');
+                let contentDiv = messageDiv.querySelector('.message-content');
 
                 let fullText = '';
                 let startTime = Date.now();
@@ -2103,6 +2141,13 @@
                         
                         if (data.type === 'message') {
                             if (data.content) {
+                                // 如果 verification 出现过，创建新 div（此时 verification 已在 DOM 中）
+                                if (needsNewMessageDiv) {
+                                    const newDiv = addMessage('assistant', '');
+                                    contentDiv = newDiv.querySelector('.message-content');
+                                    fullText = '';
+                                    needsNewMessageDiv = false;
+                                }
                                 fullText += data.content + '\n\n';
                                 contentDiv.innerHTML = renderMarkdown(fullText);
                                 scrollToBottom();
@@ -2272,6 +2317,9 @@
         function handleHumanVerification(verification) {
             // 隐藏 typing indicator
             hideTypingIndicator();
+
+            // 标记：后续 message 事件需要创建新 div（延迟到 message 到达时创建，确保在 verification 之后）
+            needsNewMessageDiv = true;
 
             // 设置待处理验证信息
             pendingVerificationId = verification.verification_id;
@@ -5679,10 +5727,9 @@
 
                         if (data.type === 'human_verification_required') {
                             hasQuestion = true;
-                            console.log('📢 LLM提问:', data.description);
-                            console.log('   验证ID:', data.verification_id);
-                            // 调用 handleHumanVerification 显示验证问题 UI
-                            const verification = data.verification || data;
+                            const verification = data.verification || {};
+                            console.log('📢 LLM提问:', verification.description);
+                            console.log('   验证ID:', verification.verification_id);
                             handleHumanVerification(verification);
                         }
 

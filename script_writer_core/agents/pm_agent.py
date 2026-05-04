@@ -34,10 +34,10 @@ class PMAgent(BaseAgent, AskUserMixin):
         max_total_failures: int = 7,
         context_window: Optional[int] = None
     ):
-        agent_id = f"pm_agent_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        agent_id = "pm_agent"
 
-        # 初始化技能加载器
-        self.skill_loader = SkillLoader()
+        # 初始化技能加载器（支持用户级自定义 skill）
+        self.skill_loader = SkillLoader(user_id=int(user_id) if user_id else None)
 
         # 从配置文件获取技能名称列表
         pm_skill_names = agents_config.get("pm_agent", {}).get("skills", ["script-orchestrator"])
@@ -326,6 +326,15 @@ class PMAgent(BaseAgent, AskUserMixin):
 
             result = self._execute_tool(tool_name, tool_args, task, session_data)
 
+            # ask_user 工具：在 tool 回答之前，将问题写入历史（保证顺序正确）
+            if tool_name == "ask_user" and isinstance(result, dict) and "_verification_meta" in result:
+                meta = result.pop("_verification_meta")
+                self.add_to_history("verification", {
+                    "title": "需要用户输入",
+                    "description": meta["question"],
+                    "options": meta["options"]
+                })
+
             tool_history_entry = {
                 "tool_call_id": tool_call.id,
                 "name": tool_name,
@@ -382,9 +391,8 @@ class PMAgent(BaseAgent, AskUserMixin):
         
         logger.info(f"{self.agent_id}: Dispatching task to expert {skill_name}")
         
-        self.task_manager.push_message(task.task_id, 'message', {
-            'role': 'assistant',
-            'content': f"正在调用专家 {skill_name} 执行任务..."
+        self.task_manager.push_message(task.task_id, 'progress', {
+            'step': f"正在调用专家 {skill_name} 执行任务..."
         })
         
         expert_config = self.agents_config["expert_agents"][skill_name]
@@ -418,25 +426,20 @@ class PMAgent(BaseAgent, AskUserMixin):
             task_id=task.task_id
         )
 
+        # 合并 LLM 提供的 conversation_history 和 PM 已有的 ask_user 交互
+        # 避免 Expert 重复提问已被 PM 回答过的问题
+        llm_history = tool_args.get("conversation_history", [])
+        pm_ask_user_history = self._extract_ask_user_qa()
+        merged_history = llm_history + pm_ask_user_history
+
         expert_task = {
             "session_id": task.task_id,
             "description": tool_args.get("task_description", "执行任务"),
             "pm_context": context,
-            "conversation_history": tool_args.get("conversation_history", [])
+            "conversation_history": merged_history
         }
 
         result = expert.execute_task(expert_task)
-
-        # 合并 ExpertAgent 的对话历史到 PM 的历史中
-        # 这样 ask_user 工具调用和用户回答会被保存到数据库
-        if expert.conversation_history:
-            logger.info(f"{self.agent_id}: Expert {skill_name} has {len(expert.conversation_history)} messages in conversation_history")
-            # 打印前3条消息以调试
-            for i, msg in enumerate(expert.conversation_history[:3]):
-                msg_role = msg.get('role', 'unknown')
-                logger.debug(f"  Message {i}: role={msg_role}, content_type={type(msg.get('content')).__name__}")
-            self.conversation_history.extend(expert.conversation_history)
-            logger.info(f"{self.agent_id}: Merged {len(expert.conversation_history)} messages from {skill_name} expert to PM history. PM history now has {len(self.conversation_history)} messages")
 
         if result.get("success"):
             logger.info(f"{self.agent_id}: Expert {skill_name} succeeded")
@@ -502,7 +505,58 @@ class PMAgent(BaseAgent, AskUserMixin):
             full_context = self._truncate_context(full_context, user_id, world_id, max_chars)
 
         return full_context
-    
+
+    def _extract_ask_user_qa(self) -> List[Dict[str, Any]]:
+        """从 PM 的 conversation_history 中提取 ask_user 交互，转换为 user/assistant 格式
+
+        用于传递给 Expert Agent，避免重复提问已回答过的问题。
+        """
+        qa_pairs = []
+        history = self.conversation_history
+
+        for i, msg in enumerate(history):
+            if msg.get("role") == "tool":
+                content = msg.get("content", {})
+                name = content.get("name") if isinstance(content, dict) else None
+                if name != "ask_user":
+                    continue
+
+                # 解析用户回答
+                try:
+                    result_str = content.get("content", "{}")
+                    result = json.loads(result_str) if isinstance(result_str, str) else result_str
+                except (json.JSONDecodeError, TypeError):
+                    continue
+
+                user_input = result.get("user_input", "")
+                message = result.get("message", "")
+                if not user_input:
+                    continue
+
+                # 回溯找到对应的 assistant 消息（包含 tool_calls），提取问题文本
+                question_text = message or f"用户已回答: {user_input}"
+                for j in range(i - 1, -1, -1):
+                    prev = history[j]
+                    if prev.get("role") == "assistant":
+                        prev_content = prev.get("content")
+                        if isinstance(prev_content, dict) and "tool_calls" in prev_content:
+                            for tc in prev_content["tool_calls"]:
+                                if tc.get("function", {}).get("name") == "ask_user":
+                                    try:
+                                        tc_args = json.loads(tc["function"]["arguments"])
+                                        question_text = tc_args.get("question", question_text)
+                                    except (json.JSONDecodeError, KeyError):
+                                        pass
+                        break
+
+                qa_pairs.append({"role": "assistant", "content": question_text})
+                qa_pairs.append({"role": "user", "content": user_input})
+
+        if qa_pairs:
+            logger.info(f"{self.agent_id}: Extracted {len(qa_pairs) // 2} ask_user Q&A pairs for expert")
+
+        return qa_pairs
+
     def _truncate_environment_context(self, env_context: str, user_id: str, world_id: str, max_chars: int) -> str:
         """截断环境上下文"""
         return self._truncate_context(env_context, user_id, world_id, max_chars)
@@ -695,6 +749,10 @@ class PMAgent(BaseAgent, AskUserMixin):
 
             # 跳过 system 消息（已在上面处理）
             if role == "system":
+                continue
+
+            # 跳过 verification 消息（仅供前端展示，不发给 LLM）
+            if role == "verification":
                 continue
 
             if role == "tool":

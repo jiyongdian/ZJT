@@ -16,13 +16,34 @@ AskUserMixin - 向用户提问并等待回答的共享功能
 import logging
 from typing import Dict, Any
 
-from model.agent_verifications import AgentVerificationsModel
-
 logger = logging.getLogger(__name__)
 
 
 class AskUserMixin:
     """向用户提问并等待回答的 Mixin"""
+
+    # agent_id → 中文显示名映射
+    _DISPLAY_NAME_MAP = {
+        "pm_agent": "剧本编排",
+        "expert_story-writer": "故事写手",
+        "expert_character-creator": "角色设计",
+        "expert_location-creator": "场景设计",
+        "expert_plot-analyzer": "剧情分析",
+        "expert_content-compliance-checker": "内容审核",
+        "expert_novel-episode-splitter": "剧集拆分",
+        "expert_character-image-designer": "角色形象设计",
+        "expert_location-prop-image-designer": "场景道具设计",
+    }
+
+    def _get_agent_display_name(self) -> str:
+        """获取当前智能体的中文显示名"""
+        agent_id = getattr(self, 'agent_id', '')
+        if agent_id in self._DISPLAY_NAME_MAP:
+            return self._DISPLAY_NAME_MAP[agent_id]
+        # 兜底：从 agent_id 提取 skill 名称
+        if agent_id.startswith("expert_"):
+            return agent_id[len("expert_"):]
+        return agent_id or "AI"
 
     def _handle_ask_user(self, tool_args: Dict[str, Any]) -> Dict[str, Any]:
         """处理 ask_user 工具调用 - 向用户提问并等待响应
@@ -48,45 +69,18 @@ class AskUserMixin:
         if not question:
             return {"error": "question 参数不能为空"}
 
+        if not options or not isinstance(options, list) or len(options) == 0:
+            return {"error": "options 参数不能为空，必须提供至少一个选项供用户选择"}
+
         logger.info(f"{self.agent_id}: Creating user verification request: {question}")
 
         try:
-            # 防重复机制：检查是否已有已完成的 ask_user
-            existing = AgentVerificationsModel.get_latest_completed_by_task(self.task_id)
-            if existing and existing.result:
-                user_input = existing.result.get("user_input", "")
-                logger.info(f"{self.agent_id}: Reusing existing ask_user result: {user_input}")
-                return {
-                    "success": True,
-                    "user_input": user_input,
-                    "message": f"用户已回答: {user_input}",
-                    "reused": True
-                }
-
-            # 防重复机制：检查是否已有 pending 的 ask_user，避免创建重复 verification
-            pending = AgentVerificationsModel.get_pending_by_task(self.task_id)
-            if pending:
-                logger.info(f"{self.agent_id}: Found pending verification {pending.verification_id}, waiting instead of creating new")
-                result = self.task_manager.wait_for_verification(
-                    verification=pending,
-                    timeout=300
-                )
-                if result.get("success"):
-                    return {
-                        "success": True,
-                        "user_input": result.get("user_input", ""),
-                        "message": f"用户已回答: {result.get('user_input', '')}"
-                    }
-                return {
-                    "error": result.get("error", "验证失败"),
-                    "user_input": None
-                }
-
             # 创建验证请求
+            agent_name = self._get_agent_display_name()
             verification = self.task_manager.create_verification(
                 task_id=self.task_id,
                 verification_type="ask_user",
-                title="需要用户输入",
+                title=f"{agent_name} 向您提问",
                 description=question,
                 options=options,
                 context=context
@@ -107,11 +101,16 @@ class AskUserMixin:
                     "user_input": None
                 }
 
-            # 返回用户的回答
+            # 返回用户的回答（附带 verification 元数据，用于写入 conversation_history）
             return {
                 "success": True,
                 "user_input": result.get("user_input", ""),
-                "message": f"用户已回答: {result.get('user_input', '')}"
+                "message": f"用户已回答: {result.get('user_input', '')}",
+                "_verification_meta": {
+                    "verification_id": verification.verification_id,
+                    "question": question,
+                    "options": options
+                }
             }
 
         except Exception as e:

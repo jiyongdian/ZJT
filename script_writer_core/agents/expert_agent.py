@@ -37,11 +37,11 @@ class ExpertAgent(BaseAgent, AskUserMixin):
     ):
         # 使用第一个技能名称作为主要标识
         primary_skill = skill_names[0] if skill_names else "unknown"
-        agent_id = f"expert_{primary_skill}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        agent_id = f"expert_{primary_skill}"
         
         
-        # 初始化技能加载器
-        self.skill_loader = SkillLoader()
+        # 初始化技能加载器（支持用户级自定义 skill）
+        self.skill_loader = SkillLoader(user_id=int(user_id) if user_id else None)
         
         system_prompt = self._build_system_prompt(skill_names, context_from_pm)
         
@@ -259,6 +259,16 @@ class ExpertAgent(BaseAgent, AskUserMixin):
             
             result = self._execute_tool(tool_name, tool_args)
 
+            # ask_user 工具：在 tool 回答之前，将问题写入历史（保证顺序正确）
+            # 同时移除 _verification_meta，避免 LLM 看到后重复提问
+            if tool_name == "ask_user" and isinstance(result, dict) and "_verification_meta" in result:
+                meta = result.pop("_verification_meta")
+                self.add_to_history("verification", {
+                    "title": "需要用户输入",
+                    "description": meta["question"],
+                    "options": meta["options"]
+                })
+
             self.outputs.append(result)
 
             # 将result转换为JSON字符串以便后续解析，而不是Python dict的字符串表示
@@ -355,6 +365,9 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                     "reasoning_content": ""
                 }
                 messages.append(assistant_msg)
+            elif role == "verification":
+                # 跳过 verification 消息（仅供前端展示，不发给 LLM）
+                continue
             else:
                 messages.append({
                     "role": role,
