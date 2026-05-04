@@ -5256,6 +5256,7 @@ async def parse_script(
         language = body.get('language', '')
         model = body.get('model', 'gemini-3-flash-preview')
         model_id = body.get('model_id', '')
+        vendor_id = body.get('vendor_id', None)
 
         if not script_content:
             return JSONResponse(
@@ -5297,9 +5298,16 @@ async def parse_script(
         from llm.script_parser import parse_script_to_shots
         from model.vendor_model import VendorModelModel
 
-        # 根据 model_id 查询真实的 vendor_id
+        # 获取真实的 vendor_id
+        # 优先使用前端发送的 vendor_id（用户选择的供应商），其次根据 model_id 查询
         real_vendor_id = 1  # 默认值
-        if model_id:
+        if vendor_id:
+            try:
+                real_vendor_id = int(vendor_id)
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid vendor_id: {vendor_id}, will try to get from model_id")
+
+        if real_vendor_id == 1 and model_id:
             try:
                 real_vendor_id = VendorModelModel.get_vendor_id_by_model_id(int(model_id)) or 1
             except Exception as e:
