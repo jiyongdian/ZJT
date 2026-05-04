@@ -3,8 +3,10 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 from .base_agent import BaseAgent
 from .expert_agent import ExpertAgent
+from .ask_user_mixin import AskUserMixin
 from .summarizer import ConversationSummarizer
 from .task_manager import TaskManager, AgentTask
+from .tool_definitions import ASK_USER_TOOL_DEFINITION
 from llm.llm_client_factory import get_llm_client
 from script_writer_core.file_manager import FileManager
 from script_writer_core.skill_loader import SkillLoader
@@ -14,7 +16,7 @@ import json
 logger = logging.getLogger(__name__)
 
 
-class PMAgent(BaseAgent):
+class PMAgent(BaseAgent, AskUserMixin):
     """项目经理智能体 - 负责任务拆分、派发、验证、协调"""
     
     def __init__(
@@ -120,7 +122,7 @@ class PMAgent(BaseAgent):
 
 **可用工具**：
 1. call_agent(AgentName, task_description): 调用专家智能体执行任务
-2. request_human_verification(...): 请求人工验证确认
+2. ask_user(question, options, context): 向用户提问并等待回答
 
 **约束**：
 - 任务必须串行执行，一次只能调用一个专家
@@ -150,6 +152,9 @@ class PMAgent(BaseAgent):
     def execute(self, task: AgentTask, session_data: Dict[str, Any]) -> Dict[str, Any]:
         """执行主任务"""
         logger.info(f"{self.agent_id}: Starting execution for task {task.task_id}")
+
+        # 设置 task_id，供 AskUserMixin 使用
+        self.task_id = task.task_id
         
         try:
             # 添加用户消息到历史
@@ -343,8 +348,8 @@ class PMAgent(BaseAgent):
         try:
             if tool_name == "call_agent":
                 return self._handle_agent_call(tool_args, task, session_data)
-            elif tool_name == "request_human_verification":
-                return self._handle_verification_request(tool_args, task)
+            elif tool_name == "ask_user":
+                return self._handle_ask_user(tool_args)
             else:
                 # Delegate to tool_executor for non-PM specific tools
                 return self.tool_executor.execute_tool(
@@ -468,37 +473,6 @@ class PMAgent(BaseAgent):
             
             logger.warning(f"{self.agent_id}: Expert {skill_name} failed")
         
-        return result
-    
-    def _handle_verification_request(
-        self,
-        tool_args: Dict[str, Any],
-        task: AgentTask
-    ) -> Dict[str, Any]:
-        """处理人工验证请求"""
-        verification_type = tool_args.get("verification_type")
-        title = tool_args.get("title")
-        description = tool_args.get("description")
-        options = tool_args.get("options", [])
-        context = tool_args.get("context", {})
-        
-        if not all([verification_type, title, description]):
-            return {"error": "缺少必要参数"}
-        
-        logger.info(f"{self.agent_id}: Creating verification request")
-        
-        verification = self.task_manager.create_verification(
-            task_id=task.task_id,
-            verification_type=verification_type,
-            title=title,
-            description=description,
-            options=options,
-            context=context
-        )
-        
-        result = self.task_manager.wait_for_verification(verification, timeout=300)
-        
-        logger.info(f"{self.agent_id}: Verification result: {result}")
         return result
     
     def _build_context_for_expert(self, skill_name: str, user_id: str = "0", world_id: str = "0") -> str:
@@ -822,15 +796,19 @@ class PMAgent(BaseAgent):
         ]
         
         # 2. 获取 allowed_tools 中的其他工具
-        core_tool_names = ["call_agent"]
+        core_tool_names = ["call_agent", "ask_user"]
         other_allowed_tools = [t for t in self.allowed_tools if t not in core_tool_names]
 
         if other_allowed_tools:
             other_tool_definitions = self.tool_executor.get_tool_definitions(other_allowed_tools)
             pm_tools.extend(other_tool_definitions)
-            
+
+        # 3. 添加 ask_user 工具定义（PM 可直接向用户提问）
+        if "ask_user" in self.allowed_tools:
+            pm_tools.append(ASK_USER_TOOL_DEFINITION)
+
         return pm_tools
-    
+
     def should_stop(self) -> tuple[bool, str]:
         """检查是否需要停止"""
         if self.consecutive_failures >= self.max_consecutive_failures:

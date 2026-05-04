@@ -165,6 +165,32 @@ class AgentVerificationsModel:
             raise
 
     @staticmethod
+    def get_latest_completed_by_task(
+        task_id: str,
+        verification_type: str = 'ask_user'
+    ) -> Optional[AgentVerificationEntity]:
+        """获取指定任务最新已完成的验证请求
+
+        Returns:
+            AgentVerificationEntity object or None
+        """
+        sql = """
+            SELECT * FROM agent_verifications
+            WHERE task_id = %s AND verification_type = %s AND status = 'approved'
+            ORDER BY created_at DESC
+            LIMIT 1
+        """
+
+        try:
+            result = execute_query(sql, (task_id, verification_type), fetch_one=True)
+            if result:
+                return AgentVerificationEntity(**result)
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get latest completed verification for task {task_id}: {e}")
+            raise
+
+    @staticmethod
     def get_pending_by_task(task_id: str) -> Optional[AgentVerificationEntity]:
         """
         Get the latest pending verification for a task

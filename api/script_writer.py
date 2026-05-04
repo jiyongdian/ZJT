@@ -123,7 +123,7 @@ except Exception as e:
     agents_config = {
         "pm_agent": {
             "model": "gemini/gemini-2.0-flash-exp",
-            "allowed_tools": ["skill", "request_human_verification"],
+            "allowed_tools": ["skill", "ask_user"],
             "skills": ["script-orchestrator"],
             "max_consecutive_failures": 3,
             "max_total_failures": 7

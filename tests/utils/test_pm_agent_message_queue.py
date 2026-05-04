@@ -104,7 +104,7 @@ class TestPMAgentMessageQueueRegression(unittest.TestCase):
 
         return PMAgent(
             model="test-model",
-            allowed_tools=["call_agent", "request_human_verification"],
+            allowed_tools=["call_agent", "ask_user"],
             task_manager=task_manager_mock,
             file_manager=file_manager_mock,
             tool_executor=MagicMock(),

@@ -4,6 +4,7 @@
     "model": "gemini/gemini-3-flash-preview",
     "allowed_tools": [
       "call_agent",
+      "ask_user",
       "list_character_jsons",
       "list_location_jsons",
       "list_prop_jsons",

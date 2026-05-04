@@ -66,7 +66,7 @@ class ChatSession:
 
         self.pm_agent = PMAgent(
             model=pm_model,
-            allowed_tools=pm_config.get("allowed_tools", ["skill", "request_human_verification"]),
+            allowed_tools=pm_config.get("allowed_tools", ["skill", "ask_user"]),
             task_manager=task_manager,
             file_manager=file_manager,
             tool_executor=tool_executor,
