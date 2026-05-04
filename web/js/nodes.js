@@ -6462,7 +6462,8 @@
               narration_as_dialogue: node.data.narrationAsDialogue || false,
               language: node.data.language || '',
               model: node.data.splitModel || 'gemini-3-flash-preview',
-              model_id: node.data.splitModelId || ''
+              model_id: node.data.splitModelId || '',
+              vendor_id: node.data.splitModelVendorId || ''
             })
           });
 
@@ -6954,7 +6955,8 @@
               narration_as_dialogue: node.data.narrationAsDialogue || false,
               language: node.data.language || '',
               model: node.data.splitModel || 'gemini-3-flash-preview',
-              model_id: node.data.splitModelId || ''
+              model_id: node.data.splitModelId || '',
+              vendor_id: node.data.splitModelVendorId || ''
             })
           });
 
