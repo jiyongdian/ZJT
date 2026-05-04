@@ -50,6 +50,7 @@ COPY utils/ ./utils/
 COPY web/ ./web/
 COPY server.py ./
 COPY config.example.yml ./
+COPY config_unit.base.yml ./
 
 # Copy entrypoint script and fix line endings for Windows compatibility
 COPY docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

@@ -71,7 +71,7 @@ test_mode:
 # Video/Audio API configurations (empty by default, override in config_unit.yml)
 runninghub:
   host: "https://www.runninghub.cn"
-  api_key: ""
+  api_key: "unittest"
   max_concurrent_slots: 3
 
 google:
@@ -100,7 +100,7 @@ yunwu:
   base_url: "https://yunwu.ai"
 
 duomi:
-  token: ""
+  token: "unittest"
 
 ai_tools:
   token: ""
@@ -108,6 +108,33 @@ ai_tools:
 # Volcengine configuration (for Seedream driver)
 volcengine:
   api_key: "unittest"
+
+# API Aggregator configuration
+api_aggregator:
+  site_0:
+    base_url: "https://yw.perseids.cn"
+    api_key: "unittest"
+    name: "zjtapi"
+  site_1:
+    base_url: "https://yw.perseids.cn"
+    api_key: "unittest"
+    name: "ywapi"
+  site_2:
+    base_url: "https://ai.comfly.chat"
+    api_key: "unittest"
+    name: "comfly"
+  site_3:
+    base_url: "https://ai.comfly.chat"
+    api_key: "unittest"
+    name: "comfly"
+  site_4:
+    base_url: "https://ai.comfly.chat"
+    api_key: "unittest"
+    name: "comfly"
+  site_5:
+    base_url: "https://ai.comfly.chat"
+    api_key: "unittest"
+    name: "comfly"
 
 # File storage configuration
 file_storage:

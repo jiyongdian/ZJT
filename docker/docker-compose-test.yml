@@ -62,8 +62,6 @@ services:
       # 时区设置
       TZ: Asia/Shanghai
     volumes:
-      # 配置文件挂载
-      - ../config_unit.yml:/app/config_unit.yml:ro
       # 数据持久化
       - ../data:/app/data
       - ../logs:/app/logs
