@@ -1097,12 +1097,10 @@
 
         const LOGIN_URL = window.location.origin + '/?login=1&redirect_url=video-workflow-list';
 
-        // LLM 供应商常量
-        const LLMVendor = {
-            JIEKOU: 'jiekou',      // 接口供应商（Gemini 模型）
-            ALIYUN: 'aliyun',      // 阿里云供应商（Qwen 模型）
-            OLLAMA: 'ollama'       // 本地运行供应商（Ollama 模型）
-        };
+        // LLM 供应商常量（从 /api/vendors 动态加载）
+        const LLMVendor = {};
+        // 供应商图标映射（从 /api/vendors 动态加载）
+        const vendorIcons = {};
 
         // LLM 模型名称常量
         const LLMModel = {
@@ -1238,6 +1236,7 @@
             } catch (e) {
                 isCommunityEdition = true;
             }
+            await loadVendors();
             await loadAvailableModels();
             await loadDriverStatus();
             await loadTextToImageModels();
@@ -2267,6 +2266,23 @@
             }
         }
 
+        async function loadVendors() {
+            try {
+                const response = await fetch('/api/vendors');
+                const data = await response.json();
+                if (data.success && data.vendors) {
+                    data.vendors.forEach(v => {
+                        const key = v.vendor_name.toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+                        LLMVendor[key] = v.vendor_name;
+                        vendorIcons[v.vendor_name.toLowerCase()] = v.icon || '📦';
+                    });
+                    console.log('[供应商加载] LLMVendor:', LLMVendor, 'vendorIcons:', vendorIcons);
+                }
+            } catch (e) {
+                console.warn('[供应商加载] 失败，使用空映射:', e);
+            }
+        }
+
         async function loadAvailableModels() {
             try {
                 const response = await fetch('/api/models', {
@@ -2334,15 +2350,6 @@
                     console.log(`  ${m.model_name} (vendor: ${m.vendor_name}): threshold=${threshold}, multiplier=${multiplier}x`);
                 });
 
-                // 供应商图标映射
-                const vendorIcons = {
-                    'jiekou': '☁️',
-                    'aliyun': '🌐',
-                    'ollama': '🖥️',
-                    'volcengine': '🌋',
-                    'zjt_api': '🚀'
-                };
-
                 // 记录排序后的第一个作为默认选中
                 let firstEnabledModel = null;
 
@@ -2370,9 +2377,7 @@
                         console.warn(`[模型加载] 模型 "${modelName}" 缺少 input_token_threshold 信息`);
                     }
 
-                    option.textContent = modelDesc
-                        ? `${displayName} - ${modelDesc}`
-                        : displayName;
+                    option.textContent = displayName;
                     // model_id 用于获取 context_window 等信息
                     const dbModelId = model.model_id ?? '';
                     if (dbModelId) {
@@ -2408,21 +2413,45 @@
                     }
                 });
 
-                // 设置默认选中模型：优先选择 aliyun 供应商的 qwen3.5-plus，否则选择第一个启用的模型
+                // 设置默认选中模型：deepseek-v4-flash (deepseek) → deepseek-v4-flash (zjt_api) → qwen3.5-plus → 第一个启用的模型
                 let defaultModel = null;
 
                 const allOptions = selector.querySelectorAll('option');
-                // 第一轮：优先查找 aliyun 供应商下的 qwen3.5-plus
+                // 第一轮：优先查找 deepseek 供应商下的 deepseek-v4-flash
                 for (let i = 0; i < allOptions.length; i++) {
                     const option = allOptions[i];
-                    if (!option.disabled && option.value && option.value.includes('qwen3.5-plus')
-                        && option.dataset.vendorName === LLMVendor.ALIYUN) {
+                    if (!option.disabled && option.value && option.value.includes('deepseek-v4-flash')
+                        && option.dataset.vendorName === LLMVendor.DEEPSEEK) {
                         defaultModel = option;
-                        console.log('[模型选择] 选择默认模型: qwen3.5-plus (aliyun)');
+                        console.log('[模型选择] 选择默认模型: deepseek-v4-flash (deepseek)');
                         break;
                     }
                 }
-                // 第二轮：如果 aliyun 下没有，再查找其他供应商的 qwen3.5-plus
+                // 第二轮：查找 zjt_api 供应商下的 deepseek-v4-flash
+                if (!defaultModel) {
+                    for (let i = 0; i < allOptions.length; i++) {
+                        const option = allOptions[i];
+                        if (!option.disabled && option.value && option.value.includes('deepseek-v4-flash')
+                            && option.dataset.vendorName === LLMVendor.ZJT_API) {
+                            defaultModel = option;
+                            console.log('[模型选择] 选择默认模型: deepseek-v4-flash (zjt_api)');
+                            break;
+                        }
+                    }
+                }
+                // 第三轮：查找 aliyun 供应商下的 qwen3.5-plus
+                if (!defaultModel) {
+                    for (let i = 0; i < allOptions.length; i++) {
+                        const option = allOptions[i];
+                        if (!option.disabled && option.value && option.value.includes('qwen3.5-plus')
+                            && option.dataset.vendorName === LLMVendor.ALIYUN) {
+                            defaultModel = option;
+                            console.log('[模型选择] 选择默认模型: qwen3.5-plus (aliyun)');
+                            break;
+                        }
+                    }
+                }
+                // 第四轮：查找其他供应商的 qwen3.5-plus
                 if (!defaultModel) {
                     for (let i = 0; i < allOptions.length; i++) {
                         const option = allOptions[i];
@@ -2434,10 +2463,10 @@
                     }
                 }
 
-                // 如果没找到 qwen3.5-plus，则使用第一个启用的模型
+                // 最终回退：使用第一个启用的模型
                 if (!defaultModel && firstEnabledModel) {
                     defaultModel = firstEnabledModel;
-                    console.log(`[模型选择] 未找到 qwen3.5-plus，选择第一个启用的模型: ${firstEnabledModel.value}`);
+                    console.log(`[模型选择] 未找到推荐模型，选择第一个启用的模型: ${firstEnabledModel.value}`);
                 }
 
                 if (defaultModel) {

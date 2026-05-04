@@ -33,7 +33,7 @@ from model.location import LocationModel
 from model.script import ScriptModel
 from model.props import PropsModel
 import uuid
-from api.clients.duomi_client import create_video_remix, create_character as create_character_task, get_character_task_result
+from api.clients.duomi_client import create_video_remix
 from PIL import Image
 from llm import call_ernie_vl_api
 from task.scheduler import init_scheduler
@@ -61,9 +61,14 @@ from config.constant import (
     GRID_DEFAULT_SIZE_BY_TYPE,
     GRID_LOCK_TIMEOUT_SECONDS,
     GRID_IMAGE_DOWNLOAD_TIMEOUT,
-    FilePathConstants
+    FilePathConstants,
+    UploadPathConstants
 )
 from utils.wechat_pay_util import WechatPayUtil
+from utils.project_path import (
+    get_upload_dir, get_upload_subdir, get_upload_temp_dir,
+    generate_upload_filename, build_upload_url, resolve_upload_url_to_local_path,
+)
 from config.constant import Edition, Action
 from utils.image_grid_splitter import ImageGridSplitter
 from utils.image_grid_merger import ImageGridMerger
@@ -191,7 +196,7 @@ def _ensure_world_access(world_id: int, user_id: int, action: str = Action.VIEW)
     return _ensure_resource_access(world, user_id, action, "世界")
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOAD_DIR = os.path.join(APP_DIR, "upload")
+UPLOAD_DIR = get_upload_dir()
 CHECK_AUTH_TOKEN = True
 
 # 前端静态资源版本号 - 从 pyproject.toml 读取版本号并生成 hash
@@ -222,9 +227,11 @@ _PROCESSED_HTML_CACHE = {}
 def _get_processed_html(file_path: str) -> bytes:
     """
     获取处理后的 HTML 内容，带版本号的 js/css 引用。
-    结果会被缓存，服务器启动后只处理一次。
+    当启用 cache_bust 时，结果会被缓存以提高性能。
+    当禁用 cache_bust（开发模式）时，不缓存以便实时看到文件修改。
     """
-    if file_path in _PROCESSED_HTML_CACHE:
+    # 禁用 cache_bust 时，不使用缓存，以便在开发中实时看到文件变更
+    if CACHE_BUST_ENABLED and file_path in _PROCESSED_HTML_CACHE:
         return _PROCESSED_HTML_CACHE[file_path]
 
     with open(file_path, 'r', encoding='utf-8') as f:
@@ -246,8 +253,11 @@ def _get_processed_html(file_path: str) -> bytes:
 
         content = re.sub(pattern, replace_with_version, content)
 
-    _PROCESSED_HTML_CACHE[file_path] = content.encode('utf-8')
-    return _PROCESSED_HTML_CACHE[file_path]
+    # 仅在启用 cache_bust 时才缓存处理结果
+    if CACHE_BUST_ENABLED:
+        _PROCESSED_HTML_CACHE[file_path] = content.encode('utf-8')
+
+    return content.encode('utf-8')
 
 
 MP_VERIFY_FILENAME = "MP_verify_lXQewBFqjUipl3B8.txt"
@@ -297,7 +307,7 @@ async def startup_event():
             await edition_auth_service.start()
         except Exception as e:
             logger.warning(f"Failed to start edition auth service (non-critical): {e}")
-    
+
     asyncio.create_task(start_edition_auth_service())
 
 # 导入并注册 script_writer API 路由
@@ -310,9 +320,26 @@ app.include_router(admin_router)
 # 注册系统状态 API 路由
 app.include_router(system_router)
 
-# 注册用户偏好 API 路由
-from api.user import router as user_router
-app.include_router(user_router)
+# 导入并注册媒体验证 API 路由
+from api.media import router as media_router
+app.include_router(media_router)
+
+# 尝试加载 enterprise 模块，未加载时注册主仓库的用户路由（演示模式）
+try:
+    from utils.enterprise_loader import enterprise_loader
+    if enterprise_loader.discover():
+        enterprise_loader.load(app)
+    else:
+        from api.user import router as user_router
+        app.include_router(user_router)
+except Exception as e:
+    import logging as _logging
+    _logging.warning(f"Enterprise/user router error (non-critical): {e}")
+    try:
+        from api.user import router as user_router
+        app.include_router(user_router)
+    except Exception:
+        pass
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -548,27 +575,18 @@ def _save_uploaded_image(upload_file: UploadFile) -> str:
     """
     Save uploaded image to upload/temp/date directory and return the file URL
     """
-    # Get current date for directory name
     date_str = datetime.now().strftime("%Y%m%d")
-    
-    # Create upload/temp/date directory structure
-    temp_dir = os.path.join(UPLOAD_DIR, "temp", date_str)
-    os.makedirs(temp_dir, exist_ok=True)
-    
-    # Generate unique filename
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    unique_id = str(uuid.uuid4())[:8]
+    temp_dir = get_upload_temp_dir(date_str)
+
     file_extension = os.path.splitext(upload_file.filename or "image.png")[1]
-    filename = f"upload_{timestamp}_{unique_id}{file_extension}"
-    
-    # Save file
-    file_path = os.path.join(temp_dir, filename)
+    info = generate_upload_filename(UploadPathConstants.UPLOAD_PREFIX, file_extension)
+
+    file_path = os.path.join(temp_dir, info.filename)
     with open(file_path, "wb") as f:
         content = upload_file.file.read()
         f.write(content)
-    
-    # Return URL that can be accessed via static file serving
-    return f"{SERVER_HOST}/upload/temp/{date_str}/{filename}"
+
+    return build_upload_url(UploadPathConstants.TEMP_DIR, date_str, info.filename, host=SERVER_HOST)
 
 def _get_request_host(request: Request) -> str:
     """
@@ -592,23 +610,19 @@ def _save_user_asset(
     """
     Save a user-specific asset (image/video) under a scoped directory.
     """
-    asset_dir = os.path.join(UPLOAD_DIR, category, str(user_id))
-    os.makedirs(asset_dir, exist_ok=True)
+    asset_dir = get_upload_subdir(category, str(user_id))
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    unique_id = uuid.uuid4().hex[:8]
     original_name = upload_file.filename or "asset"
     file_extension = os.path.splitext(original_name)[1] or ".bin"
-    filename = f"{category}_{timestamp}_{unique_id}{file_extension}"
+    info = generate_upload_filename(category, file_extension)
 
-    file_path = os.path.join(asset_dir, filename)
+    file_path = os.path.join(asset_dir, info.filename)
     with open(file_path, "wb") as f:
         content = upload_file.file.read()
         f.write(content)
 
-    relative_path = f"{category}/{user_id}/{filename}"
     host = (base_host or SERVER_HOST).rstrip("/")
-    return f"{host}/upload/{relative_path}"
+    return build_upload_url(category, str(user_id), info.filename, host=host)
 
 
 def _normalize_origin(origin: Optional[str]) -> Optional[str]:
@@ -635,8 +649,7 @@ def _get_local_upload_file(asset_url: Optional[str], origin: Optional[str]) -> O
     try:
         # Support relative URLs like /upload/...
         if asset_url.startswith("/upload/"):
-            relative_path = asset_url[len("/upload/"):]
-            local_path = os.path.join(UPLOAD_DIR, *relative_path.split("/"))
+            local_path = resolve_upload_url_to_local_path(asset_url)
             return local_path if os.path.exists(local_path) else None
 
         parsed = urlparse(asset_url)
@@ -648,10 +661,7 @@ def _get_local_upload_file(asset_url: Optional[str], origin: Optional[str]) -> O
         asset_path = parsed.path or ""
         if not asset_path.startswith("/upload/"):
             return None
-        relative_path = asset_path[len("/upload/"):]
-        if not relative_path:
-            return None
-        local_path = os.path.join(UPLOAD_DIR, *relative_path.split("/"))
+        local_path = resolve_upload_url_to_local_path(asset_url)
         return local_path if os.path.exists(local_path) else None
     except Exception:
         return None
@@ -958,7 +968,7 @@ def _concatenate_images(upload_files: List[UploadFile]) -> str:
         raise ValueError("Maximum 5 images allowed")
     
     # Ensure upload directory exists
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    os.makedirs(get_upload_dir(), exist_ok=True)
     
     # Load all images
     images = []
@@ -1008,10 +1018,10 @@ def _concatenate_images(upload_files: List[UploadFile]) -> str:
             x_offset += spacing
     
     # Generate unique filename
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    unique_id = str(uuid.uuid4())[:8]
-    filename = f"concat_{timestamp}_{unique_id}.jpg"
-    file_path = os.path.join(UPLOAD_DIR, filename)
+    # Generate unique filename
+    info = generate_upload_filename(UploadPathConstants.CONCAT_PREFIX, ".jpg")
+    filename = info.filename
+    file_path = os.path.join(get_upload_dir(), filename)
     
     # Save concatenated image
     concatenated.save(file_path, 'JPEG', quality=95)
@@ -1503,8 +1513,9 @@ async def ai_app_run(
         task_config = UnifiedConfigRegistry.get_by_id(task_id)
         if not task_config:
             raise HTTPException(status_code=400, detail=f"无效的 task_id: {task_id}")
-        # 验证任务分类是否正确
-        if task_config.category != TaskCategory.TEXT_TO_VIDEO:
+        # 验证任务分类是否正确（支持主分类和附加分类）
+        supported_categories = [task_config.category] + task_config.categories
+        if TaskCategory.TEXT_TO_VIDEO not in supported_categories:
             raise HTTPException(status_code=400, detail=f"task_id {task_id} 不是文生视频任务")
         
         text_to_video_type = task_id
@@ -1612,7 +1623,12 @@ async def ai_app_run_image(
     user_id: int = Form(None, description="User ID"),
     auth_token: str = Form(None, description="Authentication token"),
     image_mode: str = Form("first_last_frame", description="Image mode: first_last_frame, multi_reference, first_last_with_ref"),
-    reference_image_urls: str = Form(None, description="Comma-separated reference image URLs (for multi_reference or first_last_with_ref mode)")
+    reference_image_urls: str = Form(None, description="Comma-separated reference image URLs (for multi_reference or first_last_with_ref mode)"),
+    audio: UploadFile = File(None, description="Reference audio file (optional)"),
+    video: UploadFile = File(None, description="Reference video file (optional)"),
+    audio_urls: str = Form(None, description="Comma-separated reference audio URLs (alternative to uploading audio file)"),
+    video_urls: str = Form(None, description="Comma-separated reference video URLs (alternative to uploading video file)"),
+    media_references: Optional[str] = Form(None, description="JSON array of media references for @ mention resolution")
 ):
     """
     Submit image to video task.
@@ -1626,6 +1642,8 @@ async def ai_app_run_image(
     - Upload images via 'images' parameter
     - Provide comma-separated URLs via 'image_urls' parameter
     - For reference images, use 'reference_image_urls' parameter
+    - For reference audio, use 'audio' parameter
+    - For reference video, use 'video' parameter
     """
     try:
         # 通过 task_id 获取任务配置
@@ -1645,6 +1663,15 @@ async def ai_app_run_image(
 
         # 记录输入的图片信息
         logger.info(f"AI app run image request - prompt: {prompt}, task_id: {task_id}, ratio: {ratio}, duration: {duration_seconds}, count: {count}, user_id: {user_id}, image_mode: {image_mode}")
+
+        # 解析 @ 引用（如果有 media_references）
+        if media_references:
+            try:
+                refs = json.loads(media_references)
+                if isinstance(refs, list):
+                    logger.info(f"Media references: {[r.get('displayName') for r in refs]}")
+            except (json.JSONDecodeError, TypeError):
+                pass
         
         if image_urls:
             url_list = [url.strip() for url in image_urls.split(',') if url.strip()]
@@ -1714,6 +1741,22 @@ async def ai_app_run_image(
             all_refs = middle_refs + ref_image_list
             if all_refs:
                 reference_images_json = json.dumps(all_refs)
+
+        # 处理音频和视频文件/URL
+        audio_path = None
+        video_path = None
+        if audio_urls:
+            audio_path = audio_urls.strip()
+            logger.info(f"Using reference audio URL: {audio_path}")
+        elif audio:
+            audio_path = await asyncio.to_thread(_save_uploaded_image, audio)
+            logger.info(f"Saved reference audio: {audio_path}")
+        if video_urls:
+            video_path = video_urls.strip()
+            logger.info(f"Using reference video URL: {video_path}")
+        elif video:
+            video_path = await asyncio.to_thread(_save_uploaded_image, video)
+            logger.info(f"Saved reference video: {video_path}")
 
         # 根据 image_mode 和图片数量构建 context，用于算力修饰符计算
         context = {}
@@ -1802,7 +1845,9 @@ async def ai_app_run_image(
                             transaction_id=transaction_id,
                             status=AI_TOOL_STATUS_PENDING,
                             extra_config=extra_config_json,
-                            reference_images=reference_images_json
+                            reference_images=reference_images_json,
+                            audio_path=audio_path,
+                            video_path=video_path
                         )
                         TasksModel.create(
                             task_type=TASK_TYPE_GENERATE_VIDEO,
@@ -3092,6 +3137,7 @@ async def image_upscale(
                 )
 
         # Create new database record for upscale task (type=4)
+        from config.unified_config import get_implementation_id
         new_record_id = AIToolsModel.create(
             prompt=f"高清放大: {original_record.prompt or '原始图片'}",
             user_id=user_id or original_record.user_id,
@@ -3100,7 +3146,8 @@ async def image_upscale(
             project_id=task_id,  # Use the new task_id as project_id
             ratio=original_record.ratio,
             transaction_id=transaction_id,  # Store transaction ID
-            status=AI_TOOL_STATUS_PROCESSING
+            status=AI_TOOL_STATUS_PROCESSING,
+            implementation=get_implementation_id('local_enhance')
         )
         
         logger.info(f"Created upscale record with ID: {new_record_id}, project_id: {task_id}")
@@ -3233,13 +3280,13 @@ async def video_enhance(
             filename = video.filename or "video.mp4"
             ext = os.path.splitext(filename)[1].lower()
             video_filename = f"{uuid.uuid4()}{ext}"
-            local_video_path = os.path.join(UPLOAD_DIR, video_filename)
-            os.makedirs(UPLOAD_DIR, exist_ok=True)
-            
+            local_video_path = os.path.join(get_upload_dir(), video_filename)
+            os.makedirs(get_upload_dir(), exist_ok=True)
+
             await asyncio.to_thread(_sync_write_file, local_video_path, file_bytes)
-            
+
             # Create accessible URL for frontend
-            local_video_url = f"{SERVER_HOST}/upload/{video_filename}"
+            local_video_url = build_upload_url(video_filename, host=SERVER_HOST)
             logger.info(f"Video saved to local: {local_video_url}")
             
             # 2. 上传到 RunningHub 获取 fileName
@@ -3328,6 +3375,7 @@ async def video_enhance(
         # Create database record
         if user_id:
             try:
+                from config.unified_config import get_implementation_id
                 await asyncio.to_thread(
                     AIToolsModel.create,
                     prompt="视频高清修复",
@@ -3336,7 +3384,8 @@ async def video_enhance(
                     image_path=local_video_url,  # 使用本地 URL 存入数据库
                     project_id=project_id,
                     transaction_id=transaction_id,
-                    status=AI_TOOL_STATUS_PROCESSING
+                    status=AI_TOOL_STATUS_PROCESSING,
+                    implementation=get_implementation_id('local_video_enhance')
                 )
             except Exception as db_error:
                 logger.error(f"Failed to create database record: {db_error}")
@@ -3481,6 +3530,7 @@ async def video_remix(
                 # 创建数据库记录
                 if user_id:
                     try:
+                        from config.unified_config import get_implementation_id
                         AIToolsModel.create(
                             prompt=f"Remix: {prompt}",
                             user_id=user_id,
@@ -3490,7 +3540,8 @@ async def video_remix(
                             project_id=project_id,
                             transaction_id=transaction_id,
                             status=AI_TOOL_STATUS_PROCESSING,
-                            message=f"原视频ID: {video_id}"
+                            message=f"原视频ID: {video_id}",
+                            implementation=get_implementation_id('sora2_duomi_v1')
                         )
                     except Exception as db_error:
                         logger.error(f"Failed to create database record for task {i+1}: {db_error}")
@@ -3517,168 +3568,6 @@ async def video_remix(
         logger.error(f"Video remix failed: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"视频重新编辑失败: {str(e)}")
-
-
-@app.post("/api/create-character")
-@require_permission("character:create_card")
-async def api_create_character(
-    request: Request,
-    timestamps: str = Form(..., description="Time range (format: 'start,end', 1-3 seconds)"),
-    url: Optional[str] = Form(None, description="Video URL (not for real people)"),
-    from_task: Optional[str] = Form(None, description="Task ID or database record ID (supports real people)"),
-    callback_url: Optional[str] = Form(None, description="Callback URL"),
-    user_id: Optional[int] = Form(None, description="User ID"),
-    auth_token: Optional[str] = Form(None, description="Authentication token")
-):
-    """
-    Create character generation task using SORA API
-    Either url or from_task must be provided
-    from_task can be either a Duomi API task ID or a database record ID
-    """
-    try:
-        # 检查认证
-        if CHECK_AUTH_TOKEN and auth_token is None:
-            raise HTTPException(
-                status_code=400,
-                detail="请提供认证令牌"
-            )
-        
-        # Validate that either url or from_task is provided
-        if not url and not from_task:
-            raise HTTPException(
-                status_code=400, 
-                detail="必须提供 url 或 from_task 其中一个参数"
-            )
-        
-        # Validate timestamps format
-        try:
-            parts = timestamps.split(",")
-            if len(parts) != 2:
-                raise ValueError("Invalid format")
-            start = float(parts[0])
-            end = float(parts[1])
-            diff = end - start
-            if diff < 1 or diff > 3:
-                raise HTTPException(
-                    status_code=400, 
-                    detail="时间范围差值必须在 1-3 秒之间"
-                )
-        except ValueError:
-            raise HTTPException(
-                status_code=400, 
-                detail="timestamps 格式错误，应为 '起始秒,结束秒'"
-            )
-        
-        # 计算所需算力
-        task_config = TaskTypeRegistry.get(TaskTypeId.CHARACTER_CARD)  # 创建角色卡
-        computing_power = task_config.get_computing_power()
-        
-        if CHECK_AUTH_TOKEN:
-            headers = {'Authorization': f'Bearer {auth_token}'}
-            
-            # 检查算力是否充足
-            success, message, response_data = await async_make_perseids_request(
-                endpoint='user/check_computing_power',
-                method='GET',
-                headers=headers
-            )
-            if not success:
-                raise HTTPException(
-                    status_code=400,
-                    detail=message
-                )
-            
-            # 检查算力是否足够
-            user_computing_power = response_data.get('computing_power', 0)
-            user_id_from_token = response_data.get('user_id')
-            if user_computing_power < computing_power:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"您的算力不足，需要 {computing_power} 算力，当前仅有 {user_computing_power} 算力"
-                )
-            if user_id_from_token != user_id:
-                raise HTTPException(
-                    status_code=400, 
-                    detail="用户ID不匹配"
-                )
-        
-        # 生成交易ID
-        transaction_id = str(uuid.uuid4())
-        
-        # Call the character creation API
-        response = await asyncio.to_thread(
-            create_character_task,
-            timestamps=timestamps,
-            url=url,
-            from_task=from_task,
-            callback_url=callback_url
-        )
-        
-        logger.info(f"Character creation response: {response}")
-        
-        # Check for API errors first
-        if "error" in response:
-            error_info = response.get("error", {})
-            error_message = error_info.get("message", "未知错误")
-            error_code = error_info.get("code", "unknown")
-            raise HTTPException(
-                status_code=500, 
-                detail=f"创建角色任务失败: [{error_code}] {error_message}"
-            )
-        
-        # Extract task ID from response
-        task_id = response.get("id") or response.get("task_id") or response.get("data", {}).get("id")
-        
-        if not task_id:
-            raise HTTPException(
-                status_code=500, 
-                detail=f"创建角色任务失败: {response.get('message', '未知错误')}"
-            )
-        
-        # 扣除算力
-        if CHECK_AUTH_TOKEN:
-            success, message, response_data = await async_make_perseids_request(
-                endpoint='user/calculate_computing_power',
-                method='POST',
-                headers=headers,
-                data={
-                    "computing_power": computing_power,
-                    "behavior": "deduct",
-                    "transaction_id": transaction_id
-                }
-            )
-            if not success:
-                logger.error(f"Character creation computing power deduction failed: {message}")
-        
-        # 创建数据库记录
-        if user_id:
-            try:
-                source_info = f"from_task: {from_task}" if from_task else f"url: {url}"
-                AIToolsModel.create(
-                    prompt=f"创建角色卡 - timestamps: {timestamps}",
-                    user_id=user_id,
-                    type=8,  # 8-创建角色卡
-                    project_id=task_id,
-                    transaction_id=transaction_id,
-                    status=AI_TOOL_STATUS_PROCESSING,
-                    message=source_info
-                )
-            except Exception as db_error:
-                logger.error(f"Failed to create database record for character creation: {db_error}")
-        
-        return JSONResponse({
-            "success": True,
-            "task_id": task_id,
-            "status": "submitted",
-            "message": "角色创建任务已提交"
-        })
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Character creation failed: {str(e)}")
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"创建角色失败: {str(e)}")
 
 
 @app.post("/api/digital-human")
@@ -3922,125 +3811,6 @@ async def audio_status(request: Request, audio_id: int):
         logger.error(f"Audio status check failed: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"查询音频状态失败: {str(e)}")
-
-
-@app.get("/api/character-status/{task_id}")
-@require_permission("character:view_status")
-async def api_character_status(
-    request: Request,
-    task_id: str,
-    auth_token: Optional[str] = Query(None, description="Auth token for computing power refund")
-):
-    """
-    Check the status of a character generation task
-    
-    Response format from API:
-    {
-        "id": "task-id",
-        "state": "succeeded/processing/failed",
-        "data": {
-            "characters": [{"id": "character-username"}]
-        },
-        "progress": 100,
-        "action": "characters"
-    }
-    """
-    try:
-        response = await asyncio.to_thread(get_character_task_result, task_id)
-        
-        logger.info(f"Character status response: {response}")
-        
-        # Parse the response
-        state = response.get("state", "")
-        progress = response.get("progress", 0)
-        
-        if state == "succeeded":
-            # Get characters array from data
-            characters = response.get("data", {}).get("characters", [])
-            
-            # Update database record with character IDs
-            try:
-                # Build character IDs string like "@id1, @id2"
-                character_ids = ", ".join([f"@{c.get('id', '')}" for c in characters if c.get('id')])
-                AIToolsModel.update_by_project_id(
-                    project_id=task_id,
-                    result_url=character_ids,  # Store character IDs in result_url field
-                    status=AI_TOOL_STATUS_COMPLETED
-                )
-            except Exception as db_error:
-                logger.error(f"Failed to update character record: {db_error}")
-            
-            return JSONResponse({
-                "status": "SUCCESS",
-                "characters": characters,
-                "progress": progress,
-                "raw_response": response
-            })
-        elif state in ["failed", "error"]:
-            # Update database record as failed
-            try:
-                task_record = AIToolsModel.get_by_project_id(task_id)
-                already_failed = task_record and task_record.status == AI_TOOL_STATUS_FAILED
-                
-                if not already_failed:
-                    AIToolsModel.update_by_project_id(
-                        project_id=task_id,
-                        status=AI_TOOL_STATUS_FAILED,
-                        message=response.get("message", "任务失败")
-                    )
-                    
-                    # Refund computing power
-                    if CHECK_AUTH_TOKEN and auth_token and task_record:
-                        transaction_id = str(uuid.uuid4())
-                        headers = {'Authorization': f'Bearer {auth_token}'}
-                        #发起请求，获取用户ID
-                        success, message, response_data = await async_make_perseids_request(
-                            endpoint='user/get_user_id_by_auth_token',
-                            method='POST',
-                            headers=headers
-                        )
-                        if not success:
-                            raise HTTPException(status_code=400, detail=message)
-                        user_id_from_token = response_data.get('user_id')
-                        if task_record.user_id != user_id_from_token:
-                            raise HTTPException(status_code=400, detail="用户ID不匹配")
-                        task_config = TaskTypeRegistry.get(task_record.type)
-                        # 使用任务记录中的时长来计算正确的算力扣减（支持按时长计费的任务）
-                        computing_power = task_config.get_computing_power(duration=task_record.duration) if task_config else 0
-                        if computing_power > 0:
-                            success, message, _ = await async_make_perseids_request(
-                                endpoint='user/calculate_computing_power',
-                                method='POST',
-                                headers=headers,
-                                data={
-                                    "computing_power": computing_power,
-                                    "behavior": "increase",
-                                    "transaction_id": transaction_id
-                                }
-                            )
-                            if success:
-                                logger.info(f"Refunded {computing_power} for failed character task {task_id}")
-            except Exception as db_error:
-                logger.error(f"Failed to update failed character record: {db_error}")
-            
-            return JSONResponse({
-                "status": "FAILED",
-                "reason": response.get("message", "任务失败"),
-                "raw_response": response
-            })
-        else:
-            # Still processing (state might be "processing" or other)
-            return JSONResponse({
-                "status": "RUNNING",
-                "progress": progress,
-                "message": response.get("message", "任务处理中..."),
-                "raw_response": response
-            })
-            
-    except Exception as e:
-        logger.error(f"Character status check failed: {str(e)}")
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"查询角色状态失败: {str(e)}")
 
 
 class RechargePackage(BaseModel):
@@ -4530,7 +4300,7 @@ async def wechat_payment_callback(request: Request):
 
 
 # Serve upload directory for static file access
-upload_dir = os.path.join(APP_DIR, "upload")
+upload_dir = os.path.join(APP_DIR, UploadPathConstants.UPLOAD_ROOT)
 if not os.path.exists(upload_dir):
     os.makedirs(upload_dir, exist_ok=True)
 app.mount("/upload", StaticFiles(directory=upload_dir), name="uploads")
@@ -4544,6 +4314,7 @@ class VideoWorkflowCreateRequest(BaseModel):
     style: Optional[str] = None
     style_reference_image: Optional[str] = None
     default_world_id: Optional[int] = None
+    workflow_ratio: Optional[str] = None
 
 class VideoWorkflowUpdateRequest(BaseModel):
     name: Optional[str] = None
@@ -4554,6 +4325,7 @@ class VideoWorkflowUpdateRequest(BaseModel):
     style: Optional[str] = None
     style_reference_image: Optional[str] = None
     default_world_id: Optional[int] = None
+    workflow_ratio: Optional[str] = None
 
 
 @app.get('/api/video-workflow/list')
@@ -4863,8 +4635,7 @@ async def extract_video_frame(
             )
 
         request_host = _get_request_host(request)
-        temp_dir = os.path.join(UPLOAD_DIR, "temp", datetime.now().strftime("%Y%m%d"))
-        os.makedirs(temp_dir, exist_ok=True)
+        temp_dir = get_upload_temp_dir()
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         unique_id = str(uuid.uuid4())[:8]
@@ -4877,20 +4648,8 @@ async def extract_video_frame(
             # 从URL获取视频路径（本地服务器上的文件）
             # URL格式: http://host/upload/temp/20250101/video_xxx.mp4 或 /upload/xxx
             if video_url.startswith("/upload/") or "/upload/" in video_url:
-                # 提取相对路径
-                if video_url.startswith("http"):
-                    # 完整URL，提取路径部分
-                    from urllib.parse import urlparse
-                    parsed = urlparse(video_url)
-                    relative_path = parsed.path
-                else:
-                    relative_path = video_url
-
                 # 转换为本地文件路径
-                # /upload/temp/20250101/xxx.mp4 -> UPLOAD_DIR/temp/20250101/xxx.mp4
-                if relative_path.startswith("/upload/"):
-                    relative_path = relative_path[8:]  # 移除 /upload/
-                video_path = os.path.join(UPLOAD_DIR, relative_path)
+                video_path = resolve_upload_url_to_local_path(video_url)
                 video_filename = os.path.basename(video_path)
 
                 if not os.path.exists(video_path):
@@ -5018,6 +4777,137 @@ async def extract_video_frame(
         )
 
 
+def _generate_thumbnail(file_path: str, media_type: str, thumb_dir: str, thumb_filename: str) -> Optional[str]:
+    """
+    生成媒体文件缩略图。
+    - 图片: PIL 缩放到最大 200x200，保存为 JPEG
+    - 视频: ffmpeg 抽取第一帧，然后 PIL 缩放
+    - 音频: 不生成，返回 None
+    """
+    os.makedirs(thumb_dir, exist_ok=True)
+    thumb_path = os.path.join(thumb_dir, thumb_filename)
+
+    if media_type == "audio":
+        return None
+
+    if media_type == "image":
+        try:
+            with Image.open(file_path) as img:
+                img.thumbnail((200, 200), Image.LANCZOS)
+                if img.mode in ("RGBA", "P"):
+                    img = img.convert("RGB")
+                img.save(thumb_path, "JPEG", quality=75)
+            return thumb_path
+        except Exception as e:
+            logger.error(f"生成图片缩略图失败: {e}")
+            return None
+
+    if media_type == "video":
+        try:
+            ffmpeg_path = resolve_bin_path(get_config_value("bin", "ffmpeg", default="ffmpeg"), APP_DIR)
+            ffmpeg_timeout = get_config_value("bin", "ffmpeg_timeout", default=30)
+
+            # 先抽取第一帧到临时文件
+            temp_frame = thumb_path + ".tmp_frame.jpg"
+            ffmpeg_cmd = [
+                ffmpeg_path, "-i", file_path,
+                "-vframes", "1", "-q:v", "2", "-y", temp_frame
+            ]
+            process = subprocess.run(
+                ffmpeg_cmd, capture_output=True, text=True, timeout=ffmpeg_timeout
+            )
+            if process.returncode != 0 or not os.path.exists(temp_frame):
+                logger.error(f"ffmpeg 抽帧失败: {process.stderr}")
+                return None
+
+            # 缩放为缩略图
+            with Image.open(temp_frame) as img:
+                img.thumbnail((200, 200), Image.LANCZOS)
+                if img.mode in ("RGBA", "P"):
+                    img = img.convert("RGB")
+                img.save(thumb_path, "JPEG", quality=75)
+
+            # 清理临时帧
+            try:
+                os.remove(temp_frame)
+            except Exception:
+                pass
+            return thumb_path
+        except Exception as e:
+            logger.error(f"生成视频缩略图失败: {e}")
+            return None
+
+    return None
+
+
+@app.post('/api/image-to-video/upload-media')
+@require_permission("image_to_video:upload_media")
+async def upload_image_to_video_media(
+    request: Request,
+    file: UploadFile = File(..., description="要上传的媒体文件（图片、视频或音频）"),
+    media_type: str = Form(..., description="媒体类型: image, video, audio"),
+    auth_token: str = Header(None, alias="Authorization"),
+    user_id: Optional[int] = Header(None, alias="X-User-Id")
+):
+    """
+    图生视频页面上传媒体文件，自动生成缩略图。
+    返回文件URL和缩略图URL。
+    """
+    try:
+        user_id = _get_user_id_from_header(user_id)
+
+        # 验证 media_type
+        if media_type not in ("image", "video", "audio"):
+            return JSONResponse(status_code=400, content={"code": -1, "message": "media_type 必须是 image, video 或 audio"})
+
+        # 验证文件类型
+        content_type = file.content_type or ""
+        type_prefix_map = {"image": "image/", "video": "video/", "audio": "audio/"}
+        if not content_type.startswith(type_prefix_map[media_type]):
+            return JSONResponse(status_code=400, content={"code": -1, "message": f"文件类型与 media_type({media_type}) 不匹配"})
+
+        # 获取配置的上传子目录
+        upload_subdir = get_dynamic_config_value("upload", "image_to_video", "subdir", default="image_to_video")
+
+        # 保存原始文件
+        request_host = _get_request_host(request)
+        date_str = datetime.now().strftime("%Y%m%d")
+        asset_dir = get_upload_subdir(upload_subdir, str(user_id), date_str)
+
+        original_ext = os.path.splitext(file.filename or "file")[1] or ".bin"
+        info = generate_upload_filename(UploadPathConstants.MEDIA_PREFIX, original_ext)
+        file_path = os.path.join(asset_dir, info.filename)
+
+        content = await file.read()
+        # 异步写入文件（避免在 async 函数中执行同步 I/O 阻塞事件循环）
+        await asyncio.to_thread(_sync_write_file, file_path, content)
+
+        # 生成缩略图
+        thumb_filename = f"thumb_{info.timestamp}_{info.unique_id}.jpg"
+        thumb_path = await asyncio.to_thread(
+            _generate_thumbnail, file_path, media_type, asset_dir, thumb_filename
+        )
+
+        # 构建返回 URL
+        file_url = build_upload_url(upload_subdir, str(user_id), date_str, info.filename, host=request_host)
+        thumbnail_url = None
+        if thumb_path and os.path.exists(thumb_path):
+            thumbnail_url = build_upload_url(upload_subdir, str(user_id), date_str, thumb_filename, host=request_host)
+
+        return JSONResponse({
+            "code": 0,
+            "message": "上传成功",
+            "data": {
+                "file_url": file_url,
+                "thumbnail_url": thumbnail_url
+            }
+        })
+    except Exception as e:
+        logger.error(f"Failed to upload image-to-video media: {str(e)}")
+        logger.error(traceback.format_exc())
+        return JSONResponse(status_code=500, content={"code": -1, "message": f"上传失败: {str(e)}"})
+
+
 @app.get('/api/ai-tools/{ai_tools_id}/grid-split')
 @require_permission("image:grid_split")
 async def get_grid_split_image(
@@ -5097,8 +4987,8 @@ async def get_grid_split_image(
             )
         
         # 准备目录
-        cache_dir = os.path.join(os.getcwd(), "upload", "workflow", str(user_id), "grid_cache", str(ai_tools_id))
-        output_dir = os.path.join(os.getcwd(), "upload", "workflow", str(user_id), "grid_split", str(ai_tools_id))
+        cache_dir = get_upload_subdir("workflow", str(user_id), "grid_cache", str(ai_tools_id))
+        output_dir = get_upload_subdir("workflow", str(user_id), "grid_split", str(ai_tools_id))
         os.makedirs(cache_dir, exist_ok=True)
         os.makedirs(output_dir, exist_ok=True)
         
@@ -5265,7 +5155,7 @@ async def merge_grid_images(
     """
     try:
 
-        merger = ImageGridMerger(upload_dir=UPLOAD_DIR, server_host=SERVER_HOST)
+        merger = ImageGridMerger(upload_dir=get_upload_dir(), server_host=SERVER_HOST)
         result = await merger.merge_images(
             image_urls=request.image_urls,
             grid_size=request.grid_size,
@@ -5366,6 +5256,7 @@ async def parse_script(
         language = body.get('language', '')
         model = body.get('model', 'gemini-3-flash-preview')
         model_id = body.get('model_id', '')
+        vendor_id = body.get('vendor_id', None)
 
         if not script_content:
             return JSONResponse(
@@ -5407,9 +5298,16 @@ async def parse_script(
         from llm.script_parser import parse_script_to_shots
         from model.vendor_model import VendorModelModel
 
-        # 根据 model_id 查询真实的 vendor_id
+        # 获取真实的 vendor_id
+        # 优先使用前端发送的 vendor_id（用户选择的供应商），其次根据 model_id 查询
         real_vendor_id = 1  # 默认值
-        if model_id:
+        if vendor_id:
+            try:
+                real_vendor_id = int(vendor_id)
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid vendor_id: {vendor_id}, will try to get from model_id")
+
+        if real_vendor_id == 1 and model_id:
             try:
                 real_vendor_id = VendorModelModel.get_vendor_id_by_model_id(int(model_id)) or 1
             except Exception as e:
@@ -5541,7 +5439,8 @@ async def create_video_workflow(
             workflow_data=workflow_request.workflow_data,
             style=workflow_request.style,
             style_reference_image=workflow_request.style_reference_image,
-            default_world_id=workflow_request.default_world_id
+            default_world_id=workflow_request.default_world_id,
+            workflow_ratio=workflow_request.workflow_ratio
         )
         
         return JSONResponse({
@@ -5605,6 +5504,8 @@ async def update_video_workflow(
             update_fields['style_reference_image'] = update_request.style_reference_image
         if update_request.default_world_id is not None:
             update_fields['default_world_id'] = update_request.default_world_id
+        if update_request.workflow_ratio is not None:
+            update_fields['workflow_ratio'] = update_request.workflow_ratio
         
         if update_fields:
             VideoWorkflowModel.update(workflow_id, **update_fields)
@@ -5665,7 +5566,7 @@ async def delete_video_workflow(
 
 
 # Serve upload directory for static file access
-upload_dir = os.path.join(APP_DIR, "upload")
+upload_dir = os.path.join(APP_DIR, UploadPathConstants.UPLOAD_ROOT)
 if not os.path.exists(upload_dir):
     os.makedirs(upload_dir, exist_ok=True)
 app.mount("/upload", StaticFiles(directory=upload_dir), name="uploads")
@@ -8073,8 +7974,7 @@ async def export_timeline_draft(
         # 创建草稿压缩包
         logger.info("开始创建草稿压缩包...")
         # 使用日期分组目录
-        draft_upload_dir = os.path.join(UPLOAD_DIR, 'draft', date_folder)
-        os.makedirs(draft_upload_dir, exist_ok=True)
+        draft_upload_dir = get_upload_subdir(UploadPathConstants.DRAFT_DIR, date_folder)
         
         zip_filename = f"{draft_name}.zip"
         zip_path = os.path.join(draft_upload_dir, zip_filename)

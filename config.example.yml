@@ -98,10 +98,10 @@ api_aggregator:
 
 
 vidu:
-  token: "vda_xxxx"
+  token: ""
 
 volcengine:
-  api_key: "your_volcengine_api_key"  # 火山引擎 API Key（用于 Seedream 5.0 文生图）
+  api_key: ""  # 火山引擎 API Key（用于 Seedream 5.0 文生图）
 
 pay:
   wxpay:
@@ -127,17 +127,17 @@ bin:
 
 llm:
   baidu:
-    api_key: "bce-v3/ALTAK-RW7XXXX"
+    api_key: ""
     api_url: "https://qianfan.baidubce.com/v2/chat/completions"
     model: "ernie-4.5-turbo-vl-latest"
   qwen:
-    api_key: "sk-f3694dd0XXXX"
+    api_key: ""
     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   google:
-    api_key: "sk_xxxxx"
+    api_key: ""
     gemini_base_url: "https://api.jiekou.ai"
   claude:
-    api_key: "sk_xxxxx"  # Claude API Key（jiekou.ai）
+    api_key: ""  # Claude API Key（jiekou.ai）
     base_url: "https://api.jiekou.ai/openai"  # Claude API Base URL
   ollama:
     enabled: false  # 是否启用 Ollama 本地模型
@@ -150,6 +150,9 @@ llm:
     presence_penalty: 1.5  # 存在惩罚
     repetition_penalty: 1.0  # 重复惩罚
     enable_thinking: false  # 是否启用思维链（部分模型支持）
+  deepseek:
+    api_key: ""  # DeepSeek API Key
+    base_url: "https://api.deepseek.com"
 
 # TTS (Text-to-Speech) configuration
 tts:
@@ -200,6 +203,12 @@ alembic:
 # Edition configuration
 edition:
   mode: "community"
+
+# Enterprise 模块版本兼容性配置
+# 当 enterprise/ 目录存在时，主仓库会校验 enterprise 模块版本是否在此范围内
+enterprise:
+  min_version: "1.0.0"
+  max_version: "1.0.0"
 
 file_storage:
   # Qiniu cloud storage configuration
@@ -258,4 +267,6 @@ checkin:
 
 zjt:
   token: ""
+
+
 

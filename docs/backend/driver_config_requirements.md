@@ -73,10 +73,71 @@ volcengine:
   api_key: "your_volcengine_api_key"
 ```
 
-**注意**: 
+**注意**:
 - Seedream 是同步 API，一次请求直接返回图片 URL，无需轮询
 - 支持的图片尺寸：2K、3K、4K
 - **图片大小限制**: 输入图片不能超过 10 MB，系统会自动压缩超过限制的图片
+
+### 阿里云百炼驱动 (Happy Horse)
+
+**必需配置**: `llm.qwen.api_key`
+
+适用驱动：
+- `happy_horse_dashscope_v1` - Happy Horse 图生视频（任务类型 28）
+  - 模型: `happyhorse-1.0-i2v`
+  - 仅支持单张首帧图片
+  - 支持可选驱动音频和视频
+  - 异步 API，创建任务后需轮询查询结果
+- `happy_horse_dashscope_r2v_v1` - Happy Horse 参考生视频（任务类型 29）
+  - 模型: `happyhorse-1.0-r2v`
+  - 支持 1-9 张参考图像
+  - prompt 中通过 `[Image 1]`、`[Image 2]` 指代参考图像
+  - 异步 API，创建任务后需轮询查询结果
+- `happy_horse_dashscope_t2v_v1` - Happy Horse 文生视频（任务类型 30）
+  - 模型: `happyhorse-1.0-t2v`
+  - 仅需文本提示词，无需图片
+  - 异步 API，创建任务后需轮询查询结果
+
+配置示例：
+```yaml
+llm:
+  qwen:
+    api_key: "sk-your-dashscope-api-key"
+```
+
+**注意**:
+- Happy Horse 复用 LLM 配置中的阿里云 Qwen API Key，无需单独配置
+- Happy Horse 是异步 API，提交后返回 task_id，需轮询查询结果
+
+**图生视频（i2v）限制**:
+- 首帧图片限制：JPEG/JPG/PNG/WEBP，宽高不小于300像素，1:2.5 ~ 2.5:1，不超过10MB
+- 支持时长：3-15秒，默认5秒
+- 支持分辨率：720P、1080P（默认）
+- 支持驱动音频（可选）：wav/mp3，2～30秒，不超过15MB，通过 `ai_tool.audio_path` 传入
+- 支持驱动视频（可选）：通过 `ai_tool.video_path` 传入
+- 可选参数：`resolution` (720P/1080P)、`watermark` (true/false)、`seed` (0-2147483647)、`prompt_extend` (true/false)
+
+**参考生视频（r2v）限制**:
+- 参考图像：1-9张，JPEG/JPG/PNG/WEBP，短边不低于400像素，不超过10MB
+- 支持时长：3-15秒，默认5秒
+- 支持分辨率：720P、1080P（默认）
+- 支持比例：16:9(默认)、9:16、3:4、4:3、1:1
+- prompt 中通过 `[Image N]` 指代参考图像，需指明参考图中的具体对象
+- 不支持驱动音频和视频
+- 可选参数：`resolution` (720P/1080P)、`watermark` (true/false)、`seed` (0-2147483647)
+
+**文生视频（t2v）限制**:
+- 仅需文本提示词，无需上传任何图片
+- prompt 长度不超过5000个非中文字符或2500个中文字符
+- 支持时长：3-15秒，默认5秒
+- 支持分辨率：720P、1080P（默认）
+- 支持比例：16:9(默认)、9:16、1:1、4:3、3:4
+- 不支持驱动音频和视频
+- 可选参数：`resolution` (720P/1080P)、`watermark` (true/false)、`seed` (0-2147483647)
+
+**通用**:
+- 视频和音频如为本地文件，会自动上传到图床获取公网URL
+- 视频 URL 有效期24小时，获取后会自动下载保存
 
 ## 配置检查
 

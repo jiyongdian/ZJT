@@ -496,10 +496,10 @@ class BaseVideoDriver(ABC):
     def get_all_images_by_mode(self, ai_tool) -> Dict[str, Any]:
         """
         根据图片模式获取所有图片信息
-        
+
         Args:
             ai_tool: AITool 对象
-        
+
         Returns:
             Dict[str, Any]: 图片信息字典
                 - mode: 图片模式
@@ -510,14 +510,38 @@ class BaseVideoDriver(ABC):
         mode = self.parse_image_mode(ai_tool)
         first_frame, last_frame = self.get_first_last_frames(ai_tool)
         reference_images = self.get_reference_images(ai_tool)
-        
+
         return {
             'mode': mode,
             'first_frame': first_frame,
             'last_frame': last_frame,
             'reference_images': reference_images
         }
-    
+
+    def get_audio_path(self, ai_tool) -> Optional[str]:
+        """
+        获取参考音频路径
+
+        Args:
+            ai_tool: AITool 对象
+
+        Returns:
+            Optional[str]: 音频文件路径或URL，未设置时返回 None
+        """
+        return ai_tool.audio_path if hasattr(ai_tool, 'audio_path') else None
+
+    def get_video_path(self, ai_tool) -> Optional[str]:
+        """
+        获取参考视频路径
+
+        Args:
+            ai_tool: AITool 对象
+
+        Returns:
+            Optional[str]: 视频文件路径或URL，未设置时返回 None
+        """
+        return ai_tool.video_path if hasattr(ai_tool, 'video_path') else None
+
     def __str__(self):
         return f"{self.__class__.__name__}(driver_name={self.driver_name}, driver_type={self.driver_type})"
     

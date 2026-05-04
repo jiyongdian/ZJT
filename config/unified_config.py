@@ -144,20 +144,24 @@ class ImplementationConfig:
             return list(self.default_computing_power.values())[0] if self.default_computing_power else 0
         return self.default_computing_power
 
-    def is_enabled(self) -> bool:
+    def is_enabled(self, driver_key: Optional[str] = None) -> bool:
         """
-        检查实现方是否启用（从数据库读取）
+        检查实现方是否启用（优先从数据库读取）
+
+        Args:
+            driver_key: 业务驱动名称，用于数据库查询。如果不传则回退到代码默认值
 
         Returns:
             True 如果启用，False 如果禁用
         """
-        try:
-            from model.implementation_power import ImplementationPowerModel
-            return ImplementationPowerModel.is_enabled(self.name)
-        except ImportError:
-            pass
-        except Exception:
-            pass
+        if driver_key:
+            try:
+                from model.implementation_power import ImplementationPowerModel
+                return ImplementationPowerModel.is_enabled(self.name, driver_key)
+            except ImportError:
+                pass
+            except Exception:
+                pass
         # 回退到代码默认值
         return self.enabled
 
@@ -244,6 +248,8 @@ class UnifiedTaskConfig:
     supports_last_frame: bool = True  # 是否支持尾帧（某些模型虽然支持首尾帧模式，但只使用首帧，忽略尾帧）
     hidden: bool = False  # 是否隐藏（隐藏的任务不在前端模型选择器中显示，仅通过API调用）
     power_modifiers: List[PowerModifier] = field(default_factory=list)  # 算力修饰符列表
+    supports_ref_audio_video: bool = False  # 是否支持参考音频和视频
+    max_multi_ref_images: int = 5  # 多参考图模式最大图片数量
 
     def get_computing_power(self, duration: Optional[int] = None, implementation: Optional[str] = None, context: Optional[Dict[str, Any]] = None) -> int:
         """
@@ -336,10 +342,14 @@ class UnifiedTaskConfig:
             result['default_image_mode'] = self.default_image_mode
             result['supports_grid_merge'] = self.supports_grid_merge
             result['supports_last_frame'] = self.supports_last_frame
+            result['max_multi_ref_images'] = self.max_multi_ref_images
 
         # 文生图任务添加宫格生图配置
         if TaskCategory.TEXT_TO_IMAGE in [self.category] + self.categories:
             result['supports_grid_image'] = self.supports_grid_image
+
+        # 添加参考音频和视频支持标记
+        result['supports_ref_audio_video'] = self.supports_ref_audio_video
 
         # 添加算力修饰符
         if self.power_modifiers:
@@ -376,7 +386,7 @@ class UnifiedTaskConfig:
             impl_config = UnifiedConfigRegistry.get_implementation(impl_name)
             if impl_config:
                 # 检查实现方是否启用（从数据库读取）
-                if not impl_config.is_enabled():
+                if not impl_config.is_enabled(self.driver_name):
                     continue
 
                 # 获取排序值（从数据库读取，如果没有则使用默认值）
@@ -808,6 +818,11 @@ class DriverImplementation:
     GROK_COMMON_SITE4_V1 = 'grok_common_site4_v1'
     GROK_COMMON_SITE5_V1 = 'grok_common_site5_v1'
 
+    # Happy Horse
+    HAPPY_HORSE_DASHSCOPE_V1 = 'happy_horse_dashscope_v1'
+    HAPPY_HORSE_DASHSCOPE_R2V_V1 = 'happy_horse_dashscope_r2v_v1'
+    HAPPY_HORSE_DASHSCOPE_T2V_V1 = 'happy_horse_dashscope_t2v_v1'
+
 
 # ============ 驱动实现 ID 常量（用于数据库存储） ============
 class DriverImplementationId:
@@ -864,6 +879,9 @@ class DriverImplementationId:
     GROK_COMMON_SITE4_V1 = 46
     GROK_COMMON_SITE5_V1 = 47
     GROK_DUOMI_V1 = 48
+    HAPPY_HORSE_DASHSCOPE_V1 = 49
+    HAPPY_HORSE_DASHSCOPE_R2V_V1 = 50
+    HAPPY_HORSE_DASHSCOPE_T2V_V1 = 51
 
 
 # implementation 字符串到 ID 的映射
@@ -916,6 +934,9 @@ IMPLEMENTATION_TO_ID = {
     'grok_common_site4_v1': DriverImplementationId.GROK_COMMON_SITE4_V1,
     'grok_common_site5_v1': DriverImplementationId.GROK_COMMON_SITE5_V1,
     'grok_duomi_v1': DriverImplementationId.GROK_DUOMI_V1,
+    'happy_horse_dashscope_v1': DriverImplementationId.HAPPY_HORSE_DASHSCOPE_V1,
+    'happy_horse_dashscope_r2v_v1': DriverImplementationId.HAPPY_HORSE_DASHSCOPE_R2V_V1,
+    'happy_horse_dashscope_t2v_v1': DriverImplementationId.HAPPY_HORSE_DASHSCOPE_T2V_V1,
 }
 
 # implementation ID 到字符串的映射
@@ -979,6 +1000,15 @@ class DriverKey:
     # Grok 图生视频
     GROK_IMAGE_TO_VIDEO = 'grok_image_to_video'
 
+    # Happy Horse 图生视频
+    HAPPY_HORSE_IMAGE_TO_VIDEO = 'happy_horse_image_to_video'
+
+    # Happy Horse 参考生视频
+    HAPPY_HORSE_REFERENCE_TO_VIDEO = 'happy_horse_reference_to_video'
+
+    # Happy Horse 文生视频
+    HAPPY_HORSE_TEXT_TO_VIDEO = 'happy_horse_text_to_video'
+
 
 # ============ 任务类型 ID 常量 ============
 class TaskTypeId:
@@ -1009,6 +1039,9 @@ class TaskTypeId:
     SEEDANCE_2_0_FAST_IMAGE_TO_VIDEO = 22 # Seedance 2.0 Fast 图生视频
     SEEDANCE_2_0_IMAGE_TO_VIDEO = 23      # Seedance 2.0 图生视频
     GROK_IMAGE_TO_VIDEO = 27             # Grok 图生视频
+    HAPPY_HORSE_IMAGE_TO_VIDEO = 28      # Happy Horse 图生视频
+    HAPPY_HORSE_REFERENCE_TO_VIDEO = 29  # Happy Horse 参考生视频
+    HAPPY_HORSE_TEXT_TO_VIDEO = 30       # Happy Horse 文生视频
 
     # 图片/视频 增强
     IMAGE_ENHANCE = 4                   # 图片高清放大
@@ -1200,6 +1233,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         default_ratio='9:16',
         default_duration=10,
         sort_order=200,
+        hidden=True,  # 该功能已下线，隐藏但保留配置常量
     ),
 
     # ==================== 图生视频 ====================
@@ -1263,7 +1297,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         provider=TaskProvider.RUNNINGHUB,
         driver_name=DriverKey.LTX2_3_IMAGE_TO_VIDEO,
         implementation=DriverImplementation.LTX2_3_RUNNINGHUB_V1,
-        computing_power=6,
+        computing_power=0,
         supported_ratios=['9:16', '16:9'],
         supported_durations=[5, 8, 10],
         default_ratio='9:16',
@@ -1345,6 +1379,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         key='veo3_image_to_video',
         name='图片生成视频 (VEO3.1-fast)',
         category=TaskCategory.IMAGE_TO_VIDEO,
+        categories=[TaskCategory.TEXT_TO_VIDEO],  # 支持文生视频
         provider=TaskProvider.DUOMI,
         driver_name=DriverKey.VEO3_IMAGE_TO_VIDEO,
         implementation=DriverImplementation.VEO3_DUOMI_V1,
@@ -1371,6 +1406,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         key='grok_image_to_video',
         name='图片生成视频 (Grok)',
         category=TaskCategory.IMAGE_TO_VIDEO,
+        categories=[TaskCategory.TEXT_TO_VIDEO],  # 支持文生视频
         provider=TaskProvider.DUOMI,
         driver_name=DriverKey.GROK_IMAGE_TO_VIDEO,
         implementation=DriverImplementation.GROK_DUOMI_V1,
@@ -1397,6 +1433,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         key='seedance_1_5_pro_image_to_video',
         name='图片生成视频 (Seedance 1.5 Pro)',
         category=TaskCategory.IMAGE_TO_VIDEO,
+        categories=[TaskCategory.TEXT_TO_VIDEO],  # 支持文生视频
         provider=TaskProvider.VOLCENGINE,
         driver_name=DriverKey.SEEDANCE_1_5_PRO_IMAGE_TO_VIDEO,
         implementation=DriverImplementation.SEEDANCE_1_5_PRO_VOLCENGINE_V1,
@@ -1407,12 +1444,14 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         sort_order=37,
         supported_image_modes=[ImageMode.FIRST_LAST_FRAME],  # 1.5 Pro 不支持多参考图
         supports_last_frame=True,  # 支持首尾帧
+        supports_ref_audio_video=False,  # 1.5 Pro 不支持参考音频和视频
     ),
     UnifiedTaskConfig(
         id=TaskTypeId.SEEDANCE_2_0_FAST_IMAGE_TO_VIDEO,
         key='seedance_2_0_fast_image_to_video',
         name='图片生成视频 (Seedance 2.0 Fast)',
         category=TaskCategory.IMAGE_TO_VIDEO,
+        categories=[TaskCategory.TEXT_TO_VIDEO],  # 支持文生视频
         provider=TaskProvider.VOLCENGINE,
         driver_name=DriverKey.SEEDANCE_2_0_FAST_IMAGE_TO_VIDEO,
         implementation=DriverImplementation.SEEDANCE_2_0_FAST_VOLCENGINE_V1,
@@ -1423,12 +1462,15 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         sort_order=38,
         supported_image_modes=[ImageMode.FIRST_LAST_FRAME, ImageMode.MULTI_REFERENCE],
         supports_last_frame=True,  # 支持首尾帧
+        supports_ref_audio_video=True,  # 支持参考音频和视频
+        max_multi_ref_images=9,
     ),
     UnifiedTaskConfig(
         id=TaskTypeId.SEEDANCE_2_0_IMAGE_TO_VIDEO,
         key='seedance_2_0_image_to_video',
         name='图片生成视频 (Seedance 2.0)',
         category=TaskCategory.IMAGE_TO_VIDEO,
+        categories=[TaskCategory.TEXT_TO_VIDEO],  # 支持文生视频
         provider=TaskProvider.VOLCENGINE,
         driver_name=DriverKey.SEEDANCE_2_0_IMAGE_TO_VIDEO,
         implementation=DriverImplementation.SEEDANCE_2_0_VOLCENGINE_V1,
@@ -1439,6 +1481,57 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         sort_order=39,
         supported_image_modes=[ImageMode.FIRST_LAST_FRAME, ImageMode.MULTI_REFERENCE],
         supports_last_frame=True,  # 支持首尾帧
+        supports_ref_audio_video=True,  # 支持参考音频和视频
+        max_multi_ref_images=9,
+    ),
+    UnifiedTaskConfig(
+        id=TaskTypeId.HAPPY_HORSE_IMAGE_TO_VIDEO,
+        key='happy_horse_image_to_video',
+        name='图片生成视频 (Happy Horse)',
+        category=TaskCategory.IMAGE_TO_VIDEO,
+        provider=TaskProvider.DUOMI,
+        driver_name=DriverKey.HAPPY_HORSE_IMAGE_TO_VIDEO,
+        implementation=DriverImplementation.HAPPY_HORSE_DASHSCOPE_V1,
+        supported_ratios=['9:16', '16:9', '1:1', '2:3', '3:2'],
+        supported_durations=[3, 5, 8, 10, 15],
+        default_ratio='9:16',
+        default_duration=5,
+        sort_order=41,
+        supported_image_modes=[ImageMode.FIRST_LAST_FRAME],  # 仅支持首帧（API限制有且仅有1张）
+        supports_last_frame=False,  # 不支持尾帧
+        supports_ref_audio_video=False,  # 支持参考音频和视频
+    ),
+    UnifiedTaskConfig(
+        id=TaskTypeId.HAPPY_HORSE_REFERENCE_TO_VIDEO,
+        key='happy_horse_reference_to_video',
+        name='参考生视频 (Happy Horse)',
+        category=TaskCategory.IMAGE_TO_VIDEO,
+        provider=TaskProvider.DUOMI,
+        driver_name=DriverKey.HAPPY_HORSE_REFERENCE_TO_VIDEO,
+        implementation=DriverImplementation.HAPPY_HORSE_DASHSCOPE_R2V_V1,
+        supported_ratios=['16:9', '9:16', '3:4', '4:3', '1:1'],
+        supported_durations=[3, 5, 8, 10, 15],
+        default_ratio='16:9',
+        default_duration=5,
+        sort_order=42,
+        supported_image_modes=[ImageMode.MULTI_REFERENCE],  # 多参考图模式
+        supports_last_frame=False,  # 不支持尾帧
+        supports_ref_audio_video=False,  # 不支持参考音频和视频
+        max_multi_ref_images=9,
+    ),
+    UnifiedTaskConfig(
+        id=TaskTypeId.HAPPY_HORSE_TEXT_TO_VIDEO,
+        key='happy_horse_text_to_video',
+        name='文生视频 (Happy Horse)',
+        category=TaskCategory.TEXT_TO_VIDEO,
+        provider=TaskProvider.DUOMI,
+        driver_name=DriverKey.HAPPY_HORSE_TEXT_TO_VIDEO,
+        implementation=DriverImplementation.HAPPY_HORSE_DASHSCOPE_T2V_V1,
+        supported_ratios=['16:9', '9:16', '1:1', '4:3', '3:4'],
+        supported_durations=[3, 5, 8, 10, 15],
+        default_ratio='16:9',
+        default_duration=5,
+        sort_order=43,
     ),
 
     # ==================== 数字人 ====================
@@ -1915,6 +2008,16 @@ ALL_IMPLEMENTATIONS: List[ImplementationConfig] = [
         required_config_keys=['runninghub.api_key']
     ),
     ImplementationConfig(
+        name='ltx2.3_runninghub_v1',
+        display_name='RunningHub',
+        driver_class='Ltx2Dot3RunninghubV1Driver',
+        default_computing_power=6,
+        enabled=True,
+        description='RunningHub LTX2.3 接口',
+        sort_order=5100.0,
+        required_config_keys=['runninghub.api_key']
+    ),
+    ImplementationConfig(
         name='wan22_runninghub_v1',
         display_name='RunningHub',
         driver_class='Wan22RunninghubV1Driver',
@@ -2008,6 +2111,36 @@ ALL_IMPLEMENTATIONS: List[ImplementationConfig] = [
         description='火山引擎 Seedance 2.0 图生视频接口',
         sort_order=10700.0,
         required_config_keys=['volcengine.api_key']
+    ),
+    ImplementationConfig(
+        name='happy_horse_dashscope_v1',
+        display_name='阿里云百炼',
+        driver_class='HappyHorseDashscopeV1Driver',
+        default_computing_power={3: 69, 5: 115, 8: 184, 10: 230, 15: 345},
+        enabled=True,
+        description='阿里云百炼 Happy Horse 图生视频接口',
+        sort_order=10800.0,
+        required_config_keys=['llm.qwen.api_key']
+    ),
+    ImplementationConfig(
+        name='happy_horse_dashscope_r2v_v1',
+        display_name='阿里云百炼',
+        driver_class='HappyHorseDashscopeR2VV1Driver',
+        default_computing_power={3: 69, 5: 115, 8: 184, 10: 230, 15: 345},
+        enabled=True,
+        description='阿里云百炼 Happy Horse 参考生视频接口',
+        sort_order=10810.0,
+        required_config_keys=['llm.qwen.api_key']
+    ),
+    ImplementationConfig(
+        name='happy_horse_dashscope_t2v_v1',
+        display_name='阿里云百炼',
+        driver_class='HappyHorseDashscopeT2VV1Driver',
+        default_computing_power={3: 69, 5: 115, 8: 184, 10: 230, 15: 345},
+        enabled=True,
+        description='阿里云百炼 Happy Horse 文生视频接口',
+        sort_order=10820.0,
+        required_config_keys=['llm.qwen.api_key']
     ),
 
     # ==================== 本地处理 ====================

@@ -9,11 +9,15 @@ Seedance 火山引擎供应商 v1 版本驱动实现
 from typing import Dict, Any, Optional
 import traceback
 import json
-from .base_video_driver import BaseVideoDriver
+import uuid
+from .base_video_driver import BaseVideoDriver, ImageMode
 from config.config_util import get_config, get_dynamic_config_value
+from config.unified_config import DriverImplementation
 from utils.sentry_util import SentryUtil, AlertLevel
-from utils.image_upload_utils import compress_and_upload_image_sync
+from utils.image_upload_utils import compress_and_upload_image_sync, upload_media_to_cdn_sync
 
+
+# 接口文档 https://www.volcengine.com/docs/82379/1520757?lang=zh
 
 class SeedanceVolcengineV1Driver(BaseVideoDriver):
     """
@@ -25,15 +29,16 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
     注意：不应直接实例化基类，应使用具体的子类。
     """
 
-    def __init__(self, driver_type: int, model_name: str):
+    def __init__(self, driver_type: int, model_name: str, impl_name: str = DriverImplementation.SEEDANCE_2_0_VOLCENGINE_V1):
         """
         初始化驱动
 
         Args:
             driver_type: 驱动类型（对应 TaskTypeId）
             model_name: 模型名称（如 doubao-seedance-1-5-pro-251215）
+            impl_name: 实现方名称，需与 IMPLEMENTATION_TO_ID 映射一致
         """
-        super().__init__(driver_name="seedance_volcengine_v1", driver_type=driver_type)
+        super().__init__(driver_name=impl_name, driver_type=driver_type)
 
         # 加载配置
         self._api_key = get_dynamic_config_value("volcengine", "api_key", default="")
@@ -46,6 +51,10 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
         # 是否为本地环境
         self._is_local = get_dynamic_config_value("server", "is_local", default=False)
         self._config = get_config()
+
+        # 测试模式配置
+        self._test_mode_enabled = get_dynamic_config_value("test_mode", "enabled", default=False)
+        self._mock_video_url = get_dynamic_config_value("test_mode", "mock_videos", default={}).get("image_to_video")
 
         self._validate_required({
             "Volcengine API Key": self._api_key,
@@ -99,7 +108,7 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
         期望格式:
         {
             "id": "cgt-xxx",
-            "status": "processing"|"succeeded"|"failed",
+            "status": "queued"|"running"|"succeeded"|"failed",
             "content": { "video_url": "https://..." },  # succeeded 时
             ...
         }
@@ -114,7 +123,7 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
             return False, f"响应缺少 'status' 字段，实际字段: {list(result.keys())}"
 
         status = result.get("status")
-        if status not in ("running", "succeeded", "failed"):
+        if status not in ("queued", "running", "succeeded", "failed"):
             return False, f"'status' 值无效: {status}"
 
         if status == "succeeded":
@@ -130,37 +139,40 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
         """
         构建 Seedance 图生视频创建任务请求
 
-        content 数组格式:
-        [
-            { "type": "text", "text": "prompt" },
-            { "type": "image_url", "image_url": { "url": "首帧图" } },
-            { "type": "image_url", "image_url": { "url": "参考图1" }, "role": "reference_image" },
-            { "type": "image_url", "image_url": { "url": "参考图2" }, "role": "reference_image" },
-            { "type": "video_url", "video_url": { "url": "参考视频" }, "role": "reference_video" },
-            { "type": "audio_url", "audio_url": { "url": "参考音频" }, "role": "reference_audio" }
-        ]
+        三种互斥模式（不可混用）：
+        - first_last_frame: 首帧/首尾帧模式，content 中放 first_frame/last_frame
+        - multi_reference: 多模态参考模式，content 中放 reference_image + reference_video + reference_audio
+        - first_last_with_ref: 首尾帧+参考图模式（暂不支持，降级为首尾帧）
         """
-        # 1. 解析 extra_config
+        # 1. 解析 extra_config 和图片模式
         extra_config = self._parse_extra_config(ai_tool)
-
-        # 2. 获取图片信息（首帧 + 尾帧 + 参考图）
         all_images_info = self.get_all_images_by_mode(ai_tool)
+        img_mode = all_images_info['mode']
         first_frame = all_images_info.get('first_frame')
         last_frame = all_images_info.get('last_frame')
         reference_images = all_images_info.get('reference_images', [])
 
-        # 3. 处理首帧图片（multi_reference 模式下可选）
-        processed_first_frame = None
-        if first_frame:
+        prompt = ai_tool.prompt or ""
+        content = []
+
+        # 2. 根据 image_mode 分支构建 content（三种模式互斥）
+        if img_mode == ImageMode.FIRST_LAST_FRAME or img_mode == ImageMode.FIRST_LAST_WITH_REF:
+            # ---- 首帧/首尾帧模式 ----
+            self.logger.info(f"首尾帧模式: first_frame={first_frame}, last_frame={last_frame}")
+
+            if not first_frame:
+                return {
+                    "success": False,
+                    "error": "首尾帧模式需要至少1张首帧图片",
+                    "error_type": "USER",
+                    "retry": False
+                }
+
+            # 处理首帧图片
             success, processed_url, error = compress_and_upload_image_sync(
-                first_frame,
-                self._config,
-                max_size_mb=10.0,
-                is_local=True
+                first_frame, self._config, max_size_mb=10.0, is_local=True
             )
-            if success:
-                processed_first_frame = processed_url
-            else:
+            if not success:
                 self.logger.error(f"处理首帧图片失败: {error}")
                 return {
                     "success": False,
@@ -169,105 +181,142 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
                     "retry": False
                 }
 
-        # 4. 处理尾帧图片（可选）
-        processed_last_frame = None
-        if last_frame:
+            # 处理尾帧图片（可选）
+            processed_last_frame = None
+            if last_frame:
+                success_lf, url_lf, error_lf = compress_and_upload_image_sync(
+                    last_frame, self._config, max_size_mb=10.0, is_local=True
+                )
+                if success_lf:
+                    processed_last_frame = url_lf
+                else:
+                    self.logger.warning(f"处理尾帧图片失败，跳过: {error_lf}")
+
+            # 文本
+            if prompt:
+                content.append({"type": "text", "text": prompt})
+
+            # 有尾帧时：首帧带 role: "first_frame"，尾帧带 role: "last_frame"
+            # 无尾帧时：首帧不带 role 字段（API 文档规范）
+            if processed_last_frame:
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": processed_url},
+                    "role": "first_frame"
+                })
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": processed_last_frame},
+                    "role": "last_frame"
+                })
+            else:
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": processed_url}
+                })
+
+        elif img_mode == ImageMode.MULTI_REFERENCE:
+            # ---- 多模态参考模式 ----
+            self.logger.info(f"多参考图模式: reference_images={len(reference_images)}张")
+
+            if not reference_images:
+                return {
+                    "success": False,
+                    "error": "多参考图模式需要至少1张参考图",
+                    "error_type": "USER",
+                    "retry": False
+                }
+
+            # 处理参考图列表
+            processed_reference_images = []
+            for ref_img in reference_images:
+                success, new_url, error = compress_and_upload_image_sync(
+                    ref_img, self._config, max_size_mb=10.0, is_local=True
+                )
+                if success:
+                    processed_reference_images.append(new_url)
+                else:
+                    self.logger.warning(f"处理参考图失败，跳过: {error}")
+
+            if not processed_reference_images:
+                return {
+                    "success": False,
+                    "error": "所有参考图处理失败",
+                    "error_type": "USER",
+                    "retry": False
+                }
+
+            # 文本
+            if prompt:
+                content.append({"type": "text", "text": prompt})
+
+            # 参考图
+            for ref_img_url in processed_reference_images:
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": ref_img_url},
+                    "role": "reference_image"
+                })
+
+            # 参考视频（仅多参考图模式下添加，需上传到 CDN）
+            reference_video = self.get_video_path(ai_tool) or extra_config.get('reference_video')
+            if reference_video:
+                success, cdn_url, error = upload_media_to_cdn_sync(reference_video, self._config)
+                if success and cdn_url:
+                    content.append({
+                        "type": "video_url",
+                        "video_url": {"url": cdn_url},
+                        "role": "reference_video"
+                    })
+                else:
+                    self.logger.warning(f"参考视频上传 CDN 失败，跳过: {error}")
+
+            # 参考音频（仅多参考图模式下添加，需上传到 CDN）
+            reference_audio = self.get_audio_path(ai_tool) or extra_config.get('reference_audio')
+            if reference_audio:
+                success, cdn_url, error = upload_media_to_cdn_sync(reference_audio, self._config)
+                if success and cdn_url:
+                    content.append({
+                        "type": "audio_url",
+                        "audio_url": {"url": cdn_url},
+                        "role": "reference_audio"
+                    })
+                else:
+                    self.logger.warning(f"参考音频上传 CDN 失败，跳过: {error}")
+
+        else:
+            # ---- 未知模式，降级为首尾帧 ----
+            self.logger.warning(f"未知的 image_mode: {img_mode}，降级为首尾帧模式")
+            if not first_frame:
+                return {
+                    "success": False,
+                    "error": "未找到可用的图片",
+                    "error_type": "USER",
+                    "retry": False
+                }
             success, processed_url, error = compress_and_upload_image_sync(
-                last_frame,
-                self._config,
-                max_size_mb=10.0,
-                is_local=True
+                first_frame, self._config, max_size_mb=10.0, is_local=True
             )
-            if success:
-                processed_last_frame = processed_url
-            else:
-                self.logger.warning(f"处理尾帧图片失败，跳过: {error}")
-
-        # 5. 处理参考图列表
-        processed_reference_images = []
-        for ref_img in reference_images:
-            success, new_url, error = compress_and_upload_image_sync(
-                ref_img,
-                self._config,
-                max_size_mb=10.0,
-                is_local=True
-            )
-            if success:
-                processed_reference_images.append(new_url)
-            else:
-                self.logger.warning(f"处理参考图失败，跳过: {error}")
-                # 参考图失败不阻断流程，继续处理
-
-        # 6. 构建 content 数组
-        content = []
-
-        # 文本部分（放在最前面）
-        prompt = ai_tool.prompt or ""
-        if prompt:
-            content.append({
-                "type": "text",
-                "text": prompt
-            })
-
-        # 首帧图（role: "first_frame"，可选）
-        if processed_first_frame:
+            if not success:
+                return {
+                    "success": False,
+                    "error": f"处理图片失败: {error}",
+                    "error_type": "USER",
+                    "retry": False
+                }
+            if prompt:
+                content.append({"type": "text", "text": prompt})
             content.append({
                 "type": "image_url",
-                "image_url": {
-                    "url": processed_first_frame
-                },
-                "role": "first_frame"
+                "image_url": {"url": processed_url}
             })
 
-        # 尾帧图（role: "last_frame"，可选）
-        if processed_last_frame:
-            content.append({
-                "type": "image_url",
-                "image_url": {
-                    "url": processed_last_frame
-                },
-                "role": "last_frame"
-            })
-
-        # 参考图列表（role: "reference_image"）
-        for ref_img_url in processed_reference_images:
-            content.append({
-                "type": "image_url",
-                "image_url": {
-                    "url": ref_img_url
-                },
-                "role": "reference_image"
-            })
-
-        # 参考视频（role: "reference_video"）
-        reference_video = extra_config.get('reference_video')
-        if reference_video:
-            content.append({
-                "type": "video_url",
-                "video_url": {
-                    "url": reference_video
-                },
-                "role": "reference_video"
-            })
-
-        # 参考音频（role: "reference_audio"）
-        reference_audio = extra_config.get('reference_audio')
-        if reference_audio:
-            content.append({
-                "type": "audio_url",
-                "audio_url": {
-                    "url": reference_audio
-                },
-                "role": "reference_audio"
-            })
-
-        # 6. 构建 payload
+        # 3. 构建 payload（所有模式通用）
         payload = {
             "model": self._model,
             "content": content
         }
 
-        # 添加可选参数
         if extra_config.get('generate_audio') is not None:
             payload["generate_audio"] = extra_config['generate_audio']
 
@@ -280,7 +329,7 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
         if ai_tool.duration:
             payload["duration"] = ai_tool.duration
 
-        self.logger.info(f"使用模型: {self._model}, driver_type: {self.driver_type}, content 元素数: {len(content)}")
+        self.logger.info(f"使用模型: {self._model}, driver_type: {self.driver_type}, 模式: {img_mode}, content 元素数: {len(content)}")
 
         headers = {
             "Content-Type": "application/json",
@@ -323,6 +372,15 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
             # build_create_request 可能返回错误（如图片处理失败）
             if "success" in request_params and not request_params["success"]:
                 return request_params
+
+            # 测试模式：返回mock数据，避免实际API调用和费用
+            if self._test_mode_enabled:
+                mock_project_id = f"test-{uuid.uuid4().hex[:8]}"
+                self.logger.info(f"[TEST MODE] 返回模拟task_id: {mock_project_id}")
+                return {
+                    "success": True,
+                    "project_id": mock_project_id
+                }
 
             # 2. 发送请求
             try:
@@ -416,6 +474,14 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
         try:
             self.logger.info(f"Checking Seedance task status: project_id={project_id}")
 
+            # 测试模式：返回mock数据，避免实际API调用
+            if self._test_mode_enabled and self._mock_video_url:
+                self.logger.info(f"[TEST MODE] 返回模拟视频结果: {self._mock_video_url}")
+                return {
+                    "status": "SUCCESS",
+                    "result_url": self._mock_video_url
+                }
+
             # 1. 构建请求并发送
             request_params = self.build_check_query(project_id)
 
@@ -495,18 +561,18 @@ class Seedance15ProVolcengineV1Driver(SeedanceVolcengineV1Driver):
     """Seedance 1.5 Pro 图生视频驱动"""
 
     def __init__(self):
-        super().__init__(driver_type=21, model_name="doubao-seedance-1-5-pro-251215")
+        super().__init__(driver_type=21, model_name="doubao-seedance-1-5-pro-251215", impl_name=DriverImplementation.SEEDANCE_1_5_PRO_VOLCENGINE_V1)
 
 
 class Seedance20FastVolcengineV1Driver(SeedanceVolcengineV1Driver):
     """Seedance 2.0 Fast 图生视频驱动"""
 
     def __init__(self):
-        super().__init__(driver_type=22, model_name="doubao-seedance-2-0-fast-260128")
+        super().__init__(driver_type=22, model_name="doubao-seedance-2-0-fast-260128", impl_name=DriverImplementation.SEEDANCE_2_0_FAST_VOLCENGINE_V1)
 
 
 class Seedance20VolcengineV1Driver(SeedanceVolcengineV1Driver):
     """Seedance 2.0 图生视频驱动"""
 
     def __init__(self):
-        super().__init__(driver_type=23, model_name="doubao-seedance-2-0-260128")
+        super().__init__(driver_type=23, model_name="doubao-seedance-2-0-260128", impl_name=DriverImplementation.SEEDANCE_2_0_VOLCENGINE_V1)

@@ -42,6 +42,7 @@ EXCLUDE_DIRS = [
     ".pytest_cache",
     ".venv",
     "build",
+    "enterprise",
 ]
 
 # 不需要打包的目录（相对路径，只排除特定子目录）

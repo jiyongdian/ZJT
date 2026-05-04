@@ -493,3 +493,45 @@ def compress_and_upload_image_sync(
     except RuntimeError:
         # 没有事件循环，创建新的
         return asyncio.run(compress_and_upload_image(image_url, config, max_size_mb, is_local, project_root))
+
+
+def upload_media_to_cdn_sync(
+    media_url: str,
+    config: Dict[str, Any],
+    project_root: str = None
+) -> tuple[bool, Optional[str], Optional[str]]:
+    """
+    将媒体文件（音频/视频）上传到 CDN，返回可访问的 CDN URL
+
+    与 compress_and_upload_image_sync 的区别：不进行图片压缩，适用于音频/视频等非图片文件。
+    底层复用 upload_local_images_to_cdn 的通用上传逻辑。
+
+    处理流程：
+    1. 如果是外网 URL，直接返回
+    2. 如果是本地文件或局域网 URL，上传到七牛云 CDN
+    3. 返回带签名的 CDN 下载链接
+
+    Args:
+        media_url: 媒体文件 URL 或本地路径
+        config: 配置字典
+        project_root: 项目根目录
+
+    Returns:
+        (success, cdn_url, error_message)
+    """
+    if not media_url:
+        return False, None, "媒体 URL 为空"
+
+    # 外网 URL 直接返回
+    if not is_local_path(media_url):
+        return True, media_url, None
+
+    try:
+        uploaded_urls = upload_local_images_to_cdn_sync([media_url], config, project_root)
+        if uploaded_urls and uploaded_urls[0]:
+            return True, uploaded_urls[0], None
+        else:
+            return False, None, f"上传媒体到 CDN 失败: {media_url}"
+    except Exception as e:
+        logger.error(f"上传媒体到 CDN 异常: {media_url}, 错误: {str(e)}")
+        return False, None, f"上传媒体到 CDN 异常: {str(e)}"

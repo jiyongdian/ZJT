@@ -52,19 +52,40 @@ create_config() {
 
     if [ ! -f "$config_file" ]; then
         log_info "创建配置文件: $config_file"
-        cp /app/config.example.yml "$config_file"
 
-        # 使用 Python 更新数据库配置
+        # 深度合并：config_{env}.base.yml（如有）作为默认值 + config.example.yml（用户配置，过滤空值）
         python3 -c "
-import yaml
-import os
+import yaml, os
+
+def strip_empty(d):
+    if not isinstance(d, dict): return d
+    return {k: strip_empty(v) for k, v in d.items() if v not in (None, '', {}, [])}
+
+def merge(base, over):
+    r = base.copy()
+    for k, v in over.items():
+        if k in r and isinstance(r[k], dict) and isinstance(v, dict):
+            r[k] = merge(r[k], v)
+        else:
+            r[k] = v
+    return r
 
 config_file = '${config_file}'
-with open(config_file, 'r', encoding='utf-8') as f:
-    config = yaml.safe_load(f)
+env = '${comfyui_env}'
 
-if config is None:
-    config = {}
+base_file = None
+for ext in ('.yml', '.yaml'):
+    candidate = f'/app/config_{env}.base{ext}'
+    if os.path.exists(candidate):
+        base_file = candidate
+        break
+
+if base_file:
+    base = yaml.safe_load(open(base_file, encoding='utf-8')) or {}
+    over = strip_empty(yaml.safe_load(open('/app/config.example.yml', encoding='utf-8')) or {})
+    config = merge(base, over)
+else:
+    config = yaml.safe_load(open('/app/config.example.yml', encoding='utf-8')) or {}
 
 if 'database' not in config:
     config['database'] = {}
@@ -78,7 +99,7 @@ config['database']['database'] = os.environ.get('DB_NAME', 'zjt')
 with open(config_file, 'w', encoding='utf-8') as f:
     yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
 
-print('[INFO] 已更新数据库配置')
+print('[INFO] 配置文件已生成（深度合并）并更新数据库配置')
 " 2>&1 | head -1
     else
         log_info "配置文件已存在: $config_file"

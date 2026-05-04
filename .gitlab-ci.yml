@@ -18,9 +18,8 @@ stages:
 variables:
   # Docker 配置 - DinD
   DOCKER_HOST: tcp://docker:2375
-  DOCKER_OPTS: "--registry-mirror=https://docker.mirrors.ustc.edu.cn"
   DOCKER_TLS_CERTDIR: ""
-  FF_NETWORK_PER_BUILD: "1"
+  DOCKER_DRIVER: overlay2
 
   # 测试数据库配置
   DB_HOST: mysql_test
@@ -47,10 +46,10 @@ unit_tests:
   services:
     - name: m.daocloud.io/docker.io/library/docker:24-dind
       alias: docker
-      command: 
-        - "--registry-mirror=https://docker.1ms.run"
-        - "--registry-mirror=https://m60nr9km.mirror.aliyuncs.com"
-        - "--registry-mirror=https://docker.mirrors.ustc.edu.cn"
+      variables:
+        DOCKER_TLS_CERTDIR: ""
+      command: ["--registry-mirror=https://docker.1ms.run", "--registry-mirror=https://docker.mirrors.ustc.edu.cn"]
+
 
   # 缓存配置（加速后续构建）
   cache:
@@ -63,41 +62,65 @@ unit_tests:
     # 使用国内 Alpine 镜像源加速
     - sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 
-    # 安装必要工具（包括 Docker CLI）
-    - apk add --no-cache python3 py3-pip mysql-client
+    # 安装必要工具
+    - apk add --no-cache python3 py3-pip mysql-client netcat-openbsd bind-tools
 
-    # 等待 Docker daemon 就绪
+    # ===== 深度调试 =====
+    - echo "===== 环境变量 ====="
+    - echo "DOCKER_HOST=$DOCKER_HOST"
+    - echo "DOCKER_TLS_CERTDIR=$DOCKER_TLS_CERTDIR"
+    
+    - echo "===== DNS 解析测试 ====="
+    - cat /etc/hosts | grep -i docker || echo "No docker in /etc/hosts"
+    - getent hosts docker || echo "Cannot resolve 'docker' via getent"
+    - nslookup docker 2>/dev/null || echo "Cannot resolve 'docker' via nslookup"
+    
+    - echo "===== 网络连通性测试 ====="
+    - nc -zv docker 2375 2>&1 || echo "Port 2375 NOT reachable on 'docker'"
+    - nc -zv docker 2376 2>&1 || echo "Port 2376 NOT reachable on 'docker'"
+    - nc -zv localhost 2375 2>&1 || echo "Port 2375 NOT reachable on localhost"
+    
+    - echo "===== 尝试多种 DOCKER_HOST ====="
+    # ===== 深度调试结束 =====
+
+    # 等待 Docker daemon 就绪（尝试多种连接方式）
     - |
       echo "Waiting for Docker daemon..."
-      max_attempts=60
+      max_attempts=30
       for i in $(seq 1 $max_attempts); do
+        # 尝试默认 DOCKER_HOST
         if docker info > /dev/null 2>&1; then
-          echo "Docker daemon is ready!"
+          echo "Docker daemon is ready via $DOCKER_HOST!"
+          break
+        fi
+        # 尝试 localhost
+        if DOCKER_HOST=tcp://localhost:2375 docker info > /dev/null 2>&1; then
+          echo "Docker daemon is ready via localhost:2375!"
+          export DOCKER_HOST=tcp://localhost:2375
+          break
+        fi
+        # 尝试 127.0.0.1
+        if DOCKER_HOST=tcp://127.0.0.1:2375 docker info > /dev/null 2>&1; then
+          echo "Docker daemon is ready via 127.0.0.1:2375!"
+          export DOCKER_HOST=tcp://127.0.0.1:2375
           break
         fi
         if [ $i -eq $max_attempts ]; then
           echo "ERROR: Docker daemon failed to start after $max_attempts attempts"
-          echo "Checking dind service status..."
-          cat /var/log/docker.log 2>/dev/null || true
+          echo "===== 最终诊断 ====="
+          echo "检查所有容器进程:"
+          ps aux
+          echo "检查网络接口:"
+          ip addr 2>/dev/null || ifconfig 2>/dev/null || echo "No network tools"
           exit 1
         fi
         echo "Attempt $i/$max_attempts - waiting..."
-        sleep 2
+        sleep 3
       done
-
-    # 调试：检查 DinD 服务
-    - echo "DOCKER_HOST=$DOCKER_HOST"
-    - cat /etc/docker/daemon.json 2>/dev/null || echo "No daemon.json"
-    - ps aux | grep dockerd || echo "dockerd not running"
-    - cat /etc/resolv.conf | grep docker || echo "No docker in resolv.conf"
-    - nslookup docker 2>/dev/null || echo "Cannot resolve docker"
 
     # 验证 Docker 是否可用
     - docker --version
     - docker-compose --version
-
-    # 复制测试配置
-    - cp config.example.yml config_unit.yml || true
 
   script:
     # 进入 docker 目录

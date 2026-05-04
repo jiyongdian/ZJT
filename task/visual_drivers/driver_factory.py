@@ -724,4 +724,31 @@ def register_all_drivers():
         else:
             logger.info(f"Grok通用聚合 {site_id} 配置不存在或不完整，跳过驱动注册")
 
+    try:
+        from .happy_horse_dashscope_v1_driver import HappyHorseDashscopeV1Driver
+        VideoDriverFactory.register_driver(
+            DriverImplementation.HAPPY_HORSE_DASHSCOPE_V1,
+            HappyHorseDashscopeV1Driver
+        )
+    except ImportError as e:
+        logger.warning(f"Failed to import HappyHorseDashscopeV1Driver: {e}")
+
+    try:
+        from .happy_horse_dashscope_v1_driver import HappyHorseDashscopeR2VV1Driver
+        VideoDriverFactory.register_driver(
+            DriverImplementation.HAPPY_HORSE_DASHSCOPE_R2V_V1,
+            HappyHorseDashscopeR2VV1Driver
+        )
+    except ImportError as e:
+        logger.warning(f"Failed to import HappyHorseDashscopeR2VV1Driver: {e}")
+
+    try:
+        from .happy_horse_dashscope_v1_driver import HappyHorseDashscopeT2VV1Driver
+        VideoDriverFactory.register_driver(
+            DriverImplementation.HAPPY_HORSE_DASHSCOPE_T2V_V1,
+            HappyHorseDashscopeT2VV1Driver
+        )
+    except ImportError as e:
+        logger.warning(f"Failed to import HappyHorseDashscopeT2VV1Driver: {e}")
+
     logger.info(f"Registered {len(VideoDriverFactory.get_supported_drivers())} video drivers")

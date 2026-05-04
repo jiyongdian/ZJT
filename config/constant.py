@@ -225,6 +225,11 @@ DRIVER_IMPLEMENTATION_MAPPING = {
         DriverImplementation.GROK_COMMON_SITE5_V1,  # 通用聚合站点 5
     ],
 
+    # Happy Horse 相关驱动
+    DriverKey.HAPPY_HORSE_IMAGE_TO_VIDEO: DriverImplementation.HAPPY_HORSE_DASHSCOPE_V1,
+    DriverKey.HAPPY_HORSE_REFERENCE_TO_VIDEO: DriverImplementation.HAPPY_HORSE_DASHSCOPE_R2V_V1,
+    DriverKey.HAPPY_HORSE_TEXT_TO_VIDEO: DriverImplementation.HAPPY_HORSE_DASHSCOPE_T2V_V1,
+
 }
 
 # 视频模型时长选项配置
@@ -410,6 +415,23 @@ class FilePathConstants:
         os.makedirs(path, exist_ok=True)
         return path
 
+
+class UploadPathConstants:
+    """上传路径相关常量"""
+
+    # 上传根目录名
+    UPLOAD_ROOT = "upload"
+
+    # 子目录名
+    TEMP_DIR = "temp"           # 临时目录（每天定时清理，由 media_cache.cleanup_temp_dir 执行）
+    DRAFT_DIR = "draft"         # 草稿目录
+
+    # 文件名前缀
+    MEDIA_PREFIX = "media"      # 媒体文件前缀（图生视频上传）
+    UPLOAD_PREFIX = "upload"    # 通用上传文件前缀
+    CONCAT_PREFIX = "concat"    # 拼接图片文件前缀
+
+
 RECHARGE_PACKAGES = [
     {
         "package_id": 1,
@@ -477,6 +499,7 @@ class LLMVendor:
     VOLCENGINE = 'volcengine'  # 火山引擎供应商（Doubao 模型）
     CLAUDE = 'claude'      # Claude 供应商（Anthropic 模型）
     ZJT_API = 'zjt_api'    # ZJT API 供应商（Qwen3.5/3.6 模型）
+    DEEPSEEK = 'deepseek'  # DeepSeek 供应商（DeepSeek-V4 模型）
 
 
 class LLMModel:
@@ -500,6 +523,20 @@ class LLMModel:
     # Claude 模型
     CLAUDE_HAIKU_4_5 = 'claude-haiku-4-5'
 
+    # DeepSeek 模型
+    DEEPSEEK_V4_FLASH = 'deepseek-v4-flash'
+    DEEPSEEK_V4_PRO = 'deepseek-v4-pro'
+
+
+# 供应商图标映射（前端显示用）
+VENDOR_ICONS = {
+    'jiekou': '☁️',
+    'aliyun': '🌐',
+    'ollama': '🖥️',
+    'volcengine': '🌋',
+    'zjt_api': '🚀',
+    'deepseek': '🔍',
+}
 
 # 模型前缀 -> 供应商映射（用于 LLMClientFactory 路由）
 MODEL_PREFIX_VENDOR_MAP = {
@@ -511,4 +548,5 @@ MODEL_PREFIX_VENDOR_MAP = {
     'doubao': LLMVendor.VOLCENGINE,
     'qwen3.5': LLMVendor.ZJT_API,  # ZJT API 的 Qwen 3.5 Plus 模型
     'qwen3.6': LLMVendor.ZJT_API,  # ZJT API 的 Qwen 3.6 Plus 模型
+    'deepseek': LLMVendor.DEEPSEEK,  # DeepSeek 的 DeepSeek-V4 模型
 }

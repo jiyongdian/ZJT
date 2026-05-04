@@ -318,10 +318,23 @@
       background: #fff;
       border-radius: 12px;
       width: 90%;
-      max-width: 480px;
+      max-width: 720px;
       padding: 24px;
       transform: scale(0.9);
       transition: transform 0.2s;
+    }
+    .modal-two-column{
+      display: grid;
+      grid-template-columns: 1fr 200px;
+      gap: 24px;
+    }
+    .modal-left-column{
+      display: flex;
+      flex-direction: column;
+    }
+    .modal-right-column{
+      display: flex;
+      flex-direction: column;
     }
     .modal-overlay.active .modal{
       transform: scale(1);
@@ -356,6 +369,74 @@
     .form-textarea{
       min-height: 100px;
       resize: vertical;
+    }
+    /* 比例选择器样式 */
+    .ratio-option {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 16px 12px;
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      transition: all 0.3s ease;
+      background: #fff;
+      min-height: 120px;
+      cursor: pointer;
+      gap: 8px;
+    }
+    .ratio-option input[type="radio"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      margin: 0;
+      flex-shrink: 0;
+    }
+    .ratio-option input[type="radio"]:checked {
+      accent-color: #3b82f6;
+    }
+    .ratio-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
+      border: 2px solid #a5b4fc;
+      border-radius: 4px;
+    }
+    .ratio-icon-landscape {
+      width: 64px;
+      height: 36px;
+    }
+    .ratio-icon-portrait {
+      width: 36px;
+      height: 64px;
+    }
+    .ratio-text {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .ratio-value {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .ratio-label {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    /* 支持 :has() 选择器的浏览器显示选中状态 */
+    .ratio-option:has(input[type="radio"]:checked) {
+      border-color: #3b82f6;
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.08));
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+    /* 针对不支持 :has() 的浏览器，使用 JavaScript 处理选中状态 */
+    .ratio-option.checked {
+      border-color: #3b82f6;
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.08));
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
     }
     .modal-actions{
       display: flex;
@@ -559,56 +640,86 @@
       <h2 class="modal-title" id="modalTitle">新建工作流</h2>
       <form id="workflowForm" onsubmit="handleSubmit(event)">
         <input type="hidden" id="workflowId">
-        <div class="form-group">
-          <label class="form-label">工作流名称 *</label>
-          <input type="text" class="form-input" id="workflowName" required>
-        </div>
-        <div class="form-group">
-          <button type="button" class="btn btn-secondary btn-sm" id="toggleDescBtn" onclick="toggleDescSection()" style="width: 100%; justify-content: center;">展开填写描述</button>
-          <div id="descSection" style="display: none; margin-top: 12px;">
-            <label class="form-label">描述</label>
-            <textarea class="form-input form-textarea" id="workflowDesc"></textarea>
+        <div class="modal-two-column">
+          <div class="modal-left-column">
+            <div class="form-group">
+              <label class="form-label">工作流名称 *</label>
+              <input type="text" class="form-input" id="workflowName" required>
+            </div>
+            <div class="form-group">
+              <button type="button" class="btn btn-secondary btn-sm" id="toggleDescBtn" onclick="toggleDescSection()" style="width: 100%; justify-content: center;">展开填写描述</button>
+              <div id="descSection" style="display: none; margin-top: 12px;">
+                <label class="form-label">描述</label>
+                <textarea class="form-input form-textarea" id="workflowDesc"></textarea>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">世界</label>
+              <div style="font-size: 12px; color: var(--muted); margin-bottom: 6px;">世界是一个包裹角色、场景、道具还有剧本的盒子</div>
+              <div style="display: flex; gap: 8px;">
+                <select class="form-input" id="workflowWorld" style="flex: 1;">
+                  <option value="">选择世界（可选）</option>
+                </select>
+                <button type="button" class="btn btn-secondary" onclick="openWorldModal()" style="white-space: nowrap;">新建世界</button>
+              </div>
+            </div>
+            <div class="form-group" id="styleFieldGroup">
+              <label class="form-label">
+                画风
+                <a href="/image-style-guide" target="_blank" style="margin-left: 8px; font-size: 12px; color: #3b82f6; text-decoration: none; font-weight: normal; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'" title="查看画风说明">查看画风说明</a>
+                <span style="margin-left: 8px; font-size: 12px; color: #6b7280; font-weight: normal;">不知道如何描述画风？可以在即梦寻找画风。查看：<a href="https://bq3mlz1jiae.feishu.cn/wiki/LBw5w7zZaiuQhuk4sT7c42zcn0e#share-NKbIdQfDdouM8xx3LxIcZrPHn7c" target="_blank" style="color: #3b82f6; text-decoration: none; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'">文档</a>。</span>
+              </label>
+              <input type="text" class="form-input" id="workflowStyle" list="styleOptions" placeholder="选择或输入画风">
+              <datalist id="styleOptions">
+                <option value="漫画风格">
+                <option value="写实风格">
+                <option value="日漫:新海诚风">
+                <option value="美漫:漫威风">
+                <option value="皮克斯风">
+                <option value="日漫:宫崎骏风">
+                <option value="迪士尼风格">
+                <option value="国漫:3D动画风">
+                <option value="日漫:今敏风">
+                <option value="国漫:2D手绘风">
+                <option value="日漫:细田守风">
+                <option value="赛博朋克风">
+                <option value="美漫:DC风">
+              </datalist>
+            </div>
+            <div class="form-group">
+              <label class="form-label">状态</label>
+              <select class="form-input" id="workflowStatus">
+                <option value="1">启用</option>
+                <option value="2">草稿</option>
+                <option value="0">禁用</option>
+              </select>
+            </div>
           </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">世界</label>
-          <div style="font-size: 12px; color: var(--muted); margin-bottom: 6px;">世界是一个包裹角色、场景、道具还有剧本的盒子</div>
-          <div style="display: flex; gap: 8px;">
-            <select class="form-input" id="workflowWorld" style="flex: 1;">
-              <option value="">选择世界（可选）</option>
-            </select>
-            <button type="button" class="btn btn-secondary" onclick="openWorldModal()" style="white-space: nowrap;">新建世界</button>
+          <div class="modal-right-column">
+            <div class="form-group">
+              <label class="form-label">工作流比例 *</label>
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+                <!-- 16:9 横屏 -->
+                <label class="ratio-option">
+                  <input type="radio" name="workflowRatio" value="16:9">
+                  <div class="ratio-icon ratio-icon-landscape"></div>
+                  <div class="ratio-text">
+                    <span class="ratio-value">16:9</span>
+                    <span class="ratio-label">横屏</span>
+                  </div>
+                </label>
+                <!-- 9:16 竖屏 -->
+                <label class="ratio-option">
+                  <input type="radio" name="workflowRatio" value="9:16">
+                  <div class="ratio-icon ratio-icon-portrait"></div>
+                  <div class="ratio-text">
+                    <span class="ratio-value">9:16</span>
+                    <span class="ratio-label">竖屏</span>
+                  </div>
+                </label>
+              </div>
+            </div>
           </div>
-        </div>
-        <div class="form-group" id="styleFieldGroup">
-          <label class="form-label">
-            画风
-            <a href="/image-style-guide" target="_blank" style="margin-left: 8px; font-size: 12px; color: #3b82f6; text-decoration: none; font-weight: normal; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'" title="查看画风说明">查看画风说明</a>
-          </label>
-          <input type="text" class="form-input" id="workflowStyle" list="styleOptions" placeholder="选择或输入画风">
-          <datalist id="styleOptions">
-            <option value="漫画风格">
-            <option value="写实风格">
-            <option value="日漫:新海诚风">
-            <option value="美漫:漫威风">
-            <option value="皮克斯风">
-            <option value="日漫:宫崎骏风">
-            <option value="迪士尼风格">
-            <option value="国漫:3D动画风">
-            <option value="日漫:今敏风">
-            <option value="国漫:2D手绘风">
-            <option value="日漫:细田守风">
-            <option value="赛博朋克风">
-            <option value="美漫:DC风">
-          </datalist>
-        </div>
-        <div class="form-group">
-          <label class="form-label">状态</label>
-          <select class="form-input" id="workflowStatus">
-            <option value="1">启用</option>
-            <option value="2">草稿</option>
-            <option value="0">禁用</option>
-          </select>
         </div>
         <div class="modal-actions">
           <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
@@ -842,6 +953,13 @@
       document.getElementById('workflowWorld').value = '';
       document.getElementById('workflowStyle').value = '';
       document.getElementById('workflowStatus').value = '1';
+      // 重置比例选择为默认值
+      const defaultRatioInput = document.querySelector('input[name="workflowRatio"][value="16:9"]');
+      if (defaultRatioInput) {
+        defaultRatioInput.checked = true;
+        // 更新checked类（用于不支持:has()的浏览器）
+        updateRatioOptionStyles();
+      }
       document.getElementById('descSection').style.display = 'none';
       document.getElementById('toggleDescBtn').textContent = '展开填写描述';
       document.getElementById('styleFieldGroup').style.display = options.hideStyle ? 'none' : '';
@@ -872,6 +990,21 @@
         if (result.code === 0 && result.data) {
           document.getElementById('workflowWorld').value = result.data.default_world_id || '';
           document.getElementById('workflowStyle').value = result.data.style || '';
+          // Load workflow_ratio if provided
+          if (result.data.workflow_ratio) {
+            const ratioInput = document.querySelector(`input[name="workflowRatio"][value="${result.data.workflow_ratio}"]`);
+            if (ratioInput) {
+              ratioInput.checked = true;
+            }
+          } else {
+            // Default to 16:9 if no workflow_ratio
+            const defaultRatioInput = document.querySelector('input[name="workflowRatio"][value="16:9"]');
+            if (defaultRatioInput) {
+              defaultRatioInput.checked = true;
+            }
+          }
+          // 更新checked类（用于不支持:has()的浏览器）
+          updateRatioOptionStyles();
         }
       } catch (error) {
         console.error('Failed to load workflow details:', error);
@@ -880,8 +1013,27 @@
       document.getElementById('createModal').classList.add('active');
     }
 
+    // 更新比例选项的样式（为不支持:has()的浏览器添加checked类）
+    function updateRatioOptionStyles() {
+      const ratioOptions = document.querySelectorAll('.ratio-option');
+      ratioOptions.forEach(option => {
+        const radio = option.querySelector('input[type="radio"]');
+        if (radio && radio.checked) {
+          option.classList.add('checked');
+        } else {
+          option.classList.remove('checked');
+        }
+      });
+    }
+
     function closeModal() {
       document.getElementById('createModal').classList.remove('active');
+      // 重置比例选择为默认值
+      const defaultRatioInput = document.querySelector('input[name="workflowRatio"][value="16:9"]');
+      if (defaultRatioInput) {
+        defaultRatioInput.checked = true;
+        updateRatioOptionStyles();
+      }
     }
 
     function toggleDescSection() {
@@ -899,16 +1051,23 @@
     // 创建工作流的通用逻辑，返回创建的工作流ID
     async function createWorkflowData() {
       if (!ensureLoggedIn()) return null;
-      
+
       const id = document.getElementById('workflowId').value;
       const name = document.getElementById('workflowName').value.trim();
       const description = document.getElementById('workflowDesc').value.trim();
       const status = parseInt(document.getElementById('workflowStatus').value);
       const worldId = document.getElementById('workflowWorld').value;
       const style = document.getElementById('workflowStyle').value.trim();
+      const workflowRatio = document.querySelector('input[name="workflowRatio"]:checked')?.value || null;
 
       if (!name) {
         showToast('请输入工作流名称', 'error');
+        return null;
+      }
+
+      const isEdit = !!id;
+      if (!isEdit && !workflowRatio) {
+        showToast('请选择工作流比例', 'error');
         return null;
       }
 
@@ -924,7 +1083,10 @@
         data.style = style;
       }
 
-      const isEdit = !!id;
+      // Add workflow_ratio if provided
+      if (workflowRatio) {
+        data.workflow_ratio = workflowRatio;
+      }
       const url = isEdit ? `/api/video-workflow/${id}` : '/api/video-workflow/create';
       const method = isEdit ? 'PUT' : 'POST';
 
@@ -1195,6 +1357,12 @@
     
     // 检测URL参数，如果有action=create则自动打开新建表单
     const urlParams = new URLSearchParams(window.location.search);
+    // 为比例选择器添加事件监听（用于不支持:has()的浏览器）
+    const ratioInputs = document.querySelectorAll('input[name="workflowRatio"]');
+    ratioInputs.forEach(input => {
+      input.addEventListener('change', updateRatioOptionStyles);
+    });
+
     if (urlParams.get('action') === 'create') {
       // 提前隐藏画风字段，防止缓存导致JS未生效时字段仍显示
       const styleFieldGroup = document.getElementById('styleFieldGroup');
