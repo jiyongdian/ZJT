@@ -122,9 +122,6 @@ unit_tests:
     - docker --version
     - docker-compose --version
 
-    # 复制测试配置
-    - cp config.example.yml config_unit.yml || true
-
   script:
     # 进入 docker 目录
     - cd docker

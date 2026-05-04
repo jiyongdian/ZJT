@@ -6039,11 +6039,22 @@
 
         // 如果已经加载过（全局缓存），直接使用
         if(window._scriptSplitModels && window._scriptSplitModels.length > 0) {
-          renderSplitModelOptions(window._scriptSplitModels);
+          renderSplitModelOptions(window._scriptSplitModels, window._vendorIcons);
           return;
         }
 
         try {
+          // 加载供应商列表及图标
+          const vendorResponse = await fetch('/api/vendors');
+          const vendorData = await vendorResponse.json();
+          const vendorIcons = {};
+          if(vendorData.success && vendorData.vendors) {
+            vendorData.vendors.forEach(v => {
+              vendorIcons[v.vendor_name.toLowerCase()] = v.icon || '📦';
+            });
+          }
+          window._vendorIcons = vendorIcons;
+
           const response = await fetch('/api/models', {
             headers: {
               'Authorization': getAuthToken()
@@ -6074,7 +6085,7 @@
 
           // 缓存到全局变量
           window._scriptSplitModels = sortedModels;
-          renderSplitModelOptions(sortedModels);
+          renderSplitModelOptions(sortedModels, vendorIcons);
 
         } catch (error) {
           console.error('加载拆分模型列表失败:', error);
@@ -6084,25 +6095,61 @@
         }
       }
 
-      function renderSplitModelOptions(models) {
+      function renderSplitModelOptions(models, vendorIcons = {}) {
         if(!splitModelSelect) return;
         splitModelSelect.innerHTML = '';
 
-        let firstEnabled = null;
+        // 按供应商分组
+        const vendorGroups = {};
+        const vendorOrder = [];
         models.forEach(model => {
-          const option = document.createElement('option');
-          const modelName = model.model_name || model.name || '';
-          const modelDesc = model.note || model.description || '';
-          option.value = modelName;
-          option.textContent = modelDesc ? `${modelName} - ${modelDesc}` : modelName;
-          const modelId = model.id ?? model.model_id ?? '';
-          if(modelId) {
-            option.dataset.modelId = modelId;
+          const vendorId = model.vendor_id || 1;
+          const vendorName = model.vendor_name || 'unknown';
+          if (!vendorGroups[vendorId]) {
+            vendorGroups[vendorId] = {
+              vendorName: vendorName,
+              models: []
+            };
+            vendorOrder.push(vendorId);
           }
-          if(!option.disabled && !firstEnabled) {
-            firstEnabled = option;
-          }
-          splitModelSelect.appendChild(option);
+          vendorGroups[vendorId].models.push(model);
+        });
+
+        let firstEnabled = null;
+
+        // 按供应商分组添加选项
+        vendorOrder.forEach(vendorId => {
+          const group = vendorGroups[vendorId];
+          const optGroup = document.createElement('optgroup');
+          const icon = vendorIcons[group.vendorName.toLowerCase()] || '📦';
+          optGroup.label = `${icon} ${group.vendorName}`;
+
+          group.models.forEach(model => {
+            const option = document.createElement('option');
+            const modelName = model.model_name || model.name || '';
+            const modelDesc = model.note || model.description || '';
+            option.value = modelName;
+            option.textContent = modelDesc ? `${modelName} - ${modelDesc}` : modelName;
+
+            // 保存模型和供应商信息到 dataset
+            const modelId = model.id ?? model.model_id ?? '';
+            if(modelId) {
+              option.dataset.modelId = modelId;
+            }
+            option.dataset.vendorId = model.vendor_id || 1;
+            option.dataset.vendorName = model.vendor_name || 'unknown';
+            option.dataset.supportsThinking = model.supports_thinking ? 'true' : 'false';
+            if(model.context_window) {
+              option.dataset.contextWindow = model.context_window;
+            }
+
+            if(!option.disabled && !firstEnabled) {
+              firstEnabled = option;
+            }
+            optGroup.appendChild(option);
+          });
+
+          splitModelSelect.appendChild(optGroup);
         });
 
         // 默认选中第一个
@@ -6110,6 +6157,8 @@
           firstEnabled.selected = true;
           node.data.splitModel = firstEnabled.value;
           node.data.splitModelId = firstEnabled.dataset.modelId || '';
+          node.data.splitModelVendorId = firstEnabled.dataset.vendorId || '';
+          node.data.splitModelVendorName = firstEnabled.dataset.vendorName || '';
         }
       }
 
@@ -6122,7 +6171,9 @@
           const selected = splitModelSelect.options[splitModelSelect.selectedIndex];
           node.data.splitModel = splitModelSelect.value;
           node.data.splitModelId = selected.dataset.modelId || '';
-          console.log(`[剧本节点] 拆分模型切换为: ${splitModelSelect.value}, modelId: ${node.data.splitModelId}`);
+          node.data.splitModelVendorId = selected.dataset.vendorId || '';
+          node.data.splitModelVendorName = selected.dataset.vendorName || '';
+          console.log(`[剧本节点] 拆分模型切换为: ${splitModelSelect.value}, modelId: ${node.data.splitModelId}, vendor: ${node.data.splitModelVendorName}`);
         });
       }
 
@@ -6174,6 +6225,8 @@
       node.data.narrationAsDialogue = false;
       node.data.language = '';
       node.data.gridModel = 'auto';
+      node.data.splitModelVendorId = '';
+      node.data.splitModelVendorName = '';
       
       // 应用驱动状态禁用未配置的宫格生图模型选项
       if(gridModelSelect) applyDriverStatusToSelect(gridModelSelect);
@@ -6409,7 +6462,8 @@
               narration_as_dialogue: node.data.narrationAsDialogue || false,
               language: node.data.language || '',
               model: node.data.splitModel || 'gemini-3-flash-preview',
-              model_id: node.data.splitModelId || ''
+              model_id: node.data.splitModelId || '',
+              vendor_id: node.data.splitModelVendorId || ''
             })
           });
 
@@ -6901,7 +6955,8 @@
               narration_as_dialogue: node.data.narrationAsDialogue || false,
               language: node.data.language || '',
               model: node.data.splitModel || 'gemini-3-flash-preview',
-              model_id: node.data.splitModelId || ''
+              model_id: node.data.splitModelId || '',
+              vendor_id: node.data.splitModelVendorId || ''
             })
           });
 

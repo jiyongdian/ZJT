@@ -98,10 +98,10 @@ api_aggregator:
 
 
 vidu:
-  token: "vda_xxxx"
+  token: ""
 
 volcengine:
-  api_key: "your_volcengine_api_key"  # 火山引擎 API Key（用于 Seedream 5.0 文生图）
+  api_key: ""  # 火山引擎 API Key（用于 Seedream 5.0 文生图）
 
 pay:
   wxpay:
@@ -127,17 +127,17 @@ bin:
 
 llm:
   baidu:
-    api_key: "bce-v3/ALTAK-RW7XXXX"
+    api_key: ""
     api_url: "https://qianfan.baidubce.com/v2/chat/completions"
     model: "ernie-4.5-turbo-vl-latest"
   qwen:
-    api_key: "sk-f3694dd0XXXX"
+    api_key: ""
     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   google:
-    api_key: "sk_xxxxx"
+    api_key: ""
     gemini_base_url: "https://api.jiekou.ai"
   claude:
-    api_key: "sk_xxxxx"  # Claude API Key（jiekou.ai）
+    api_key: ""  # Claude API Key（jiekou.ai）
     base_url: "https://api.jiekou.ai/openai"  # Claude API Base URL
   ollama:
     enabled: false  # 是否启用 Ollama 本地模型
