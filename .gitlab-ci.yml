@@ -122,8 +122,32 @@ unit_tests:
     - docker --version
     - docker-compose --version
 
-    # 复制测试配置
-    - cp config.example.yml config_unit.yml || true
+    # 生成测试配置：合并 config_unit.base.yml（测试安全默认值）+ config.example.yml（用户配置，过滤空值）
+    - |
+      python3 -c "
+      import yaml, sys, os
+      def strip_empty(d):
+          if not isinstance(d, dict): return d
+          return {k: strip_empty(v) for k, v in d.items() if v not in (None, '', {}, [])}
+      def merge(base, over):
+          r = base.copy()
+          for k, v in over.items():
+              if k in r and isinstance(r[k], dict) and isinstance(v, dict):
+                  r[k] = merge(r[k], v)
+              else:
+                  r[k] = v
+          return r
+      base_file = None
+      for ext in ('.yml', '.yaml'):
+          candidate = f'config_unit.base{ext}'
+          if os.path.exists(candidate):
+              base_file = candidate
+              break
+      base = yaml.safe_load(open(base_file, encoding='utf-8')) or {} if base_file else {}
+      over = strip_empty(yaml.safe_load(open('config.example.yml', encoding='utf-8')) or {})
+      yaml.dump(merge(base, over), open('config_unit.yml', 'w', encoding='utf-8'), default_flow_style=False, allow_unicode=True)
+      print('config_unit.yml generated via deep merge')
+      " || cp config.example.yml config_unit.yml || true
 
   script:
     # 进入 docker 目录
