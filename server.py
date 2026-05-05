@@ -314,6 +314,10 @@ async def startup_event():
 from api.script_writer import router as script_writer_router
 app.include_router(script_writer_router)
 
+# 导入并注册测试路由（临时测试，完成后移除）
+from api.test_ask_user import router as test_ask_user_router
+app.include_router(test_ask_user_router)
+
 # 注册管理员 API 路由
 app.include_router(admin_router)
 

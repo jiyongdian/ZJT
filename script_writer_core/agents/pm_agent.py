@@ -3,8 +3,10 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 from .base_agent import BaseAgent
 from .expert_agent import ExpertAgent
+from .ask_user_mixin import AskUserMixin
 from .summarizer import ConversationSummarizer
 from .task_manager import TaskManager, AgentTask
+from .tool_definitions import ASK_USER_TOOL_DEFINITION
 from llm.llm_client_factory import get_llm_client
 from script_writer_core.file_manager import FileManager
 from script_writer_core.skill_loader import SkillLoader
@@ -14,7 +16,7 @@ import json
 logger = logging.getLogger(__name__)
 
 
-class PMAgent(BaseAgent):
+class PMAgent(BaseAgent, AskUserMixin):
     """项目经理智能体 - 负责任务拆分、派发、验证、协调"""
     
     def __init__(
@@ -32,10 +34,10 @@ class PMAgent(BaseAgent):
         max_total_failures: int = 7,
         context_window: Optional[int] = None
     ):
-        agent_id = f"pm_agent_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        agent_id = "pm_agent"
 
-        # 初始化技能加载器
-        self.skill_loader = SkillLoader()
+        # 初始化技能加载器（支持用户级自定义 skill）
+        self.skill_loader = SkillLoader(user_id=int(user_id) if user_id else None)
 
         # 从配置文件获取技能名称列表
         pm_skill_names = agents_config.get("pm_agent", {}).get("skills", ["script-orchestrator"])
@@ -120,7 +122,7 @@ class PMAgent(BaseAgent):
 
 **可用工具**：
 1. call_agent(AgentName, task_description): 调用专家智能体执行任务
-2. request_human_verification(...): 请求人工验证确认
+2. ask_user(question, options, context): 向用户提问并等待回答
 
 **约束**：
 - 任务必须串行执行，一次只能调用一个专家
@@ -150,6 +152,9 @@ class PMAgent(BaseAgent):
     def execute(self, task: AgentTask, session_data: Dict[str, Any]) -> Dict[str, Any]:
         """执行主任务"""
         logger.info(f"{self.agent_id}: Starting execution for task {task.task_id}")
+
+        # 设置 task_id，供 AskUserMixin 使用
+        self.task_id = task.task_id
         
         try:
             # 添加用户消息到历史
@@ -307,9 +312,10 @@ class PMAgent(BaseAgent):
         
         # 提取 reasoning_content（如果存在）
         # DeepSeek 等推理模型要求在后续请求中回传 reasoning_content
-        if hasattr(message, 'reasoning_content') and message.reasoning_content:
+        # 注意：即使 reasoning_content 为空字符串或 None 也要保留，服务端要求原样回传
+        if hasattr(message, 'reasoning_content'):
             history_entry["reasoning_content"] = message.reasoning_content
-        
+
         self.add_to_history("assistant", history_entry)
         
         for tool_call in tool_calls:
@@ -320,6 +326,15 @@ class PMAgent(BaseAgent):
                 tool_args = {}
 
             result = self._execute_tool(tool_name, tool_args, task, session_data)
+
+            # ask_user 工具：在 tool 回答之前，将问题写入历史（保证顺序正确）
+            if tool_name == "ask_user" and isinstance(result, dict) and "_verification_meta" in result:
+                meta = result.pop("_verification_meta")
+                self.add_to_history("verification", {
+                    "title": "需要用户输入",
+                    "description": meta["question"],
+                    "options": meta["options"]
+                })
 
             tool_history_entry = {
                 "tool_call_id": tool_call.id,
@@ -343,8 +358,8 @@ class PMAgent(BaseAgent):
         try:
             if tool_name == "call_agent":
                 return self._handle_agent_call(tool_args, task, session_data)
-            elif tool_name == "request_human_verification":
-                return self._handle_verification_request(tool_args, task)
+            elif tool_name == "ask_user":
+                return self._handle_ask_user(tool_args)
             else:
                 # Delegate to tool_executor for non-PM specific tools
                 return self.tool_executor.execute_tool(
@@ -377,9 +392,8 @@ class PMAgent(BaseAgent):
         
         logger.info(f"{self.agent_id}: Dispatching task to expert {skill_name}")
         
-        self.task_manager.push_message(task.task_id, 'message', {
-            'role': 'assistant',
-            'content': f"正在调用专家 {skill_name} 执行任务..."
+        self.task_manager.push_message(task.task_id, 'progress', {
+            'step': f"正在调用专家 {skill_name} 执行任务..."
         })
         
         expert_config = self.agents_config["expert_agents"][skill_name]
@@ -408,18 +422,26 @@ class PMAgent(BaseAgent):
             vendor_id=task.vendor_id,
             model_id=task.model_id,
             enable_thinking=task.enable_thinking,
-            thinking_effort=task.thinking_effort
+            thinking_effort=task.thinking_effort,
+            task_manager=self.task_manager,
+            task_id=task.task_id
         )
+
+        # 合并 LLM 提供的 conversation_history 和 PM 已有的 ask_user 交互
+        # 避免 Expert 重复提问已被 PM 回答过的问题
+        llm_history = tool_args.get("conversation_history", [])
+        pm_ask_user_history = self._extract_ask_user_qa()
+        merged_history = llm_history + pm_ask_user_history
 
         expert_task = {
             "session_id": task.task_id,
             "description": tool_args.get("task_description", "执行任务"),
             "pm_context": context,
-            "conversation_history": tool_args.get("conversation_history", [])
+            "conversation_history": merged_history
         }
 
         result = expert.execute_task(expert_task)
-        
+
         if result.get("success"):
             logger.info(f"{self.agent_id}: Expert {skill_name} succeeded")
             self.consecutive_failures = 0
@@ -457,37 +479,6 @@ class PMAgent(BaseAgent):
         
         return result
     
-    def _handle_verification_request(
-        self,
-        tool_args: Dict[str, Any],
-        task: AgentTask
-    ) -> Dict[str, Any]:
-        """处理人工验证请求"""
-        verification_type = tool_args.get("verification_type")
-        title = tool_args.get("title")
-        description = tool_args.get("description")
-        options = tool_args.get("options", [])
-        context = tool_args.get("context", {})
-        
-        if not all([verification_type, title, description]):
-            return {"error": "缺少必要参数"}
-        
-        logger.info(f"{self.agent_id}: Creating verification request")
-        
-        verification = self.task_manager.create_verification(
-            task_id=task.task_id,
-            verification_type=verification_type,
-            title=title,
-            description=description,
-            options=options,
-            context=context
-        )
-        
-        result = self.task_manager.wait_for_verification(verification, timeout=300)
-        
-        logger.info(f"{self.agent_id}: Verification result: {result}")
-        return result
-    
     def _build_context_for_expert(self, skill_name: str, user_id: str = "0", world_id: str = "0") -> str:
         """为专家构建上下文，包含所有环境内容"""
         context_parts = [
@@ -515,7 +506,58 @@ class PMAgent(BaseAgent):
             full_context = self._truncate_context(full_context, user_id, world_id, max_chars)
 
         return full_context
-    
+
+    def _extract_ask_user_qa(self) -> List[Dict[str, Any]]:
+        """从 PM 的 conversation_history 中提取 ask_user 交互，转换为 user/assistant 格式
+
+        用于传递给 Expert Agent，避免重复提问已回答过的问题。
+        """
+        qa_pairs = []
+        history = self.conversation_history
+
+        for i, msg in enumerate(history):
+            if msg.get("role") == "tool":
+                content = msg.get("content", {})
+                name = content.get("name") if isinstance(content, dict) else None
+                if name != "ask_user":
+                    continue
+
+                # 解析用户回答
+                try:
+                    result_str = content.get("content", "{}")
+                    result = json.loads(result_str) if isinstance(result_str, str) else result_str
+                except (json.JSONDecodeError, TypeError):
+                    continue
+
+                user_input = result.get("user_input", "")
+                message = result.get("message", "")
+                if not user_input:
+                    continue
+
+                # 回溯找到对应的 assistant 消息（包含 tool_calls），提取问题文本
+                question_text = message or f"用户已回答: {user_input}"
+                for j in range(i - 1, -1, -1):
+                    prev = history[j]
+                    if prev.get("role") == "assistant":
+                        prev_content = prev.get("content")
+                        if isinstance(prev_content, dict) and "tool_calls" in prev_content:
+                            for tc in prev_content["tool_calls"]:
+                                if tc.get("function", {}).get("name") == "ask_user":
+                                    try:
+                                        tc_args = json.loads(tc["function"]["arguments"])
+                                        question_text = tc_args.get("question", question_text)
+                                    except (json.JSONDecodeError, KeyError):
+                                        pass
+                        break
+
+                qa_pairs.append({"role": "assistant", "content": question_text})
+                qa_pairs.append({"role": "user", "content": user_input})
+
+        if qa_pairs:
+            logger.info(f"{self.agent_id}: Extracted {len(qa_pairs) // 2} ask_user Q&A pairs for expert")
+
+        return qa_pairs
+
     def _truncate_environment_context(self, env_context: str, user_id: str, world_id: str, max_chars: int) -> str:
         """截断环境上下文"""
         return self._truncate_context(env_context, user_id, world_id, max_chars)
@@ -710,6 +752,10 @@ class PMAgent(BaseAgent):
             if role == "system":
                 continue
 
+            # 跳过 verification 消息（仅供前端展示，不发给 LLM）
+            if role == "verification":
+                continue
+
             if role == "tool":
                 messages.append({
                     "role": "tool",
@@ -809,15 +855,19 @@ class PMAgent(BaseAgent):
         ]
         
         # 2. 获取 allowed_tools 中的其他工具
-        core_tool_names = ["call_agent"]
+        core_tool_names = ["call_agent", "ask_user"]
         other_allowed_tools = [t for t in self.allowed_tools if t not in core_tool_names]
 
         if other_allowed_tools:
             other_tool_definitions = self.tool_executor.get_tool_definitions(other_allowed_tools)
             pm_tools.extend(other_tool_definitions)
-            
+
+        # 3. 添加 ask_user 工具定义（PM 可直接向用户提问）
+        if "ask_user" in self.allowed_tools:
+            pm_tools.append(ASK_USER_TOOL_DEFINITION)
+
         return pm_tools
-    
+
     def should_stop(self) -> tuple[bool, str]:
         """检查是否需要停止"""
         if self.consecutive_failures >= self.max_consecutive_failures:

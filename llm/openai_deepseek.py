@@ -43,6 +43,17 @@ class DeepSeekOpenAIClient(OpenAIBaseClient):
             logger.debug(f"DeepSeekOpenAIClient model mapping: {model} -> {actual}")
         return actual
 
+    def _apply_thinking_params(self, kwargs, enable_thinking, thinking_effort):
+        """DeepSeek 专用 thinking 参数格式
+        官方文档要求：extra_body={"thinking": {"type": "enabled"}}
+        """
+        kwargs.setdefault("extra_body", {})
+        kwargs["extra_body"]["thinking"] = {
+            "type": "enabled" if enable_thinking else "disabled"
+        }
+        if enable_thinking:
+            kwargs["reasoning_effort"] = thinking_effort
+
 
 _deepseek_client = None
 

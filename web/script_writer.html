@@ -52,6 +52,39 @@
         .thinking-toggle input:checked + .thinking-toggle-slider:before {
             transform: translateX(14px);
         }
+
+        /* Debug 按钮样式 - 上线前删除 */
+        .debug-test-btn {
+            margin-left: 8px;
+            padding: 8px 12px;
+            background-color: #8b5cf6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .debug-test-btn:hover {
+            background-color: #7c3aed;
+            transform: scale(1.05);
+        }
+
+        .debug-test-btn:active {
+            transform: scale(0.98);
+        }
+
+        .debug-test-btn:disabled {
+            background-color: #d1d5db;
+            cursor: not-allowed;
+            transform: scale(1);
+        }
+
+        /* 上线前隐藏 - 取消注释后隐藏按钮 */
+        /* .debug-test-btn { display: none !important; } */
     </style>
 </head>
 <body>
@@ -349,6 +382,12 @@
                                 <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
                             </svg>
                         </button>
+                        <!-- Debug 按钮 - 上线前删除或隐藏 -->
+                        <!--
+                        <button id="debug-test-btn" class="debug-test-btn" title="测试 ask_user 功能">
+                            🧪 测试
+                        </button>
+                        -->
                     </div>
                     <div class="status-info">
                         <span class="status-item">
@@ -1049,6 +1088,9 @@
     <script>
         let sessionId = null;
         let isProcessing = false;
+        let pendingVerificationId = null;
+        let pendingVerificationData = null;
+        let needsNewMessageDiv = false;
         const urlParams = new URLSearchParams(window.location.search);
         
         // 全局参数：从URL获取并存储，供所有接口使用
@@ -1263,7 +1305,17 @@
                     }
                 });
             }
-            
+
+            // 设置 Debug 测试按钮事件监听器
+            const debugTestBtn = document.getElementById('debug-test-btn');
+            if (debugTestBtn) {
+                debugTestBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    testAskUserFeature();
+                });
+            }
+
             // 设置输入框事件监听器
             const messageInput = document.getElementById('message-input');
             if (messageInput) {
@@ -1287,9 +1339,22 @@
                 return; // 不继续初始化其他功能
             }
             
-            await loadCurrentWorldName();
-            await initOrReuseSession();
-            await loadFiles('worlds');
+            // 核心初始化流程：加载世界名称、初始化会话、加载文件
+            // 使用 try-catch 防止快速刷新时 fetch 被取消导致异常中断后续流程
+            try {
+                await loadCurrentWorldName();
+                await initOrReuseSession();
+                await loadFiles('worlds');
+            } catch (error) {
+                // 快速刷新时 fetch 会被页面导航取消，抛出 TypeError: Failed to fetch
+                // 这是正常行为，不需要创建新会话或做其他处理
+                if (error.name === 'AbortError' || (error.message && error.message.includes('Failed to fetch'))) {
+                    console.log('[初始化] 页面导航取消了正在进行的请求，忽略此次初始化');
+                } else {
+                    console.error('[初始化] 核心初始化流程出错:', error);
+                }
+                return; // 如果初始化被中断，不继续执行后续UI更新
+            }
 
             // 有世界时显示需求选择界面
             const requirementSelector = document.getElementById('requirement-selector');
@@ -1323,25 +1388,86 @@
                     
                     // 显示历史消息
                     data.history.forEach(msg => {
-                        // 不显示系统提示和工具返回结果
-                        if (msg.role === 'system' || msg.role === 'tool') {
+                        // 不显示系统提示
+                        if (msg.role === 'system') {
                             return;
                         }
-                        
-                        // 处理 content 可能是对象或数组的情况
+
+                        // 特殊处理 tool 消息：只显示 ask_user 的用户回答
+                        if (msg.role === 'tool') {
+                            const content = msg.content;
+                            if (typeof content === 'object') {
+                                // 检查是否是 ask_user 工具的结果
+                                if (content.name === 'ask_user' && content.content) {
+                                    // 尝试解析 content
+                                    let result;
+                                    try {
+                                        result = typeof content.content === 'string'
+                                            ? JSON.parse(content.content)
+                                            : content.content;
+                                    } catch (e) {
+                                        result = content.content;
+                                    }
+
+                                    // 提取用户的回答
+                                    let userAnswer = null;
+                                    if (typeof result === 'object') {
+                                        userAnswer = result.user_input || result.success;
+                                    } else if (typeof result === 'string') {
+                                        userAnswer = result;
+                                    }
+
+                                    if (userAnswer) {
+                                        // 显示用户的回答
+                                        addMessage('user', `我的回答：${userAnswer}`);
+                                    }
+                                }
+                            }
+                            return;
+                        }
+
+                        // 显示历史中的 verification 问题（样式与对话中保持一致）
+                        if (msg.role === 'verification') {
+                            const vContent = msg.content;
+                            const desc = vContent.description || '';
+                            const options = vContent.options || [];
+
+                            let vHtml = `<div class="verification-question history-mode">`;
+                            vHtml += `<strong class="verification-title">${escapeHtml(vContent.title || 'AI 提问')}</strong>`;
+                            vHtml += `<p class="verification-description">${escapeHtml(desc)}</p>`;
+                            if (options.length > 0) {
+                                vHtml += `<div class="verification-options">`;
+                                options.forEach(opt => {
+                                    vHtml += `<span class="option-btn">${escapeHtml(opt)}</span>`;
+                                });
+                                vHtml += `</div>`;
+                            }
+                            vHtml += `</div>`;
+                            addMessage('assistant', vHtml);
+                            return;
+                        }
+
+                        // 处理其他角色的 content
                         let content = msg.content;
                         let hasToolCalls = false;
-                        
+
                         if (typeof content === 'object') {
                             // 检查是否包含函数调用
                             if (content.tool_calls && Array.isArray(content.tool_calls)) {
                                 hasToolCalls = true;
+                                // 检查是否有 ask_user 调用
+                                const hasAskUser = content.tool_calls.some(tc => tc.function?.name === 'ask_user');
+
                                 // 如果只有函数调用，没有文本内容，显示图标
                                 if (!content.text && content.tool_calls.length > 0) {
-                                    content = `<span class="tool-call-icon" title="调用了 ${content.tool_calls.length} 个工具">🔧 执行了 ${content.tool_calls.length} 个操作</span>`;
+                                    const icon = hasAskUser ? '❓' : '🔧';
+                                    const desc = hasAskUser ? '提出了一个问题' : `执行了 ${content.tool_calls.length} 个操作`;
+                                    content = `<span class="tool-call-icon" title="调用了 ${content.tool_calls.length} 个工具">${icon} ${desc}</span>`;
                                 } else if (content.text) {
                                     // 如果既有文本又有函数调用，显示文本 + 图标
-                                    content = content.text + `\n\n<span class="tool-call-icon" title="调用了 ${content.tool_calls.length} 个工具">🔧 执行了 ${content.tool_calls.length} 个操作</span>`;
+                                    const icon = hasAskUser ? '❓' : '🔧';
+                                    const desc = hasAskUser ? '提出了一个问题' : `执行了 ${content.tool_calls.length} 个操作`;
+                                    content = content.text + `\n\n<span class="tool-call-icon" title="调用了 ${content.tool_calls.length} 个工具">${icon} ${desc}</span>`;
                                 }
                             } else if (Array.isArray(content)) {
                                 // 如果是数组，提取所有 text 类型的内容，过滤掉 tool_use
@@ -1359,12 +1485,12 @@
                                 content = String(content);
                             }
                         }
-                        
+
                         // 如果 content 为空或只有空白字符，跳过
                         if (!content || !content.trim()) {
                             return;
                         }
-                        
+
                         addMessage(msg.role, content);
                     });
                     
@@ -1416,8 +1542,14 @@
                     await createSession();
                 }
             } catch (error) {
+                // 快速刷新时 fetch 会被页面导航取消，抛出 TypeError: Failed to fetch
+                // 这种情况下不应该创建新会话，直接向上抛出让外层 try-catch 处理
+                if (error.name === 'AbortError' || (error.message && error.message.includes('Failed to fetch'))) {
+                    console.log('[初始化] 会话初始化请求被页面导航取消，跳过');
+                    return; // 不创建新会话
+                }
                 console.error('初始化会话失败:', error);
-                // 出错时尝试创建新会话
+                // 只有非网络中断的错误才尝试创建新会话
                 await createSession();
             }
         }
@@ -1698,6 +1830,11 @@
         const AUTO_REFRESH_MIN_INTERVAL = 67000; // 67秒
         const AUTO_REFRESH_MAX_INTERVAL = 83000; // 83秒
 
+        // ========== 算力定时刷新功能 ==========
+        let computingPowerRefreshTimer = null;
+        const COMPUTING_POWER_REFRESH_MIN_INTERVAL = 30000; // 30秒
+        const COMPUTING_POWER_REFRESH_MAX_INTERVAL = 45000; // 45秒
+
         function toggleAutoSubmit() {
             const switchEl = document.getElementById('auto-submit-switch');
             if (switchEl.checked) {
@@ -1811,6 +1948,8 @@
             
             // 启动自动刷新暂存文件功能
             startAutoRefresh();
+            // 启动算力定时刷新功能
+            startComputingPowerRefresh();
         }
 
         function startAutoRefresh() {
@@ -1847,6 +1986,40 @@
             }
         }
 
+        function startComputingPowerRefresh() {
+            // 清除现有定时器
+            if (computingPowerRefreshTimer) {
+                clearTimeout(computingPowerRefreshTimer);
+            }
+
+            // 生成随机间隔时间 (30-45秒)
+            const randomInterval = COMPUTING_POWER_REFRESH_MIN_INTERVAL +
+                Math.random() * (COMPUTING_POWER_REFRESH_MAX_INTERVAL - COMPUTING_POWER_REFRESH_MIN_INTERVAL);
+
+            console.log(`[算力刷新] 已调度，${Math.round(randomInterval/1000)}秒后刷新算力`);
+
+            computingPowerRefreshTimer = setTimeout(async () => {
+                try {
+                    console.log('[算力刷新] 开始刷新算力...');
+                    await loadComputingPower();
+                    console.log('[算力刷新] 算力刷新完成');
+                } catch (error) {
+                    console.error('[算力刷新] 刷新算力出错:', error);
+                } finally {
+                    // 无论成功失败，继续调度下一次刷新
+                    startComputingPowerRefresh();
+                }
+            }, randomInterval);
+        }
+
+        function stopComputingPowerRefresh() {
+            if (computingPowerRefreshTimer) {
+                clearTimeout(computingPowerRefreshTimer);
+                computingPowerRefreshTimer = null;
+                console.log('[算力刷新] 已停止');
+            }
+        }
+
         // 页面加载完成后恢复设置
         document.addEventListener('DOMContentLoaded', () => {
             setTimeout(loadAutoSubmitSettings, 500);
@@ -1859,8 +2032,8 @@
         });
 
         async function sendMessage(customMessage = null, isSystemMessage = false) {
-            console.log('sendMessage called, isProcessing:', isProcessing);
-            
+            console.log('sendMessage called, isProcessing:', isProcessing, 'pendingVerificationId:', pendingVerificationId);
+
             // Disable send button immediately to prevent multiple clicks
             const sendBtn = document.getElementById('send-btn');
             if (sendBtn) {
@@ -1875,6 +2048,29 @@
                     sendBtn.disabled = false;
                     sendBtn.classList.remove('sending');
                 }
+                return;
+            }
+
+            // 如果有待处理的验证，优先走验证提交路由（不受 isProcessing 限制）
+            if (pendingVerificationId) {
+                let message;
+                if (customMessage) {
+                    message = customMessage;
+                } else {
+                    const input = document.getElementById('message-input');
+                    message = input.value.trim();
+                    if (!message) {
+                        if (sendBtn) {
+                            sendBtn.disabled = false;
+                            sendBtn.classList.remove('sending');
+                        }
+                        return;
+                    }
+                    input.value = '';
+                    input.style.height = 'auto';
+                }
+                // 保持 isProcessing = true，Expert 仍在处理中
+                await submitVerificationAnswer(message);
                 return;
             }
 
@@ -1987,7 +2183,7 @@
                 const eventSource = new EventSource(`/api/task/${taskId}/stream`);
                 hideTypingIndicator();
                 const messageDiv = addMessage('assistant', '');
-                const contentDiv = messageDiv.querySelector('.message-content');
+                let contentDiv = messageDiv.querySelector('.message-content');
 
                 let fullText = '';
                 let startTime = Date.now();
@@ -2005,6 +2201,13 @@
                         
                         if (data.type === 'message') {
                             if (data.content) {
+                                // 如果 verification 出现过，创建新 div（此时 verification 已在 DOM 中）
+                                if (needsNewMessageDiv) {
+                                    const newDiv = addMessage('assistant', '');
+                                    contentDiv = newDiv.querySelector('.message-content');
+                                    fullText = '';
+                                    needsNewMessageDiv = false;
+                                }
                                 fullText += data.content + '\n\n';
                                 contentDiv.innerHTML = renderMarkdown(fullText);
                                 scrollToBottom();
@@ -2036,6 +2239,10 @@
                             const sendBtn = document.getElementById('send-btn');
                             sendBtn.disabled = false;
                             sendBtn.classList.remove('sending');
+                        } else if (data.type === 'human_verification_required') {
+                            const verification = data.verification || {};
+                            console.log('[SSE] Received human_verification_required:', verification);
+                            handleHumanVerification(verification);
                         } else if (data.type === 'status') {
                             if (data.status) updateStatus(data.status);
                         }
@@ -2164,6 +2371,135 @@
             const statusElement = document.getElementById('status-text');
             if (statusElement) {
                 statusElement.textContent = text;
+            }
+        }
+
+        function handleHumanVerification(verification) {
+            // 隐藏 typing indicator
+            hideTypingIndicator();
+
+            // 标记：后续 message 事件需要创建新 div（延迟到 message 到达时创建，确保在 verification 之后）
+            needsNewMessageDiv = true;
+
+            // 设置待处理验证信息
+            pendingVerificationId = verification.verification_id;
+            pendingVerificationData = verification;
+
+            // 显示验证问题
+            const messageDiv = addMessage('assistant', '');
+            const contentDiv = messageDiv.querySelector('.message-content');
+
+            // 构造 HTML
+            let html = `<div class="verification-question">`;
+            html += `<strong class="verification-title">${escapeHtml(verification.title)}</strong>`;
+            html += `<p class="verification-description">${escapeHtml(verification.description)}</p>`;
+
+            // 如果有选项，显示选择按钮
+            if (verification.options && verification.options.length > 0) {
+                html += `<div class="verification-options">`;
+                verification.options.forEach((option, index) => {
+                    const escapedOption = escapeHtml(option);
+                    html += `<button class="option-btn" data-option-index="${index}">`;
+                    html += `${escapedOption}</button>`;
+                });
+                // 添加"其他"按钮
+                html += `<button class="option-btn option-other-btn" data-option-other="true">`;
+                html += `其他</button>`;
+                html += `</div>`;
+            }
+
+            html += `</div>`;
+
+            contentDiv.innerHTML = html;
+
+            // 为选项按钮添加事件监听器
+            const optionBtns = contentDiv.querySelectorAll('.option-btn');
+            const input = document.getElementById('message-input');
+
+            optionBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const isOther = e.target.dataset.optionOther === 'true';
+
+                    if (isOther) {
+                        // 点击"其他"按钮，焦点转移到下方的消息输入框
+                        input.placeholder = '请输入您的自定义答案...';
+                        input.focus();
+                        updateStatus('💬 请在下方输入框中输入您的自定义答案');
+                        console.log('[VERIFICATION] 用户选择"其他"，等待自定义输入');
+                    } else {
+                        // 点击预设选项，直接提交（无需用户再输入）
+                        const index = e.target.dataset.optionIndex;
+                        const option = verification.options[index];
+                        if (option) {
+                            console.log('[VERIFICATION] 用户选择选项:', option);
+                            submitVerificationAnswer(option);
+                        }
+                    }
+                });
+            });
+
+            // 启用输入框
+            input.disabled = false;
+            input.placeholder = verification.options && verification.options.length > 0
+                ? '点击上方选项或选择"其他"输入自定义答案'
+                : '请输入您的回答...';
+
+            updateStatus('等待您的回答...');
+        }
+
+        async function submitVerificationAnswer(userInput) {
+            if (!pendingVerificationId) {
+                console.error('No pending verification');
+                return;
+            }
+
+            try {
+                const response = await axios.post(
+                    `/api/verification/${pendingVerificationId}`,
+                    {
+                        approved: true,
+                        user_input: userInput
+                    },
+                    {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${AUTH_TOKEN}`
+                        }
+                    }
+                );
+
+                if (response.data.success) {
+                    console.log('[VERIFICATION] Answer submitted successfully');
+
+                    // 清除验证状态
+                    pendingVerificationId = null;
+                    pendingVerificationData = null;
+
+                    // 显示用户回答
+                    addMessage('user', `我的回答：${userInput}`);
+
+                    // 重置输入框
+                    const input = document.getElementById('message-input');
+                    input.value = '';
+                    input.placeholder = '输入消息...';
+
+                    updateStatus('等待 AI 继续处理...');
+                } else {
+                    showError('验证提交失败：' + response.data.error + '，请重新输入');
+                    // 保持 pendingVerificationId，允许用户重试
+                    // 注意：不重置 isProcessing，因为 Expert 仍在等待
+                    const input = document.getElementById('message-input');
+                    input.value = '';  // 清空失败的输入
+                    input.focus();
+                }
+            } catch (error) {
+                console.error('Failed to submit verification:', error);
+                showError('提交验证时出错：' + error.message + '，请重新输入');
+                // 保持 pendingVerificationId，允许用户重试
+                // 注意：不重置 isProcessing，因为 Expert 仍在等待
+                const input = document.getElementById('message-input');
+                input.value = '';  // 清空失败的输入
+                input.focus();
             }
         }
 
@@ -2629,15 +2965,52 @@
             const supportsThinking = selectedOption.dataset.supportsThinking === 'true';
             wrapper.style.display = supportsThinking ? 'flex' : 'none';
 
-            // 如果不支持思考模式，重置开关
-            if (!supportsThinking) {
+            // 如果支持思考模式，恢复缓存的状态
+            if (supportsThinking) {
+                restoreThinkingState();
+            } else {
+                // 如果不支持思考模式，重置开关
                 const toggle = document.getElementById('thinking-toggle');
                 if (toggle) toggle.checked = false;
                 updateThinkingEffortVisibility();
             }
         }
 
+        function saveThinkingState() {
+            const toggle = document.getElementById('thinking-toggle');
+            const effortSelect = document.getElementById('thinking-effort');
+            if (!toggle) return;
+
+            const state = {
+                enabled: toggle.checked,
+                effort: effortSelect ? effortSelect.value : 'medium'
+            };
+            localStorage.setItem('lastThinkingState', JSON.stringify(state));
+        }
+
+        function restoreThinkingState() {
+            const savedStateRaw = localStorage.getItem('lastThinkingState');
+            if (!savedStateRaw) return;
+
+            try {
+                const state = JSON.parse(savedStateRaw);
+                const toggle = document.getElementById('thinking-toggle');
+                const effortSelect = document.getElementById('thinking-effort');
+
+                if (toggle) {
+                    toggle.checked = state.enabled || false;
+                }
+                if (effortSelect && state.effort) {
+                    effortSelect.value = state.effort;
+                }
+                updateThinkingEffortVisibility();
+            } catch (e) {
+                console.warn('[思考模式] 恢复状态失败:', e);
+            }
+        }
+
         function onThinkingToggleChange() {
+            saveThinkingState();
             updateThinkingEffortVisibility();
         }
 
@@ -2656,7 +3029,7 @@
         }
 
         function onThinkingEffortChange() {
-            // effort 值已经通过 select 的 value 管理
+            saveThinkingState();
         }
 
         function getThinkingParams() {
@@ -2801,11 +3174,30 @@
                     return;
                 }
 
-                // 只显示支持宫格生图的模型，Seedream 5.0 排在最前面
+                // 按优先级分组模型：GPT IMAGE 2 优先，其次 Seedream 5.0，最后其他支持宫格生图的模型
+                const gptImage2Model = models.find(m => m.task_id === 26);  // GPT IMAGE 2 的 task_id 为 26
                 const seedreamModel = models.find(m => m.name === 'Seedream 5.0');
-                const otherModels = models.filter(m => m.name !== 'Seedream 5.0' && m.supports_grid_image);
+                const otherModels = models.filter(m => m.task_id !== 26 && m.name !== 'Seedream 5.0' && m.supports_grid_image);
 
-                // 先添加 Seedream 5.0，并默认选中
+                // 先添加 GPT IMAGE 2（如果可用）
+                if (gptImage2Model) {
+                    const option = document.createElement('option');
+                    option.value = gptImage2Model.task_id;
+                    // 检查模型可用性
+                    const taskTypeKey = String(gptImage2Model.task_id);
+                    const status = driverStatus[taskTypeKey];
+                    const isAvailable = !status || status.available !== false;
+                    if (!isAvailable) {
+                        option.textContent = `${gptImage2Model.name} (未配置)`;
+                        option.disabled = true;
+                    } else {
+                        option.textContent = gptImage2Model.name;
+                        option.selected = true;  // GPT IMAGE 2 默认选中（仅当可用时）
+                    }
+                    selector.appendChild(option);
+                }
+
+                // 再添加 Seedream 5.0
                 if (seedreamModel) {
                     const option = document.createElement('option');
                     option.value = seedreamModel.task_id;
@@ -2818,12 +3210,15 @@
                         option.disabled = true;
                     } else {
                         option.textContent = seedreamModel.name;
-                        option.selected = true;  // Seedream 5.0 默认选中（仅当可用时）
+                        // 如果 GPT IMAGE 2 不可用，Seedream 作为备选默认选中
+                        if (!gptImage2Model) {
+                            option.selected = true;
+                        }
                     }
                     selector.appendChild(option);
                 }
 
-                // 再添加其他模型
+                // 最后添加其他模型
                 otherModels.forEach(model => {
                     const option = document.createElement('option');
                     option.value = model.task_id;
@@ -2858,7 +3253,45 @@
             const selector = document.getElementById('text-to-image-model-selector');
             if (!selector || !sessionId) return;
 
-            const selectedModel = selector.value;
+            let selectedModel = selector.value;
+
+            // 如果没有选中的模型，尝试智能选择：优先 GPT IMAGE 2，其次 Seedream 5.0
+            if (!selectedModel) {
+                // 查找可用的模型
+                let gptImage2Option = null;
+                let seedreamOption = null;
+                let firstAvailableOption = null;
+
+                for (const option of selector.options) {
+                    if (option.value && !option.disabled) {
+                        if (!firstAvailableOption) {
+                            firstAvailableOption = option;
+                        }
+                        if (option.value === '26') {  // GPT IMAGE 2 的 task_id
+                            gptImage2Option = option;
+                        }
+                        if (option.textContent.includes('Seedream 5.0')) {
+                            seedreamOption = option;
+                        }
+                    }
+                }
+
+                // 按优先级选择
+                if (gptImage2Option) {
+                    selectedModel = gptImage2Option.value;
+                    selector.value = selectedModel;
+                } else if (seedreamOption) {
+                    selectedModel = seedreamOption.value;
+                    selector.value = selectedModel;
+                } else if (firstAvailableOption) {
+                    selectedModel = firstAvailableOption.value;
+                    selector.value = selectedModel;
+                } else {
+                    // 没有可用模型
+                    return;
+                }
+            }
+
             if (!selectedModel) return;
 
             console.log('[DEBUG] 自动设置生图模型:', selector.options[selector.selectedIndex].text, 'task_id:', selectedModel);
@@ -5379,6 +5812,120 @@
                 showError('读取文件失败');
             };
             reader.readAsText(file, 'UTF-8');
+        }
+
+        // Debug: 测试 ask_user 功能
+        async function testAskUserFeature() {
+            const debugBtn = document.getElementById('debug-test-btn');
+            if (!debugBtn) return;
+
+            debugBtn.disabled = true;
+            debugBtn.textContent = '⏳ 测试中...';
+
+            try {
+                console.log('🧪 开始测试 ask_user 功能...');
+
+                // 获取当前选择的模型
+                const modelSelector = document.getElementById('model-selector');
+                if (!modelSelector || !modelSelector.value) {
+                    showError('请先选择一个 LLM 模型');
+                    debugBtn.disabled = false;
+                    debugBtn.textContent = '🧪 测试';
+                    return;
+                }
+
+                const selectedOption = modelSelector.options[modelSelector.selectedIndex];
+                const model = modelSelector.value;
+                const vendor_id = selectedOption?.dataset?.vendorId || 1;
+                const model_id = selectedOption?.dataset?.modelId || 1;
+                const modelDisplay = selectedOption?.text || model;
+
+                console.log('📋 使用模型:', {
+                    model: model,
+                    vendor_id: vendor_id,
+                    model_id: model_id,
+                    display: modelDisplay
+                });
+
+                // 1. 触发测试端点
+                const taskResp = await fetch('/api/test/ask-user', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: 'test_' + Date.now(),
+                        user_id: USER_ID,
+                        world_id: WORLD_ID,
+                        auth_token: '',
+                        model: model,
+                        vendor_id: parseInt(vendor_id),
+                        model_id: parseInt(model_id)
+                    })
+                }).then(r => r.json());
+
+                if (!taskResp.success) {
+                    console.error('❌ 测试任务创建失败:', taskResp);
+                    showError('测试失败: ' + (taskResp.error || '未知错误'));
+                    return;
+                }
+
+                console.log('✅ 任务已创建:', taskResp);
+                alert(`✅ 测试任务已创建！\n\n📋 任务ID: ${taskResp.task_id}\n\n现在 LLM 将向你提问，请在前端回答，然后观察 LLM 的回复。\n\n💡 提示：打开浏览器控制台（F12）可以看到更详细的 SSE 消息日志。`);
+
+                // 2. 监听 SSE
+                const es = new EventSource(`/api/task/${taskResp.task_id}/stream`);
+
+                let hasQuestion = false;
+                let hasReply = false;
+
+                es.onmessage = (e) => {
+                    try {
+                        const data = JSON.parse(e.data);
+                        console.log('📨 SSE消息:', data.type, data);
+
+                        if (data.type === 'human_verification_required') {
+                            hasQuestion = true;
+                            const verification = data.verification || {};
+                            console.log('📢 LLM提问:', verification.description);
+                            console.log('   验证ID:', verification.verification_id);
+                            handleHumanVerification(verification);
+                        }
+
+                        if (data.type === 'message') {
+                            hasReply = true;
+                            console.log('💬 LLM回复:', data.content);
+                            // 也显示 LLM 的回复消息
+                            addMessage('assistant', data.content || '');
+                        }
+
+                        if (data.type === 'done') {
+                            es.close();
+                            console.log('✅ 测试完成！');
+
+                            // 验证链路
+                            if (hasQuestion && hasReply) {
+                                console.log('🎉 完整链路验证成功：LLM 成功提问并基于回答生成了内容！');
+                                showSuccess('🎉 测试成功！LLM 完整链路验证通过！');
+                            } else {
+                                console.warn('⚠️ 链路验证不完整:', { hasQuestion, hasReply });
+                            }
+                        }
+                    } catch (err) {
+                        console.error('❌ 解析 SSE 消息失败:', err);
+                    }
+                };
+
+                es.onerror = (e) => {
+                    console.error('❌ SSE 连接错误:', e);
+                    es.close();
+                };
+
+            } catch (error) {
+                console.error('❌ 测试过程发生错误:', error);
+                showError('测试过程发生错误: ' + error.message);
+            } finally {
+                debugBtn.disabled = false;
+                debugBtn.textContent = '🧪 测试';
+            }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
