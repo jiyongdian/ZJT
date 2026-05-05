@@ -3133,11 +3133,30 @@
                     return;
                 }
 
-                // 只显示支持宫格生图的模型，Seedream 5.0 排在最前面
+                // 按优先级分组模型：GPT IMAGE 2 优先，其次 Seedream 5.0，最后其他支持宫格生图的模型
+                const gptImage2Model = models.find(m => m.task_id === 26);  // GPT IMAGE 2 的 task_id 为 26
                 const seedreamModel = models.find(m => m.name === 'Seedream 5.0');
-                const otherModels = models.filter(m => m.name !== 'Seedream 5.0' && m.supports_grid_image);
+                const otherModels = models.filter(m => m.task_id !== 26 && m.name !== 'Seedream 5.0' && m.supports_grid_image);
 
-                // 先添加 Seedream 5.0，并默认选中
+                // 先添加 GPT IMAGE 2（如果可用）
+                if (gptImage2Model) {
+                    const option = document.createElement('option');
+                    option.value = gptImage2Model.task_id;
+                    // 检查模型可用性
+                    const taskTypeKey = String(gptImage2Model.task_id);
+                    const status = driverStatus[taskTypeKey];
+                    const isAvailable = !status || status.available !== false;
+                    if (!isAvailable) {
+                        option.textContent = `${gptImage2Model.name} (未配置)`;
+                        option.disabled = true;
+                    } else {
+                        option.textContent = gptImage2Model.name;
+                        option.selected = true;  // GPT IMAGE 2 默认选中（仅当可用时）
+                    }
+                    selector.appendChild(option);
+                }
+
+                // 再添加 Seedream 5.0
                 if (seedreamModel) {
                     const option = document.createElement('option');
                     option.value = seedreamModel.task_id;
@@ -3150,12 +3169,15 @@
                         option.disabled = true;
                     } else {
                         option.textContent = seedreamModel.name;
-                        option.selected = true;  // Seedream 5.0 默认选中（仅当可用时）
+                        // 如果 GPT IMAGE 2 不可用，Seedream 作为备选默认选中
+                        if (!gptImage2Model) {
+                            option.selected = true;
+                        }
                     }
                     selector.appendChild(option);
                 }
 
-                // 再添加其他模型
+                // 最后添加其他模型
                 otherModels.forEach(model => {
                     const option = document.createElement('option');
                     option.value = model.task_id;
@@ -3190,7 +3212,45 @@
             const selector = document.getElementById('text-to-image-model-selector');
             if (!selector || !sessionId) return;
 
-            const selectedModel = selector.value;
+            let selectedModel = selector.value;
+
+            // 如果没有选中的模型，尝试智能选择：优先 GPT IMAGE 2，其次 Seedream 5.0
+            if (!selectedModel) {
+                // 查找可用的模型
+                let gptImage2Option = null;
+                let seedreamOption = null;
+                let firstAvailableOption = null;
+
+                for (const option of selector.options) {
+                    if (option.value && !option.disabled) {
+                        if (!firstAvailableOption) {
+                            firstAvailableOption = option;
+                        }
+                        if (option.value === '26') {  // GPT IMAGE 2 的 task_id
+                            gptImage2Option = option;
+                        }
+                        if (option.textContent.includes('Seedream 5.0')) {
+                            seedreamOption = option;
+                        }
+                    }
+                }
+
+                // 按优先级选择
+                if (gptImage2Option) {
+                    selectedModel = gptImage2Option.value;
+                    selector.value = selectedModel;
+                } else if (seedreamOption) {
+                    selectedModel = seedreamOption.value;
+                    selector.value = selectedModel;
+                } else if (firstAvailableOption) {
+                    selectedModel = firstAvailableOption.value;
+                    selector.value = selectedModel;
+                } else {
+                    // 没有可用模型
+                    return;
+                }
+            }
+
             if (!selectedModel) return;
 
             console.log('[DEBUG] 自动设置生图模型:', selector.options[selector.selectedIndex].text, 'task_id:', selectedModel);
