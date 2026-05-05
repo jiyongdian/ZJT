@@ -312,9 +312,10 @@ class PMAgent(BaseAgent, AskUserMixin):
         
         # 提取 reasoning_content（如果存在）
         # DeepSeek 等推理模型要求在后续请求中回传 reasoning_content
-        if hasattr(message, 'reasoning_content') and message.reasoning_content:
+        # 注意：即使 reasoning_content 为空字符串或 None 也要保留，服务端要求原样回传
+        if hasattr(message, 'reasoning_content'):
             history_entry["reasoning_content"] = message.reasoning_content
-        
+
         self.add_to_history("assistant", history_entry)
         
         for tool_call in tool_calls:
