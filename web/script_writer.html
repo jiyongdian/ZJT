@@ -1830,6 +1830,11 @@
         const AUTO_REFRESH_MIN_INTERVAL = 67000; // 67秒
         const AUTO_REFRESH_MAX_INTERVAL = 83000; // 83秒
 
+        // ========== 算力定时刷新功能 ==========
+        let computingPowerRefreshTimer = null;
+        const COMPUTING_POWER_REFRESH_MIN_INTERVAL = 30000; // 30秒
+        const COMPUTING_POWER_REFRESH_MAX_INTERVAL = 45000; // 45秒
+
         function toggleAutoSubmit() {
             const switchEl = document.getElementById('auto-submit-switch');
             if (switchEl.checked) {
@@ -1943,6 +1948,8 @@
             
             // 启动自动刷新暂存文件功能
             startAutoRefresh();
+            // 启动算力定时刷新功能
+            startComputingPowerRefresh();
         }
 
         function startAutoRefresh() {
@@ -1976,6 +1983,40 @@
                 clearTimeout(autoRefreshTimer);
                 autoRefreshTimer = null;
                 console.log('[自动刷新] 已停止');
+            }
+        }
+
+        function startComputingPowerRefresh() {
+            // 清除现有定时器
+            if (computingPowerRefreshTimer) {
+                clearTimeout(computingPowerRefreshTimer);
+            }
+
+            // 生成随机间隔时间 (30-45秒)
+            const randomInterval = COMPUTING_POWER_REFRESH_MIN_INTERVAL +
+                Math.random() * (COMPUTING_POWER_REFRESH_MAX_INTERVAL - COMPUTING_POWER_REFRESH_MIN_INTERVAL);
+
+            console.log(`[算力刷新] 已调度，${Math.round(randomInterval/1000)}秒后刷新算力`);
+
+            computingPowerRefreshTimer = setTimeout(async () => {
+                try {
+                    console.log('[算力刷新] 开始刷新算力...');
+                    await loadComputingPower();
+                    console.log('[算力刷新] 算力刷新完成');
+                } catch (error) {
+                    console.error('[算力刷新] 刷新算力出错:', error);
+                } finally {
+                    // 无论成功失败，继续调度下一次刷新
+                    startComputingPowerRefresh();
+                }
+            }, randomInterval);
+        }
+
+        function stopComputingPowerRefresh() {
+            if (computingPowerRefreshTimer) {
+                clearTimeout(computingPowerRefreshTimer);
+                computingPowerRefreshTimer = null;
+                console.log('[算力刷新] 已停止');
             }
         }
 
