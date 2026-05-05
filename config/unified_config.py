@@ -1010,6 +1010,10 @@ class DriverKey:
     HAPPY_HORSE_TEXT_TO_VIDEO = 'happy_horse_text_to_video'
 
 
+# ============ Agent 相关常量 ============
+ASK_USER_MAX_CONSECUTIVE_FAILS = 2  # ask_user 连续失败/超时上限，超过则终止任务
+
+
 # ============ 任务类型 ID 常量 ============
 class TaskTypeId:
     """任务类型ID常量"""

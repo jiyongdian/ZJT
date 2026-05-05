@@ -1949,10 +1949,20 @@ async def submit_verification(request: Request, verification_id: str, verify_req
         )
         
         if not success:
-            return JSONResponse({
-                'success': False,
-                'error': '验证请求不存在'
-            }, status_code=404)
+            # 查询实际状态，返回更有意义的错误信息
+            db_verification = task_manager.get_verification(verification_id)
+            if db_verification and db_verification.status == 'cancelled':
+                return JSONResponse({
+                    'success': False,
+                    'error': '验证已超时',
+                    'status': 'cancelled'
+                }, status_code=410)
+            else:
+                return JSONResponse({
+                    'success': False,
+                    'error': '验证请求不存在或已处理',
+                    'status': db_verification.status if db_verification else 'not_found'
+                }, status_code=404)
         
         return JSONResponse({
             'success': True,

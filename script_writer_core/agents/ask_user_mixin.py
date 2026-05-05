@@ -16,6 +16,8 @@ AskUserMixin - 向用户提问并等待回答的共享功能
 import logging
 from typing import Dict, Any
 
+from config.unified_config import ASK_USER_MAX_CONSECUTIVE_FAILS
+
 logger = logging.getLogger(__name__)
 
 
@@ -54,7 +56,16 @@ class AskUserMixin:
         Returns:
             成功: {"success": True, "user_input": "...", "message": "用户已回答: ..."}
             超时/失败: {"error": "...", "user_input": None}
+            已禁用: {"error": "...", "user_input": None, "ask_disabled": True}
         """
+        # 检查连续失败次数 - 达到上限后直接返回错误，不创建 verification，节省算力
+        fail_count = getattr(self, '_ask_fail_count', 0)
+        if fail_count >= ASK_USER_MAX_CONSECUTIVE_FAILS:
+            error_msg = (f"ask_user 已连续失败 {fail_count} 次，用户当前可能无法回应。"
+                         f"请立即停止工作，不要继续提问，等待用户主动发送消息后再继续。")
+            logger.warning(f"{self.agent_id}: {error_msg}")
+            return {"error": error_msg, "user_input": None, "ask_disabled": True}
+
         # 检查必要依赖
         if not getattr(self, 'task_manager', None) or not getattr(self, 'task_id', None):
             error_msg = "ask_user 工具未配置 task_manager 或 task_id"
@@ -96,10 +107,15 @@ class AskUserMixin:
 
             # 检查是否超时或出错
             if not result.get("success"):
+                self._ask_fail_count = getattr(self, '_ask_fail_count', 0) + 1
+                logger.warning(f"{self.agent_id}: ask_user failed ({self._ask_fail_count}/{ASK_USER_MAX_CONSECUTIVE_FAILS})")
                 return {
                     "error": result.get("error", "验证失败"),
                     "user_input": None
                 }
+
+            # 成功，重置失败计数
+            self._ask_fail_count = 0
 
             # 返回用户的回答（附带 verification 元数据，用于写入 conversation_history）
             return {
