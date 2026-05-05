@@ -109,7 +109,7 @@ class TestPMAgentMessageQueueRegression(unittest.TestCase):
             file_manager=file_manager_mock,
             tool_executor=MagicMock(),
             agents_config=agents_config,
-            user_id="test_user",
+            user_id="123",
             world_id="test_world",
             auth_token="test_token"
         )
