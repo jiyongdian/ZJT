@@ -1339,9 +1339,22 @@
                 return; // 不继续初始化其他功能
             }
             
-            await loadCurrentWorldName();
-            await initOrReuseSession();
-            await loadFiles('worlds');
+            // 核心初始化流程：加载世界名称、初始化会话、加载文件
+            // 使用 try-catch 防止快速刷新时 fetch 被取消导致异常中断后续流程
+            try {
+                await loadCurrentWorldName();
+                await initOrReuseSession();
+                await loadFiles('worlds');
+            } catch (error) {
+                // 快速刷新时 fetch 会被页面导航取消，抛出 TypeError: Failed to fetch
+                // 这是正常行为，不需要创建新会话或做其他处理
+                if (error.name === 'AbortError' || (error.message && error.message.includes('Failed to fetch'))) {
+                    console.log('[初始化] 页面导航取消了正在进行的请求，忽略此次初始化');
+                } else {
+                    console.error('[初始化] 核心初始化流程出错:', error);
+                }
+                return; // 如果初始化被中断，不继续执行后续UI更新
+            }
 
             // 有世界时显示需求选择界面
             const requirementSelector = document.getElementById('requirement-selector');
@@ -1529,8 +1542,14 @@
                     await createSession();
                 }
             } catch (error) {
+                // 快速刷新时 fetch 会被页面导航取消，抛出 TypeError: Failed to fetch
+                // 这种情况下不应该创建新会话，直接向上抛出让外层 try-catch 处理
+                if (error.name === 'AbortError' || (error.message && error.message.includes('Failed to fetch'))) {
+                    console.log('[初始化] 会话初始化请求被页面导航取消，跳过');
+                    return; // 不创建新会话
+                }
                 console.error('初始化会话失败:', error);
-                // 出错时尝试创建新会话
+                // 只有非网络中断的错误才尝试创建新会话
                 await createSession();
             }
         }
@@ -2905,15 +2924,52 @@
             const supportsThinking = selectedOption.dataset.supportsThinking === 'true';
             wrapper.style.display = supportsThinking ? 'flex' : 'none';
 
-            // 如果不支持思考模式，重置开关
-            if (!supportsThinking) {
+            // 如果支持思考模式，恢复缓存的状态
+            if (supportsThinking) {
+                restoreThinkingState();
+            } else {
+                // 如果不支持思考模式，重置开关
                 const toggle = document.getElementById('thinking-toggle');
                 if (toggle) toggle.checked = false;
                 updateThinkingEffortVisibility();
             }
         }
 
+        function saveThinkingState() {
+            const toggle = document.getElementById('thinking-toggle');
+            const effortSelect = document.getElementById('thinking-effort');
+            if (!toggle) return;
+
+            const state = {
+                enabled: toggle.checked,
+                effort: effortSelect ? effortSelect.value : 'medium'
+            };
+            localStorage.setItem('lastThinkingState', JSON.stringify(state));
+        }
+
+        function restoreThinkingState() {
+            const savedStateRaw = localStorage.getItem('lastThinkingState');
+            if (!savedStateRaw) return;
+
+            try {
+                const state = JSON.parse(savedStateRaw);
+                const toggle = document.getElementById('thinking-toggle');
+                const effortSelect = document.getElementById('thinking-effort');
+
+                if (toggle) {
+                    toggle.checked = state.enabled || false;
+                }
+                if (effortSelect && state.effort) {
+                    effortSelect.value = state.effort;
+                }
+                updateThinkingEffortVisibility();
+            } catch (e) {
+                console.warn('[思考模式] 恢复状态失败:', e);
+            }
+        }
+
         function onThinkingToggleChange() {
+            saveThinkingState();
             updateThinkingEffortVisibility();
         }
 
@@ -2932,7 +2988,7 @@
         }
 
         function onThinkingEffortChange() {
-            // effort 值已经通过 select 的 value 管理
+            saveThinkingState();
         }
 
         function getThinkingParams() {
