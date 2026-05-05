@@ -542,6 +542,23 @@ class TaskManager:
         except Exception as e:
             logger.error(f"Failed to cancel verification on timeout: {e}")
 
+        # 恢复任务状态为 running（超时后 agent 会继续执行）
+        if task:
+            task.status = TaskStatus.RUNNING
+        try:
+            AgentTasksModel.update_status(
+                task_id=verification.task_id,
+                status='running'
+            )
+        except Exception as e:
+            logger.error(f"Failed to restore task status to running after timeout: {e}")
+
+        # 推送超时事件到前端，让前端清除 pendingVerificationId
+        self.push_message(verification.task_id, 'verification_timeout', {
+            'verification_id': verification.verification_id,
+            'error': '验证超时'
+        })
+
         return {"success": False, "error": "验证超时"}
     
     def submit_verification(

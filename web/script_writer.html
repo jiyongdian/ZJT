@@ -2221,6 +2221,8 @@
                             eventSource.close();
                             updateStatus('完成');
                             isProcessing = false;
+                            pendingVerificationId = null;
+                            pendingVerificationData = null;
                             const sendBtn = document.getElementById('send-btn');
                             sendBtn.disabled = false;
                             sendBtn.classList.remove('sending');
@@ -2236,6 +2238,8 @@
                             eventSource.close();
                             showError('任务执行错误: ' + data.error);
                             isProcessing = false;
+                            pendingVerificationId = null;
+                            pendingVerificationData = null;
                             const sendBtn = document.getElementById('send-btn');
                             sendBtn.disabled = false;
                             sendBtn.classList.remove('sending');
@@ -2243,6 +2247,16 @@
                             const verification = data.verification || {};
                             console.log('[SSE] Received human_verification_required:', verification);
                             handleHumanVerification(verification);
+                        } else if (data.type === 'verification_timeout') {
+                            console.log('[SSE] Received verification_timeout:', data);
+                            if (pendingVerificationId === data.verification_id) {
+                                pendingVerificationId = null;
+                                pendingVerificationData = null;
+                                const input = document.getElementById('message-input');
+                                input.value = '';
+                                input.placeholder = '输入消息...';
+                            }
+                            showError('验证已超时，请重新发送消息');
                         } else if (data.type === 'status') {
                             if (data.status) updateStatus(data.status);
                         }
@@ -2257,6 +2271,8 @@
                         showError('连接失败，请重试');
                     }
                     isProcessing = false;
+                    pendingVerificationId = null;
+                    pendingVerificationData = null;
                     const sendBtn = document.getElementById('send-btn');
                     sendBtn.disabled = false;
                     sendBtn.classList.remove('sending');
@@ -2494,12 +2510,20 @@
                 }
             } catch (error) {
                 console.error('Failed to submit verification:', error);
-                showError('提交验证时出错：' + error.message + '，请重新输入');
-                // 保持 pendingVerificationId，允许用户重试
-                // 注意：不重置 isProcessing，因为 Expert 仍在等待
                 const input = document.getElementById('message-input');
-                input.value = '';  // 清空失败的输入
-                input.focus();
+                input.value = '';
+
+                // 如果是 404/410，说明验证已过期（超时/已完成/已取消），清除状态让用户继续对话
+                if (error.response && (error.response.status === 404 || error.response.status === 410)) {
+                    pendingVerificationId = null;
+                    pendingVerificationData = null;
+                    input.placeholder = '输入消息...';
+                    showError('验证已过期，请重新发送消息');
+                } else {
+                    // 其他错误（网络问题等），保持状态允许用户重试
+                    showError('提交验证时出错：' + error.message + '，请重新输入');
+                    input.focus();
+                }
             }
         }
 
