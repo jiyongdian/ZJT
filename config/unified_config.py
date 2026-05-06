@@ -1688,16 +1688,6 @@ ALL_IMPLEMENTATIONS: List[ImplementationConfig] = [
         required_config_keys=['api_aggregator.site_5.api_key', 'api_aggregator.site_5.base_url']
     ),
     ImplementationConfig(
-        name='gemini_duomi_v1',
-        display_name='多米',
-        driver_class='GeminiDuomiV1Driver',
-        default_computing_power=2,
-        enabled=True,
-        description='多米平台 Gemini 接口',
-        sort_order=3000.0,
-        required_config_keys=['duomi.token']
-    ),
-    ImplementationConfig(
         name='duomi_gpt_image_v1',
         display_name='多米',
         driver_class='GptImageDuomiV1Driver',
@@ -1793,6 +1783,16 @@ ALL_IMPLEMENTATIONS: List[ImplementationConfig] = [
         site_number=0,
         sync_mode=True,  # 同步模式
         required_config_keys=['api_aggregator.site_0.api_key']
+    ),
+    ImplementationConfig(
+        name='gemini_duomi_v1',
+        display_name='多米',
+        driver_class='GeminiDuomiV1Driver',
+        default_computing_power=2,
+        enabled=True,
+        description='多米平台 Gemini 接口',
+        sort_order=10800.0,
+        required_config_keys=['duomi.token']
     ),
     ImplementationConfig(
         name='gemini_image_preview_site1_v1',
