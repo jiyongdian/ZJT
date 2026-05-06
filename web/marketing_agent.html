@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>营销智能体</title>
+    <link rel="icon" href="/files/logo.ico" type="image/vnd.microsoft.icon"/>
+    <link rel="stylesheet" href="css/marketing_agent.css">
+    <script src="js/vue.global.prod.js"></script>
+    <script src="js/axios.min.js"></script>
+    <script src="js/marked.min.js"></script>
+    <link rel="stylesheet" href="css/github.min.css">
+</head>
+<body>
+    <div id="app" class="app-container">
+        <!-- 左侧边栏 -->
+        <aside class="sidebar" :class="{open: sidebarOpen, collapsed: !sidebarOpen}">
+            <div class="sidebar-header">
+                <div class="sidebar-header-top">
+                    <span class="sidebar-title">开启创作</span>
+                </div>
+                <button class="new-chat-btn" @click="newChat">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                    <span>新对话</span>
+                </button>
+            </div>
+
+            <div class="sidebar-search">
+                <input type="text" v-model="searchQuery" placeholder="搜索对话...">
+            </div>
+
+            <div class="sidebar-nav">
+                <div class="sidebar-nav-item active" @click="newChat">
+                    <span class="sidebar-nav-icon">💬</span>
+                    <span>新对话</span>
+                </div>
+                <div class="sidebar-nav-item" @click="loadDefaultChat">
+                    <span class="sidebar-nav-icon">📝</span>
+                    <span>默认创作</span>
+                </div>
+            </div>
+
+            <div class="sidebar-section">最近</div>
+            <div class="sidebar-history">
+                <div
+                    v-for="session in filteredSessions"
+                    :key="session.id"
+                    class="sidebar-history-item"
+                    :class="{active: currentSessionId === session.id}"
+                    @click="selectSession(session.id)"
+                >
+                    <span class="sidebar-nav-icon">💬</span>
+                    <span class="history-title">{{ session.title || '新对话' }}</span>
+                    <span class="history-date">{{ formatShortDate(session.createdAt) }}</span>
+                </div>
+                <div v-if="filteredSessions.length === 0" style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 13px;">
+                    暂无历史对话
+                </div>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="user-avatar">{{ userInitial }}</div>
+                <span>{{ userPhone || '用户' }}</span>
+            </div>
+        </aside>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <!-- 顶部栏 -->
+            <header class="top-bar">
+                <div class="top-bar-left">
+                    <button class="menu-toggle" @click="sidebarOpen = !sidebarOpen">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 12h18M3 6h18M3 18h18"/>
+                        </svg>
+                    </button>
+                    <span class="top-bar-date">{{ currentDate }}</span>
+                </div>
+                <div class="top-bar-right">
+                    <div class="top-bar-search">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" v-model="searchQuery" placeholder="搜索...">
+                    </div>
+                    <div class="filter-dropdown">
+                        <select v-model="selectedDate">
+                            <option value="">时间</option>
+                            <option value="today">今天</option>
+                            <option value="week">本周</option>
+                            <option value="month">本月</option>
+                        </select>
+                    </div>
+                    <div class="filter-dropdown">
+                        <select v-model="selectedGenType">
+                            <option value="">生成类型</option>
+                            <option value="video">视频</option>
+                            <option value="image">图片</option>
+                            <option value="text">文本</option>
+                        </select>
+                    </div>
+                    <div class="filter-dropdown">
+                        <select v-model="selectedActionType">
+                            <option value="">操作类型</option>
+                            <option value="create">创作</option>
+                            <option value="edit">编辑</option>
+                            <option value="review">审核</option>
+                        </select>
+                    </div>
+                </div>
+            </header>
+
+            <!-- 消息流 -->
+            <div class="chat-messages" ref="chatMessages">
+                <!-- 欢迎卡片 -->
+                <div v-if="messages.length === 0" class="welcome-card">
+                    <div class="welcome-icon">🎯</div>
+                    <h2 class="welcome-title">营销智能体</h2>
+                    <p class="welcome-desc">我是您的营销助手，可以帮助您创作带货脚本、广告创意、产品文案等营销内容。请告诉我您的需求。</p>
+                </div>
+
+                <!-- 消息列表 -->
+                <template v-for="(msg, index) in messages" :key="index">
+                    <!-- 任务状态标签 -->
+                    <div v-if="msg.taskStatus" class="message" style="justify-content: center;">
+                        <div class="task-status completed" @click="msg.expanded = !msg.expanded">
+                            <span>{{ msg.taskStatus }}</span>
+                            <span>{{ msg.expanded ? '▼' : '▶' }}</span>
+                        </div>
+                    </div>
+
+                    <!-- 消息 -->
+                    <div class="message" :class="msg.role">
+                        <div class="message-avatar">{{ msg.role === 'user' ? '👤' : '🤖' }}</div>
+                        <div class="message-content">
+                            <div class="message-bubble" v-html="renderMarkdown(msg.content)"></div>
+                            <div class="message-time">{{ formatTime(msg.timestamp) }}</div>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- 打字指示器 -->
+                <div v-if="isLoading" class="message ai">
+                    <div class="message-avatar">🤖</div>
+                    <div class="message-content">
+                        <div class="message-bubble">
+                            <div class="typing-indicator">
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 继续按钮 -->
+                <div v-if="showContinue" class="message" style="justify-content: center;">
+                    <button class="continue-btn" @click="sendContinue">
+                        <span>继续</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 输入区 -->
+            <div class="input-area">
+                <div class="input-wrapper">
+                    <div class="input-box">
+                        <textarea
+                            class="input-textarea"
+                            v-model="inputText"
+                            placeholder="输入想法、剧本或上传参考，支持 '/' 使用技能，@添加主体，和Agent一起创作"
+                            rows="1"
+                            @keydown.enter.exact.prevent="handleSend"
+                            @input="autoResize"
+                            ref="inputTextarea"
+                        ></textarea>
+                    </div>
+                    <div class="input-actions">
+                        <div class="input-actions-left">
+                            <button class="action-btn">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 5v14M5 12h14"/>
+                                </svg>
+                                <span>上传</span>
+                            </button>
+                            <button class="action-btn">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                                </svg>
+                                <span>使用技能</span>
+                            </button>
+                            <button class="action-btn">
+                                <span style="color: var(--accent-color); font-weight: 600;">@</span>
+                                <span>添加主体</span>
+                            </button>
+                        </div>
+                        <div class="input-actions-right">
+                            <button class="action-btn">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                                    <line x1="12" y1="19" x2="12" y2="23"/>
+                                    <line x1="8" y1="23" x2="16" y2="23"/>
+                                </svg>
+                            </button>
+                            <button class="send-btn" @click="handleSend" :disabled="!inputText.trim() || isLoading">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- 加载遮罩 -->
+        <div v-if="isInitializing" class="loading-overlay">
+            <div class="loading-spinner"></div>
+        </div>
+
+        <!-- 错误提示 -->
+        <div v-if="errorMessage" class="error-toast" @click="errorMessage = ''">
+            {{ errorMessage }}
+        </div>
+    </div>
+
+    <script>
+    const { createApp, ref, computed, onMounted, nextTick } = Vue;
+
+    createApp({
+        setup() {
+            // ========== 状态 ==========
+            const messages = ref([]);
+            const inputText = ref('');
+            const isLoading = ref(false);
+            const isInitializing = ref(true);
+            const errorMessage = ref('');
+            const sidebarOpen = ref(true);
+            const searchQuery = ref('');
+            const selectedDate = ref('');
+            const selectedGenType = ref('');
+            const selectedActionType = ref('');
+            const sessions = ref([]);
+            const currentSessionId = ref(null);
+            const showContinue = ref(false);
+            const chatMessages = ref(null);
+            const inputTextarea = ref(null);
+
+            // 用户信息
+            const userId = ref('');
+            const authToken = ref('');
+            const userPhone = ref('');
+            const worldId = ref('');
+
+            // ========== 计算属性 ==========
+            const currentDate = computed(() => {
+                const now = new Date();
+                const month = now.getMonth() + 1;
+                const day = now.getDate();
+                return `${month}月${day}日`;
+            });
+
+            const userInitial = computed(() => {
+                return userPhone.value ? userPhone.value.charAt(0).toUpperCase() : 'U';
+            });
+
+            const filteredSessions = computed(() => {
+                if (!searchQuery.value) return sessions.value;
+                const q = searchQuery.value.toLowerCase();
+                return sessions.value.filter(s =>
+                    (s.title || '').toLowerCase().includes(q)
+                );
+            });
+
+            // ========== 方法 ==========
+
+            // 显示错误
+            function showError(msg) {
+                errorMessage.value = msg;
+                setTimeout(() => { errorMessage.value = ''; }, 5000);
+            }
+
+            // 格式化时间
+            function formatTime(timestamp) {
+                if (!timestamp) return '';
+                const d = new Date(timestamp);
+                const h = String(d.getHours()).padStart(2, '0');
+                const m = String(d.getMinutes()).padStart(2, '0');
+                return `${h}:${m}`;
+            }
+
+            // 格式化短日期
+            function formatShortDate(timestamp) {
+                if (!timestamp) return '';
+                const d = new Date(timestamp);
+                const now = new Date();
+                const diff = now - d;
+                if (diff < 86400000) {
+                    return formatTime(timestamp);
+                }
+                return `${d.getMonth() + 1}/${d.getDate()}`;
+            }
+
+            // 渲染 Markdown
+            function renderMarkdown(text) {
+                if (!text) return '';
+                return marked.parse(text);
+            }
+
+            // 自动调整 textarea 高度
+            function autoResize() {
+                nextTick(() => {
+                    const el = inputTextarea.value;
+                    if (el) {
+                        el.style.height = 'auto';
+                        el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+                    }
+                });
+            }
+
+            // 滚动到底部
+            function scrollToBottom() {
+                nextTick(() => {
+                    const el = chatMessages.value;
+                    if (el) {
+                        el.scrollTop = el.scrollHeight;
+                    }
+                });
+            }
+
+            // 获取 URL 参数
+            function getUrlParam(name) {
+                const params = new URLSearchParams(window.location.search);
+                return params.get(name) || '';
+            }
+
+            // 获取 world 列表
+            async function getWorlds() {
+                try {
+                    const response = await fetch('/api/worlds?page=1&page_size=100', {
+                        headers: {
+                            'Authorization': authToken.value,
+                            'X-User-Id': userId.value
+                        }
+                    });
+                    const data = await response.json();
+                    if (data.code === 0 || data.success) {
+                        return data.data?.data || data.worlds || [];
+                    }
+                    return [];
+                } catch (e) {
+                    console.error('获取世界列表失败:', e);
+                    return [];
+                }
+            }
+
+            // 创建 world
+            async function createWorld(name, description = '') {
+                try {
+                    const response = await fetch('/api/worlds', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': authToken.value,
+                            'X-User-Id': userId.value
+                        },
+                        body: JSON.stringify({ name, description })
+                    });
+                    const data = await response.json();
+                    if (data.code === 0 || data.success) {
+                        return data.data;
+                    }
+                    return null;
+                } catch (e) {
+                    console.error('创建世界失败:', e);
+                    return null;
+                }
+            }
+
+            // 创建 session
+            async function createSession() {
+                try {
+                    const response = await fetch('/api/session/create', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            user_id: userId.value,
+                            world_id: worldId.value,
+                            auth_token: authToken.value
+                        })
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        currentSessionId.value = data.session_id;
+                        return data.session_id;
+                    }
+                    throw new Error(data.error || '创建会话失败');
+                } catch (e) {
+                    showError(e.message);
+                    return null;
+                }
+            }
+
+            // 获取 session 历史
+            async function loadSessionHistory(sessionId) {
+                try {
+                    const response = await fetch(`/api/session/${sessionId}/history`, {
+                        headers: {
+                            'Authorization': authToken.value,
+                            'X-User-Id': userId.value
+                        }
+                    });
+                    const data = await response.json();
+                    if (data.code === 0 || data.success) {
+                        return data.history || [];
+                    }
+                    return [];
+                } catch (e) {
+                    console.error('加载历史失败:', e);
+                    return [];
+                }
+            }
+
+            // 发送消息
+            async function handleSend() {
+                const text = inputText.value.trim();
+                if (!text || isLoading.value) return;
+
+                // 确保有 session
+                if (!currentSessionId.value) {
+                    const sid = await createSession();
+                    if (!sid) return;
+                }
+
+                // 添加用户消息
+                messages.value.push({
+                    role: 'user',
+                    content: text,
+                    timestamp: new Date().toISOString()
+                });
+                inputText.value = '';
+                autoResize();
+                scrollToBottom();
+                showContinue.value = false;
+
+                // 发送请求
+                await sendMessageToApi(text);
+            }
+
+            // 继续按钮
+            async function sendContinue() {
+                showContinue.value = false;
+                await sendMessageToApi('继续');
+            }
+
+            // 调用 API 发送消息
+            async function sendMessageToApi(text) {
+                isLoading.value = true;
+                const sessionId = currentSessionId.value;
+
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 300000);
+
+                    // 1. 创建任务
+                    const taskResponse = await fetch(`/api/session/${sessionId}/task`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            message: text,
+                            auth_token: authToken.value
+                        }),
+                        signal: controller.signal
+                    });
+                    clearTimeout(timeoutId);
+
+                    const taskData = await taskResponse.json();
+                    if (!taskResponse.ok || !taskData.success) {
+                        if (taskData.error?.includes('算力') || taskData.message?.includes('算力')) {
+                            showError('算力不足，请充值后继续使用');
+                            return;
+                        }
+                        throw new Error(taskData.message || taskData.error || '发送失败');
+                    }
+
+                    const taskId = taskData.task_id;
+
+                    // 2. 接收流式响应
+                    await handleStream(taskId);
+
+                } catch (e) {
+                    if (e.name === 'AbortError') {
+                        showError('请求超时，请稍后重试');
+                    } else {
+                        showError(e.message);
+                    }
+                    // 添加错误消息
+                    messages.value.push({
+                        role: 'ai',
+                        content: '抱歉，处理您的请求时出现了错误。请稍后重试。',
+                        timestamp: new Date().toISOString()
+                    });
+                } finally {
+                    isLoading.value = false;
+                    scrollToBottom();
+                }
+            }
+
+            // 处理流式响应
+            async function handleStream(taskId) {
+                return new Promise((resolve, reject) => {
+                    const eventSource = new EventSource(`/api/task/${taskId}/stream`);
+                    let fullContent = '';
+                    let hasReceivedData = false;
+
+                    // 添加占位消息
+                    const msgIndex = messages.value.length;
+                    messages.value.push({
+                        role: 'ai',
+                        content: '',
+                        timestamp: new Date().toISOString()
+                    });
+
+                    eventSource.onmessage = (event) => {
+                        try {
+                            const data = JSON.parse(event.data);
+
+                            if (data.type === 'content') {
+                                hasReceivedData = true;
+                                fullContent += data.content || '';
+                                messages.value[msgIndex].content = fullContent;
+                                scrollToBottom();
+                            } else if (data.type === 'status') {
+                                // 状态更新，可忽略或显示
+                            } else if (data.type === 'error') {
+                                eventSource.close();
+                                messages.value[msgIndex].content = fullContent || '处理出错，请重试';
+                                reject(new Error(data.message || 'Stream error'));
+                            } else if (data.type === 'complete' || data.type === 'done') {
+                                eventSource.close();
+                                messages.value[msgIndex].content = fullContent || data.content || '';
+                                showContinue.value = true;
+                                resolve();
+                            }
+                        } catch (e) {
+                            // 非 JSON 数据，直接追加
+                            hasReceivedData = true;
+                            fullContent += event.data;
+                            messages.value[msgIndex].content = fullContent;
+                            scrollToBottom();
+                        }
+                    };
+
+                    eventSource.onerror = (e) => {
+                        eventSource.close();
+                        if (!hasReceivedData) {
+                            messages.value[msgIndex].content = '连接出错，请重试';
+                            reject(new Error('EventSource error'));
+                        } else {
+                            // 已经收到部分数据，视为完成
+                            showContinue.value = true;
+                            resolve();
+                        }
+                    };
+
+                    // 超时处理
+                    setTimeout(() => {
+                        eventSource.close();
+                        if (!hasReceivedData) {
+                            messages.value[msgIndex].content = '请求超时，请重试';
+                            reject(new Error('Stream timeout'));
+                        } else {
+                            showContinue.value = true;
+                            resolve();
+                        }
+                    }, 300000);
+                });
+            }
+
+            // 新建对话
+            async function newChat() {
+                currentSessionId.value = null;
+                messages.value = [];
+                showContinue.value = false;
+                inputText.value = '';
+                autoResize();
+                scrollToBottom();
+            }
+
+            // 加载默认创作
+            async function loadDefaultChat() {
+                await newChat();
+                // 可以预加载一些默认提示
+                inputText.value = '帮我创作一个带货短视频脚本';
+                autoResize();
+            }
+
+            // 选择会话
+            async function selectSession(sessionId) {
+                currentSessionId.value = sessionId;
+                const history = await loadSessionHistory(sessionId);
+                messages.value = history.map(h => ({
+                    role: h.role === 'assistant' ? 'ai' : h.role,
+                    content: h.content,
+                    timestamp: h.timestamp
+                }));
+                scrollToBottom();
+            }
+
+            // 加载本地历史
+            function loadLocalSessions() {
+                try {
+                    const data = localStorage.getItem('marketing_sessions');
+                    if (data) {
+                        sessions.value = JSON.parse(data);
+                    }
+                } catch (e) {
+                    console.error('加载本地历史失败:', e);
+                }
+            }
+
+            // 保存本地历史
+            function saveLocalSessions() {
+                try {
+                    localStorage.setItem('marketing_sessions', JSON.stringify(sessions.value));
+                } catch (e) {
+                    console.error('保存本地历史失败:', e);
+                }
+            }
+
+            // ========== 初始化 ==========
+            onMounted(async () => {
+                // 获取用户信息
+                userId.value = getUrlParam('user_id') || localStorage.getItem('user_id') || '';
+                authToken.value = localStorage.getItem('auth_token') || '';
+                userPhone.value = localStorage.getItem('phone') || '';
+
+                if (!userId.value || !authToken.value) {
+                    isInitializing.value = false;
+                    showError('请先登录');
+                    return;
+                }
+
+                // 获取 world
+                const worlds = await getWorlds();
+                if (worlds.length === 0) {
+                    // 创建默认营销世界
+                    const newWorld = await createWorld('营销世界', '默认营销创作世界');
+                    if (newWorld) {
+                        worldId.value = String(newWorld.id || newWorld.world_id || '');
+                    }
+                } else {
+                    worldId.value = String(worlds[0].id || worlds[0].world_id || '');
+                }
+
+                if (!worldId.value) {
+                    isInitializing.value = false;
+                    showError('无法获取或创建世界，请稍后重试');
+                    return;
+                }
+
+                // 加载本地历史
+                loadLocalSessions();
+
+                // 检查是否有初始消息
+                const initialMessage = getUrlParam('initial_message');
+                if (initialMessage) {
+                    inputText.value = decodeURIComponent(initialMessage);
+                    autoResize();
+                    // 自动发送
+                    await handleSend();
+                }
+
+                isInitializing.value = false;
+            });
+
+            return {
+                messages,
+                inputText,
+                isLoading,
+                isInitializing,
+                errorMessage,
+                sidebarOpen,
+                searchQuery,
+                selectedDate,
+                selectedGenType,
+                selectedActionType,
+                sessions,
+                currentSessionId,
+                showContinue,
+                chatMessages,
+                inputTextarea,
+                currentDate,
+                userInitial,
+                userPhone,
+                filteredSessions,
+                formatTime,
+                formatShortDate,
+                renderMarkdown,
+                autoResize,
+                handleSend,
+                sendContinue,
+                newChat,
+                loadDefaultChat,
+                selectSession
+            };
+        }
+    }).mount('#app');
+    </script>
+</body>
+</html>
