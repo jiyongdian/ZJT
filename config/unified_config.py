@@ -1012,6 +1012,7 @@ class DriverKey:
 
 # ============ Agent 相关常量 ============
 ASK_USER_MAX_CONSECUTIVE_FAILS = 2  # ask_user 连续失败/超时上限，超过则终止任务
+COMPUTING_POWER_CHECK_THRESHOLD = 1  # Agent 循环算力检查阈值，低于此值停止任务
 
 
 # ============ 任务类型 ID 常量 ============

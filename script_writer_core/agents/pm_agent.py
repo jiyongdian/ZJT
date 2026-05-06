@@ -1,7 +1,7 @@
 import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
-from .base_agent import BaseAgent
+from .base_agent import BaseAgent, InsufficientComputingPowerError, check_computing_power_sync
 from .expert_agent import ExpertAgent
 from .ask_user_mixin import AskUserMixin
 from .summarizer import ConversationSummarizer
@@ -155,7 +155,11 @@ class PMAgent(BaseAgent, AskUserMixin):
 
         # 设置 task_id，供 AskUserMixin 使用
         self.task_id = task.task_id
-        
+
+        # 重置失败计数器，确保每个新任务独立（避免算力不足停止后残留计数导致新任务立即失败）
+        self.consecutive_failures = 0
+        self.total_failures = 0
+
         try:
             # 添加用户消息到历史
             self.add_to_history("user", task.user_message)
@@ -193,7 +197,18 @@ class PMAgent(BaseAgent, AskUserMixin):
                     'content': f"任务执行停止: {reason}"
                 })
                 return f"任务执行停止: {reason}"
-            
+
+            # 检查算力是否充足
+            try:
+                check_computing_power_sync(self.auth_token, self.agent_id)
+            except InsufficientComputingPowerError as e:
+                logger.warning(f"{self.agent_id}: 算力不足，停止任务 - {e.message}")
+                self.task_manager.push_message(task.task_id, 'message', {
+                    'role': 'assistant',
+                    'content': f"任务执行停止: {e.message}"
+                })
+                return f"任务执行停止: {e.message}"
+
             logger.info(f"{self.agent_id}: PM Loop iteration {iteration}/{max_iterations}")
             
             self.task_manager.push_message(task.task_id, 'progress', {
@@ -232,6 +247,7 @@ class PMAgent(BaseAgent, AskUserMixin):
 
                 # 使用 LLM 客户端工厂获取对应模型的客户端并调用 API
                 # 传入 vendor_id 确保正确路由到目标供应商（如 zjt_api）
+                history_len = len(self.conversation_history)  # 记录调用前的历史长度，用于异常时截断
                 response = get_llm_client(self.model, vendor_id=task.vendor_id).call_api(
                     model=self.model,
                     messages=messages,
@@ -273,7 +289,17 @@ class PMAgent(BaseAgent, AskUserMixin):
                     
                     logger.info(f"{self.agent_id}: PM completed with response")
                     return content
-                    
+
+            except InsufficientComputingPowerError as e:
+                # 截断历史，移除不完整的 tool_calls 消息（防止重试时 LLM 报错）
+                logger.info(f"{self.agent_id}: 截断不完整的历史，从 {len(self.conversation_history)} 恢复到 {history_len}")
+                self.conversation_history = self.conversation_history[:history_len]
+                logger.warning(f"{self.agent_id}: 算力不足 - {e.message}")
+                self.task_manager.push_message(task.task_id, 'message', {
+                    'role': 'assistant',
+                    'content': f"任务执行停止: {e.message}"
+                })
+                return f"任务执行停止: {e.message}"
             except Exception as e:
                 logger.error(f"{self.agent_id}: Error in PM loop - {e}", exc_info=True)
                 self.total_failures += 1
@@ -369,6 +395,8 @@ class PMAgent(BaseAgent, AskUserMixin):
                     world_id=self.world_id,
                     auth_token=self.auth_token
                 )
+        except InsufficientComputingPowerError:
+            raise
         except Exception as e:
             logger.error(f"{self.agent_id}: Tool execution failed - {e}", exc_info=True)
             self.total_failures += 1

@@ -2,7 +2,7 @@ import logging
 import json
 from typing import Dict, Any, List, Optional
 from datetime import datetime
-from .base_agent import BaseAgent
+from .base_agent import BaseAgent, InsufficientComputingPowerError, check_computing_power_sync
 from .ask_user_mixin import AskUserMixin
 from .history_manager import ExpertHistoryManager
 from .tool_definitions import ASK_USER_TOOL_DEFINITION
@@ -143,7 +143,9 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                 "success": True,
                 "result": result
             }
-            
+
+        except InsufficientComputingPowerError:
+            raise
         except Exception as e:
             logger.error(f"{self.agent_id}: Task failed - {e}", exc_info=True)
             
@@ -166,7 +168,10 @@ class ExpertAgent(BaseAgent, AskUserMixin):
         
         while iteration < max_iterations:
             iteration += 1
-            
+
+            # 检查算力是否充足
+            check_computing_power_sync(self.auth_token, self.agent_id)
+
             try:
                 # 从数据库获取模型的最大输出 token 数
                 max_output_tokens = 65536  # 默认值
@@ -181,6 +186,7 @@ class ExpertAgent(BaseAgent, AskUserMixin):
 
                 # 使用 LLM 客户端工厂获取对应模型的客户端并调用 API
                 # 传入 vendor_id 确保正确路由到目标供应商（如 zjt_api）
+                history_len = len(self.conversation_history)  # 记录调用前的历史长度，用于异常时截断
                 response = get_llm_client(self.model, vendor_id=self.vendor_id).call_api(
                     model=self.model,
                     messages=self._format_messages_for_api(),
@@ -208,7 +214,12 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                     self.add_to_history("assistant", history_content)
                     logger.info(f"{self.agent_id}: Task completed with response")
                     return content
-                    
+
+            except InsufficientComputingPowerError:
+                # 截断历史，移除不完整的 tool_calls 消息（防止重试时 LLM 报错）
+                logger.info(f"{self.agent_id}: 截断不完整的历史，从 {len(self.conversation_history)} 恢复到 {history_len}")
+                self.conversation_history = self.conversation_history[:history_len]
+                raise
             except Exception as e:
                 logger.error(f"{self.agent_id}: Error in task loop - {e}", exc_info=True)
                 raise

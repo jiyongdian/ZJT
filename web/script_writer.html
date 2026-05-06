@@ -2513,6 +2513,23 @@
                 const input = document.getElementById('message-input');
                 input.value = '';
 
+                // 401: token 过期
+                if (error.response && error.response.status === 401) {
+                    pendingVerificationId = null;
+                    pendingVerificationData = null;
+                    handleTokenExpired();
+                    return;
+                }
+
+                // 400 算力不足：清除验证状态，提醒用户充值
+                if (error.response && error.response.status === 400 && error.response.data?.error_code === 'INSUFFICIENT_POWER') {
+                    pendingVerificationId = null;
+                    pendingVerificationData = null;
+                    input.placeholder = '输入消息...';
+                    showError(error.response.data.message || '您的算力不足，请充值后再试');
+                    return;
+                }
+
                 // 如果是 404/410，说明验证已过期（超时/已完成/已取消），清除状态让用户继续对话
                 if (error.response && (error.response.status === 404 || error.response.status === 410)) {
                     pendingVerificationId = null;
