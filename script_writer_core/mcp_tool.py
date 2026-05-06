@@ -67,6 +67,87 @@ def _get_model_name_by_task_id(task_id: int) -> str:
     config = UnifiedConfigRegistry.get_by_id(task_id)
     return config.name if config else "unknown"
 
+
+def get_text_to_image_model_info(user_id: str, world_id: str, auth_token: str) -> Dict[str, Any]:
+    """
+    获取当前用户/世界选中的生图模型信息 - MCP工具函数
+
+    返回模型名称、算力、支持尺寸、是否支持宫格等信息，供 Agent 在生成前了解成本和能力。
+
+    Args:
+        user_id: 用户ID（必填）
+        world_id: 世界ID（必填）
+        auth_token: 认证令牌（必填）
+
+    Returns:
+        dict: 模型信息，包含 task_id、name、computing_power、supported_sizes、supports_grid_image 等
+    """
+    try:
+        task_id = _get_text_to_image_task_id(user_id, world_id)
+        from config.unified_config import UnifiedConfigRegistry
+        config = UnifiedConfigRegistry.get_by_id(task_id)
+        if not config:
+            return {'success': False, 'error': f'未找到模型配置: task_id={task_id}'}
+
+        max_size = config.supported_sizes[-1] if config.supported_sizes else None
+        default_size = config.default_size or max_size
+
+        # 计算不同尺寸的单张算力
+        from utils.computing_power import get_computing_power_for_task
+        power_default = get_computing_power_for_task(task_id, context={'resolution': default_size} if default_size else None)
+        power_max = get_computing_power_for_task(task_id, context={'resolution': max_size} if max_size else None)
+
+        return {
+            'success': True,
+            'task_id': task_id,
+            'name': config.name,
+            'computing_power': config.computing_power,
+            'supported_sizes': config.supported_sizes,
+            'supported_ratios': config.supported_ratios,
+            'supports_grid_image': config.supports_grid_image,
+            'default_size': default_size,
+            'max_size': max_size,
+            'cost_per_image_default_size': power_default,
+            'cost_per_image_max_size': power_max,
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'获取模型信息失败: {str(e)}'}
+
+
+def get_user_computing_power(user_id: str, world_id: str, auth_token: str) -> Dict[str, Any]:
+    """
+    查询用户剩余算力余额 - MCP工具函数
+
+    Args:
+        user_id: 用户ID（必填，用于格式兼容，实际鉴权使用 auth_token）
+        world_id: 世界ID（必填，当前未使用，为兼容ToolExecutor调用签名）
+        auth_token: 认证令牌（必填）
+
+    Returns:
+        dict: 包含 computing_power（剩余算力）的结果
+    """
+    try:
+        if not auth_token:
+            return {'success': False, 'error': '认证令牌不能为空'}
+
+        from perseids_server.client import make_perseids_request
+        success, message, data = make_perseids_request(
+            endpoint='user/check_computing_power',
+            method='GET',
+            headers={'Authorization': f'Bearer {auth_token}'}
+        )
+        if not success:
+            return {'success': False, 'error': message}
+
+        return {
+            'success': True,
+            'computing_power': data.get('computing_power', 0),
+            'message': f'当前剩余算力: {data.get("computing_power", 0)}'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'查询算力失败: {str(e)}'}
+
+
 def get_skill_loader():
     """获取技能加载器实例（单例模式）"""
     global _skill_loader
@@ -2226,8 +2307,26 @@ MCP_TOOLS = [
         }
     },
     {
+        "name": "get_text_to_image_model_info",
+        "description": "获取当前用户选中的生图模型信息，包括模型名称、算力价格、支持的尺寸和比例、是否支持4宫格等。在生成图片前调用此工具可以了解模型能力和成本。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
+        "name": "get_user_computing_power",
+        "description": "查询当前用户的剩余算力余额。在批量生成图片前调用此工具，可以预估是否有足够算力完成任务，避免提交后因算力不足而失败。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
         "name": "generate_text_to_image",
-        "description": "文本生成图片功能（非阻塞版本，支持后台任务）。根据提示词发起图片生成请求，立即返回project_ids。如果指定item_type和item_name，会创建后台任务自动处理图片下载和更新。注意：生图模型由用户在前端界面选择，大模型无需关心具体使用哪个模型，返回结果中会包含使用的模型信息。",
+        "description": "文本生图（非阻塞）。发起图片生成请求，立即返回project_ids。返回结果包含 model_used、image_size_used、computing_power_required 等算力信息。注意：生图模型由用户在前端界面选择，不同模型算力价格不同，请先调用 get_text_to_image_model_info 了解当前模型。",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -2243,6 +2342,10 @@ MCP_TOOLS = [
                     "type": "integer",
                     "description": "生成图片数量（可选，默认：1）"
                 },
+                "image_size": {
+                    "type": "string",
+                    "description": "图片分辨率（可选），如 1K/2K/3K/4K，不填则使用模型默认值。4宫格生成时自动使用模型支持的最大尺寸"
+                },
                 "item_type": {
                     "type": "integer",
                     "description": "物品类型（可选）：1=角色(character), 2=地点(location), 3=道具(props)。指定后会创建后台任务自动处理"
@@ -2257,7 +2360,7 @@ MCP_TOOLS = [
     },
     {
         "name": "generate_4grid_character_images",
-        "description": "生成4宫格角色图像并自动切分更新到各个角色（一站式解决方案）。自动构建4宫格JSON格式，添加image_size=4k参数生成高分辨率图像，轮询等待生成完成，自动下载并切分4宫格图像为4个独立图像，自动更新每个角色的reference_image字段。注意：生图模型由用户在前端界面选择，大模型无需关心具体使用哪个模型。",
+        "description": "生成4宫格角色图像并自动切分更新到各个角色（一站式解决方案）。自动构建4宫格JSON格式，使用模型支持的最大分辨率生成图像（如4K/3K/2K，取决于所选模型），轮询等待生成完成，自动下载并切分4宫格图像为4个独立图像，自动更新每个角色的reference_image字段。注意：不同生图模型算力价格不同，请先调用 get_text_to_image_model_info 了解当前模型。",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -2281,7 +2384,7 @@ MCP_TOOLS = [
     },
     {
         "name": "generate_4grid_location_images",
-        "description": "生成4宫格场景图像并自动切分更新到各个场景（一站式解决方案）。自动构建4宫格JSON格式，添加image_size=4k参数生成高分辨率图像，轮询等待生成完成，自动下载并切分4宫格图像为4个独立图像，自动更新每个场景的reference_image字段。注意：生图模型由用户在前端界面选择，大模型无需关心具体使用哪个模型。",
+        "description": "生成4宫格场景图像并自动切分更新到各个场景（一站式解决方案）。自动构建4宫格JSON格式，使用模型支持的最大分辨率生成图像（如4K/3K/2K，取决于所选模型），轮询等待生成完成，自动下载并切分4宫格图像为4个独立图像，自动更新每个场景的reference_image字段。注意：不同生图模型算力价格不同，请先调用 get_text_to_image_model_info 了解当前模型。",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -2305,7 +2408,7 @@ MCP_TOOLS = [
     },
     {
         "name": "generate_4grid_prop_images",
-        "description": "生成4宫格道具图像并自动切分更新到各个道具（一站式解决方案）。自动构建4宫格JSON格式，添加image_size=4k参数生成高分辨率图像，轮询等待生成完成，自动下载并切分4宫格图像为4个独立图像，自动更新每个道具的reference_image字段。注意：生图模型由用户在前端界面选择，大模型无需关心具体使用哪个模型。",
+        "description": "生成4宫格道具图像并自动切分更新到各个道具（一站式解决方案）。自动构建4宫格JSON格式，使用模型支持的最大分辨率生成图像（如4K/3K/2K，取决于所选模型），轮询等待生成完成，自动下载并切分4宫格图像为4个独立图像，自动更新每个道具的reference_image字段。注意：不同生图模型算力价格不同，请先调用 get_text_to_image_model_info 了解当前模型。",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -2490,13 +2593,14 @@ def skill(SkillName: str) -> Dict[str, Any]:
 
 def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt: str,
                           aspect_ratio: str = "16:9", count: int = 1,
+                          image_size: Optional[str] = None,
                           item_type: int = None, item_name: str = None,
                           force_update_exist_image: bool = False,
                           is_grid: bool = False) -> Dict[str, Any]:
     """
     文本生成图片 - MCP工具函数（非阻塞版本，支持后台任务处理）
 
-    注意：生图模型由用户在前端界面选择，存储在会话配置中，大模型无需关心具体使用哪个模型。
+    注意：生图模型由用户在前端界面选择，不同模型算力价格不同，请先调用 get_text_to_image_model_info 了解当前模型。
 
     Args:
         user_id: 用户ID（必填）
@@ -2505,16 +2609,18 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
         prompt: 图片描述提示词（必填）
         aspect_ratio: 图片宽高比（默认：16:9）
         count: 生成图片数量（默认：1）
+        image_size: 图片分辨率（可选），如 1K/2K/3K/4K，不填则使用模型默认值。
+                    4宫格生成时自动使用模型支持的最大尺寸，无需手动指定。
         item_type: 物品类型（可选）：1=角色(character), 2=地点(location), 3=道具(props)
         item_name: 物品名称（可选），当指定item_type时必填，会自动更新对应物品的reference_image字段
         force_update_exist_image: 是否强制更新已存在的图像（默认：False）
                                  - False: 如果角色/场景/道具已有参考图像，则跳过生成
                                  - True: 强制生成并更新，覆盖现有图像
         is_grid: 是否为4宫格批量生成（默认：False）
-                - True: 添加 image_size="4k" 参数，用于4宫格高分辨率生成
+                - True: 自动使用模型支持的最大尺寸，用于4宫格高分辨率生成
 
     Returns:
-        dict: 操作结果，包含success状态、project_ids、使用的模型信息等
+        dict: 操作结果，包含success状态、project_ids、使用的模型信息、算力消耗等
     """
     # 获取用户配置的生图模型 task_id
     text_to_image_task_id = _get_text_to_image_task_id(user_id, world_id)
@@ -2607,19 +2713,41 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
             'user_id': user_id,
             'auth_token': auth_token
         }
-        
-        # 如果是4宫格生成，添加 image_size 参数
+
+        # 确定 image_size
+        from config.unified_config import UnifiedConfigRegistry
+        config = UnifiedConfigRegistry.get_by_id(text_to_image_task_id)
         if is_grid:
-            from config.unified_config import UnifiedConfigRegistry
-            config = UnifiedConfigRegistry.get_by_id(text_to_image_task_id)
+            # 4宫格生成：自动使用模型支持的最大尺寸
             if config and config.supported_sizes:
-                # 获取最大尺寸（supported_sizes 列表通常是排序的，取最后一个即可）
                 max_size = config.supported_sizes[-1]
                 request_data['image_size'] = max_size
             else:
-                # 如果配置中没有 supported_sizes，使用默认 4k
                 request_data['image_size'] = '4k'
-        
+        elif image_size:
+            # Agent 指定了 image_size，校验是否在支持列表中
+            if config and config.supported_sizes:
+                supported_lower = [s.lower() for s in config.supported_sizes]
+                if image_size.lower() not in supported_lower:
+                    return {
+                        'success': False,
+                        'error': f'不支持的图片尺寸: {image_size}，当前模型支持: {config.supported_sizes}'
+                    }
+            request_data['image_size'] = image_size
+        # 否则不设置 image_size，让后端使用模型默认尺寸
+
+        # 计算预估算力
+        from utils.computing_power import get_computing_power_for_task
+        context_for_power = {}
+        if 'image_size' in request_data:
+            context_for_power['resolution'] = request_data['image_size']
+        elif config and config.default_size:
+            context_for_power['resolution'] = config.default_size
+        computing_power_per_image = get_computing_power_for_task(
+            text_to_image_task_id, context=context_for_power or None
+        )
+        computing_power_total = computing_power_per_image * count
+
         # 发起文本生成图片请求
         api_url = f"{comfyui_base_url.rstrip('/')}/api/text-to-image"
         
@@ -2674,7 +2802,10 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
                 'status': 'submitted',
                 'comfyui_base_url': comfyui_base_url,
                 'model_used': model_name,
-                'text_to_image_task_id': text_to_image_task_id
+                'text_to_image_task_id': text_to_image_task_id,
+                'image_size_used': request_data.get('image_size'),
+                'computing_power_required': computing_power_per_image,
+                'computing_power_total': computing_power_total,
             }
 
             if task_id:
@@ -2690,9 +2821,34 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
             return result
             
         except requests.exceptions.RequestException as e:
+            # 尝试解析结构化错误（如算力不足）
+            error_detail = f'图片生成请求失败: {str(e)}'
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    resp_data = e.response.json()
+                    detail = resp_data.get('detail', '')
+                    if detail:
+                        error_detail = detail
+                        # 解析算力不足信息：格式如 "需要 X 算力，当前仅有 Y 算力"
+                        import re
+                        match = re.search(r'需要\s*(\d+)\s*算力.*当前仅有\s*(\d+)\s*算力', detail)
+                        if match:
+                            return {
+                                'success': False,
+                                'error': '算力不足',
+                                'detail': detail,
+                                'computing_power_required': int(match.group(1)),
+                                'computing_power_available': int(match.group(2)),
+                                'shortage': int(match.group(1)) - int(match.group(2)),
+                                'model_used': model_name,
+                            }
+                except (ValueError, KeyError):
+                    pass
             return {
                 'success': False,
-                'error': f'图片生成请求失败: {str(e)}'
+                'error': error_detail,
+                'model_used': model_name,
+                'computing_power_required': computing_power_total,
             }
         
     except Exception as e:
@@ -2708,7 +2864,7 @@ def generate_4grid_images(user_id: str, world_id: str, auth_token: str,
     """
     生成4宫格图像并自动切分更新到各个项目（角色/场景/道具）
 
-    注意：生图模型由用户在前端界面选择，存储在会话配置中，大模型无需关心具体使用哪个模型。
+    注意：不同生图模型算力价格不同，请先调用 get_text_to_image_model_info 了解当前模型。
 
     Args:
         user_id: 用户ID（必填）
@@ -2719,7 +2875,7 @@ def generate_4grid_images(user_id: str, world_id: str, auth_token: str,
         item_type: 项目类型（4=角色四宫格, 5=场景四宫格, 6=道具四宫格）
 
     Returns:
-        dict: 操作结果，包含每个项目的更新状态
+        dict: 操作结果，包含每个项目的更新状态、算力消耗等
     """
     import logging
     logger = logging.getLogger(__name__)
@@ -2831,7 +2987,7 @@ def generate_4grid_character_images(user_id: str, world_id: str, auth_token: str
     """
     生成4宫格角色图像并自动切分更新到各个角色（向后兼容的包装函数）
 
-    注意：生图模型由用户在前端界面选择，存储在会话配置中，大模型无需关心具体使用哪个模型。
+    注意：不同生图模型算力价格不同，请先调用 get_text_to_image_model_info 了解当前模型。
 
     Args:
         user_id: 用户ID（必填）
@@ -2841,7 +2997,7 @@ def generate_4grid_character_images(user_id: str, world_id: str, auth_token: str
         prompts: 4个角色的提示词列表（必须是4个）
 
     Returns:
-        dict: 操作结果，包含每个角色的更新状态
+        dict: 操作结果，包含每个角色的更新状态、算力消耗等
     """
     result = generate_4grid_images(
         user_id=user_id,
@@ -2864,7 +3020,7 @@ def generate_4grid_location_images(user_id: str, world_id: str, auth_token: str,
     """
     生成4宫格场景图像并自动切分更新到各个场景（向后兼容的包装函数）
 
-    注意：生图模型由用户在前端界面选择，存储在会话配置中，大模型无需关心具体使用哪个模型。
+    注意：不同生图模型算力价格不同，请先调用 get_text_to_image_model_info 了解当前模型。
 
     Args:
         user_id: 用户ID（必填）
@@ -2874,7 +3030,7 @@ def generate_4grid_location_images(user_id: str, world_id: str, auth_token: str,
         prompts: 4个场景的提示词列表（必须是4个）
 
     Returns:
-        dict: 操作结果，包含每个场景的更新状态
+        dict: 操作结果，包含每个场景的更新状态、算力消耗等
     """
     result = generate_4grid_images(
         user_id=user_id,
@@ -2897,7 +3053,7 @@ def generate_4grid_prop_images(user_id: str, world_id: str, auth_token: str,
     """
     生成4宫格道具图像并自动切分更新到各个道具（向后兼容的包装函数）
 
-    注意：生图模型由用户在前端界面选择，存储在会话配置中，大模型无需关心具体使用哪个模型。
+    注意：不同生图模型算力价格不同，请先调用 get_text_to_image_model_info 了解当前模型。
 
     Args:
         user_id: 用户ID（必填）
@@ -2907,7 +3063,7 @@ def generate_4grid_prop_images(user_id: str, world_id: str, auth_token: str,
         prompts: 4个道具的提示词列表（必须是4个）
 
     Returns:
-        dict: 操作结果，包含每个道具的更新状态
+        dict: 操作结果，包含每个道具的更新状态、算力消耗等
     """
     result = generate_4grid_images(
         user_id=user_id,

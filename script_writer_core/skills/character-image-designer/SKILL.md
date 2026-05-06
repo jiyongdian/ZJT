@@ -1,7 +1,7 @@
 ---
 name: 角色形象设计师
 description: 角色形象设计师专门负责管理和生成角色的视觉形象。它能够扫描所有角色，识别缺少参考图像的角色，并批量生成角色的参考图像。
-allowed-tools: ["read_world", "list_character_jsons", "read_character_json", "generate_text_to_image", "generate_4grid_character_images", "get_task_status"]
+allowed-tools: ["read_world", "list_character_jsons", "read_character_json", "get_text_to_image_model_info", "get_user_computing_power", "generate_text_to_image", "generate_4grid_character_images", "get_task_status"]
 ---
 
 # 角色形象设计师 (Character Image Designer)
@@ -49,7 +49,7 @@ ENDIF
 **优势**：
 - 批量生成2-4个角色，大幅提升效率
 - 自动切分和更新，无需手动处理
-- 高分辨率4K图像质量
+- 使用模型支持的最大分辨率生成（如4K/3K/2K，取决于所选模型）
 - 保持同批次角色视觉风格一致
 - 对于2-3个角色，空余位置用黑色占位图片填充（提示词设为"pure black background"）
 
@@ -152,6 +152,19 @@ ABSOLUTELY NO text, NO watermark, NO letters, NO characters, NO words, NO signs,
   - `color_language`: 色彩语言（如：暖色调、冷色调、高饱和等）
   - `composition_preference`: 构图倾向
 - **这些信息将用于所有角色的提示词生成，确保画风一致性**
+
+### 0.5. 检查模型信息与算力余额（必须在生成前执行）
+- 调用 `get_text_to_image_model_info()` 获取当前选中的生图模型信息：
+  - `name`: 模型名称
+  - `cost_per_image_max_size`: 单张最大尺寸的算力消耗
+  - `supports_grid_image`: 是否支持4宫格
+  - `max_size`: 模型支持的最大分辨率（如 4K、3K 等）
+- 调用 `get_user_computing_power()` 获取用户剩余算力余额
+- **预估总成本**：根据角色数量计算预估算力消耗
+  - 4宫格生成：`cost_per_image_max_size * ceil(角色数 / 4)`
+  - 逐个生成：`cost_per_image_default_size * 角色数`
+- **如果余额不足**，必须向用户报告所需算力和当前余额，停止生成流程
+- **如果当前模型不支持4宫格**（`supports_grid_image=false`），当角色数量>=2时需告知用户当前模型不支持4宫格，将改用逐个生成
 
 ### 1. 角色列表获取与分析
 - 使用 `list_character_jsons()` 获取所有角色文件列表
@@ -443,10 +456,10 @@ Japanese anime style, Ancient Chinese setting, Warm earthy color palette. A char
   - `prompts`: 4个提示词的列表（必须是4个）
     - 如果实际角色<4个，用"pure black background"补齐
     - 例如：2个角色 → [提示词1, 提示词2, "pure black background", "pure black background"]
-- **注意**：生图模型由用户在前端界面选择，大模型无需关心具体使用哪个模型。
+- **注意**：生图模型由用户在前端界面选择，不同模型算力价格不同，请先调用 `get_text_to_image_model_info()` 了解当前模型和成本。
 - **功能说明**：
   - 自动构建4宫格JSON格式
-  - 自动添加 `image_size="4k"` 参数生成高分辨率图像
+  - 自动使用模型支持的最大分辨率生成图像（如4K/3K/2K，取决于所选模型）
   - 自动轮询等待图像生成完成（最多10分钟）
   - 自动下载并切分4宫格图像为4个独立图像（每个图像包含角色的三视角图）
   - 自动更新每个角色的 `reference_image` 字段
@@ -475,7 +488,7 @@ Japanese anime style, Ancient Chinese setting, Warm earthy color palette. A char
   - `prompt`: 单个角色的提示词
   - `item_type`: 1 (角色类型)
   - `item_name`: 角色名称
-- **注意**：生图模型由用户在前端界面选择，大模型无需关心具体使用哪个模型。
+- **注意**：生图模型由用户在前端界面选择，不同模型算力价格不同，请先调用 `get_text_to_image_model_info()` 了解当前模型和成本。
 
 **❌ 错误示例（禁止）：**
 ```python
@@ -625,12 +638,16 @@ if not result.get("success"):
 - `read_world` - 读取世界设定（获取画风信息）
 - `read_character_json` - 读取角色信息
 - `list_character_jsons` - 列出所有角色
+- `get_text_to_image_model_info` - 获取当前生图模型信息（名称、算力、支持尺寸等）
+- `get_user_computing_power` - 查询用户剩余算力余额
 - `generate_text_to_image` - 生成图像
 - `get_task_status` - 查询任务状态
 
 ## 输出格式
 生成完成后提供简洁的状态报告：
 - 角色信息读取状态
+- 当前模型名称和单张算力消耗
 - 任务冲突检查结果
 - 图像生成任务提交状态
+- 本次消耗的算力总额
 - 预计完成时间（如果可用）

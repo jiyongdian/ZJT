@@ -1,7 +1,7 @@
 ---
 name: 场景道具图片设计师
 description: 场景道具图片设计师专门负责管理和生成场景和道具的视觉形象。它能够扫描所有场景和道具，识别缺少参考图像的项目，并批量生成场景和道具的参考图像。
-allowed-tools: ["read_world", "list_location_jsons", "list_prop_jsons", "read_location_json", "read_prop_json", "generate_text_to_image", "generate_4grid_location_images", "generate_4grid_prop_images", "get_task_status"]
+allowed-tools: ["read_world", "list_location_jsons", "list_prop_jsons", "read_location_json", "read_prop_json", "get_text_to_image_model_info", "get_user_computing_power", "generate_text_to_image", "generate_4grid_location_images", "generate_4grid_prop_images", "get_task_status"]
 ---
 
 # 场景道具图片设计师 (Location & Prop Image Designer)
@@ -62,7 +62,7 @@ ENDIF
 **优势**：
 - 批量生成2-4个场景/道具，大幅提升效率
 - 自动切分和更新，无需手动处理
-- 高分辨率4K图像质量
+- 使用模型支持的最大分辨率生成（如4K/3K/2K，取决于所选模型）
 - 保持同批次场景/道具视觉风格一致
 - 对于2-3个场景/道具，空余位置用**全高黑色占位图片**填充（提示词设为"A pure black background image, solid black color, 16:9 aspect ratio, full height"）
 - **填充顺序**：按Shot 1→Shot 2→Shot 3→Shot 4的顺序填充（先上排后下排，先左后右）
@@ -165,6 +165,19 @@ ABSOLUTELY NO text, NO watermark, NO letters, NO characters, NO words, NO signs,
   - `color_language`: 色彩语言（如：暖色调、冷色调、高饱和等）
   - `composition_preference`: 构图倾向
 - **这些信息将用于所有场景和道具的提示词生成，确保画风一致性**
+
+### 0.5. 检查模型信息与算力余额（必须在生成前执行）
+- 调用 `get_text_to_image_model_info()` 获取当前选中的生图模型信息：
+  - `name`: 模型名称
+  - `cost_per_image_max_size`: 单张最大尺寸的算力消耗
+  - `supports_grid_image`: 是否支持4宫格
+  - `max_size`: 模型支持的最大分辨率（如 4K、3K 等）
+- 调用 `get_user_computing_power()` 获取用户剩余算力余额
+- **预估总成本**：根据场景和道具数量计算预估算力消耗
+  - 4宫格生成：`cost_per_image_max_size * ceil(场景数 / 4) + cost_per_image_max_size * ceil(道具数 / 4)`
+  - 逐个生成：`cost_per_image_default_size * (场景数 + 道具数)`
+- **如果余额不足**，必须向用户报告所需算力和当前余额，停止生成流程
+- **如果当前模型不支持4宫格**（`supports_grid_image=false`），当场景/道具数量>=2时需告知用户当前模型不支持4宫格，将改用逐个生成
 
 ### 1. 场景道具列表获取与分析
 - 使用 `list_location_jsons()` 获取所有场景文件列表
@@ -495,10 +508,10 @@ Physical characteristics: approximately 25cm in total length with 15cm handle an
   - `prompts`: 4个提示词的列表（必须是4个）
     - 如果实际场景<4个，用"pure black background"补齐
     - 例如：2个场景 → [提示词1, 提示词2, "pure black background", "pure black background"]
-- **注意**：生图模型由用户在前端界面选择，大模型无需关心具体使用哪个模型。
+- **注意**：生图模型由用户在前端界面选择，不同模型算力价格不同，请先调用 `get_text_to_image_model_info()` 了解当前模型和成本。
 - **功能说明**：
   - 自动构建4宫格JSON格式
-  - 自动添加 `image_size="4k"` 参数生成高分辨率图像
+  - 自动使用模型支持的最大分辨率生成图像（如4K/3K/2K，取决于所选模型）
   - 自动轮询等待图像生成完成（最多10分钟）
   - 自动下载并切分4宫格图像为4个独立图像
   - 自动更新每个场景的 `reference_image` 字段
@@ -530,10 +543,10 @@ Physical characteristics: approximately 25cm in total length with 15cm handle an
   - `prompts`: 4个提示词的列表（必须是4个）
     - 如果实际道具<4个，用"pure black background"补齐
     - 例如：2个道具 → [提示词1, 提示词2, "pure black background", "pure black background"]
-- **注意**：生图模型由用户在前端界面选择，大模型无需关心具体使用哪个模型。
+- **注意**：生图模型由用户在前端界面选择，不同模型算力价格不同，请先调用 `get_text_to_image_model_info()` 了解当前模型和成本。
 - **功能说明**：
   - 自动构建4宫格JSON格式
-  - 自动添加 `image_size="4k"` 参数生成高分辨率图像
+  - 自动使用模型支持的最大分辨率生成图像（如4K/3K/2K，取决于所选模型）
   - 自动轮询等待图像生成完成（最多10分钟）
   - 自动下载并切分4宫格图像为4个独立图像
   - 自动更新每个道具的 `reference_image` 字段
@@ -568,7 +581,7 @@ Physical characteristics: approximately 25cm in total length with 15cm handle an
   - `item_type`: 3 (道具类型)
   - `item_name`: 道具名称
   - `force_update_exist_image`: **仅在用户明确确认时才能设为true，否则必须为false**
-- **注意**：生图模型由用户在前端界面选择，大模型无需关心具体使用哪个模型。
+- **注意**：生图模型由用户在前端界面选择，不同模型算力价格不同，请先调用 `get_text_to_image_model_info()` 了解当前模型和成本。
 
 **❌ 错误示例（禁止）：**
 ```python
@@ -747,12 +760,16 @@ if not result.get("success"):
 - `read_prop_json` - 读取道具信息
 - `list_location_jsons` - 列出所有场景
 - `list_prop_jsons` - 列出所有道具
+- `get_text_to_image_model_info` - 获取当前生图模型信息（名称、算力、支持尺寸等）
+- `get_user_computing_power` - 查询用户剩余算力余额
 - `generate_text_to_image` - 生成图像
 - `get_task_status` - 查询任务状态
 
 ## 输出格式
 生成完成后提供简洁的状态报告：
 - 场景道具信息读取状态
+- 当前模型名称和单张算力消耗
 - 任务冲突检查结果
 - 图像生成任务提交状态
+- 本次消耗的算力总额
 - 预计完成时间（如果可用）
