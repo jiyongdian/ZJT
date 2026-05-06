@@ -1939,6 +1939,33 @@ async def get_task_status(request: Request, task_id: str):
 async def submit_verification(request: Request, verification_id: str, verify_request: VerificationSubmitRequest):
     """提交人工验证结果"""
     try:
+        # 检查算力是否充足
+        auth_token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        if auth_token:
+            success, computing_power, error_msg = await check_computing_power(auth_token)
+            if not success:
+                # 检测 token 过期
+                if error_msg and 'TOKEN_EXPIRED' in error_msg:
+                    return JSONResponse({
+                        'success': False,
+                        'error': error_msg.replace('TOKEN_EXPIRED: ', ''),
+                        'error_code': 'TOKEN_EXPIRED',
+                        'token_expired': True
+                    }, status_code=401)
+                return JSONResponse({
+                    'success': False,
+                    'error': '算力检查失败',
+                    'message': error_msg
+                }, status_code=400)
+
+            if computing_power < 1:
+                return JSONResponse({
+                    'success': False,
+                    'error': '算力不足',
+                    'error_code': 'INSUFFICIENT_POWER',
+                    'message': '您的算力不足，请充值后再试'
+                }, status_code=400)
+
         result = {
             "action": "confirm" if verify_request.approved else "cancel",
             "user_input": verify_request.user_input
