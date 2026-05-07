@@ -20,6 +20,11 @@ import sys
 from pathlib import Path
 
 
+# 确保项目根目录在 sys.path 中，以便 import config.config_util
+_project_dir = Path(__file__).parent.parent.resolve()
+if str(_project_dir) not in sys.path:
+    sys.path.insert(0, str(_project_dir))
+
 def get_project_dir() -> Path:
     """获取项目根目录"""
     return Path(__file__).parent.parent.resolve()
@@ -62,7 +67,7 @@ def get_upgrade_config():
         "repo_urls": [],       # 多源配置，按顺序尝试
         "branch": "main",
         "check_on_startup": True,
-        "auto_update": False,
+        "auto_update": True,
         "timeout_seconds": 30,
     }
 
@@ -272,9 +277,11 @@ def init_git_repo(project_dir, git_cmd, repo_urls, branch, timeout):
     return False
 
 
-def perform_update(git_cmd, project_dir, timeout):
-    """执行更新（stash + pull + stash pop）
 
+def perform_update(git_cmd, project_dir, branch, timeout):
+    """执行更新（stash + reset + stash pop）
+
+    使用 fetch + reset --hard 替代 pull，避免分支分叉导致 --ff-only 失败。
     返回 (success, message)
     """
     stashed = False
@@ -286,15 +293,28 @@ def perform_update(git_cmd, project_dir, timeout):
         stashed = True
         print("[upgrade] 本地修改已暂存")
 
+
+    # fetch 最新代码
     rc, out, err = run_git(
-        git_cmd, ["pull", "origin", "--ff-only"],
+        git_cmd, ["fetch", "origin", branch],
         project_dir, timeout=timeout
     )
     if rc != 0:
         msg = err or out or "未知错误"
         if stashed:
             run_git(git_cmd, ["stash", "pop"], project_dir, timeout=timeout)
-        return False, f"pull 失败: {msg}"
+        return False, f"fetch 失败: {msg}"
+
+    # reset 到远程最新版本
+    rc, out, err = run_git(
+        git_cmd, ["reset", "--hard", f"origin/{branch}"],
+        project_dir, timeout=timeout
+    )
+    if rc != 0:
+        msg = err or out or "未知错误"
+        if stashed:
+            run_git(git_cmd, ["stash", "pop"], project_dir, timeout=timeout)
+        return False, f"reset 失败: {msg}"
 
     print("[upgrade] 代码更新成功")
 
@@ -342,6 +362,76 @@ def check_requirements_changed(git_cmd, project_dir, timeout):
             print("[upgrade] 注意：依赖有更新，启动时将自动安装")
 
 
+
+def get_current_remote_url(git_cmd, project_dir, timeout):
+    """获取当前 origin 的 URL"""
+    rc, out, _ = run_git(
+        git_cmd, ["remote", "get-url", "origin"],
+        project_dir, timeout=timeout
+    )
+    if rc == 0 and out.strip():
+        return out.strip()
+    return None
+
+
+def update_remote_url_if_needed(git_cmd, project_dir, repo_urls, timeout):
+    """检查并更新 origin URL
+
+    如果当前 origin URL 不在配置的 repo_urls 中，则更新为第一个可用的源。
+    返回 True 表示 origin URL 有效（无需更新或更新成功）。
+    """
+    current_url = get_current_remote_url(git_cmd, project_dir, timeout)
+
+    if not current_url:
+        # 没有 origin，添加第一个源
+        if repo_urls:
+            rc, _, err = run_git(
+                git_cmd, ["remote", "add", "origin", repo_urls[0]],
+                project_dir, timeout=timeout
+            )
+            if rc == 0:
+                print(f"[upgrade] 添加 origin: {repo_urls[0]}")
+                return True
+            print(f"[upgrade] 添加 origin 失败: {err}")
+        return False
+
+    # 标准化 URL（去掉末尾 .git 和 /）
+    def normalize_url(url):
+        url = url.rstrip("/")
+        if url.endswith(".git"):
+            url = url[:-4]
+        return url
+
+    current_normalized = normalize_url(current_url)
+
+    # 检查当前 URL 是否在配置的 repo_urls 中
+    for url in repo_urls:
+        if normalize_url(url) == current_normalized:
+            return True  # 当前 URL 有效
+
+    # 当前 URL 不在配置中，更新为第一个可用的源
+    print(f"[upgrade] 当前 origin ({current_url}) 不在配置的源中")
+    for url in repo_urls:
+        rc, _, err = run_git(
+            git_cmd, ["remote", "set-url", "origin", url],
+            project_dir, timeout=timeout
+        )
+        if rc == 0:
+            # 验证新源是否可用
+            rc, _, _ = run_git(
+                git_cmd, ["ls-remote", "--heads", "origin"],
+                project_dir, timeout=timeout
+            )
+            if rc == 0:
+                print(f"[upgrade] 已更新 origin: {url}")
+                return True
+            else:
+                print(f"[upgrade] 源 {url} 不可用，尝试下一个")
+
+    print("[upgrade] 所有配置的源都不可用")
+    return False
+
+
 def main():
     """主入口"""
     project_dir = get_project_dir()
@@ -380,11 +470,21 @@ def main():
 
         return 0
 
-    # 1. 读取本地版本
+
+    # 1. 检查并更新 origin URL
+    if not repo_urls:
+        print("[upgrade] 未配置仓库地址，跳过更新检查")
+        return 0
+
+    if not update_remote_url_if_needed(git_cmd, project_dir, repo_urls, timeout):
+        print("[upgrade] 无法设置有效的远程源，跳过更新检查")
+        return 0
+
+    # 2. 读取本地版本
     local_version = get_local_version(project_dir)
     print(f"[upgrade] 当前版本: {local_version}")
 
-    # 2. fetch 远程（包含 tag）
+    # 3. fetch 远程（包含 tag）
     rc, _, err = run_git(
         git_cmd, ["fetch", "origin", branch, "--tags"],
         project_dir, timeout=timeout
@@ -393,7 +493,8 @@ def main():
         print(f"[upgrade] fetch 远程信息失败: {err}")
         return 1
 
-    # 3. 获取远程最新 tag
+
+    # 4. 获取远程最新 tag
     latest_tag = get_remote_latest_tag(git_cmd, project_dir, timeout)
     if not latest_tag:
         print("[upgrade] 远程无可用版本 tag，跳过更新检查")
@@ -401,7 +502,7 @@ def main():
 
     print(f"[upgrade] 远程最新版本: {latest_tag}")
 
-    # 4. 比较版本
+    # 5. 比较版本
     cmp = compare_version(latest_tag, local_version)
     if cmp <= 0:
         if cmp == 0:
@@ -410,7 +511,7 @@ def main():
             print(f"[upgrade] 本地版本 ({local_version}) 高于远程 ({latest_tag})，无需更新")
         return 0
 
-    # 5. 提示更新
+    # 6. 提示更新
     print(f"[upgrade] 发现新版本: {local_version} -> {latest_tag}")
 
     if auto_update:
@@ -421,7 +522,7 @@ def main():
             return 0
 
     # 6. 执行更新
-    success, message = perform_update(git_cmd, project_dir, timeout)
+    success, message = perform_update(git_cmd, project_dir, branch, timeout)
     if not success:
         print(f"[upgrade] 更新失败: {message}")
         return 1

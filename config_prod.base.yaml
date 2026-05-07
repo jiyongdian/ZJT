@@ -177,7 +177,7 @@ checkin:
 
 enterprise:
   min_version: "1.0.0"
-  max_version: "1.0.0"
+
 
 # 自动升级配置
 # 支持通过 git 在启动时检查并更新代码
@@ -188,5 +188,5 @@ upgrade:
     - "https://github.com/jeffstric/ZJT.git"      # 备用 GitHub
   branch: "main"             # 跟踪分支
   check_on_startup: true     # 启动时是否检查更新
-  auto_update: false         # 是否静默自动更新（不询问用户直接更新）
+  auto_update: true          # 是否静默自动更新（不询问用户直接更新）
   timeout_seconds: 30        # git fetch/pull 超时（秒）
