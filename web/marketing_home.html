@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>营销模式 - 智剧通</title>
+    <link rel="icon" href="/files/logo.ico" type="image/vnd.microsoft.icon"/>
+    <link rel="stylesheet" href="/css/index.css">
+    <script src="/js/vue.global.prod.js"></script>
+</head>
+<body style="background: #f8f9fa; margin: 0; padding: 0;">
+    <div id="app" style="display: flex; min-height: 100vh; width: 100%;">
+        <!-- 左侧导航 -->
+        <nav class="marketing-nav">
+            <a href="/" class="marketing-nav-logo" title="返回短剧首页">
+                <img src="/files/logo.svg" alt="Logo" style="width: 32px; height: 32px;" />
+            </a>
+            <div class="marketing-nav-item active">
+                <div class="marketing-nav-icon">💡</div>
+                <div class="marketing-nav-text">灵感</div>
+            </div>
+            <div class="marketing-nav-item" @click="goToAgent">
+                <div class="marketing-nav-icon">✨</div>
+                <div class="marketing-nav-text">生成</div>
+            </div>
+            <div class="marketing-nav-item">
+                <div class="marketing-nav-icon">📁</div>
+                <div class="marketing-nav-text">资产</div>
+            </div>
+            <div class="marketing-nav-item">
+                <div class="marketing-nav-icon">🔀</div>
+                <div class="marketing-nav-text">工作流</div>
+            </div>
+        </nav>
+
+        <!-- 主内容区 -->
+        <div class="marketing-main" style="flex: 1; display: flex; flex-direction: column; align-items: center; padding: 40px 24px; gap: 24px;">
+            <!-- 大标题 -->
+            <div class="marketing-hero">
+                <h1 class="marketing-title">开启你的 <span class="marketing-title-highlight">Agent 模式</span> 即刻造梦！</h1>
+            </div>
+
+            <!-- 中央输入区 -->
+            <div class="marketing-input-section">
+                <div class="marketing-input-box">
+                    <div class="marketing-input-upload">
+                        <button class="marketing-upload-btn" title="上传参考">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 5v14M5 12h14"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <textarea
+                        class="marketing-textarea"
+                        v-model="marketingInput"
+                        placeholder="输入想法、剧本或上传参考，支持 '/' 使用技能，@添加主体，和Agent一起创作"
+                        rows="3"
+                        @keydown.enter.exact.prevent="handleSubmit"
+                    ></textarea>
+                </div>
+
+                <!-- 底部按钮条 -->
+                <div class="marketing-input-bar">
+                    <div class="marketing-input-bar-left">
+                        <div class="marketing-dropdown">
+                            <button class="marketing-bar-btn">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                                </svg>
+                                <span>Agent 模式</span>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M6 9l6 6 6-6"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <button class="marketing-bar-btn">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                            </svg>
+                            <span>自动</span>
+                        </button>
+                        <button class="marketing-bar-btn">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                            </svg>
+                            <span>使用技能</span>
+                        </button>
+                        <button class="marketing-bar-btn">
+                            <span class="marketing-at-icon">@</span>
+                            <span>添加主体</span>
+                        </button>
+                    </div>
+                    <div class="marketing-input-bar-right">
+                        <button class="marketing-bar-btn" title="语音输入">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                                <line x1="12" y1="19" x2="12" y2="23"/>
+                                <line x1="8" y1="23" x2="16" y2="23"/>
+                            </svg>
+                        </button>
+                        <button class="marketing-send-btn" @click="handleSubmit" :disabled="!marketingInput.trim()">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 创作类型 -->
+            <div class="marketing-creation-types">
+                <div class="marketing-type-label">创作类型</div>
+                <div class="marketing-type-list">
+                    <div class="marketing-type-item active">
+                        <div class="marketing-type-icon">✨</div>
+                        <div class="marketing-type-info">
+                            <div class="marketing-type-name">Agent 模式</div>
+                            <div class="marketing-type-desc">$2.0视频创作</div>
+                        </div>
+                        <div class="marketing-type-check">✓</div>
+                    </div>
+                    <div class="marketing-type-item">
+                        <div class="marketing-type-icon">🖼️</div>
+                        <div class="marketing-type-info">
+                            <div class="marketing-type-name">图片生成</div>
+                            <div class="marketing-type-desc">智能美学提升</div>
+                        </div>
+                    </div>
+                    <div class="marketing-type-item">
+                        <div class="marketing-type-icon">📹</div>
+                        <div class="marketing-type-info">
+                            <div class="marketing-type-name">视频生成</div>
+                            <div class="marketing-type-desc">Seedance 2.0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 功能卡片 -->
+            <div class="marketing-feature-cards">
+                <div class="marketing-feature-card">
+                    <div class="marketing-feature-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">🎨</div>
+                    <div class="marketing-feature-info">
+                        <div class="marketing-feature-title">无限画布</div>
+                        <div class="marketing-feature-desc">自由创作</div>
+                    </div>
+                </div>
+                <div class="marketing-feature-card">
+                    <div class="marketing-feature-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">🤖</div>
+                    <div class="marketing-feature-info">
+                        <div class="marketing-feature-title">Agent 模式</div>
+                        <div class="marketing-feature-desc">$2.0视频创作</div>
+                    </div>
+                </div>
+                <div class="marketing-feature-card">
+                    <div class="marketing-feature-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">🖼️</div>
+                    <div class="marketing-feature-info">
+                        <div class="marketing-feature-title">图片生成</div>
+                        <div class="marketing-feature-desc">智能美学提升</div>
+                    </div>
+                </div>
+                <div class="marketing-feature-card">
+                    <div class="marketing-feature-icon" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">📹</div>
+                    <div class="marketing-feature-info">
+                        <div class="marketing-feature-title">视频生成</div>
+                        <div class="marketing-feature-desc">Seedance 2.0</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    const { createApp, ref } = Vue;
+
+    createApp({
+        setup() {
+            const marketingInput = ref('');
+
+            function goToAgent() {
+                const authToken = localStorage.getItem('auth_token');
+                const userId = localStorage.getItem('user_id');
+
+                if (!authToken || !userId) {
+                    alert('请先登录');
+                    return;
+                }
+
+                const url = `/marketing-agent?user_id=${encodeURIComponent(userId)}`;
+                window.location.href = url;
+            }
+
+            function handleSubmit() {
+                const message = marketingInput.value.trim();
+                if (!message) return;
+
+                const authToken = localStorage.getItem('auth_token');
+                const userId = localStorage.getItem('user_id');
+
+                if (!authToken || !userId) {
+                    alert('请先登录');
+                    return;
+                }
+
+                const url = `/marketing-agent?user_id=${encodeURIComponent(userId)}&initial_message=${encodeURIComponent(message)}`;
+                window.location.href = url;
+            }
+
+            // 检查登录态
+            const authToken = localStorage.getItem('auth_token');
+            const userId = localStorage.getItem('user_id');
+            if (!authToken || !userId) {
+                alert('请先登录');
+                window.location.href = '/';
+            }
+
+            return {
+                marketingInput,
+                goToAgent,
+                handleSubmit
+            };
+        }
+    }).mount('#app');
+    </script>
+</body>
+</html>

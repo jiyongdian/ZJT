@@ -22,15 +22,15 @@
 
 ## 页面结构
 
-### 营销首页（`/`）
+### 营销首页（`/marketing-home`）
 
-营销模式首页通过 `web/index.html` 中的 `ListPage` 组件根据 `creationMode` 动态渲染。营销模式分支位于约第 810 行起的 `<template v-if="$root.creationMode === 'marketing'">` 块中。
+营销模式首页为**独立页面** `web/marketing_home.html`，采用 Vue 3 单文件应用实现，与短剧模式的 `index.html` 完全解耦。用户选择营销模式后，从 `index.html` 跳转至该页面。
 
 页面包含以下区块：
 
 | 区块 | 说明 |
 |------|------|
-| 左侧导航 | 灵感、生成、资产、画布（纯 UI 展示，未实现跳转） |
+| 左侧导航 | 灵感、生成、资产、工作流（纯 UI 展示，未实现跳转） |
 | 大标题 | "开启你的 Agent 模式 即刻造梦！" |
 | 中央输入区 | 文本输入框 + 上传按钮 + 功能按钮条 |
 | 创作类型 | Agent 模式 / 图片生成 / 视频生成（纯 UI 展示） |
@@ -39,6 +39,20 @@
 输入框中输入内容并点击发送（或按 Enter）后，会跳转至 `/marketing-agent` 对话界面，并通过 URL 参数 `initial_message` 传递初始消息。
 
 样式定义：`web/css/index.css` 末尾的"营销模式首页样式"区块（`.marketing-*` 类前缀）。
+
+#### 后端路由
+
+由 `server.py` 中的 `serve_marketing_home` 函数服务静态 HTML：
+
+```python
+@app.get("/marketing-home")
+async def serve_marketing_home():
+    file_path = os.path.join(static_dir, "marketing_home.html")
+    if os.path.isfile(file_path):
+        content = _get_processed_html(file_path)
+        return Response(content=content, media_type="text/html")
+    raise HTTPException(status_code=404, detail="Marketing home page not found")
+```
 
 ### 营销智能体对话页面（`/marketing-agent`）
 
@@ -108,11 +122,12 @@ async def serve_marketing_agent():
 
 | 文件路径 | 类型 | 说明 |
 |----------|------|------|
-| `web/index.html` | 修改 | 模式选择器（电商模式→营销模式）、ListPage 动态渲染分支 |
+| `web/index.html` | 修改 | 模式选择器（电商模式→营销模式）、选择后跳转 `/marketing-home` |
+| `web/marketing_home.html` | 新建 | 营销模式首页（Vue 3 独立页面） |
 | `web/css/index.css` | 修改 | 末尾追加"营销模式首页样式"区块 |
 | `web/marketing_agent.html` | 新建 | 营销智能体对话页面（Vue 3） |
 | `web/css/marketing_agent.css` | 新建 | 对话页面样式（浅色主题） |
-| `server.py` | 修改 | 新增 `/marketing-agent` 路由 |
+| `server.py` | 修改 | 新增 `/marketing-home` 和 `/marketing-agent` 路由 |
 
 ## 本地存储键
 

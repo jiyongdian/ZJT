@@ -36,6 +36,18 @@ body {
   box-shadow: 0 10px 30px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.03);
 }
 
+/* 营销模式：完全独立的全宽布局 */
+.card.marketing-card {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  max-width: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
 header {
   display: flex; 
   align-items: center; 
@@ -1859,6 +1871,17 @@ header {
 }
 
 /* ========== 营销模式首页样式 ========== */
+/* 覆盖 body 深色背景，确保营销模式没有黑边 */
+html.marketing-mode body {
+  background: #f8f9fa;
+}
+
+html.marketing-mode .container {
+  padding: 0;
+  max-width: none;
+  background: #f8f9fa;
+}
+
 .homepage-container.marketing-mode {
   padding: 0;
   max-width: none;
@@ -1866,21 +1889,38 @@ header {
 
 .marketing-home {
   display: flex;
-  min-height: calc(100vh - 120px);
+  min-height: 100vh;
+  width: 100%;
   background: #f8f9fa;
   overflow: hidden;
 }
 
 .marketing-nav {
-  width: 72px;
+  width: 64px;
   background: #fff;
   border-right: 1px solid #e8e8e8;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 20px 0;
-  gap: 8px;
+  padding: 16px 0;
+  gap: 4px;
   flex-shrink: 0;
+}
+
+.marketing-nav-logo {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-bottom: 16px;
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+
+.marketing-nav-logo:hover {
+  background: #f0f0f0;
 }
 
 .marketing-nav-item {
@@ -1943,7 +1983,6 @@ header {
 
 .marketing-input-section {
   width: 100%;
-  max-width: 720px;
   background: #fff;
   border-radius: 16px;
   border: 1px solid #e8e8e8;
@@ -2068,7 +2107,6 @@ header {
 
 .marketing-creation-types {
   width: 100%;
-  max-width: 720px;
 }
 
 .marketing-type-label {
@@ -2133,7 +2171,6 @@ header {
 
 .marketing-feature-cards {
   width: 100%;
-  max-width: 720px;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 16px;

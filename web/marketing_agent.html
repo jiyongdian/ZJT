@@ -5,16 +5,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>营销智能体</title>
     <link rel="icon" href="/files/logo.ico" type="image/vnd.microsoft.icon"/>
-    <link rel="stylesheet" href="css/marketing_agent.css">
-    <script src="js/vue.global.prod.js"></script>
-    <script src="js/axios.min.js"></script>
-    <script src="js/marked.min.js"></script>
-    <link rel="stylesheet" href="css/github.min.css">
+    <link rel="stylesheet" href="/css/marketing_agent.css">
+    <script src="/js/vue.global.prod.js"></script>
+    <script src="/js/axios.min.js"></script>
+    <script src="/js/marked.min.js"></script>
+    <link rel="stylesheet" href="/css/github.min.css">
 </head>
 <body>
     <div id="app" class="app-container">
-        <!-- 左侧边栏 -->
-        <aside class="sidebar" :class="{open: sidebarOpen, collapsed: !sidebarOpen}">
+        <!-- 第一列：左侧窄导航 -->
+        <nav class="marketing-nav">
+            <a href="/marketing-home" class="marketing-nav-logo" title="返回营销首页">
+                <img src="/files/logo.svg" alt="Logo" style="width: 32px; height: 32px;" />
+            </a>
+            <div class="marketing-nav-item" @click="goToHome">
+                <div class="marketing-nav-icon">💡</div>
+                <div class="marketing-nav-text">灵感</div>
+            </div>
+            <div class="marketing-nav-item active">
+                <div class="marketing-nav-icon">✨</div>
+                <div class="marketing-nav-text">生成</div>
+            </div>
+            <div class="marketing-nav-item">
+                <div class="marketing-nav-icon">📁</div>
+                <div class="marketing-nav-text">资产</div>
+            </div>
+            <div class="marketing-nav-item">
+                <div class="marketing-nav-icon">🔀</div>
+                <div class="marketing-nav-text">工作流</div>
+            </div>
+        </nav>
+
+        <!-- 第二列：对话历史 -->
+        <aside class="sidebar">
             <div class="sidebar-header">
                 <div class="sidebar-header-top">
                     <span class="sidebar-title">开启创作</span>
@@ -66,16 +89,11 @@
             </div>
         </aside>
 
-        <!-- 主内容区 -->
+        <!-- 第三列：聊天内容 -->
         <main class="main-content">
             <!-- 顶部栏 -->
             <header class="top-bar">
                 <div class="top-bar-left">
-                    <button class="menu-toggle" @click="sidebarOpen = !sidebarOpen">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 12h18M3 6h18M3 18h18"/>
-                        </svg>
-                    </button>
                     <span class="top-bar-date">{{ currentDate }}</span>
                 </div>
                 <div class="top-bar-right">
@@ -236,7 +254,6 @@
             const isLoading = ref(false);
             const isInitializing = ref(true);
             const errorMessage = ref('');
-            const sidebarOpen = ref(true);
             const searchQuery = ref('');
             const selectedDate = ref('');
             const selectedGenType = ref('');
@@ -675,13 +692,17 @@
                 isInitializing.value = false;
             });
 
+            // 返回首页
+            function goToHome() {
+                window.location.href = '/marketing-home';
+            }
+
             return {
                 messages,
                 inputText,
                 isLoading,
                 isInitializing,
                 errorMessage,
-                sidebarOpen,
                 searchQuery,
                 selectedDate,
                 selectedGenType,
@@ -703,7 +724,8 @@
                 sendContinue,
                 newChat,
                 loadDefaultChat,
-                selectSession
+                selectSession,
+                goToHome
             };
         }
     }).mount('#app');
