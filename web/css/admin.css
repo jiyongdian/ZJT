@@ -1206,6 +1206,28 @@ body {
     box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
 }
 
+.qc-guide-link {
+    background: linear-gradient(135deg, #ec4899, #db2777);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+    text-decoration: none;
+}
+
+.qc-guide-link:hover {
+    background: linear-gradient(135deg, #db2777, #be185d);
+    box-shadow: 0 2px 8px rgba(236, 72, 153, 0.3);
+    color: white;
+}
+
 /* Body - Two Panel Layout */
 .qc-body {
     display: flex;

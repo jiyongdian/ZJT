@@ -2794,3 +2794,105 @@ body {
 .import-divider::before { left: 0; }
 .import-divider::after { right: 0; }
 
+/* Verification Question Styles */
+.verification-question {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 20px;
+    border-radius: 12px;
+    color: white;
+    margin: 12px 0;
+}
+
+.verification-title {
+    display: block;
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.verification-description {
+    font-size: 14px;
+    line-height: 1.5;
+    margin-bottom: 15px;
+}
+
+.verification-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.option-btn {
+    padding: 6px 12px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 6px;
+    color: white;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.3s ease;
+}
+
+.option-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.6);
+}
+
+.option-btn:active {
+    background: rgba(255, 255, 255, 0.4);
+}
+
+/* "其他"按钮特殊样式 */
+.option-other-btn {
+    font-style: italic;
+    opacity: 0.9;
+}
+
+.option-other-btn:hover {
+    opacity: 1;
+}
+
+/* 历史记录中的 verification 问题（复用对话样式，仅禁用交互） */
+.verification-question.history-mode .option-btn {
+    cursor: default;
+    pointer-events: none;
+    opacity: 0.85;
+}
+
+/* 历史记录中的 verification 问题（旧版样式，保留兼容） */
+.history-verification {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 16px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    margin: 8px 0;
+    opacity: 0.85;
+}
+
+.history-verification .verification-title {
+    font-size: 14px;
+}
+
+.history-verification .verification-description {
+    font-size: 13px;
+    margin-bottom: 10px;
+}
+
+.history-verification-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.history-option-tag {
+    padding: 4px 10px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 5px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+    cursor: default;
+}
+

@@ -2,8 +2,10 @@ import logging
 import json
 from typing import Dict, Any, List, Optional
 from datetime import datetime
-from .base_agent import BaseAgent
+from .base_agent import BaseAgent, InsufficientComputingPowerError, check_computing_power_sync
+from .ask_user_mixin import AskUserMixin
 from .history_manager import ExpertHistoryManager
+from .tool_definitions import ASK_USER_TOOL_DEFINITION
 from llm.llm_client_factory import get_llm_client
 from script_writer_core.file_manager import FileManager
 from script_writer_core.skill_loader import SkillLoader
@@ -12,7 +14,7 @@ from model.model import ModelModel
 logger = logging.getLogger(__name__)
 
 
-class ExpertAgent(BaseAgent):
+class ExpertAgent(BaseAgent, AskUserMixin):
     """专家智能体 - 执行具体任务"""
     
     def __init__(
@@ -29,15 +31,17 @@ class ExpertAgent(BaseAgent):
         vendor_id: Optional[int] = None,
         model_id: Optional[int] = None,
         enable_thinking: bool = False,
-        thinking_effort: str = "medium"
+        thinking_effort: str = "medium",
+        task_manager: Optional[Any] = None,
+        task_id: Optional[str] = None
     ):
         # 使用第一个技能名称作为主要标识
         primary_skill = skill_names[0] if skill_names else "unknown"
-        agent_id = f"expert_{primary_skill}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        agent_id = f"expert_{primary_skill}"
         
         
-        # 初始化技能加载器
-        self.skill_loader = SkillLoader()
+        # 初始化技能加载器（支持用户级自定义 skill）
+        self.skill_loader = SkillLoader(user_id=int(user_id) if user_id else None)
         
         system_prompt = self._build_system_prompt(skill_names, context_from_pm)
         
@@ -59,6 +63,8 @@ class ExpertAgent(BaseAgent):
         self.model_id = model_id
         self.enable_thinking = enable_thinking
         self.thinking_effort = thinking_effort
+        self.task_manager = task_manager
+        self.task_id = task_id
         
         self.history_manager = ExpertHistoryManager(
             file_manager=file_manager,
@@ -137,7 +143,9 @@ class ExpertAgent(BaseAgent):
                 "success": True,
                 "result": result
             }
-            
+
+        except InsufficientComputingPowerError:
+            raise
         except Exception as e:
             logger.error(f"{self.agent_id}: Task failed - {e}", exc_info=True)
             
@@ -160,7 +168,10 @@ class ExpertAgent(BaseAgent):
         
         while iteration < max_iterations:
             iteration += 1
-            
+
+            # 检查算力是否充足
+            check_computing_power_sync(self.auth_token, self.agent_id)
+
             try:
                 # 从数据库获取模型的最大输出 token 数
                 max_output_tokens = 65536  # 默认值
@@ -175,6 +186,7 @@ class ExpertAgent(BaseAgent):
 
                 # 使用 LLM 客户端工厂获取对应模型的客户端并调用 API
                 # 传入 vendor_id 确保正确路由到目标供应商（如 zjt_api）
+                history_len = len(self.conversation_history)  # 记录调用前的历史长度，用于异常时截断
                 response = get_llm_client(self.model, vendor_id=self.vendor_id).call_api(
                     model=self.model,
                     messages=self._format_messages_for_api(),
@@ -202,7 +214,12 @@ class ExpertAgent(BaseAgent):
                     self.add_to_history("assistant", history_content)
                     logger.info(f"{self.agent_id}: Task completed with response")
                     return content
-                    
+
+            except InsufficientComputingPowerError:
+                # 截断历史，移除不完整的 tool_calls 消息（防止重试时 LLM 报错）
+                logger.info(f"{self.agent_id}: 截断不完整的历史，从 {len(self.conversation_history)} 恢复到 {history_len}")
+                self.conversation_history = self.conversation_history[:history_len]
+                raise
             except Exception as e:
                 logger.error(f"{self.agent_id}: Error in task loop - {e}", exc_info=True)
                 raise
@@ -252,17 +269,36 @@ class ExpertAgent(BaseAgent):
             })
             
             result = self._execute_tool(tool_name, tool_args)
-            
+
+            # ask_user 工具：在 tool 回答之前，将问题写入历史（保证顺序正确）
+            # 同时移除 _verification_meta，避免 LLM 看到后重复提问
+            if tool_name == "ask_user" and isinstance(result, dict) and "_verification_meta" in result:
+                meta = result.pop("_verification_meta")
+                self.add_to_history("verification", {
+                    "title": "需要用户输入",
+                    "description": meta["question"],
+                    "options": meta["options"]
+                })
+
             self.outputs.append(result)
-            
+
+            # 将result转换为JSON字符串以便后续解析，而不是Python dict的字符串表示
             self.add_to_history("tool", {
                 "tool_call_id": tool_call.id,
                 "name": tool_name,
-                "content": str(result)
+                "content": json.dumps(result, ensure_ascii=False)
             })
     
     def _execute_tool(self, tool_name: str, tool_args: Dict[str, Any]) -> Dict[str, Any]:
         """执行工具调用"""
+        # 特殊处理 ask_user 工具（但仍需检查权限）
+        if tool_name == "ask_user":
+            if "ask_user" not in self.allowed_tools:
+                error_msg = f"工具 {tool_name} 不在允许列表中"
+                logger.warning(f"{self.agent_id}: {error_msg}")
+                return {"error": error_msg}
+            return self._handle_ask_user(tool_args)
+
         if tool_name not in self.allowed_tools:
             error_msg = f"工具 {tool_name} 不在允许列表中"
             logger.warning(f"{self.agent_id}: {error_msg}")
@@ -282,7 +318,7 @@ class ExpertAgent(BaseAgent):
             error_msg = f"工具执行失败: {str(e)}"
             logger.error(f"{self.agent_id}: {error_msg}", exc_info=True)
             return {"error": error_msg}
-    
+
     def _is_deepseek_model(self) -> bool:
         """判断当前模型是否为 DeepSeek 模型"""
         return 'deepseek' in (self.model or '').lower()
@@ -340,6 +376,9 @@ class ExpertAgent(BaseAgent):
                     "reasoning_content": ""
                 }
                 messages.append(assistant_msg)
+            elif role == "verification":
+                # 跳过 verification 消息（仅供前端展示，不发给 LLM）
+                continue
             else:
                 messages.append({
                     "role": role,
@@ -350,7 +389,13 @@ class ExpertAgent(BaseAgent):
     
     def _get_tool_definitions(self) -> List[Dict[str, Any]]:
         """获取工具定义"""
-        return self.tool_executor.get_tool_definitions(self.allowed_tools)
+        tool_defs = self.tool_executor.get_tool_definitions(self.allowed_tools)
+
+        # 如果配置了 task_manager，则添加 ask_user 工具定义
+        if self.task_manager and self.task_id:
+            tool_defs.append(ASK_USER_TOOL_DEFINITION)
+
+        return tool_defs
     
     def _save_session_history(
         self,
