@@ -272,7 +272,9 @@ zjt:
 # 支持通过 git 在启动时检查并更新代码
 upgrade:
   enabled: true              # 是否启用启动时检查更新
-  repo_url: "https://github.com/jeffstric/ZJT"               # Git 仓库地址，为空则跳过检查（如: https://github.com/owner/repo.git）
+  repo_urls:                 # Git 仓库地址（多源，按顺序尝试）
+    - "https://gitee.com/jeffstric/ZJT.git"       # 优先 Gitee（国内快）
+    - "https://github.com/jeffstric/ZJT.git"      # 备用 GitHub
   branch: "main"             # 跟踪分支
   check_on_startup: true     # 启动时是否检查更新
   auto_update: false         # 是否静默自动更新（不询问用户直接更新）

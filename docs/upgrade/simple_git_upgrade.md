@@ -133,21 +133,27 @@ from pathlib import Path
 
 
 def find_git_binary():
-    """查找 git 二进制"""
-    # 1. 先检查项目自带的 git
-    project_dir = Path(__file__).parent.parent.resolve()
-    bundled_paths = [
-        project_dir / "bin" / "git" / "git.exe",       # Windows
-        project_dir / "bin" / "git" / "bin" / "git",   # macOS/Linux
-    ]
-    for p in bundled_paths:
-        if p.exists():
-            return str(p)
+    """查找 git 二进制
 
-    # 2. 系统 PATH 中找
-    for cmd in ["git", "git.exe"]:
-        if shutil.which(cmd):
-            return shutil.which(cmd)
+    Windows: 优先使用项目内置的 MinGit，其次查找系统 PATH。
+    macOS/Linux: 直接使用系统 PATH 中的 git（需用户提前安装）。
+    """
+    project_dir = Path(__file__).parent.parent.resolve()
+
+    # Windows: 优先查找项目自带的 MinGit
+    if sys.platform == "win32":
+        bundled_paths = [
+            project_dir / "bin" / "git" / "cmd" / "git.exe",   # MinGit 标准路径
+            project_dir / "bin" / "git" / "git.exe",            # 旧路径兼容
+        ]
+        for p in bundled_paths:
+            if p.exists():
+                return str(p)
+
+    # 所有平台: 在系统 PATH 中查找
+    git_cmd = shutil.which("git")
+    if git_cmd:
+        return git_cmd
 
     return None
 
@@ -160,28 +166,48 @@ def get_config(key, default=None):
         "upgrade.branch": "main",
         "upgrade.auto_update": False,
         "upgrade.check_on_startup": True,
-        "upgrade.repo_url": "https://github.com/owner/repo.git",
+        "upgrade.repo_urls": [
+            "https://gitee.com/owner/repo.git",
+            "https://github.com/owner/repo.git",
+        ],
     }
     return configs.get(key, default)
 
 
-def init_git_repo(project_dir, git_cmd, repo_url, branch):
-    """首次启动：.git 不存在，自动初始化"""
+def init_git_repo(project_dir, git_cmd, repo_urls, branch):
+    """首次启动：.git 不存在，自动初始化
+
+    支持多源 fallback，按顺序尝试每个源。
+    """
     print("[upgrade] 首次运行，初始化 git 仓库...")
-    try:
-        subprocess.run([git_cmd, "init"], cwd=project_dir, check=True, capture_output=True)
-        subprocess.run([git_cmd, "remote", "add", "origin", repo_url],
-                      cwd=project_dir, check=True, capture_output=True)
-        subprocess.run([git_cmd, "fetch", "origin", branch, "--depth", "1"],
-                      cwd=project_dir, check=True, capture_output=True, timeout=60)
-        subprocess.run([git_cmd, "reset", "--hard", f"origin/{branch}"],
-                      cwd=project_dir, check=True, capture_output=True)
-        # 注意：reset --hard 不会覆盖 PRESERVE_PATHS 中的文件（因为它们在 .gitignore 中）
-        print("[upgrade] 初始化完成")
-        return True
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-        print(f"[upgrade] 初始化失败: {e}")
-        return False
+
+    # git init 只需执行一次
+    subprocess.run([git_cmd, "init"], cwd=project_dir, check=True, capture_output=True)
+
+    # 尝试每个源
+    for url in repo_urls:
+        print(f"[upgrade] 尝试源: {url}")
+        try:
+            # 清除已有的 remote（如果有）
+            subprocess.run([git_cmd, "remote", "remove", "origin"],
+                          cwd=project_dir, capture_output=True)
+            # 添加 remote
+            subprocess.run([git_cmd, "remote", "add", "origin", url],
+                          cwd=project_dir, check=True, capture_output=True)
+            # fetch
+            subprocess.run([git_cmd, "fetch", "origin", branch, "--depth", "1", "--tags"],
+                          cwd=project_dir, check=True, capture_output=True, timeout=60)
+            # reset
+            subprocess.run([git_cmd, "reset", "--hard", f"origin/{branch}"],
+                          cwd=project_dir, check=True, capture_output=True)
+            print(f"[upgrade] 初始化完成，使用源: {url}")
+            return True
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            print(f"[upgrade] 源 {url} 失败: {e}")
+            continue
+
+    print("[upgrade] 所有源都失败")
+    return False
 
 
 def check_and_update():
@@ -197,7 +223,7 @@ def check_and_update():
     branch = get_config("upgrade.branch", "main")
     auto_update = get_config("upgrade.auto_update", False)
     check_on_startup = get_config("upgrade.check_on_startup", True)
-    repo_url = get_config("upgrade.repo_url", "")
+    repo_urls = get_config("upgrade.repo_urls", [])
 
     if not check_on_startup:
         print("[upgrade] 已关闭启动时检查")
@@ -206,10 +232,10 @@ def check_and_update():
     # 3. 检查 .git 目录
     git_dir = project_dir / ".git"
     if not git_dir.exists():
-        if not repo_url:
+        if not repo_urls:
             print("[upgrade] 未配置仓库地址，跳过更新")
             return 0
-        if not init_git_repo(project_dir, git_cmd, repo_url, branch):
+        if not init_git_repo(project_dir, git_cmd, repo_urls, branch):
             print("[upgrade] 初始化失败，跳过更新，使用本地版本")
             return 1
         # 初始化后当前版本已与 remote 一致，无需再 pull
@@ -311,7 +337,7 @@ if __name__ == "__main__":
 
 | 设计点 | 处理 |
 |--------|------|
-| git 二进制 | 优先找项目自带 `bin/git/`，其次系统 PATH |
+| git 二进制 | Windows: 内置 MinGit；macOS/Linux: 系统 PATH 中的 git |
 | .git 不存在 | 自动 `git init` + `remote add` + `fetch --depth 1` + `reset --hard origin/{branch}` |
 | 网络不通 | timeout 30s，失败返回 1（跳过更新，继续启动） |
 | 无差异 | 静默通过，返回 0 |
@@ -347,25 +373,87 @@ scheduler.lock
 
 ---
 
-## 六、配置项
+## 六、各平台 Git 获取方式
+
+### 6.1 Windows：内置 MinGit
+
+Windows 分发包内置 **Git for Windows MinGit**（最小化版本），用户无需安装 Git。
+
+- **来源**: https://github.com/git-for-windows/git/releases
+- **文件**: `MinGit-{version}-64-bit.zip`（约 38MB）
+- **放置位置**: 解压到 `bin/git/` 目录
+- **入口**: `bin/git/cmd/git.exe`
+
+```
+bin/git/
+├── cmd/git.exe           # 启动器（48KB）
+├── mingw32/bin/git.exe   # 真正的 git（4.5MB）
+├── mingw32/bin/*.dll     # 依赖库
+├── mingw32/libexec/git-core/  # git 子命令
+├── usr/                  # MSYS2 工具
+├── etc/                  # 配置
+└── LICENSE.txt
+```
+
+### 6.2 macOS：依赖系统自带
+
+macOS **不内置** git 二进制，依赖用户系统自带的 git。
+
+- **来源**: 安装 Xcode Command Line Tools 后自带
+- **安装命令**: `xcode-select --install`
+- **查找方式**: 直接使用系统 PATH 中的 git
+
+如果用户未安装 git，升级检查会跳过（返回 0），不影响正常启动。
+
+### 6.3 Linux：依赖系统安装
+
+Linux **不内置** git 二进制，需用户提前安装。
+
+- **Ubuntu/Debian**: `sudo apt install git`
+- **CentOS/RHEL**: `sudo yum install git`
+- **Alpine**: `apk add git`
+- **Docker**: Docker 镜像中通常已包含
+
+### 6.4 查找优先级
+
+```
+find_git_binary() 逻辑：
+
+Windows:
+  1. bin/git/cmd/git.exe  (内置 MinGit)
+  2. 系统 PATH 中的 git
+
+macOS/Linux:
+  1. 系统 PATH 中的 git
+```
+
+---
+
+## 七、配置项
 
 `config/config.example.yml` 新增：
 
 ```yaml
 upgrade:
   enabled: true              # 总开关
-  repo_url: "https://github.com/owner/repo.git"  # 仓库地址
+  repo_urls:                 # Git 仓库地址（多源，按顺序尝试）
+    - "https://gitee.com/owner/repo.git"       # 优先 Gitee（国内快）
+    - "https://github.com/owner/repo.git"      # 备用 GitHub
   branch: "main"             # 跟踪分支
   check_on_startup: true     # 启动时是否检查
   auto_update: false         # 静默自动更新（不询问）
   timeout_seconds: 30        # fetch 超时
 ```
 
+**配置说明**：
+- `repo_urls`：多源列表，按顺序尝试，第一个成功即停止
+- 推荐将国内源（Gitee）放在前面，GitHub 放在后面
+
 `config/config_prod.base.yaml` 同样新增默认值。
 
 ---
 
-## 七、文件改动清单
+## 八、文件改动清单
 
 ### 新增
 
@@ -395,7 +483,7 @@ upgrade:
 
 ---
 
-## 八、关于 `.git` 目录的两种策略
+## 九、关于 `.git` 目录的两种策略
 
 ### 策略 A：分发包不带 .git（推荐，保持现状）
 
@@ -416,7 +504,7 @@ upgrade:
 
 ---
 
-## 九、边界情况
+## 十、边界情况
 
 | # | 场景 | 处理 |
 |---|------|------|
@@ -438,7 +526,7 @@ upgrade:
 
 ---
 
-## 十、与完整方案（auto_upgrade_design.md）的对比
+## 十一、与完整方案（auto_upgrade_design.md）的对比
 
 | 维度 | 简化版（本文） | 完整版（auto_upgrade_design.md） |
 |------|-------------|--------------------------------|
@@ -455,7 +543,7 @@ upgrade:
 
 ---
 
-## 十一、发布流程（给维护者）
+## 十二、发布流程（给维护者）
 
 ```bash
 # 1. 开发完成 → 测试通过
@@ -474,7 +562,7 @@ upgrade:
 
 ---
 
-## 十二、测试计划
+## 十三、测试计划
 
 1. **无网络环境**：断网启动 → 应提示"网络不可用"→ 正常启动
 2. **无 git**：删除 git 二进制 → 应提示"未找到 git"→ 正常启动
@@ -489,7 +577,15 @@ upgrade:
 
 ---
 
-## 十三、风险提示
+## 十四、已知问题
+
+| # | 问题 | 影响 | 解决方案 |
+|---|------|------|----------|
+| 1 | Linux 启动脚本直接用 `python3` 执行 `upgrade_check.py`，未使用 `uv run` | 如果系统未安装 `pyyaml` 模块，配置文件解析会失败，回退到默认值 | Linux 推荐使用 Docker 部署，Docker 内已包含依赖；或手动 `pip install pyyaml` |
+
+---
+
+## 十五、风险提示
 
 1. **无灰度**：所有用户同时看到更新，push 前必须充分测试
 2. **无撤回**：bug 版本 push 后无法阻止已 pull 的用户，只能通过再 push 修复

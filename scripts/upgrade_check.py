@@ -28,20 +28,22 @@ def get_project_dir() -> Path:
 def find_git_binary():
     """查找 git 二进制
 
-    优先查找项目自带的 git，其次在系统 PATH 中查找。
+    Windows: 优先使用项目内置的 MinGit，其次查找系统 PATH。
+    macOS/Linux: 直接使用系统 PATH 中的 git（需用户提前安装）。
     """
     project_dir = get_project_dir()
 
-    # 1. 检查项目自带的 git
-    bundled_paths = [
-        project_dir / "bin" / "git" / "git.exe",       # Windows
-        project_dir / "bin" / "git" / "bin" / "git",   # macOS/Linux
-    ]
-    for p in bundled_paths:
-        if p.exists():
-            return str(p)
+    # Windows: 优先查找项目自带的 MinGit
+    if sys.platform == "win32":
+        bundled_paths = [
+            project_dir / "bin" / "git" / "cmd" / "git.exe",   # MinGit 标准路径
+            project_dir / "bin" / "git" / "git.exe",            # 旧路径兼容
+        ]
+        for p in bundled_paths:
+            if p.exists():
+                return str(p)
 
-    # 2. 系统 PATH 中找
+    # 所有平台: 在系统 PATH 中查找
     git_cmd = shutil.which("git")
     if git_cmd:
         return git_cmd
@@ -57,7 +59,7 @@ def get_upgrade_config():
     """
     defaults = {
         "enabled": True,
-        "repo_url": "",
+        "repo_urls": [],       # 多源配置，按顺序尝试
         "branch": "main",
         "check_on_startup": True,
         "auto_update": False,
@@ -216,41 +218,58 @@ def get_remote_latest_tag(git_cmd, project_dir, timeout):
     return tags[0]
 
 
-def init_git_repo(project_dir, git_cmd, repo_url, branch, timeout):
-    """首次启动：.git 不存在，自动初始化"""
+def init_git_repo(project_dir, git_cmd, repo_urls, branch, timeout):
+    """首次启动：.git 不存在，自动初始化
+
+    支持多源 fallback，按顺序尝试每个源。
+    """
     print("[upgrade] 首次运行，初始化 git 仓库...")
 
+    # git init 只需执行一次
     rc, _, err = run_git(git_cmd, ["init"], project_dir, timeout=timeout)
     if rc != 0:
         print(f"[upgrade] git init 失败: {err}")
         return False
 
-    rc, _, err = run_git(
-        git_cmd, ["remote", "add", "origin", repo_url],
-        project_dir, timeout=timeout
-    )
-    if rc != 0:
-        print(f"[upgrade] 添加远程仓库失败: {err}")
-        return False
+    # 尝试每个源
+    for url in repo_urls:
+        print(f"[upgrade] 尝试源: {url}")
 
-    rc, _, err = run_git(
-        git_cmd, ["fetch", "origin", branch, "--depth", "1", "--tags"],
-        project_dir, timeout=timeout
-    )
-    if rc != 0:
-        print(f"[upgrade] fetch 远程分支失败: {err}")
-        return False
+        # 清除已有的 remote（如果有）
+        run_git(git_cmd, ["remote", "remove", "origin"], project_dir, timeout=10)
 
-    rc, _, err = run_git(
-        git_cmd, ["reset", "--hard", f"origin/{branch}"],
-        project_dir, timeout=timeout
-    )
-    if rc != 0:
-        print(f"[upgrade] 重置到远程版本失败: {err}")
-        return False
+        # 添加 remote
+        rc, _, err = run_git(
+            git_cmd, ["remote", "add", "origin", url],
+            project_dir, timeout=timeout
+        )
+        if rc != 0:
+            print(f"[upgrade] 添加远程仓库失败: {err}")
+            continue
 
-    print("[upgrade] 初始化完成，已同步到最新版本")
-    return True
+        # fetch
+        rc, _, err = run_git(
+            git_cmd, ["fetch", "origin", branch, "--depth", "1", "--tags"],
+            project_dir, timeout=timeout
+        )
+        if rc != 0:
+            print(f"[upgrade] fetch 失败: {err}")
+            continue
+
+        # reset
+        rc, _, err = run_git(
+            git_cmd, ["reset", "--hard", f"origin/{branch}"],
+            project_dir, timeout=timeout
+        )
+        if rc != 0:
+            print(f"[upgrade] reset 失败: {err}")
+            continue
+
+        print(f"[upgrade] 初始化完成，使用源: {url}")
+        return True
+
+    print("[upgrade] 所有源都失败，无法初始化")
+    return False
 
 
 def perform_update(git_cmd, project_dir, timeout):
@@ -340,7 +359,7 @@ def main():
     branch = cfg.get("branch", "main")
     timeout = cfg.get("timeout_seconds", 30)
     auto_update = cfg.get("auto_update", False)
-    repo_url = cfg.get("repo_url", "").strip()
+    repo_urls = cfg.get("repo_urls", [])
 
     git_cmd = find_git_binary()
     if not git_cmd:
@@ -350,12 +369,12 @@ def main():
     git_dir = project_dir / ".git"
 
     if not git_dir.exists():
-        if not repo_url:
+        if not repo_urls:
             print("[upgrade] 未配置仓库地址，跳过更新检查")
-            print("[upgrade] 提示：如需自动更新，请在配置中设置 upgrade.repo_url")
+            print("[upgrade] 提示：如需自动更新，请在配置中设置 upgrade.repo_urls")
             return 0
 
-        if not init_git_repo(project_dir, git_cmd, repo_url, branch, timeout):
+        if not init_git_repo(project_dir, git_cmd, repo_urls, branch, timeout):
             print("[upgrade] 初始化失败，使用本地版本")
             return 1
 
