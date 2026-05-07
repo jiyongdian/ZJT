@@ -9,16 +9,17 @@
     <script src="/js/vue.global.prod.js"></script>
     <script src="/js/axios.min.js"></script>
     <script src="/js/marked.min.js"></script>
+    <script src="/js/task_config.js"></script>
     <link rel="stylesheet" href="/css/github.min.css">
 </head>
 <body>
     <div id="app" class="app-container">
         <!-- 第一列：左侧窄导航 -->
         <nav class="marketing-nav">
-            <a href="/marketing-home" class="marketing-nav-logo" title="返回营销首页">
+            <a href="/" class="marketing-nav-logo" title="返回短剧首页">
                 <img src="/files/logo.svg" alt="Logo" style="width: 32px; height: 32px;" />
             </a>
-            <div class="marketing-nav-item" @click="goToHome">
+            <div class="marketing-nav-item" style="opacity: 0.4; cursor: not-allowed;" title="开发中">
                 <div class="marketing-nav-icon">💡</div>
                 <div class="marketing-nav-text">灵感</div>
             </div>
@@ -182,9 +183,21 @@
             <!-- 输入区 -->
             <div class="input-area">
                 <div class="input-wrapper">
-                    <div class="input-box">
+                    <div class="marketing-input-box">
+                        <div class="marketing-input-upload">
+                            <input type="file" ref="fileInputRef" style="display: none;" accept="image/*" @change="handleFileChange">
+                            <button v-if="!hasUploadedImage" class="marketing-upload-btn" title="上传参考" @click="triggerUpload">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 5v14M5 12h14"/>
+                                </svg>
+                            </button>
+                            <div v-else style="position: relative; width: 40px; height: 40px; border-radius: 10px; overflow: hidden; cursor: pointer;" @click="triggerUpload" title="点击更换图片">
+                                <img :src="uploadedImageUrl" style="width: 100%; height: 100%; object-fit: cover;">
+                                <div style="position: absolute; top: 0; right: 0; background: rgba(0,0,0,0.5); color: #fff; width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; cursor: pointer;" @click.stop="clearUploadedImage">×</div>
+                            </div>
+                        </div>
                         <textarea
-                            class="input-textarea"
+                            class="marketing-textarea"
                             v-model="inputText"
                             placeholder="输入想法、剧本或上传参考，支持 '/' 使用技能，@添加主体，和Agent一起创作"
                             rows="1"
@@ -193,27 +206,191 @@
                             ref="inputTextarea"
                         ></textarea>
                     </div>
-                    <div class="input-actions">
-                        <div class="input-actions-left">
-                            <button class="action-btn">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M12 5v14M5 12h14"/>
-                                </svg>
-                                <span>上传</span>
-                            </button>
-                            <button class="action-btn">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <div class="marketing-input-bar">
+                        <div class="marketing-input-bar-left">
+                            <!-- 类型选择 -->
+                            <div class="marketing-dropdown" style="position: relative;">
+                                <button class="marketing-bar-btn" @click.stop="toggleDropdown">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                                    </svg>
+                                    <span>{{ selectedType }}</span>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :style="{ transform: showDropdown ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }">
+                                        <path d="M6 9l6 6 6-6"/>
+                                    </svg>
+                                </button>
+                                <div v-if="showDropdown" class="marketing-dropdown-menu" @click.stop style="position: absolute; bottom: 100%; left: 0; margin-bottom: 8px; background: #fff; border: 1px solid #e8e8e8; border-radius: 12px; box-shadow: 0 -4px 20px rgba(0,0,0,0.1); padding: 8px; min-width: 200px; z-index: 100;">
+                                    <div v-for="type in creationTypes" :key="type.name" @click.stop="selectType(type)" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; cursor: pointer; transition: background 0.2s;" :style="{ background: selectedType === type.name ? '#e6f7ff' : 'transparent' }">
+                                        <span style="font-size: 18px;">{{ type.icon }}</span>
+                                        <div>
+                                            <div style="font-size: 14px; font-weight: 500; color: #1a1a1a;">{{ type.name }}</div>
+                                            <div style="font-size: 12px; color: #999;">{{ type.desc }}</div>
+                                        </div>
+                                        <span v-if="selectedType === type.name" style="margin-left: auto; color: #00a8e6; font-weight: bold;">✓</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Agent 模式：自定义综合设置 -->
+                            <template v-if="selectedType === 'Agent 模式'">
+                                <div class="marketing-dropdown" style="position: relative;">
+                                    <button class="marketing-bar-btn" @click.stop="toggleSettingsPanel">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <circle cx="12" cy="12" r="3"/>
+                                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.17 15 1.65 1.65 0 0 0 2.66 15V15a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1.51-1V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                                        </svg>
+                                        <span>自定义</span>
+                                    </button>
+                                    <!-- 综合设置面板（向上弹出） -->
+                                    <div v-if="showSettingsPanel" class="marketing-panel" @click.stop style="position: absolute; bottom: 100%; left: 0; margin-bottom: 8px; background: #fff; border: 1px solid #e8e8e8; border-radius: 16px; box-shadow: 0 -8px 32px rgba(0,0,0,0.12); padding: 20px; min-width: 360px; z-index: 100;">
+                                        <!-- 生成偏好 -->
+                                        <div style="margin-bottom: 20px;">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                                <span style="font-size: 14px; font-weight: 500; color: #1a1a1a;">生成偏好</span>
+                                                <div style="display: flex; align-items: center; gap: 8px;">
+                                                    <span style="font-size: 12px; color: #999;">自动</span>
+                                                    <div style="width: 36px; height: 20px; background: #e8e8e8; border-radius: 10px; position: relative; cursor: pointer;" @click.stop="autoMode = !autoMode">
+                                                        <div :style="{ position: 'absolute', width: '16px', height: '16px', background: '#fff', borderRadius: '50%', top: '2px', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)', left: autoMode ? '18px' : '2px' }"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div style="display: flex; background: #f5f5f5; border-radius: 12px; padding: 4px;">
+                                                <div @click.stop="mediaType = 'image'" :style="{ flex: 1, textAlign: 'center', padding: '8px 0', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500, transition: 'all 0.2s', background: mediaType === 'image' ? '#fff' : 'transparent', color: mediaType === 'image' ? '#1a1a1a' : '#999', boxShadow: mediaType === 'image' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none' }">图片</div>
+                                                <div @click.stop="mediaType = 'video'" :style="{ flex: 1, textAlign: 'center', padding: '8px 0', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500, transition: 'all 0.2s', background: mediaType === 'video' ? '#fff' : 'transparent', color: mediaType === 'video' ? '#1a1a1a' : '#999', boxShadow: mediaType === 'video' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none' }">视频</div>
+                                            </div>
+                                        </div>
+
+                                        <!-- 选择比例 -->
+                                        <div style="margin-bottom: 20px;">
+                                            <span style="font-size: 14px; font-weight: 500; color: #1a1a1a; display: block; margin-bottom: 12px;">选择比例</span>
+                                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                                <div v-for="ratio in currentRatios" :key="ratio.value" @click.stop="selectedRatio = ratio.value" style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 10px; border-radius: 10px; cursor: pointer; transition: all 0.2s;" :style="{ border: selectedRatio === ratio.value ? '2px solid #00a8e6' : '2px solid transparent', background: selectedRatio === ratio.value ? '#e6f7ff' : '#f5f5f5' }">
+                                                    <div :style="{ width: ratio.w + 'px', height: ratio.h + 'px', border: '2px solid ' + (selectedRatio === ratio.value ? '#00a8e6' : '#ccc'), borderRadius: '3px', display: 'flex', alignItems: 'center', justifyContent: 'center' }">
+                                                        <div v-if="ratio.value === 'auto'" style="font-size: 10px; color: #666;">☆</div>
+                                                    </div>
+                                                    <span style="font-size: 11px; color: #666;">{{ ratio.label }}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- 其他设置 -->
+                                        <div>
+                                            <span style="font-size: 14px; font-weight: 500; color: #1a1a1a; display: block; margin-bottom: 12px;">其他设置</span>
+                                            <div style="display: flex; gap: 12px;">
+                                                <div style="flex: 1.6;">
+                                                    <button @click.stop="showModelSelect = !showModelSelect" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #f5f5f5; border: none; border-radius: 10px; cursor: pointer; font-size: 13px; color: #1a1a1a;">
+                                                        <span style="display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px;">
+                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                                                            <span style="overflow: hidden; text-overflow: ellipsis;">{{ selectedModel }}</span>
+                                                        </span>
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :style="{ transform: showModelSelect ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }"><path d="M6 9l6 6 6-6"/></svg>
+                                                    </button>
+                                                </div>
+                                                <div style="flex: 1;">
+                                                    <button style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #f5f5f5; border: none; border-radius: 10px; cursor: pointer; font-size: 13px; color: #1a1a1a;">
+                                                        <span style="display: flex; align-items: center; gap: 6px;">
+                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+                                                            {{ selectedResolution }}
+                                                        </span>
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <!-- 模型选择列表（内联展开） -->
+                                            <div v-if="showModelSelect" style="background: #fafafa; border-radius: 12px; padding: 12px; margin-top: 8px;">
+                                                <div style="font-size: 12px; color: #999; margin-bottom: 10px;">选择模型：{{ selectedModel }}</div>
+                                                <div v-for="model in currentModels" :key="model.name" @click.stop="selectModel(model)" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: background 0.2s; margin-bottom: 4px;" :style="{ background: selectedModel === model.name ? '#fff' : 'transparent', border: selectedModel === model.name ? '1px solid #e8e8e8' : '1px solid transparent', boxShadow: selectedModel === model.name ? '0 1px 4px rgba(0,0,0,0.05)' : 'none' }">
+                                                    <div style="width: 36px; height: 36px; background: #f0f0f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px;">{{ model.icon }}</div>
+                                                    <div style="flex: 1;">
+                                                        <div style="font-size: 14px; font-weight: 500; color: #1a1a1a; display: flex; align-items: center; gap: 6px;">
+                                                            {{ model.name }}
+                                                            <span v-if="model.tag" style="font-size: 10px; color: #00a8e6; background: #e6f7ff; padding: 1px 6px; border-radius: 4px;">{{ model.tag }}</span>
+                                                            <span v-if="model.isNew" style="font-size: 10px; color: #fff; background: #00a8e6; padding: 1px 6px; border-radius: 4px;">New</span>
+                                                        </div>
+                                                        <div style="font-size: 12px; color: #999; margin-top: 2px;">{{ model.desc }}</div>
+                                                    </div>
+                                                    <span v-if="selectedModel === model.name" style="color: #1a1a1a; font-size: 18px;">✓</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- 非 Agent 模式：独立模型 + 比例选择 -->
+                            <template v-else>
+                                <!-- 模型选择 -->
+                                <div class="marketing-dropdown" style="position: relative;">
+                                    <button class="marketing-bar-btn" @click.stop="toggleModelPanel">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                                        </svg>
+                                        <span>{{ selectedModel }}</span>
+                                    </button>
+                                    <!-- 模型选择弹窗 -->
+                                    <div v-if="showModelPanel" class="marketing-panel" @click.stop style="position: absolute; bottom: 100%; left: 0; margin-bottom: 8px; background: #fff; border: 1px solid #e8e8e8; border-radius: 16px; box-shadow: 0 -8px 32px rgba(0,0,0,0.12); padding: 16px; min-width: 360px; z-index: 100;">
+                                        <div style="font-size: 12px; color: #999; margin-bottom: 12px;">选择模型：{{ selectedModel }} by {{ mediaType === 'image' ? 'Seedream' : 'seed' }}</div>
+                                        <div v-for="model in currentModels" :key="model.name" @click.stop="selectModel(model)" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: background 0.2s; margin-bottom: 4px;" :style="{ background: selectedModel === model.name ? '#fff' : 'transparent', border: selectedModel === model.name ? '1px solid #e8e8e8' : '1px solid transparent', boxShadow: selectedModel === model.name ? '0 1px 4px rgba(0,0,0,0.05)' : 'none' }">
+                                            <div style="width: 36px; height: 36px; background: #f0f0f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px;">{{ model.icon }}</div>
+                                            <div style="flex: 1;">
+                                                <div style="font-size: 14px; font-weight: 500; color: #1a1a1a; display: flex; align-items: center; gap: 6px;">
+                                                    {{ model.name }}
+                                                    <span v-if="model.tag" style="font-size: 10px; color: #00a8e6; background: #e6f7ff; padding: 1px 6px; border-radius: 4px;">{{ model.tag }}</span>
+                                                    <span v-if="model.isNew" style="font-size: 10px; color: #fff; background: #00a8e6; padding: 1px 6px; border-radius: 4px;">New</span>
+                                                </div>
+                                                <div style="font-size: 12px; color: #999; margin-top: 2px;">{{ model.desc }}</div>
+                                            </div>
+                                            <span v-if="selectedModel === model.name" style="color: #1a1a1a; font-size: 18px;">✓</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 比例+分辨率选择 -->
+                                <div class="marketing-dropdown" style="position: relative;">
+                                    <button class="marketing-bar-btn" @click.stop="toggleRatioPanel">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                            <path d="M3 9h18M9 21V9"/>
+                                        </svg>
+                                        <span>{{ selectedRatio }} {{ selectedResolution }}</span>
+                                    </button>
+                                    <!-- 比例选择弹窗 -->
+                                    <div v-if="showRatioPanel" class="marketing-panel" @click.stop style="position: absolute; bottom: 100%; left: 0; margin-bottom: 8px; background: #fff; border: 1px solid #e8e8e8; border-radius: 16px; box-shadow: 0 -8px 32px rgba(0,0,0,0.12); padding: 20px; min-width: 380px; z-index: 100;">
+                                        <div style="margin-bottom: 16px;">
+                                            <span style="font-size: 13px; color: #999; display: block; margin-bottom: 10px;">选择比例</span>
+                                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                                <div v-for="ratio in currentRatios" :key="ratio.value" @click.stop="selectedRatio = ratio.value" style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 10px; border-radius: 10px; cursor: pointer; transition: all 0.2s;" :style="{ border: selectedRatio === ratio.value ? '2px solid #00a8e6' : '2px solid transparent', background: selectedRatio === ratio.value ? '#e6f7ff' : '#f5f5f5' }">
+                                                    <div :style="{ width: ratio.w + 'px', height: ratio.h + 'px', border: '2px solid ' + (selectedRatio === ratio.value ? '#00a8e6' : '#ccc'), borderRadius: '3px', display: 'flex', alignItems: 'center', justifyContent: 'center' }">
+                                                        <div v-if="ratio.value === 'auto'" style="font-size: 10px; color: #666;">☆</div>
+                                                    </div>
+                                                    <span style="font-size: 11px; color: #666;">{{ ratio.label }}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <span style="font-size: 13px; color: #999; display: block; margin-bottom: 10px;">选择分辨率</span>
+                                            <div style="display: flex; gap: 8px;">
+                                                <div v-for="res in currentResolutions" :key="res" @click.stop="selectedResolution = res" style="flex: 1; text-align: center; padding: 10px; border-radius: 8px; cursor: pointer; transition: all 0.2s; font-size: 14px;" :style="{ border: selectedResolution === res ? '2px solid #00a8e6' : '1px solid #e8e8e8', background: selectedResolution === res ? '#e6f7ff' : '#f5f5f5', color: selectedResolution === res ? '#00a8e6' : '#1a1a1a' }">{{ res }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <button class="marketing-bar-btn" style="color: #ccc; cursor: not-allowed; position: relative;" title="开发中">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="stroke: #ccc;">
                                     <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
                                 </svg>
                                 <span>使用技能</span>
                             </button>
-                            <button class="action-btn">
-                                <span style="color: var(--accent-color); font-weight: 600;">@</span>
+                            <button class="marketing-bar-btn" style="color: #ccc; cursor: not-allowed; position: relative;" title="开发中">
+                                <span style="color: #ccc; font-weight: 600;">@</span>
                                 <span>添加主体</span>
                             </button>
                         </div>
-                        <div class="input-actions-right">
-                            <button class="action-btn">
+                        <div class="marketing-input-bar-right">
+                            <button class="marketing-bar-btn" title="语音输入">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
                                     <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
@@ -221,7 +398,7 @@
                                     <line x1="8" y1="23" x2="16" y2="23"/>
                                 </svg>
                             </button>
-                            <button class="send-btn" @click="handleSend" :disabled="!inputText.trim() || isLoading">
+                            <button class="marketing-send-btn" @click="handleSend" :disabled="!inputText.trim() || isLoading">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
                                 </svg>
@@ -263,6 +440,71 @@
             const showContinue = ref(false);
             const chatMessages = ref(null);
             const inputTextarea = ref(null);
+
+            // 创作类型与模型选择
+            const showDropdown = ref(false);
+            const selectedType = ref('Agent 模式');
+            const creationTypes = [
+                { icon: '✨', name: 'Agent 模式', desc: '$2.0视频创作' },
+                { icon: '🖼️', name: '图片生成', desc: '智能美学提升' },
+                { icon: '📹', name: '视频生成', desc: '多种模型自由选择' }
+            ];
+
+            const showModelPanel = ref(false);
+            const showRatioPanel = ref(false);
+            const showSettingsPanel = ref(false);
+            const autoMode = ref(false);
+            const showModelSelect = ref(false);
+            const mediaType = ref('image');
+            const selectedRatio = ref('1:1');
+            const selectedModel = ref('');
+            const selectedModelKey = ref('');
+            const selectedResolution = ref('');
+
+            // 上传图片状态
+            const hasUploadedImage = ref(false);
+            const uploadedImageUrl = ref('');
+            const uploadedImageFile = ref(null);
+            const fileInputRef = ref(null);
+
+            // 图片生成任务状态
+            const imageProjectIds = ref([]);
+            const imageStatus = ref('');
+            const imageStatusInterval = ref(null);
+            const imageResults = ref([]);
+
+            // TaskConfig 动态模型数据
+            const taskConfigReady = ref(false);
+            const allImageModels = ref([]);
+            const allVideoModels = ref([]);
+            const availableRatios = ref([]);
+            const availableResolutions = ref([]);
+
+            const aspectRatioMap = {
+                'auto':  { label: '智能', value: 'auto', w: 20, h: 20 },
+                '21:9':  { label: '21:9', value: '21:9', w: 28, h: 12 },
+                '16:9':  { label: '16:9', value: '16:9', w: 24, h: 14 },
+                '3:2':   { label: '3:2',  value: '3:2',  w: 22, h: 15 },
+                '4:3':   { label: '4:3',  value: '4:3',  w: 20, h: 15 },
+                '1:1':   { label: '1:1',  value: '1:1',  w: 18, h: 18 },
+                '3:4':   { label: '3:4',  value: '3:4',  w: 15, h: 20 },
+                '2:3':   { label: '2:3',  value: '2:3',  w: 14, h: 22 },
+                '9:16':  { label: '9:16', value: '9:16', w: 12, h: 24 }
+            };
+
+            // 当前模型列表：有图片时用图生视频，否则用文生图
+            const currentModels = Vue.computed(() => {
+                if (!taskConfigReady.value) return [];
+                return hasUploadedImage.value ? allVideoModels.value : allImageModels.value;
+            });
+
+            // 当前可选比例
+            const currentRatios = Vue.computed(() => {
+                return availableRatios.value.map(r => aspectRatioMap[r] || { label: r, value: r, w: 18, h: 18 });
+            });
+
+            // 当前可选分辨率
+            const currentResolutions = Vue.computed(() => availableResolutions.value);
 
             // 用户信息
             const userId = ref('');
@@ -444,6 +686,25 @@
                 const text = inputText.value.trim();
                 if (!text || isLoading.value) return;
 
+                // 判断是否走图片生成/编辑流程
+                const isImageMode = selectedType.value === '图片生成' ||
+                                    (selectedType.value === 'Agent 模式' && mediaType.value === 'image');
+
+                if (isImageMode) {
+                    // 添加用户消息
+                    messages.value.push({
+                        role: 'user',
+                        content: text + (hasUploadedImage.value ? ' \uD83D\uDCF7（已上传参考图）' : ''),
+                        timestamp: new Date().toISOString()
+                    });
+                    inputText.value = '';
+                    autoResize();
+                    scrollToBottom();
+                    showContinue.value = false;
+                    await sendImageRequest(text);
+                    return;
+                }
+
                 // 确保有 session
                 if (!currentSessionId.value) {
                     const sid = await createSession();
@@ -463,6 +724,152 @@
 
                 // 发送请求
                 await sendMessageToApi(text);
+            }
+
+            // 发送图片生成/编辑请求
+            async function sendImageRequest(prompt) {
+                isLoading.value = true;
+                imageResults.value = [];
+                imageStatus.value = 'submitted';
+
+                try {
+                    const form = new FormData();
+                    form.append('prompt', prompt);
+                    form.append('user_id', userId.value);
+                    form.append('auth_token', authToken.value);
+
+                    let apiUrl = '';
+
+                    if (hasUploadedImage.value && uploadedImageFile.value) {
+                        // 图片编辑/图生图
+                        form.append('image', uploadedImageFile.value);
+                        form.append('ratio', selectedRatio.value);
+                        form.append('count', '1');
+                        if (selectedResolution.value) {
+                            const sizeMap = { '高清 2K': '2K', '超清 4K': '4K' };
+                            const sizeVal = sizeMap[selectedResolution.value] || '2K';
+                            form.append('image_size', sizeVal);
+                        }
+                        // 获取 task_id
+                        const taskId = window.TaskConfig?.getTaskIdByKey
+                            ? window.TaskConfig.getTaskIdByKey(selectedModelKey.value, 'image_edit')
+                            : null;
+                        if (!taskId) {
+                            throw new Error('未找到图片编辑模型对应的任务配置');
+                        }
+                        form.append('task_id', taskId);
+                        apiUrl = '/api/image-edit';
+                    } else {
+                        // 文生图
+                        form.append('aspect_ratio', selectedRatio.value);
+                        form.append('count', '1');
+                        if (selectedResolution.value) {
+                            const sizeMap = { '高清 2K': '2K', '超清 4K': '4K' };
+                            const sizeVal = sizeMap[selectedResolution.value] || '2K';
+                            form.append('image_size', sizeVal);
+                        }
+                        // 获取 task_id
+                        const taskId = window.TaskConfig?.getTaskIdByKey
+                            ? window.TaskConfig.getTaskIdByKey(selectedModelKey.value, 'text_to_image')
+                            : null;
+                        if (!taskId) {
+                            throw new Error('未找到文生图模型对应的任务配置');
+                        }
+                        form.append('task_id', taskId);
+                        apiUrl = '/api/text-to-image';
+                    }
+
+                    const res = await axios.post(apiUrl, form, {
+                        headers: { 'Content-Type': 'multipart/form-data' }
+                    });
+
+                    imageProjectIds.value = res.data.project_ids || [];
+                    imageStatus.value = res.data.status || 'submitted';
+
+                    // 添加 AI 占位消息
+                    const msgIndex = messages.value.length;
+                    messages.value.push({
+                        role: 'ai',
+                        content: '正在生成图片，请稍候...',
+                        timestamp: new Date().toISOString()
+                    });
+                    scrollToBottom();
+
+                    // 开始轮询状态
+                    startImageStatusCheck(msgIndex);
+
+                } catch (e) {
+                    showError(e.message || '图片生成请求失败');
+                    messages.value.push({
+                        role: 'ai',
+                        content: '图片生成失败：' + (e.message || '请求失败'),
+                        timestamp: new Date().toISOString()
+                    });
+                } finally {
+                    isLoading.value = false;
+                    scrollToBottom();
+                }
+            }
+
+            // 轮询图片生成状态
+            async function checkImageStatus(msgIndex) {
+                if (!imageProjectIds.value || imageProjectIds.value.length === 0) return;
+
+                try {
+                    const params = authToken.value ? { auth_token: authToken.value } : {};
+                    const projectIdsStr = imageProjectIds.value.join(',');
+                    const res = await axios.get(`/api/get-status/${projectIdsStr}`, { params });
+
+                    if (res.data.tasks) {
+                        const tasks = res.data.tasks;
+                        const allSuccess = tasks.every(t => t.status === 'SUCCESS');
+                        const anyFailed = tasks.some(t => t.status === 'FAILED');
+                        const anyRunning = tasks.some(t => t.status === 'RUNNING');
+
+                        const allResults = [];
+                        tasks.forEach(task => {
+                            if (task.results && task.results.length > 0) {
+                                task.results.forEach(result => {
+                                    allResults.push(result);
+                                });
+                            }
+                        });
+                        imageResults.value = allResults;
+
+                        if (allSuccess) {
+                            imageStatus.value = 'SUCCESS';
+                            clearImageStatusCheck();
+                            // 更新 AI 消息为图片结果
+                            const imageHtml = allResults.map(r => {
+                                const imgUrl = r.file_url || r.url || r.image_url || '';
+                                return `<img src="${imgUrl}" style="max-width:100%;border-radius:8px;margin:8px 0;" alt="生成结果">`;
+                            }).join('');
+                            messages.value[msgIndex].content = '图片已生成：\n\n' + imageHtml;
+                            scrollToBottom();
+                        } else if (anyFailed && !anyRunning) {
+                            imageStatus.value = 'FAILED';
+                            clearImageStatusCheck();
+                            messages.value[msgIndex].content = '图片生成失败，请稍后重试。';
+                            scrollToBottom();
+                        }
+                    }
+                } catch (err) {
+                    console.error('图片状态轮询错误:', err);
+                }
+            }
+
+            function startImageStatusCheck(msgIndex) {
+                clearImageStatusCheck();
+                imageStatusInterval.value = setInterval(() => {
+                    checkImageStatus(msgIndex);
+                }, 5000);
+            }
+
+            function clearImageStatusCheck() {
+                if (imageStatusInterval.value) {
+                    clearInterval(imageStatusInterval.value);
+                    imageStatusInterval.value = null;
+                }
             }
 
             // 继续按钮
@@ -694,8 +1101,223 @@
 
             // 返回首页
             function goToHome() {
-                window.location.href = '/marketing-home';
+                window.location.href = '/';
             }
+
+            // 加载 TaskConfig 并初始化模型数据
+            async function initTaskConfig() {
+                try {
+                    if (window.TaskConfig && !window.TaskConfig.isLoaded()) {
+                        await window.TaskConfig.load();
+                    }
+                    if (!window.TaskConfig || !window.TaskConfig.isLoaded()) {
+                        console.warn('TaskConfig 未加载，使用默认模型');
+                        loadDefaultModels();
+                        return;
+                    }
+
+                    // 获取文生图模型
+                    const imgOpts = window.TaskConfig.getModelOptionsForCategory('text_to_image');
+                    allImageModels.value = imgOpts.map((opt, idx) => ({
+                        icon: '🚀',
+                        name: opt.label.split(' (')[0],
+                        desc: opt.label,
+                        tag: idx === 0 ? 'New' : '',
+                        key: opt.key,
+                        value: opt.value
+                    }));
+
+                    // 获取图生视频模型
+                    const vidOpts = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+                    allVideoModels.value = vidOpts.map((opt, idx) => ({
+                        icon: '🎬',
+                        name: opt.label.split(' (')[0],
+                        desc: opt.label,
+                        tag: idx === 0 ? 'New' : '',
+                        key: opt.key,
+                        value: opt.value
+                    }));
+
+                    // 默认选中第一个模型
+                    if (allImageModels.value.length > 0 && !selectedModel.value) {
+                        const m = allImageModels.value[0];
+                        selectedModel.value = m.name;
+                        selectedModelKey.value = m.key || '';
+                    }
+
+                    // 刷新比例和分辨率
+                    refreshModelSettings();
+                    taskConfigReady.value = true;
+                } catch (e) {
+                    console.error('加载 TaskConfig 失败:', e);
+                    loadDefaultModels();
+                }
+            }
+
+            // 默认模型兜底
+            function loadDefaultModels() {
+                allImageModels.value = [
+                    { icon: '🚀', name: 'GPT IMAGE 2', desc: 'OpenAI DALL-E 3 模型', tag: '推荐', key: 'gpt_image_2', value: 'gpt_image_2' },
+                    { icon: '🚀', name: 'Seedream 5.0', desc: '字节跳动生图模型', tag: '', key: 'seedream_5', value: 'seedream_5' },
+                    { icon: '🚀', name: '可图 3.0', desc: '快手生图模型', tag: '', key: 'kling_image', value: 'kling_image' },
+                    { icon: '🚀', name: '通义万相 3.0', desc: '阿里生图模型', tag: '', key: 'wanxiang', value: 'wanxiang' }
+                ];
+                allVideoModels.value = [
+                    { icon: '🎬', name: '可灵 2.0', desc: '快手图生视频模型', tag: '推荐', key: 'kling_video', value: 'kling_video' },
+                    { icon: '🎬', name: '通义万相 3.0', desc: '阿里图生视频模型', tag: '', key: 'wanxiang_video', value: 'wanxiang_video' }
+                ];
+                if (!selectedModel.value) {
+                    const m = allImageModels.value[0];
+                    selectedModel.value = m.name;
+                    selectedModelKey.value = m.key || '';
+                }
+                availableRatios.value = ['auto', '1:1', '16:9', '9:16', '4:3', '3:4'];
+                availableResolutions.value = ['高清 2K', '超清 4K'];
+                selectedRatio.value = '1:1';
+                selectedResolution.value = '高清 2K';
+                taskConfigReady.value = true;
+            }
+
+            // 根据当前选中模型刷新比例和分辨率
+            function refreshModelSettings() {
+                if (!window.TaskConfig || !selectedModel.value) return;
+                const model = currentModels.value.find(m => m.name === selectedModel.value);
+                const modelKey = model ? model.key : '';
+                if (!modelKey) return;
+
+                // 获取比例选项
+                const ratios = window.TaskConfig.getRatioOptions(modelKey);
+                availableRatios.value = ratios.length > 0 ? ratios : ['1:1'];
+                if (!availableRatios.value.includes(selectedRatio.value)) {
+                    selectedRatio.value = availableRatios.value[0];
+                }
+
+                // 获取分辨率选项
+                const sizes = window.TaskConfig.getSizeOptions(modelKey);
+                availableResolutions.value = sizes.map(s => s === '1K' ? '高清 2K' : s === '2K' ? '高清 2K' : s === '4K' ? '超清 4K' : s);
+                if (availableResolutions.value.length === 0) {
+                    availableResolutions.value = ['高清 2K', '超清 4K'];
+                }
+                if (!availableResolutions.value.includes(selectedResolution.value)) {
+                    selectedResolution.value = availableResolutions.value[0];
+                }
+            }
+
+            // 文件上传处理
+            function triggerUpload() {
+                if (fileInputRef.value) {
+                    fileInputRef.value.click();
+                }
+            }
+
+            function handleFileChange(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                // 简单校验：只接受图片
+                if (!file.type.startsWith('image/')) {
+                    showError('请上传图片文件');
+                    return;
+                }
+                // 保存原始 File 对象并生成本地预览 URL
+                uploadedImageFile.value = file;
+                uploadedImageUrl.value = URL.createObjectURL(file);
+                hasUploadedImage.value = true;
+                // 切换模型后刷新设置
+                refreshModelSettings();
+            }
+
+            function clearUploadedImage() {
+                hasUploadedImage.value = false;
+                uploadedImageUrl.value = '';
+                uploadedImageFile.value = null;
+                if (fileInputRef.value) fileInputRef.value.value = '';
+                refreshModelSettings();
+            }
+
+            // 选择创作类型
+            function selectType(type) {
+                selectedType.value = type.name;
+                showDropdown.value = false;
+                // 根据类型自动切换媒体类型并设置默认模型
+                if (type.name === '图片生成') {
+                    mediaType.value = 'image';
+                    if (allImageModels.value.length > 0) {
+                        const m = allImageModels.value[0];
+                        selectedModel.value = m.name;
+                        selectedModelKey.value = m.key || '';
+                    }
+                } else if (type.name === '视频生成') {
+                    mediaType.value = 'video';
+                    if (allVideoModels.value.length > 0) {
+                        const m = allVideoModels.value[0];
+                        selectedModel.value = m.name;
+                        selectedModelKey.value = m.key || '';
+                    }
+                }
+                refreshModelSettings();
+            }
+
+            // 选择模型
+            function selectModel(model) {
+                selectedModel.value = model.name;
+                selectedModelKey.value = model.key || '';
+                showModelPanel.value = false;
+                showModelSelect.value = false;
+                refreshModelSettings();
+            }
+
+            // 互斥切换下拉
+            function toggleDropdown() {
+                showDropdown.value = !showDropdown.value;
+                showModelPanel.value = false;
+                showRatioPanel.value = false;
+            }
+
+            function toggleModelPanel() {
+                showModelPanel.value = !showModelPanel.value;
+                showDropdown.value = false;
+                showRatioPanel.value = false;
+            }
+
+            function toggleRatioPanel() {
+                showRatioPanel.value = !showRatioPanel.value;
+                showDropdown.value = false;
+                showModelPanel.value = false;
+                showSettingsPanel.value = false;
+                showModelSelect.value = false;
+            }
+
+            function toggleSettingsPanel() {
+                showSettingsPanel.value = !showSettingsPanel.value;
+                showDropdown.value = false;
+                showModelPanel.value = false;
+                showRatioPanel.value = false;
+                showModelSelect.value = false;
+            }
+
+            // 点击外部关闭下拉
+            function onDocumentClick(e) {
+                showDropdown.value = false;
+                showModelPanel.value = false;
+                showRatioPanel.value = false;
+                showSettingsPanel.value = false;
+                showModelSelect.value = false;
+            }
+
+            // 监听 mediaType 变化，重置选中模型
+            Vue.watch(mediaType, (newType) => {
+                if (allImageModels.value.length > 0 || allVideoModels.value.length > 0) {
+                    selectedModel.value = newType === 'image'
+                        ? (allImageModels.value[0]?.name || '')
+                        : (allVideoModels.value[0]?.name || '');
+                    refreshModelSettings();
+                }
+            });
+
+            onMounted(() => {
+                document.addEventListener('click', onDocumentClick);
+                initTaskConfig();
+            });
 
             return {
                 messages,
@@ -725,7 +1347,45 @@
                 newChat,
                 loadDefaultChat,
                 selectSession,
-                goToHome
+                goToHome,
+                showDropdown,
+                selectedType,
+                creationTypes,
+                selectType,
+                showModelPanel,
+                showRatioPanel,
+                mediaType,
+                selectedRatio,
+                selectedModel,
+                selectedResolution,
+                currentModels,
+                selectModel,
+                toggleDropdown,
+                toggleModelPanel,
+                toggleRatioPanel,
+                toggleSettingsPanel,
+                showSettingsPanel,
+                autoMode,
+                showModelSelect,
+                hasUploadedImage,
+                uploadedImageUrl,
+                fileInputRef,
+                triggerUpload,
+                handleFileChange,
+                clearUploadedImage,
+                taskConfigReady,
+                availableRatios,
+                availableResolutions,
+                currentRatios,
+                currentResolutions,
+                aspectRatioMap,
+                refreshModelSettings,
+                selectedModelKey,
+                uploadedImageFile,
+                imageResults,
+                sendImageRequest,
+                startImageStatusCheck,
+                clearImageStatusCheck
             };
         }
     }).mount('#app');
