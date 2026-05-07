@@ -1791,7 +1791,6 @@ const AdminApp = {
         // 快速设置：只选择智剧通API
         handleQuickSetup() {
             this.quickConfigModal.selectedProviderIds = ['ywapi'];
-            this.quickConfigModal.providerFormData = {};
             this.quickConfigModal.originalValues = this.quickConfigModal.originalValues || {};
             if (!this.quickConfigModal.providerFormData['ywapi']) {
                 this.quickConfigModal.providerFormData['ywapi'] = {};

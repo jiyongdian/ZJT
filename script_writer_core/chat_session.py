@@ -66,7 +66,7 @@ class ChatSession:
 
         self.pm_agent = PMAgent(
             model=pm_model,
-            allowed_tools=pm_config.get("allowed_tools", ["skill", "request_human_verification"]),
+            allowed_tools=pm_config.get("allowed_tools", ["skill", "ask_user"]),
             task_manager=task_manager,
             file_manager=file_manager,
             tool_executor=tool_executor,
@@ -131,6 +131,7 @@ class ChatSession:
         """清空对话历史"""
         if self.pm_agent:
             self.pm_agent.clear_history()
+            self.pm_agent._ask_fail_count = 0  # 重置 ask_user 连续失败计数
         self.updated_at = datetime.now()
     
     def set_model(self, model: str, model_id: Optional[int] = None) -> bool:

@@ -50,6 +50,7 @@ from perseids_server.client import async_make_perseids_request
 from script_writer_core.agents import TaskManager, TaskStatus, ToolExecutor
 from script_writer_core.chat_session import ChatSession
 from script_writer_core.file_manager import FileManager
+from script_writer_core.skill_loader import SkillLoader
 logger = logging.getLogger(__name__)
 
 # 创建路由器
@@ -123,7 +124,7 @@ except Exception as e:
     agents_config = {
         "pm_agent": {
             "model": "gemini/gemini-2.0-flash-exp",
-            "allowed_tools": ["skill", "request_human_verification"],
+            "allowed_tools": ["skill", "ask_user"],
             "skills": ["script-orchestrator"],
             "max_consecutive_failures": 3,
             "max_total_failures": 7
@@ -1938,17 +1939,57 @@ async def get_task_status(request: Request, task_id: str):
 async def submit_verification(request: Request, verification_id: str, verify_request: VerificationSubmitRequest):
     """提交人工验证结果"""
     try:
+        # 检查算力是否充足
+        auth_token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        if auth_token:
+            success, computing_power, error_msg = await check_computing_power(auth_token)
+            if not success:
+                # 检测 token 过期
+                if error_msg and 'TOKEN_EXPIRED' in error_msg:
+                    return JSONResponse({
+                        'success': False,
+                        'error': error_msg.replace('TOKEN_EXPIRED: ', ''),
+                        'error_code': 'TOKEN_EXPIRED',
+                        'token_expired': True
+                    }, status_code=401)
+                return JSONResponse({
+                    'success': False,
+                    'error': '算力检查失败',
+                    'message': error_msg
+                }, status_code=400)
+
+            if computing_power < 1:
+                return JSONResponse({
+                    'success': False,
+                    'error': '算力不足',
+                    'error_code': 'INSUFFICIENT_POWER',
+                    'message': '您的算力不足，请充值后再试'
+                }, status_code=400)
+
+        result = {
+            "action": "confirm" if verify_request.approved else "cancel",
+            "user_input": verify_request.user_input
+        }
         success = task_manager.submit_verification(
             verification_id=verification_id,
-            approved=verify_request.approved,
-            user_input=verify_request.user_input
+            result=result
         )
         
         if not success:
-            return JSONResponse({
-                'success': False,
-                'error': '验证请求不存在'
-            }, status_code=404)
+            # 查询实际状态，返回更有意义的错误信息
+            db_verification = task_manager.get_verification(verification_id)
+            if db_verification and db_verification.status == 'cancelled':
+                return JSONResponse({
+                    'success': False,
+                    'error': '验证已超时',
+                    'status': 'cancelled'
+                }, status_code=410)
+            else:
+                return JSONResponse({
+                    'success': False,
+                    'error': '验证请求不存在或已处理',
+                    'status': db_verification.status if db_verification else 'not_found'
+                }, status_code=404)
         
         return JSONResponse({
             'success': True,
@@ -2948,3 +2989,155 @@ async def check_configs(
             results[key] = False
 
     return {"success": True, "results": results}
+
+
+# ==================== 技能管理 API ====================
+
+class SkillUpdateRequest(BaseModel):
+    prompt_content: str
+    display_name: Optional[str] = None
+    description: Optional[str] = None
+    auth_token: Optional[str] = None
+
+
+@router.get('/skills')
+@require_permission("skill:view")
+async def list_skills(
+    request: Request,
+    user_id: int = QueryParam(..., description="用户ID"),
+    auth_token: str = QueryParam("", description="认证token")
+):
+    """获取所有 skill 列表（含用户是否自定义标记）"""
+    try:
+        # 加载所有 skill 元数据（从文件系统）
+        loader = SkillLoader()
+        all_metadata = loader.get_all_skills_metadata()
+
+        # 获取用户已自定义的 skill 名称
+        from model.skill_definitions import SkillDefinitionsModel
+        custom_names = SkillDefinitionsModel.get_custom_skill_names(user_id)
+
+        skills = []
+        for skill_name, metadata in sorted(all_metadata.items()):
+            # 获取文件大小
+            skill_file = loader.skills_dir / skill_name / 'SKILL.md'
+            file_size = skill_file.stat().st_size if skill_file.exists() else 0
+
+            skills.append({
+                'skill_name': skill_name,
+                'display_name': metadata.get('name') or skill_name,
+                'description': metadata.get('description', ''),
+                'file_size': file_size,
+                'has_custom': skill_name in custom_names,
+            })
+
+        return {"success": True, "skills": skills}
+    except Exception as e:
+        logger.error(f"获取技能列表失败: {e}", exc_info=True)
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+@router.get('/skills/{skill_name}')
+@require_permission("skill:view")
+async def get_skill_detail(
+    request: Request,
+    skill_name: str,
+    user_id: int = QueryParam(..., description="用户ID"),
+    auth_token: str = QueryParam("", description="认证token")
+):
+    """获取单个 skill 详情（优先返回用户自定义，回退文件系统）"""
+    try:
+        loader = SkillLoader(user_id=user_id)
+        skill_data = loader.get_skill_full_content(skill_name)
+        if not skill_data:
+            return JSONResponse({"success": False, "error": f"技能不存在: {skill_name}"}, status_code=404)
+
+        # 检查是否为用户自定义
+        from model.skill_definitions import SkillDefinitionsModel
+        user_skill = SkillDefinitionsModel.get_user_skill(user_id, skill_name)
+
+        return {
+            "success": True,
+            "skill": {
+                "skill_name": skill_name,
+                "display_name": skill_data.get('name') or skill_name,
+                "description": skill_data.get('description', ''),
+                "prompt_content": skill_data.get('prompt', ''),
+                "has_custom": user_skill is not None,
+            }
+        }
+    except Exception as e:
+        logger.error(f"获取技能详情失败: {e}", exc_info=True)
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+@router.put('/skills/{skill_name}')
+@require_permission("skill:edit")
+async def update_skill(
+    request: Request,
+    skill_name: str,
+    update_req: SkillUpdateRequest,
+    user_id: int = QueryParam(..., description="用户ID"),
+):
+    """保存用户自定义 skill prompt"""
+    try:
+        # 验证 skill 是否存在（文件系统中）
+        loader = SkillLoader()
+        if skill_name not in loader.list_skills():
+            return JSONResponse({"success": False, "error": f"技能不存在: {skill_name}"}, status_code=404)
+
+        from model.skill_definitions import SkillDefinitionsModel
+
+        # 获取元数据作为默认值
+        metadata = loader.get_skill_metadata(skill_name) or {}
+        display_name = update_req.display_name or metadata.get('name') or skill_name
+        description = update_req.description or metadata.get('description', '')
+
+        # 保存到数据库
+        SkillDefinitionsModel.upsert_user_skill(
+            user_id=user_id,
+            skill_name=skill_name,
+            prompt_content=update_req.prompt_content,
+            display_name=display_name,
+            description=description,
+        )
+
+        # 清除内存缓存（如果有全局单例）
+        try:
+            from script_writer_core.mcp_tool import get_skill_loader
+            get_skill_loader().invalidate_cache(skill_name)
+        except Exception:
+            pass
+
+        return {"success": True, "message": "技能已保存"}
+    except Exception as e:
+        logger.error(f"保存技能失败: {e}", exc_info=True)
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+@router.delete('/skills/{skill_name}')
+@require_permission("skill:edit")
+async def delete_skill(
+    request: Request,
+    skill_name: str,
+    user_id: int = QueryParam(..., description="用户ID"),
+    auth_token: str = QueryParam("", description="认证token")
+):
+    """删除用户自定义 skill，回退到默认"""
+    try:
+        from model.skill_definitions import SkillDefinitionsModel
+        deleted = SkillDefinitionsModel.delete_user_skill(user_id, skill_name)
+
+        if deleted:
+            # 清除内存缓存
+            try:
+                from script_writer_core.mcp_tool import get_skill_loader
+                get_skill_loader().invalidate_cache(skill_name)
+            except Exception:
+                pass
+            return {"success": True, "message": "已恢复默认配置"}
+        else:
+            return {"success": True, "message": "当前已是默认配置"}
+    except Exception as e:
+        logger.error(f"删除技能自定义失败: {e}", exc_info=True)
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)

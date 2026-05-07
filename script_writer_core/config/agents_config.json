@@ -4,6 +4,7 @@
     "model": "gemini/gemini-3-flash-preview",
     "allowed_tools": [
       "call_agent",
+      "ask_user",
       "list_character_jsons",
       "list_location_jsons",
       "list_prop_jsons",
@@ -37,7 +38,8 @@
         "read_prop_json",
         "read_script_json",
         "get_script_problem",
-        "get_long_user_input"
+        "get_long_user_input",
+        "ask_user"
       ],
       "summary_only": true
     },
@@ -48,7 +50,8 @@
         "create_character_json",
         "update_character_json",
         "list_character_jsons",
-        "read_character_json"
+        "read_character_json",
+        "ask_user"
       ],
       "summary_only": true
     },
@@ -63,7 +66,8 @@
         "list_prop_jsons",
         "read_prop_json",
         "update_prop_json",
-        "create_prop_json"
+        "create_prop_json",
+        "ask_user"
       ],
       "summary_only": true
     },
@@ -81,7 +85,8 @@
         "list_location_jsons",
         "read_prop_json",
         "list_prop_jsons",
-        "get_long_user_input"
+        "get_long_user_input",
+        "ask_user"
       ],
       "summary_only": true
     },
@@ -99,7 +104,8 @@
         "read_prop_json",
         "list_prop_jsons",
         "get_script_problem",
-        "set_script_problem"
+        "set_script_problem",
+        "ask_user"
       ],
       "summary_only": true
     },
@@ -116,7 +122,8 @@
         "list_location_jsons",
         "read_prop_json",
         "list_prop_jsons",
-        "get_long_user_input"
+        "get_long_user_input",
+        "ask_user"
       ],
       "summary_only": true
     },
@@ -129,7 +136,8 @@
         "generate_text_to_image",
         "generate_4grid_character_images",
         "get_task_status",
-        "read_world"
+        "read_world",
+        "ask_user"
       ],
       "summary_only": true
     },
@@ -145,7 +153,8 @@
         "generate_text_to_image",
         "generate_4grid_location_images",
         "generate_4grid_prop_images",
-        "get_task_status"
+        "get_task_status",
+        "ask_user"
       ],
       "summary_only": true
     }

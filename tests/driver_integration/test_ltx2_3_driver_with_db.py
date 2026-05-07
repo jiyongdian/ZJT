@@ -34,8 +34,8 @@ class MockUploadResult:
 
 
 def create_mock_upload_result(key: str, image_path: str) -> MockUploadResult:
-    """创建 mock 上传结果 - 公网 URL 直接返回原路径"""
-    return MockUploadResult(success=True, key=image_path, url=image_path)
+    """创建 mock 上传结果 - 模拟上传到 RunningHub 后返回 fileName"""
+    return MockUploadResult(success=True, key="comfyui_nodes/test_image.jpg", url="https://www.runninghub.cn/download/test_image.jpg")
 
 
 class TestLtx2Dot3RunninghubWithDB(BaseVideoDriverTest):
@@ -170,6 +170,9 @@ class TestLtx2Dot3RunninghubWithDB(BaseVideoDriverTest):
         image_node = next((n for n in node_info_list if n['fieldName'] == 'image'), None)
         self.assertIsNotNone(image_node)
         self.assertEqual(image_node['nodeId'], '2004')  # LTX2.3 使用 2004
+        # 验证图片已上传到 RunningHub（使用 RunningHub URL 而非原始 URL）
+        self.assertIn('runninghub.cn', image_node['fieldValue'])
+        self.assertNotIn('example.com', image_node['fieldValue'])
 
         # 验证视频宽高（最长边限制在 640，等比例缩放）
         # 1920x1080 -> 640x360 (最长边 1920 缩放到 640)

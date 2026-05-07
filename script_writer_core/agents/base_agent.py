@@ -1,8 +1,66 @@
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import logging
 
+from perseids_server.client import make_perseids_request
+from config.unified_config import COMPUTING_POWER_CHECK_THRESHOLD
+
 logger = logging.getLogger(__name__)
+
+
+class InsufficientComputingPowerError(Exception):
+    """算力不足异常 - 当用户算力降到阈值以下时抛出"""
+    def __init__(self, computing_power: int, message: str = "算力不足，任务已停止"):
+        self.computing_power = computing_power
+        self.message = message
+        super().__init__(self.message)
+
+
+def check_computing_power_sync(auth_token: str, agent_id: str, threshold: int = COMPUTING_POWER_CHECK_THRESHOLD) -> int:
+    """
+    同步检查用户算力（在后台线程中使用）
+
+    Args:
+        auth_token: 认证令牌
+        agent_id: 调用方 agent ID（用于日志）
+        threshold: 算力阈值，默认 1
+
+    Returns:
+        int: 当前算力值
+
+    Raises:
+        InsufficientComputingPowerError: 算力低于阈值
+    """
+    if not auth_token:
+        return 999999  # 无 token 时跳过检查
+
+    try:
+        headers = {'Authorization': f'Bearer {auth_token}'}
+        success, message, response_data = make_perseids_request(
+            endpoint='user/check_computing_power',
+            method='GET',
+            headers=headers
+        )
+
+        if not success:
+            logger.warning(f"{agent_id}: 算力检查失败: {message}, 继续执行")
+            return 999999  # 检查失败时不阻断任务
+
+        computing_power = response_data.get('computing_power', 0) if isinstance(response_data, dict) else 0
+
+        if computing_power < threshold:
+            raise InsufficientComputingPowerError(
+                computing_power=computing_power,
+                message=f"算力不足（当前: {computing_power}），任务已停止"
+            )
+
+        return computing_power
+
+    except InsufficientComputingPowerError:
+        raise
+    except Exception as e:
+        logger.warning(f"{agent_id}: 算力检查异常: {e}, 继续执行")
+        return 999999  # 异常时不阻断任务
 
 
 class BaseAgent:
