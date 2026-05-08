@@ -310,6 +310,16 @@ async def startup_event():
 
     asyncio.create_task(start_edition_auth_service())
 
+    # 启动通知拉取服务
+    async def start_notification_service():
+        try:
+            from services.notification_service import NotificationService
+            await NotificationService.initialize()
+        except Exception as e:
+            logger.warning(f"Failed to start notification service (non-critical): {e}")
+
+    asyncio.create_task(start_notification_service())
+
 # 导入并注册 script_writer API 路由
 from api.script_writer import router as script_writer_router
 app.include_router(script_writer_router)
@@ -327,6 +337,10 @@ app.include_router(system_router)
 # 导入并注册媒体验证 API 路由
 from api.media import router as media_router
 app.include_router(media_router)
+
+# 导入并注册通知系统 API 路由
+from api.notifications import router as notifications_router
+app.include_router(notifications_router)
 
 # 尝试加载 enterprise 模块，未加载时注册主仓库的用户路由（演示模式）
 try:

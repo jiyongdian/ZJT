@@ -1741,3 +1741,184 @@ body {
     border-color: #e2e8f0;
     box-shadow: none;
 }
+
+
+/* ============ 通知系统样式 ============ */
+
+/* 未读角标 */
+.notification-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    margin-left: 6px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 9px;
+    line-height: 1;
+}
+
+/* 版本升级横幅 */
+.upgrade-banner {
+    display: flex;
+    gap: 16px;
+    padding: 20px;
+    margin-bottom: 20px;
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border: 1px solid #f59e0b;
+    border-radius: 8px;
+}
+
+.upgrade-banner-icon {
+    font-size: 32px;
+    flex-shrink: 0;
+}
+
+.upgrade-banner-content h4 {
+    margin: 0 0 8px;
+    color: #92400e;
+    font-size: 16px;
+}
+
+.release-notes {
+    margin: 8px 0;
+    padding: 10px 12px;
+    background: rgba(255,255,255,0.6);
+    border-radius: 4px;
+    font-size: 13px;
+    color: #78350f;
+    white-space: pre-wrap;
+    font-family: inherit;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+.changelog-link {
+    display: inline-block;
+    margin-top: 4px;
+    color: #b45309;
+    font-size: 13px;
+    text-decoration: none;
+}
+
+.changelog-link:hover {
+    text-decoration: underline;
+}
+
+/* 通知条目 */
+.notification-item {
+    padding: 16px 20px;
+    border-bottom: 1px solid #f1f5f9;
+    transition: background 0.15s;
+}
+
+.notification-item:last-child {
+    border-bottom: none;
+}
+
+.notification-item:hover {
+    background: #f8fafc;
+}
+
+.notification-item.unread {
+    background: #eff6ff;
+    border-left: 3px solid #3b82f6;
+}
+
+.notification-item.level-warning.unread {
+    border-left-color: #f59e0b;
+    background: #fffbeb;
+}
+
+.notification-item.level-error.unread {
+    border-left-color: #ef4444;
+    background: #fef2f2;
+}
+
+.notification-item.level-success.unread {
+    border-left-color: #10b981;
+    background: #f0fdf4;
+}
+
+.notification-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.notification-type-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 4px;
+    background: #e2e8f0;
+    color: #475569;
+}
+
+.notification-type-badge.type-announcement {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.notification-type-badge.type-maintenance {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.notification-type-badge.type-feature {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.notification-type-badge.type-security {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.notification-title {
+    font-weight: 600;
+    color: #1e293b;
+    font-size: 14px;
+}
+
+.notification-content {
+    color: #475569;
+    font-size: 13px;
+    line-height: 1.6;
+    margin-bottom: 8px;
+}
+
+.notification-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+    color: #94a3b8;
+}
+
+.notification-meta .action-btn.small {
+    padding: 2px 8px;
+    font-size: 11px;
+}
+
+.notification-link {
+    color: #3b82f6;
+    text-decoration: none;
+    font-size: 12px;
+}
+
+.notification-link:hover {
+    text-decoration: underline;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px;
+    color: #94a3b8;
+}
