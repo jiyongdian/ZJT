@@ -76,10 +76,8 @@ def get_upgrade_config():
         result = {}
         for key in defaults:
             result[key] = get_config_value("upgrade", key, default=defaults[key])
-        print(f"[upgrade][debug] config_util 读取成功, repo_urls={result.get('repo_urls')}")
         return result
-    except Exception as e:
-        print(f"[upgrade][debug] config_util 异常: {type(e).__name__}: {e}")
+    except Exception:
         return _read_config_from_yaml(defaults)
 
 
@@ -89,15 +87,11 @@ def _read_config_from_yaml(defaults):
     env = os.environ.get("comfyui_env", "dev")
     config_file = project_dir / f"config_{env}.yml"
 
-    print(f"[upgrade][debug] 回退到 YAML 直读, env={env}, config_file={config_file}, exists={config_file.exists()}")
-
     if not config_file.exists():
         base_file = project_dir / f"config_{env}.base.yaml"
-        print(f"[upgrade][debug] base_file={base_file}, exists={base_file.exists()}")
         if base_file.exists():
             config_file = base_file
         else:
-            print(f"[upgrade][debug] 两个配置文件都不存在，返回默认值")
             return defaults
 
     try:
@@ -105,13 +99,11 @@ def _read_config_from_yaml(defaults):
         with open(config_file, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f) or {}
         upgrade = config.get("upgrade", {})
-        print(f"[upgrade][debug] 读取到 upgrade 配置: {upgrade}")
         result = {}
         for key in defaults:
             result[key] = upgrade.get(key, defaults[key])
         return result
-    except Exception as e:
-        print(f"[upgrade][debug] YAML 解析异常: {type(e).__name__}: {e}")
+    except Exception:
         return defaults
 
 
