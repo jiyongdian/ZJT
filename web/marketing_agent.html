@@ -183,28 +183,59 @@
             <!-- 输入区 -->
             <div class="input-area">
                 <div class="input-wrapper">
-                    <div class="marketing-input-box">
+                    <div
+                        class="marketing-input-box"
+                        :class="{ 'drag-over': isDragging }"
+                        @dragover.prevent="handleDragOver"
+                        @dragleave.prevent="handleDragLeave"
+                        @drop.prevent="handleDrop"
+                    >
                         <div class="marketing-input-upload">
                             <input type="file" ref="fileInputRef" style="display: none;" accept="image/*" @change="handleFileChange">
-                            <button v-if="!hasUploadedImage" class="marketing-upload-btn" title="上传参考" @click="triggerUpload">
+                            <button class="marketing-upload-btn" :title="hasUploadedImage ? '更换图片' : '上传参考'" @click="triggerUpload">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M12 5v14M5 12h14"/>
                                 </svg>
                             </button>
-                            <div v-else style="position: relative; width: 40px; height: 40px; border-radius: 10px; overflow: hidden; cursor: pointer;" @click="triggerUpload" title="点击更换图片">
-                                <img :src="uploadedImageUrl" style="width: 100%; height: 100%; object-fit: cover;">
-                                <div style="position: absolute; top: 0; right: 0; background: rgba(0,0,0,0.5); color: #fff; width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; cursor: pointer;" @click.stop="clearUploadedImage">×</div>
+                        </div>
+                        <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
+                            <!-- 媒体缩略图条（统一显示所有上传的媒体） -->
+                            <div v-if="mediaItems.length > 0" style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+                                <div v-for="item in mediaItems" :key="item.id" style="position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; background: #f0f4f8; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 11px; color: #475569; flex-shrink: 0;">
+                                    <img v-if="item.thumbnailUrl" :src="item.thumbnailUrl" style="width: 24px; height: 24px; border-radius: 4px; object-fit: cover;" />
+                                    <span v-else style="font-size: 14px;">{{ item.type === 'video' ? '🎬' : '🎵' }}</span>
+                                    <span>{{ item.displayName }}</span>
+                                    <span v-if="item.uploading" style="color: #94a3b8;">...</span>
+                                    <div style="cursor: pointer; color: #94a3b8; margin-left: 2px; font-size: 13px;" @click.stop="removeMediaItem(item.id)">×</div>
+                                </div>
+                            </div>
+                            <!-- 输入框 + @ 引用下拉框 -->
+                            <div style="position: relative;">
+                                <textarea
+                                    class="marketing-textarea"
+                                    v-model="inputText"
+                                    placeholder="输入想法、剧本或上传参考，输入 @ 引用媒体文件..."
+                                    rows="2"
+                                    @input="onPromptInput($event); autoResize()"
+                                    @keydown="onPromptKeydown"
+                                    @blur="onPromptBlur"
+                                    ref="inputTextarea"
+                                ></textarea>
+                                <!-- @ 引用下拉框 -->
+                                <div v-if="mentionDropdown.visible && filteredMentionItems.length > 0" style="position: absolute; bottom: 100%; left: 0; right: 0; margin-bottom: 4px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 -4px 20px rgba(0,0,0,0.1); padding: 6px; max-height: 200px; overflow-y: auto; z-index: 100;" @mousedown.prevent>
+                                    <div v-for="(item, idx) in filteredMentionItems" :key="item.id"
+                                         @click="insertMention(item)"
+                                         @mouseenter="mentionDropdown.selectedIndex = idx"
+                                         style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; cursor: pointer; transition: background 0.15s;"
+                                         :style="{ background: idx === mentionDropdown.selectedIndex ? '#e6f7ff' : 'transparent' }">
+                                        <img v-if="item.thumbnailUrl" :src="item.thumbnailUrl" style="width: 28px; height: 28px; border-radius: 4px; object-fit: cover; flex-shrink: 0;" />
+                                        <div v-else style="width: 28px; height: 28px; border-radius: 4px; background: #f0f4f8; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0;">{{ item.type === 'video' ? '🎬' : '🎵' }}</div>
+                                        <span style="flex: 1; font-size: 13px; color: #1a1a1a;">{{ item.displayName }}</span>
+                                        <span style="font-size: 11px; color: #94a3b8; padding: 2px 6px; border-radius: 3px; background: #f0f4f8;">{{ item.type === 'image' ? '图片' : item.type === 'video' ? '视频' : '音频' }}</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <textarea
-                            class="marketing-textarea"
-                            v-model="inputText"
-                            placeholder="输入想法、剧本或上传参考，支持 '/' 使用技能，@添加主体，和Agent一起创作"
-                            rows="1"
-                            @keydown.enter.exact.prevent="handleSend"
-                            @input="autoResize"
-                            ref="inputTextarea"
-                        ></textarea>
                     </div>
                     <div class="marketing-input-bar">
                         <div class="marketing-input-bar-left">
@@ -273,6 +304,26 @@
                                             </div>
                                         </div>
 
+                                        <!-- 生成方式选择（仅视频模式） -->
+                                        <div v-if="mediaType === 'video'" style="margin-bottom: 20px;">
+                                            <span style="font-size: 14px; font-weight: 500; color: #1a1a1a; display: block; margin-bottom: 12px;">生成方式</span>
+                                            <div style="display: flex; background: #f5f5f5; border-radius: 12px; padding: 4px;">
+                                                <div @click.stop="videoImageMode = 'first_last_frame'" :style="{ flex: 1, textAlign: 'center', padding: '8px 0', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500, transition: 'all 0.2s', background: videoImageMode === 'first_last_frame' ? '#fff' : 'transparent', color: videoImageMode === 'first_last_frame' ? '#1a1a1a' : '#999', boxShadow: videoImageMode === 'first_last_frame' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none' }">首尾帧</div>
+                                                <div @click.stop="videoImageMode = 'multi_reference'" :style="{ flex: 1, textAlign: 'center', padding: '8px 0', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500, transition: 'all 0.2s', background: videoImageMode === 'multi_reference' ? '#fff' : 'transparent', color: videoImageMode === 'multi_reference' ? '#1a1a1a' : '#999', boxShadow: videoImageMode === 'multi_reference' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none' }">全能参考</div>
+                                            </div>
+                                            <div style="font-size: 12px; color: #999; margin-top: 6px;">
+                                                {{ videoImageMode === 'first_last_frame' ? '第一张为首帧，第二张为尾帧（可选）' : '所有图片作为风格参考' }}
+                                            </div>
+                                        </div>
+
+                                        <!-- 视频时长选择（仅视频模式） -->
+                                        <div v-if="mediaType === 'video'" style="margin-bottom: 20px;">
+                                            <span style="font-size: 14px; font-weight: 500; color: #1a1a1a; display: block; margin-bottom: 12px;">视频时长</span>
+                                            <div style="display: flex; gap: 8px;">
+                                                <div v-for="dur in currentDurationOptions" :key="dur" @click.stop="selectedDuration = dur" style="flex: 1; text-align: center; padding: 10px; border-radius: 8px; cursor: pointer; transition: all 0.2s; font-size: 14px;" :style="{ border: selectedDuration === dur ? '2px solid #00a8e6' : '1px solid #e8e8e8', background: selectedDuration === dur ? '#e6f7ff' : '#f5f5f5', color: selectedDuration === dur ? '#00a8e6' : '#1a1a1a' }">{{ dur }}秒</div>
+                                            </div>
+                                        </div>
+
                                         <!-- 其他设置 -->
                                         <div>
                                             <span style="font-size: 14px; font-weight: 500; color: #1a1a1a; display: block; margin-bottom: 12px;">其他设置</span>
@@ -286,7 +337,7 @@
                                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :style="{ transform: showModelSelect ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }"><path d="M6 9l6 6 6-6"/></svg>
                                                     </button>
                                                 </div>
-                                                <div style="flex: 1;">
+                                                <div v-if="!isVideoMode" style="flex: 1;">
                                                     <button style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #f5f5f5; border: none; border-radius: 10px; cursor: pointer; font-size: 13px; color: #1a1a1a;">
                                                         <span style="display: flex; align-items: center; gap: 6px;">
                                                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
@@ -329,7 +380,7 @@
                                     </button>
                                     <!-- 模型选择弹窗 -->
                                     <div v-if="showModelPanel" class="marketing-panel" @click.stop style="position: absolute; bottom: 100%; left: 0; margin-bottom: 8px; background: #fff; border: 1px solid #e8e8e8; border-radius: 16px; box-shadow: 0 -8px 32px rgba(0,0,0,0.12); padding: 16px; min-width: 360px; z-index: 100;">
-                                        <div style="font-size: 12px; color: #999; margin-bottom: 12px;">选择模型：{{ selectedModel }} by {{ mediaType === 'image' ? 'Seedream' : 'seed' }}</div>
+                                        <div style="font-size: 12px; color: #999; margin-bottom: 12px;">选择模型：{{ selectedModel }}</div>
                                         <div v-for="model in currentModels" :key="model.name" @click.stop="selectModel(model)" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: background 0.2s; margin-bottom: 4px;" :style="{ background: selectedModel === model.name ? '#fff' : 'transparent', border: selectedModel === model.name ? '1px solid #e8e8e8' : '1px solid transparent', boxShadow: selectedModel === model.name ? '0 1px 4px rgba(0,0,0,0.05)' : 'none' }">
                                             <div style="width: 36px; height: 36px; background: #f0f0f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px;">{{ model.icon }}</div>
                                             <div style="flex: 1;">
@@ -352,7 +403,7 @@
                                             <rect x="3" y="3" width="18" height="18" rx="2"/>
                                             <path d="M3 9h18M9 21V9"/>
                                         </svg>
-                                        <span>{{ selectedRatio }} {{ selectedResolution }}</span>
+                                        <span>{{ selectedRatio }} <template v-if="!isVideoMode">{{ selectedResolution }}</template></span>
                                     </button>
                                     <!-- 比例选择弹窗 -->
                                     <div v-if="showRatioPanel" class="marketing-panel" @click.stop style="position: absolute; bottom: 100%; left: 0; margin-bottom: 8px; background: #fff; border: 1px solid #e8e8e8; border-radius: 16px; box-shadow: 0 -8px 32px rgba(0,0,0,0.12); padding: 20px; min-width: 380px; z-index: 100;">
@@ -368,7 +419,7 @@
                                             </div>
                                         </div>
 
-                                        <div>
+                                        <div v-if="!isVideoMode">
                                             <span style="font-size: 13px; color: #999; display: block; margin-bottom: 10px;">选择分辨率</span>
                                             <div style="display: flex; gap: 8px;">
                                                 <div v-for="res in currentResolutions" :key="res" @click.stop="selectedResolution = res" style="flex: 1; text-align: center; padding: 10px; border-radius: 8px; cursor: pointer; transition: all 0.2s; font-size: 14px;" :style="{ border: selectedResolution === res ? '2px solid #00a8e6' : '1px solid #e8e8e8', background: selectedResolution === res ? '#e6f7ff' : '#f5f5f5', color: selectedResolution === res ? '#00a8e6' : '#1a1a1a' }">{{ res }}</div>
@@ -384,20 +435,63 @@
                                 </svg>
                                 <span>使用技能</span>
                             </button>
-                            <button class="marketing-bar-btn" style="color: #ccc; cursor: not-allowed; position: relative;" title="开发中">
-                                <span style="color: #ccc; font-weight: 600;">@</span>
+                            <!-- 视频时长选择（视频模式时显示） -->
+                            <div v-if="isVideoMode" class="marketing-dropdown" style="position: relative;">
+                                <button class="marketing-bar-btn" @click.stop="showDurationPanel = !showDurationPanel">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"/>
+                                        <path d="M12 6v6l4 2"/>
+                                    </svg>
+                                    <span>{{ selectedDuration }}秒</span>
+                                </button>
+                                <div v-if="showDurationPanel" class="marketing-panel" @click.stop style="position: absolute; bottom: 100%; left: 0; margin-bottom: 8px; background: #fff; border: 1px solid #e8e8e8; border-radius: 12px; box-shadow: 0 -4px 20px rgba(0,0,0,0.1); padding: 8px; min-width: 120px; z-index: 100;">
+                                    <div v-for="dur in currentDurationOptions" :key="dur" @click.stop="selectedDuration = dur; showDurationPanel = false" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 8px; cursor: pointer; transition: background 0.2s;" :style="{ background: selectedDuration === dur ? '#e6f7ff' : 'transparent' }">
+                                        <span style="font-size: 13px; font-weight: 500; color: #1a1a1a;">{{ dur }}秒</span>
+                                        <span v-if="selectedDuration === dur" style="color: #00a8e6; font-weight: bold;">✓</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- 视频模式选择（视频模式+有图片时显示） -->
+                            <div v-if="showVideoModeBtn" class="marketing-dropdown" style="position: relative;">
+                                <button class="marketing-bar-btn" @click.stop="showVideoModePanel = !showVideoModePanel">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+                                    </svg>
+                                    <span>{{ videoImageMode === 'first_last_frame' ? '首尾帧' : '全能参考' }}</span>
+                                </button>
+                                <div v-if="showVideoModePanel" class="marketing-panel" @click.stop style="position: absolute; bottom: 100%; left: 0; margin-bottom: 8px; background: #fff; border: 1px solid #e8e8e8; border-radius: 12px; box-shadow: 0 -4px 20px rgba(0,0,0,0.1); padding: 8px; min-width: 180px; z-index: 100;">
+                                    <div @click.stop="videoImageMode = 'first_last_frame'; showVideoModePanel = false" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; cursor: pointer; transition: background 0.2s;" :style="{ background: videoImageMode === 'first_last_frame' ? '#e6f7ff' : 'transparent' }">
+                                        <span style="font-size: 14px;">🎬</span>
+                                        <div>
+                                            <div style="font-size: 13px; font-weight: 500; color: #1a1a1a;">首尾帧模式</div>
+                                            <div style="font-size: 11px; color: #999;">第一张为首帧，第二张为尾帧</div>
+                                        </div>
+                                        <span v-if="videoImageMode === 'first_last_frame'" style="margin-left: auto; color: #00a8e6;">✓</span>
+                                    </div>
+                                    <div @click.stop="videoImageMode = 'multi_reference'; showVideoModePanel = false" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; cursor: pointer; transition: background 0.2s;" :style="{ background: videoImageMode === 'multi_reference' ? '#e6f7ff' : 'transparent' }">
+                                        <span style="font-size: 14px;">🖼</span>
+                                        <div>
+                                            <div style="font-size: 13px; font-weight: 500; color: #1a1a1a;">全能参考</div>
+                                            <div style="font-size: 11px; color: #999;">所有图片作为风格参考</div>
+                                        </div>
+                                        <span v-if="videoImageMode === 'multi_reference'" style="margin-left: auto; color: #00a8e6;">✓</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <input type="file" ref="referenceInputRef" style="display: none;" accept="image/*" multiple @change="handleReferenceFileChange">
+                            <!-- @主体按钮（全能参考模式下可用） -->
+                            <button class="marketing-bar-btn" :style="showAddSubject ? '' : 'color: #ccc; cursor: not-allowed;'" :title="showAddSubject ? '添加主体引用' : '当前模式不支持'" @mousedown.prevent @click="showAddSubject && triggerMention()">
+                                <span :style="showAddSubject ? 'color: #00a8e6; font-weight: 600;' : 'color: #ccc; font-weight: 600;'">@</span>
                                 <span>添加主体</span>
                             </button>
                         </div>
-                        <div class="marketing-input-bar-right">
-                            <button class="marketing-bar-btn" title="语音输入">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                                    <line x1="12" y1="19" x2="12" y2="23"/>
-                                    <line x1="8" y1="23" x2="16" y2="23"/>
+                        <div class="marketing-input-bar-right" style="display: flex; align-items: center; gap: 10px;">
+                            <div v-if="computingPower > 0" style="display: flex; align-items: center; gap: 4px; padding: 4px 10px; background: #f0f4f8; border-radius: 8px; font-size: 12px; color: #475569;">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="stroke: #00a8e6;">
+                                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
                                 </svg>
-                            </button>
+                                <span style="font-weight: 600; color: #00a8e6;">{{ computingPower }}</span>
+                            </div>
                             <button class="marketing-send-btn" @click="handleSend" :disabled="!inputText.trim() || isLoading">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
@@ -417,6 +511,11 @@
         <!-- 错误提示 -->
         <div v-if="errorMessage" class="error-toast" @click="errorMessage = ''">
             {{ errorMessage }}
+        </div>
+
+        <!-- 图片放大模态框 -->
+        <div id="imgModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 2000; align-items: center; justify-content: center; cursor: zoom-out;" onclick="this.style.display='none'">
+            <img id="imgModalImg" style="max-width: 90%; max-height: 90%; border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.5);" src="" alt="放大查看">
         </div>
     </div>
 
@@ -453,6 +552,8 @@
             const showModelPanel = ref(false);
             const showRatioPanel = ref(false);
             const showSettingsPanel = ref(false);
+            const showVideoModePanel = ref(false);
+            const showDurationPanel = ref(false);
             const autoMode = ref(false);
             const showModelSelect = ref(false);
             const mediaType = ref('image');
@@ -466,6 +567,7 @@
             const uploadedImageUrl = ref('');
             const uploadedImageFile = ref(null);
             const fileInputRef = ref(null);
+            const isDragging = ref(false);
 
             // 图片生成任务状态
             const imageProjectIds = ref([]);
@@ -473,10 +575,31 @@
             const imageStatusInterval = ref(null);
             const imageResults = ref([]);
 
+            // 视频生成任务状态
+            const videoProjectIds = ref([]);
+            const videoStatus = ref('');
+            const videoStatusInterval = ref(null);
+            const videoResults = ref([]);
+            const selectedDuration = ref(5);
+            const videoImageMode = ref('first_last_frame'); // 'first_last_frame' | 'multi_reference'
+
+            // 参考图状态（全能参考模式使用）
+            const referenceImageFiles = ref([]);
+            const referenceInputRef = ref(null);
+
+            // 统一媒体管理（用于 @ 引用系统）
+            const mediaItems = ref([]);  // { id, displayName, type, fileUrl, thumbnailUrl, originalFile, uploading }
+            const mediaCounters = ref({ image: 0, video: 0, audio: 0 });
+
+            // @ 引用下拉框状态
+            const mentionDropdown = ref({ visible: false, query: '', queryStart: -1, selectedIndex: 0 });
+
             // TaskConfig 动态模型数据
             const taskConfigReady = ref(false);
             const allImageModels = ref([]);
-            const allVideoModels = ref([]);
+            const allTextToVideoModels = ref([]);
+            const allImageToVideoModels = ref([]);
+            const videoModelConfigs = ref({});
             const availableRatios = ref([]);
             const availableResolutions = ref([]);
 
@@ -492,10 +615,25 @@
                 '9:16':  { label: '9:16', value: '9:16', w: 12, h: 24 }
             };
 
-            // 当前模型列表：有图片时用图生视频，否则用文生图
+            // 当前模型列表
             const currentModels = Vue.computed(() => {
                 if (!taskConfigReady.value) return [];
-                return hasUploadedImage.value ? allVideoModels.value : allImageModels.value;
+                const isVideoMode = selectedType.value === '视频生成' ||
+                                    (selectedType.value === 'Agent 模式' && mediaType.value === 'video');
+                if (isVideoMode) {
+                    if (hasUploadedImage.value) {
+                        // 有图片时根据 videoImageMode 过滤支持的图生视频模型
+                        const imageModes = videoImageMode.value === 'multi_reference'
+                            ? ['multi_reference', 'first_last_with_ref']
+                            : ['first_last_frame', 'first_last_with_ref'];
+                        return allImageToVideoModels.value.filter(m => {
+                            const modes = m.supportedImageModes || ['first_last_frame'];
+                            return modes.some(mode => imageModes.includes(mode));
+                        });
+                    }
+                    return allTextToVideoModels.value;
+                }
+                return allImageModels.value;
             });
 
             // 当前可选比例
@@ -505,6 +643,95 @@
 
             // 当前可选分辨率
             const currentResolutions = Vue.computed(() => availableResolutions.value);
+
+            // 是否为视频模式
+            const isVideoMode = Vue.computed(() => {
+                return selectedType.value === '视频生成' ||
+                       (selectedType.value === 'Agent 模式' && mediaType.value === 'video');
+            });
+
+            // 当前视频时长选项（根据选中模型动态计算，videoModelConfigs 使用简短 key）
+            const currentDurationOptions = Vue.computed(() => {
+                if (!isVideoMode.value || !selectedModelKey.value) return [3, 5, 8, 10, 15];
+                const model = currentModels.value.find(m => m.key === selectedModelKey.value);
+                const shortKey = model ? model.value : '';
+                const config = shortKey ? videoModelConfigs.value[shortKey] : null;
+                if (config && config.durations && config.durations.length > 0) {
+                    return config.durations;
+                }
+                return [3, 5, 8, 10, 15];
+            });
+
+            // 是否显示参考图上传（全能参考模式下）
+            const showAddSubject = Vue.computed(() => {
+                return isVideoMode.value && videoImageMode.value === 'multi_reference';
+            });
+
+            // 算力消耗（根据当前模式和模型动态计算）
+            const computingPower = Vue.computed(() => {
+                if (!taskConfigReady.value || !selectedModelKey.value) return 0;
+
+                const isImageMode = selectedType.value === '图片生成' ||
+                                    (selectedType.value === 'Agent 模式' && mediaType.value === 'image');
+
+                if (isImageMode) {
+                    // 图片模式：使用 TaskConfig 获取算力（不传 duration）
+                    return window.TaskConfig?.getComputingPower
+                        ? window.TaskConfig.getComputingPower(selectedModelKey.value, null, {})
+                        : 0;
+                }
+
+                if (isVideoMode.value) {
+                    // 视频模式：使用 TaskConfig 获取算力（传 duration 和 image_mode context）
+                    const model = currentModels.value.find(m => m.key === selectedModelKey.value);
+                    const shortKey = model ? model.value : '';
+                    if (!shortKey) return 0;
+
+                    const context = {};
+                    // 首尾帧模式且有2张图时，使用 first_last_with_tail 修饰符
+                    if (videoImageMode.value === 'first_last_frame') {
+                        const imageCount = mediaItems.value.filter(m => m.type === 'image').length;
+                        if (imageCount > 1) {
+                            context.image_mode = 'first_last_with_tail';
+                        } else {
+                            context.image_mode = 'first_last_frame';
+                        }
+                    } else {
+                        context.image_mode = videoImageMode.value;
+                    }
+
+                    return window.TaskConfig?.getComputingPower
+                        ? window.TaskConfig.getComputingPower(shortKey, selectedDuration.value, context)
+                        : 0;
+                }
+
+                return 0;
+            });
+
+            // @ 引用可选项
+            const mentionableItems = Vue.computed(() => {
+                return mediaItems.value.filter(m => m.fileUrl && !m.uploading).map(m => ({
+                    id: m.id,
+                    displayName: m.displayName,
+                    type: m.type,
+                    thumbnailUrl: m.thumbnailUrl
+                }));
+            });
+
+            const filteredMentionItems = Vue.computed(() => {
+                if (!mentionDropdown.value.query) return mentionableItems.value;
+                const q = mentionDropdown.value.query.toLowerCase();
+                return mentionableItems.value.filter(item =>
+                    item.displayName.toLowerCase().includes(q) ||
+                    (item.type === 'image' ? '图片' : item.type === 'video' ? '视频' : '音频').includes(q)
+                );
+            });
+
+            // 是否显示视频模式按钮（视频模式 + 有图片/媒体时）
+            const showVideoModeBtn = Vue.computed(() => {
+                const hasMedia = hasUploadedImage.value || mediaItems.value.length > 0;
+                return isVideoMode.value && hasMedia;
+            });
 
             // 用户信息
             const userId = ref('');
@@ -651,8 +878,18 @@
                     });
                     const data = await response.json();
                     if (data.success) {
-                        currentSessionId.value = data.session_id;
-                        return data.session_id;
+                        const sid = data.session_id;
+                        currentSessionId.value = sid;
+                        // 将新会话加入列表头部
+                        sessions.value.unshift({
+                            id: sid,
+                            title: '新对话',
+                            createdAt: new Date().toISOString(),
+                            updatedAt: new Date().toISOString(),
+                            messageCount: 0
+                        });
+                        saveLocalSessions();
+                        return sid;
                     }
                     throw new Error(data.error || '创建会话失败');
                 } catch (e) {
@@ -686,15 +923,21 @@
                 const text = inputText.value.trim();
                 if (!text || isLoading.value) return;
 
-                // 判断是否走图片生成/编辑流程
+                // 判断生成模式
                 const isImageMode = selectedType.value === '图片生成' ||
                                     (selectedType.value === 'Agent 模式' && mediaType.value === 'image');
+                const isVideoMode = selectedType.value === '视频生成' ||
+                                    (selectedType.value === 'Agent 模式' && mediaType.value === 'video');
 
                 if (isImageMode) {
-                    // 添加用户消息
+                    // 构建用户消息内容（含缩略图）
+                    let userContent = text;
+                    if (hasUploadedImage.value && uploadedImageUrl.value) {
+                        userContent += `\n\n<img src="${uploadedImageUrl.value}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${uploadedImageUrl.value}'" alt="参考图">`;
+                    }
                     messages.value.push({
                         role: 'user',
-                        content: text + (hasUploadedImage.value ? ' \uD83D\uDCF7（已上传参考图）' : ''),
+                        content: userContent,
                         timestamp: new Date().toISOString()
                     });
                     inputText.value = '';
@@ -702,6 +945,30 @@
                     scrollToBottom();
                     showContinue.value = false;
                     await sendImageRequest(text);
+                    return;
+                }
+
+                if (isVideoMode) {
+                    // 构建用户消息内容（含缩略图）
+                    let userContent = text;
+                    if (hasUploadedImage.value && uploadedImageUrl.value) {
+                        userContent += `\n\n<img src="${uploadedImageUrl.value}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${uploadedImageUrl.value}'" alt="参考图">`;
+                    }
+                    referenceImageFiles.value.forEach(ref => {
+                        if (ref.url) {
+                            userContent += `\n\n<img src="${ref.url}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${ref.url}'" alt="参考图">`;
+                        }
+                    });
+                    messages.value.push({
+                        role: 'user',
+                        content: userContent,
+                        timestamp: new Date().toISOString()
+                    });
+                    inputText.value = '';
+                    autoResize();
+                    scrollToBottom();
+                    showContinue.value = false;
+                    await sendVideoRequest(text);
                     return;
                 }
 
@@ -786,6 +1053,9 @@
                     imageProjectIds.value = res.data.project_ids || [];
                     imageStatus.value = res.data.status || 'submitted';
 
+                    // 更新会话 title
+                    updateSessionTitle(prompt);
+
                     // 添加 AI 占位消息
                     const msgIndex = messages.value.length;
                     messages.value.push({
@@ -842,7 +1112,7 @@
                             // 更新 AI 消息为图片结果
                             const imageHtml = allResults.map(r => {
                                 const imgUrl = r.file_url || r.url || r.image_url || '';
-                                return `<img src="${imgUrl}" style="max-width:100%;border-radius:8px;margin:8px 0;" alt="生成结果">`;
+                                return `<div class="generated-image-wrapper" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${imgUrl}'"><img src="${imgUrl}" class="generated-image" alt="生成结果"></div>`;
                             }).join('');
                             messages.value[msgIndex].content = '图片已生成：\n\n' + imageHtml;
                             scrollToBottom();
@@ -869,6 +1139,170 @@
                 if (imageStatusInterval.value) {
                     clearInterval(imageStatusInterval.value);
                     imageStatusInterval.value = null;
+                }
+            }
+
+            // 发送视频生成请求
+            async function sendVideoRequest(prompt) {
+                isLoading.value = true;
+                videoResults.value = [];
+                videoStatus.value = 'submitted';
+
+                try {
+                    const form = new FormData();
+                    form.append('prompt', prompt);
+                    form.append('user_id', userId.value);
+                    form.append('auth_token', authToken.value);
+                    form.append('ratio', selectedRatio.value);
+                    form.append('duration_seconds', String(selectedDuration.value));
+                    form.append('count', '1');
+
+                    let apiUrl = '';
+
+                    const hasAnyImage = (hasUploadedImage.value && uploadedImageFile.value) || referenceImageFiles.value.length > 0 || mediaItems.value.some(m => m.type === 'image' && m.originalFile);
+                    if (hasAnyImage) {
+                        // 图生视频
+                        form.append('image_mode', videoImageMode.value);
+
+                        // 统一收集所有图片文件，从 mediaItems 中收集确保不遗漏
+                        const allImageFiles = [];
+                        mediaItems.value.forEach(m => {
+                            if (m.type === 'image' && m.originalFile && !allImageFiles.includes(m.originalFile)) {
+                                allImageFiles.push(m.originalFile);
+                            }
+                        });
+                        // 后备：也从 uploadedImageFile / referenceImageFiles 中收集
+                        if (uploadedImageFile.value && !allImageFiles.includes(uploadedImageFile.value)) {
+                            allImageFiles.push(uploadedImageFile.value);
+                        }
+                        referenceImageFiles.value.forEach(ref => {
+                            if (ref.file && !allImageFiles.includes(ref.file)) {
+                                allImageFiles.push(ref.file);
+                            }
+                        });
+                        allImageFiles.forEach(file => form.append('images', file));
+
+                        // 发送媒体引用映射（用于 @ 引用解析）
+                        const mediaRefs = mediaItems.value.filter(m => m.fileUrl).map(m => ({
+                            displayName: m.displayName,
+                            fileUrl: m.fileUrl,
+                            type: m.type
+                        }));
+                        if (mediaRefs.length > 0) {
+                            form.append('media_references', JSON.stringify(mediaRefs));
+                        }
+                        const taskId = window.TaskConfig?.getTaskIdByKey
+                            ? window.TaskConfig.getTaskIdByKey(selectedModelKey.value, 'image_to_video')
+                            : null;
+                        if (!taskId) {
+                            throw new Error('未找到图生视频模型对应的任务配置');
+                        }
+                        form.append('task_id', taskId);
+                        apiUrl = '/api/ai-app-run-image';
+                    } else {
+                        // 文生视频
+                        const taskId = window.TaskConfig?.getTaskIdByKey
+                            ? window.TaskConfig.getTaskIdByKey(selectedModelKey.value, 'text_to_video')
+                            : null;
+                        if (!taskId) {
+                            throw new Error('未找到文生视频模型对应的任务配置');
+                        }
+                        form.append('task_id', taskId);
+                        apiUrl = '/api/ai-app-run';
+                    }
+
+                    const res = await axios.post(apiUrl, form, {
+                        headers: { 'Content-Type': 'multipart/form-data' }
+                    });
+
+                    videoProjectIds.value = res.data.project_ids || [];
+                    videoStatus.value = res.data.status || 'submitted';
+
+                    // 更新会话 title
+                    updateSessionTitle(prompt);
+
+                    // 添加 AI 占位消息
+                    const msgIndex = messages.value.length;
+                    messages.value.push({
+                        role: 'ai',
+                        content: '正在生成视频，请稍候...',
+                        timestamp: new Date().toISOString()
+                    });
+                    scrollToBottom();
+
+                    // 开始轮询状态
+                    startVideoStatusCheck(msgIndex);
+
+                } catch (e) {
+                    showError(e.message || '视频生成请求失败');
+                    messages.value.push({
+                        role: 'ai',
+                        content: '视频生成失败：' + (e.message || '请求失败'),
+                        timestamp: new Date().toISOString()
+                    });
+                } finally {
+                    isLoading.value = false;
+                    scrollToBottom();
+                }
+            }
+
+            // 轮询视频生成状态
+            async function checkVideoStatus(msgIndex) {
+                if (!videoProjectIds.value || videoProjectIds.value.length === 0) return;
+
+                try {
+                    const params = authToken.value ? { auth_token: authToken.value } : {};
+                    const projectIdsStr = videoProjectIds.value.join(',');
+                    const res = await axios.get(`/api/get-status/${projectIdsStr}`, { params });
+
+                    if (res.data.tasks) {
+                        const tasks = res.data.tasks;
+                        const allSuccess = tasks.every(t => t.status === 'SUCCESS');
+                        const anyFailed = tasks.some(t => t.status === 'FAILED');
+                        const anyRunning = tasks.some(t => t.status === 'RUNNING');
+
+                        const allResults = [];
+                        tasks.forEach(task => {
+                            if (task.results && task.results.length > 0) {
+                                task.results.forEach(result => {
+                                    allResults.push(result);
+                                });
+                            }
+                        });
+                        videoResults.value = allResults;
+
+                        if (allSuccess) {
+                            videoStatus.value = 'SUCCESS';
+                            clearVideoStatusCheck();
+                            const videoHtml = allResults.map(r => {
+                                const vidUrl = r.file_url || r.url || '';
+                                return `<video src="${vidUrl}" controls style="max-width:100%;max-height:400px;border-radius:8px;margin:8px 0;"></video>`;
+                            }).join('');
+                            messages.value[msgIndex].content = '视频已生成：\n\n' + videoHtml;
+                            scrollToBottom();
+                        } else if (anyFailed && !anyRunning) {
+                            videoStatus.value = 'FAILED';
+                            clearVideoStatusCheck();
+                            messages.value[msgIndex].content = '视频生成失败，请稍后重试。';
+                            scrollToBottom();
+                        }
+                    }
+                } catch (err) {
+                    console.error('视频状态轮询错误:', err);
+                }
+            }
+
+            function startVideoStatusCheck(msgIndex) {
+                clearVideoStatusCheck();
+                videoStatusInterval.value = setInterval(() => {
+                    checkVideoStatus(msgIndex);
+                }, 10000);
+            }
+
+            function clearVideoStatusCheck() {
+                if (videoStatusInterval.value) {
+                    clearInterval(videoStatusInterval.value);
+                    videoStatusInterval.value = null;
                 }
             }
 
@@ -909,6 +1343,9 @@
                     }
 
                     const taskId = taskData.task_id;
+
+                    // 更新会话 title（首条消息摘要）
+                    updateSessionTitle(text);
 
                     // 2. 接收流式响应
                     await handleStream(taskId);
@@ -1004,12 +1441,22 @@
 
             // 新建对话
             async function newChat() {
-                currentSessionId.value = null;
                 messages.value = [];
                 showContinue.value = false;
                 inputText.value = '';
                 autoResize();
                 scrollToBottom();
+                // 清空所有媒体状态
+                mediaItems.value = [];
+                mediaCounters.value = { image: 0, video: 0, audio: 0 };
+                referenceImageFiles.value = [];
+                hasUploadedImage.value = false;
+                uploadedImageUrl.value = '';
+                uploadedImageFile.value = null;
+                if (fileInputRef.value) fileInputRef.value.value = '';
+                if (referenceInputRef.value) referenceInputRef.value.value = '';
+                // 创建后端新会话
+                await createSession();
             }
 
             // 加载默认创作
@@ -1023,10 +1470,31 @@
             // 选择会话
             async function selectSession(sessionId) {
                 currentSessionId.value = sessionId;
+                // 完全重置所有媒体状态
+                mediaItems.value = [];
+                mediaCounters.value = { image: 0, video: 0, audio: 0 };
+                referenceImageFiles.value = [];
+                hasUploadedImage.value = false;
+                uploadedImageUrl.value = '';
+                uploadedImageFile.value = null;
+                if (fileInputRef.value) fileInputRef.value.value = '';
+                if (referenceInputRef.value) referenceInputRef.value.value = '';
                 const history = await loadSessionHistory(sessionId);
-                messages.value = history.map(h => ({
+                messages.value = history.filter(h => {
+                    // 过滤系统提示和工具内部消息
+                    if (h.role === 'system' || h.role === 'tool') return false;
+                    // 过滤包含 tool_calls 的 assistant 消息（内部调用）
+                    if (h.role === 'assistant' && h.content) {
+                        let content = h.content;
+                        if (typeof content === 'string') {
+                            try { content = JSON.parse(content); } catch (e) { /* 普通文本，忽略 */ }
+                        }
+                        if (typeof content === 'object' && content.tool_calls && Array.isArray(content.tool_calls)) return false;
+                    }
+                    return true;
+                }).map(h => ({
                     role: h.role === 'assistant' ? 'ai' : h.role,
-                    content: h.content,
+                    content: typeof h.content === 'string' ? h.content : (h.content?.text || JSON.stringify(h.content)),
                     timestamp: h.timestamp
                 }));
                 scrollToBottom();
@@ -1050,6 +1518,46 @@
                     localStorage.setItem('marketing_sessions', JSON.stringify(sessions.value));
                 } catch (e) {
                     console.error('保存本地历史失败:', e);
+                }
+            }
+
+            // 从后端加载会话列表
+            async function loadSessionsFromBackend() {
+                try {
+                    const response = await fetch(`/api/sessions?user_id=${encodeURIComponent(userId.value)}&world_id=${encodeURIComponent(worldId.value)}&limit=50`, {
+                        headers: {
+                            'Authorization': authToken.value,
+                            'X-User-Id': userId.value
+                        }
+                    });
+                    const data = await response.json();
+                    if (data.success && data.sessions) {
+                        sessions.value = data.sessions.map(s => ({
+                            id: s.session_id,
+                            title: s.title || '新对话',
+                            createdAt: s.created_at,
+                            updatedAt: s.updated_at,
+                            messageCount: s.message_count || 0
+                        }));
+                        saveLocalSessions();
+                        return sessions.value;
+                    }
+                    return [];
+                } catch (e) {
+                    console.error('加载会话列表失败:', e);
+                    loadLocalSessions(); // 失败时读本地缓存
+                    return [];
+                }
+            }
+
+            // 更新当前会话 title
+            function updateSessionTitle(text) {
+                if (!currentSessionId.value || !text) return;
+                const session = sessions.value.find(s => s.id === currentSessionId.value);
+                if (session && (!session.title || session.title === '新对话')) {
+                    session.title = text.slice(0, 20) + (text.length > 20 ? '...' : '');
+                    session.updatedAt = new Date().toISOString();
+                    saveLocalSessions();
                 }
             }
 
@@ -1084,17 +1592,50 @@
                     return;
                 }
 
-                // 加载本地历史
-                loadLocalSessions();
+                // 加载 TaskConfig 模型数据
+                await initTaskConfig();
+
+                // 从后端加载会话列表
+                const backendSessions = await loadSessionsFromBackend();
+
+                // 如果有历史会话，自动复用最近一条
+                if (backendSessions.length > 0) {
+                    const latestSession = backendSessions[0];
+                    currentSessionId.value = latestSession.id;
+                    const history = await loadSessionHistory(latestSession.id);
+                    if (history.length > 0) {
+                        messages.value = history.filter(h => {
+                            if (h.role === 'system' || h.role === 'tool') return false;
+                            if (h.role === 'assistant' && h.content) {
+                                let content = h.content;
+                                if (typeof content === 'string') {
+                                    try { content = JSON.parse(content); } catch (e) { /* 普通文本，忽略 */ }
+                                }
+                                if (typeof content === 'object' && content.tool_calls && Array.isArray(content.tool_calls)) return false;
+                            }
+                            return true;
+                        }).map(h => ({
+                            role: h.role === 'assistant' ? 'ai' : h.role,
+                            content: typeof h.content === 'string' ? h.content : (h.content?.text || JSON.stringify(h.content)),
+                            timestamp: h.timestamp
+                        }));
+                    }
+                }
 
                 // 检查是否有初始消息
                 const initialMessage = getUrlParam('initial_message');
                 if (initialMessage) {
                     inputText.value = decodeURIComponent(initialMessage);
                     autoResize();
-                    // 自动发送
+                    // 确保有 session 后再发送
+                    if (!currentSessionId.value) {
+                        await createSession();
+                    }
                     await handleSend();
                 }
+
+                // 全局点击监听（关闭下拉菜单）
+                document.addEventListener('click', onDocumentClick);
 
                 isInitializing.value = false;
             });
@@ -1127,9 +1668,9 @@
                         value: opt.value
                     }));
 
-                    // 获取图生视频模型
-                    const vidOpts = window.TaskConfig.getModelOptionsForCategory('image_to_video');
-                    allVideoModels.value = vidOpts.map((opt, idx) => ({
+                    // 获取文生视频模型
+                    const txtVidOpts = window.TaskConfig.getModelOptionsForCategory('text_to_video');
+                    allTextToVideoModels.value = txtVidOpts.map((opt, idx) => ({
                         icon: '🎬',
                         name: opt.label.split(' (')[0],
                         desc: opt.label,
@@ -1137,6 +1678,21 @@
                         key: opt.key,
                         value: opt.value
                     }));
+
+                    // 获取图生视频模型
+                    const imgVidOpts = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+                    allImageToVideoModels.value = imgVidOpts.map((opt, idx) => ({
+                        icon: '🎬',
+                        name: opt.label.split(' (')[0],
+                        desc: opt.label,
+                        tag: idx === 0 ? 'New' : '',
+                        key: opt.key,
+                        value: opt.value,
+                        supportedImageModes: opt.supportedImageModes || ['first_last_frame']
+                    }));
+
+                    // 加载视频模型配置
+                    videoModelConfigs.value = window.TaskConfig.getModelConfigs ? window.TaskConfig.getModelConfigs() : {};
 
                     // 默认选中第一个模型
                     if (allImageModels.value.length > 0 && !selectedModel.value) {
@@ -1162,7 +1718,11 @@
                     { icon: '🚀', name: '可图 3.0', desc: '快手生图模型', tag: '', key: 'kling_image', value: 'kling_image' },
                     { icon: '🚀', name: '通义万相 3.0', desc: '阿里生图模型', tag: '', key: 'wanxiang', value: 'wanxiang' }
                 ];
-                allVideoModels.value = [
+                allTextToVideoModels.value = [
+                    { icon: '🎬', name: 'Sora 2.0', desc: 'OpenAI 文生视频模型', tag: '推荐', key: 'sora2', value: 'sora2' },
+                    { icon: '🎬', name: '可灵 2.0', desc: '快手文生视频模型', tag: '', key: 'kling_text_video', value: 'kling_text_video' }
+                ];
+                allImageToVideoModels.value = [
                     { icon: '🎬', name: '可灵 2.0', desc: '快手图生视频模型', tag: '推荐', key: 'kling_video', value: 'kling_video' },
                     { icon: '🎬', name: '通义万相 3.0', desc: '阿里图生视频模型', tag: '', key: 'wanxiang_video', value: 'wanxiang_video' }
                 ];
@@ -1184,6 +1744,7 @@
                 const model = currentModels.value.find(m => m.name === selectedModel.value);
                 const modelKey = model ? model.key : '';
                 if (!modelKey) return;
+                selectedModelKey.value = modelKey;
 
                 // 获取比例选项
                 const ratios = window.TaskConfig.getRatioOptions(modelKey);
@@ -1200,6 +1761,17 @@
                 }
                 if (!availableResolutions.value.includes(selectedResolution.value)) {
                     selectedResolution.value = availableResolutions.value[0];
+                }
+
+                // 视频模式下更新默认时长（videoModelConfigs 使用简短 key）
+                if (isVideoMode.value) {
+                    const shortKey = model ? model.value : '';
+                    const config = shortKey ? videoModelConfigs.value[shortKey] : null;
+                    if (config && config.durations && config.durations.length > 0) {
+                        if (!config.durations.includes(selectedDuration.value)) {
+                            selectedDuration.value = config.default_duration || config.durations[0];
+                        }
+                    }
                 }
             }
 
@@ -1218,19 +1790,261 @@
                     showError('请上传图片文件');
                     return;
                 }
+                const isVideoMode = selectedType.value === '视频生成' ||
+                                    (selectedType.value === 'Agent 模式' && mediaType.value === 'video');
+                // 视频+全能参考模式下，已有主图时添加为参考图
+                if (isVideoMode && videoImageMode.value === 'multi_reference' && hasUploadedImage.value) {
+                    if (referenceImageFiles.value.length >= 5) {
+                        showError('参考图最多5张');
+                        return;
+                    }
+                    const refUrl = URL.createObjectURL(file);
+                    referenceImageFiles.value.push({
+                        file: file,
+                        url: refUrl
+                    });
+                    // 同步到 mediaItems
+                    addMediaItem(file, 'image', refUrl);
+                    return;
+                }
                 // 保存原始 File 对象并生成本地预览 URL
                 uploadedImageFile.value = file;
-                uploadedImageUrl.value = URL.createObjectURL(file);
+                const previewUrl = URL.createObjectURL(file);
+                uploadedImageUrl.value = previewUrl;
                 hasUploadedImage.value = true;
+                // 同步到 mediaItems
+                addMediaItem(file, 'image', previewUrl);
                 // 切换模型后刷新设置
                 refreshModelSettings();
             }
 
             function clearUploadedImage() {
+                // 从 mediaItems 中移除与当前主图 URL 匹配的记录
+                if (uploadedImageUrl.value) {
+                    const mainImage = mediaItems.value.find(m => m.fileUrl === uploadedImageUrl.value);
+                    if (mainImage) removeMediaItem(mainImage.id);
+                }
                 hasUploadedImage.value = false;
                 uploadedImageUrl.value = '';
                 uploadedImageFile.value = null;
                 if (fileInputRef.value) fileInputRef.value.value = '';
+                refreshModelSettings();
+            }
+
+            // 参考图上传（全能参考模式）
+            function triggerReferenceUpload() {
+                if (referenceInputRef.value) {
+                    referenceInputRef.value.click();
+                }
+            }
+
+            function handleReferenceFileChange(e) {
+                const files = Array.from(e.target.files || []);
+                if (files.length === 0) return;
+                const maxRef = 5;
+                const remaining = maxRef - referenceImageFiles.value.length;
+                if (remaining <= 0) {
+                    showError('参考图最多5张');
+                    if (referenceInputRef.value) referenceInputRef.value.value = '';
+                    return;
+                }
+                const toAdd = files.slice(0, remaining).filter(f => f.type.startsWith('image/'));
+                toAdd.forEach(file => {
+                    const refUrl = URL.createObjectURL(file);
+                    referenceImageFiles.value.push({
+                        file: file,
+                        url: refUrl
+                    });
+                    addMediaItem(file, 'image', refUrl);
+                });
+                if (referenceInputRef.value) referenceInputRef.value.value = '';
+            }
+
+            function removeReferenceImage(index) {
+                const removed = referenceImageFiles.value[index];
+                referenceImageFiles.value.splice(index, 1);
+                // 同步移除 mediaItems 中对应的参考图
+                if (removed && removed.url) {
+                    const item = mediaItems.value.find(m => m.fileUrl === removed.url);
+                    if (item) removeMediaItem(item.id);
+                }
+            }
+
+            function clearReferenceImages() {
+                referenceImageFiles.value = [];
+                // 同步清除 mediaItems 中的参考图（保留与 uploadedImageUrl 匹配的主图）
+                mediaItems.value = mediaItems.value.filter(m => {
+                    if (m.type !== 'image') return true;
+                    // 保留主图
+                    return m.fileUrl === uploadedImageUrl.value;
+                });
+                mediaItems.value = [...mediaItems.value];
+            }
+
+            // 统一媒体管理
+            function addMediaItem(file, type, previewUrl) {
+                const typeLabel = type === 'image' ? '图片' : type === 'video' ? '视频' : '音频';
+                // 根据当前 mediaItems 中同类型的数量动态计数，避免计数器不同步
+                const existingCount = mediaItems.value.filter(m => m.type === type).length;
+                const displayName = `${typeLabel}${existingCount + 1}`;
+                const id = `${type[0]}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+                mediaItems.value.push({
+                    id,
+                    displayName,
+                    type,
+                    fileUrl: previewUrl,
+                    thumbnailUrl: type === 'image' ? previewUrl : null,
+                    originalFile: file,
+                    uploading: false
+                });
+                mediaItems.value = [...mediaItems.value];
+            }
+
+            function removeMediaItem(id) {
+                mediaItems.value = mediaItems.value.filter(m => m.id !== id);
+                mediaItems.value = [...mediaItems.value];
+            }
+
+            // @ 引用相关方法
+            function onPromptInput(e) {
+                const textarea = e.target;
+                const cursorPos = textarea.selectionStart;
+                const text = inputText.value;
+                const textBeforeCursor = text.substring(0, cursorPos);
+                const atMatch = textBeforeCursor.match(/@([^@\s]*)$/);
+
+                if (atMatch) {
+                    mentionDropdown.value.visible = true;
+                    mentionDropdown.value.query = atMatch[1];
+                    mentionDropdown.value.queryStart = cursorPos - atMatch[0].length;
+                    mentionDropdown.value.selectedIndex = 0;
+                } else {
+                    mentionDropdown.value.visible = false;
+                }
+            }
+
+            function onPromptKeydown(e) {
+                if (mentionDropdown.value.visible) {
+                    if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        const max = filteredMentionItems.value.length - 1;
+                        mentionDropdown.value.selectedIndex = Math.min(mentionDropdown.value.selectedIndex + 1, max);
+                        return;
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        mentionDropdown.value.selectedIndex = Math.max(mentionDropdown.value.selectedIndex - 1, 0);
+                        return;
+                    } else if (e.key === 'Enter' || e.key === 'Tab') {
+                        if (filteredMentionItems.value.length > 0) {
+                            e.preventDefault();
+                            insertMention(filteredMentionItems.value[mentionDropdown.value.selectedIndex]);
+                        }
+                        return;
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        mentionDropdown.value.visible = false;
+                        return;
+                    }
+                    return;
+                }
+
+                // mention dropdown 不可见时，Enter（不带 Shift）发送消息
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                }
+            }
+
+            function onPromptBlur() {
+                setTimeout(() => { mentionDropdown.value.visible = false; }, 200);
+            }
+
+            function insertMention(item) {
+                const textarea = inputTextarea.value;
+                const start = mentionDropdown.value.queryStart;
+                const end = start + 1 + mentionDropdown.value.query.length;
+                const before = inputText.value.substring(0, start);
+                const after = inputText.value.substring(end);
+                const insertText = `@${item.displayName}`;
+
+                inputText.value = before + insertText + ' ' + after;
+                mentionDropdown.value.visible = false;
+
+                nextTick(() => {
+                    const newCursorPos = start + insertText.length + 1;
+                    textarea.setSelectionRange(newCursorPos, newCursorPos);
+                    textarea.focus();
+                });
+            }
+
+            // 点击 @添加主体 按钮，在输入框中插入 @ 并唤起下拉框
+            function triggerMention() {
+                const textarea = inputTextarea.value;
+                if (!textarea) return;
+
+                const cursorPos = textarea.selectionStart || inputText.value.length;
+                const before = inputText.value.substring(0, cursorPos);
+                const after = inputText.value.substring(cursorPos);
+
+                // 在光标位置插入 @（如果前面不是空格且不是开头，则先插入一个空格）
+                const needSpace = cursorPos > 0 && !/\s$/.test(before);
+                inputText.value = before + (needSpace ? ' ' : '') + '@' + after;
+
+                const actualAtPos = cursorPos + (needSpace ? 1 : 0);
+                mentionDropdown.value.visible = true;
+                mentionDropdown.value.query = '';
+                mentionDropdown.value.queryStart = actualAtPos;
+                mentionDropdown.value.selectedIndex = 0;
+
+                nextTick(() => {
+                    const newCursorPos = actualAtPos + 1;
+                    textarea.setSelectionRange(newCursorPos, newCursorPos);
+                    textarea.focus();
+                });
+            }
+
+            // 拖拽上传处理
+            function handleDragOver(e) {
+                e.preventDefault();
+                isDragging.value = true;
+            }
+
+            function handleDragLeave(e) {
+                e.preventDefault();
+                isDragging.value = false;
+            }
+
+            function handleDrop(e) {
+                e.preventDefault();
+                isDragging.value = false;
+                const files = e.dataTransfer.files;
+                if (!files || files.length === 0) return;
+                const file = files[0];
+                if (!file.type.startsWith('image/')) {
+                    showError('请上传图片文件');
+                    return;
+                }
+                const isVideoMode = selectedType.value === '视频生成' ||
+                                    (selectedType.value === 'Agent 模式' && mediaType.value === 'video');
+                // 视频+全能参考模式下，已有主图时添加为参考图
+                if (isVideoMode && videoImageMode.value === 'multi_reference' && hasUploadedImage.value) {
+                    if (referenceImageFiles.value.length >= 5) {
+                        showError('参考图最多5张');
+                        return;
+                    }
+                    const refUrl = URL.createObjectURL(file);
+                    referenceImageFiles.value.push({
+                        file: file,
+                        url: refUrl
+                    });
+                    addMediaItem(file, 'image', refUrl);
+                    return;
+                }
+                const previewUrl = URL.createObjectURL(file);
+                uploadedImageFile.value = file;
+                uploadedImageUrl.value = previewUrl;
+                hasUploadedImage.value = true;
+                addMediaItem(file, 'image', previewUrl);
                 refreshModelSettings();
             }
 
@@ -1248,8 +2062,9 @@
                     }
                 } else if (type.name === '视频生成') {
                     mediaType.value = 'video';
-                    if (allVideoModels.value.length > 0) {
-                        const m = allVideoModels.value[0];
+                    const list = hasUploadedImage.value ? allImageToVideoModels.value : allTextToVideoModels.value;
+                    if (list.length > 0) {
+                        const m = list[0];
                         selectedModel.value = m.name;
                         selectedModelKey.value = m.key || '';
                     }
@@ -1271,12 +2086,14 @@
                 showDropdown.value = !showDropdown.value;
                 showModelPanel.value = false;
                 showRatioPanel.value = false;
+                showDurationPanel.value = false;
             }
 
             function toggleModelPanel() {
                 showModelPanel.value = !showModelPanel.value;
                 showDropdown.value = false;
                 showRatioPanel.value = false;
+                showDurationPanel.value = false;
             }
 
             function toggleRatioPanel() {
@@ -1285,6 +2102,7 @@
                 showModelPanel.value = false;
                 showSettingsPanel.value = false;
                 showModelSelect.value = false;
+                showDurationPanel.value = false;
             }
 
             function toggleSettingsPanel() {
@@ -1293,6 +2111,7 @@
                 showModelPanel.value = false;
                 showRatioPanel.value = false;
                 showModelSelect.value = false;
+                showDurationPanel.value = false;
             }
 
             // 点击外部关闭下拉
@@ -1302,21 +2121,52 @@
                 showRatioPanel.value = false;
                 showSettingsPanel.value = false;
                 showModelSelect.value = false;
+                showDurationPanel.value = false;
+            }
+
+            // 组件卸载时清理定时器
+            function cleanup() {
+                clearImageStatusCheck();
+                clearVideoStatusCheck();
             }
 
             // 监听 mediaType 变化，重置选中模型
             Vue.watch(mediaType, (newType) => {
-                if (allImageModels.value.length > 0 || allVideoModels.value.length > 0) {
-                    selectedModel.value = newType === 'image'
-                        ? (allImageModels.value[0]?.name || '')
-                        : (allVideoModels.value[0]?.name || '');
+                const list = newType === 'image' ? allImageModels.value : allTextToVideoModels.value;
+                if (list.length > 0) {
+                    selectedModel.value = list[0]?.name || '';
+                    selectedModelKey.value = list[0]?.key || '';
                     refreshModelSettings();
                 }
             });
 
-            onMounted(() => {
-                document.addEventListener('click', onDocumentClick);
-                initTaskConfig();
+            // 监听视频生成方式变化，仅在切换时同步参考图状态，不再清空已上传图片
+            Vue.watch(videoImageMode, (newMode, oldMode) => {
+                if (oldMode === newMode) return;
+                // 切换首尾帧/全能参考时，保留所有已上传媒体，不自动清空
+                // 若从全能参考切回首尾帧，可将多余的参考图移除，只保留主图
+                if (newMode === 'first_last_frame') {
+                    // 首尾帧模式下，仅保留第一张上传的图片作为主图，其余参考图从 mediaItems 中移除
+                    const imageItems = mediaItems.value.filter(m => m.type === 'image');
+                    if (imageItems.length > 1) {
+                        const toRemove = imageItems.slice(1).map(item => item.id);
+                        toRemove.forEach(id => removeMediaItem(id));
+                        referenceImageFiles.value = [];
+                    }
+                }
+            });
+
+            // 监听选中模型变化，更新默认时长（videoModelConfigs 使用简短 key）
+            Vue.watch(selectedModelKey, (newKey) => {
+                if (!isVideoMode.value || !newKey) return;
+                const model = currentModels.value.find(m => m.key === newKey);
+                const shortKey = model ? model.value : '';
+                const config = shortKey ? videoModelConfigs.value[shortKey] : null;
+                if (config && config.durations && config.durations.length > 0) {
+                    if (!config.durations.includes(selectedDuration.value)) {
+                        selectedDuration.value = config.default_duration || config.durations[0];
+                    }
+                }
             });
 
             return {
@@ -1365,14 +2215,22 @@
                 toggleRatioPanel,
                 toggleSettingsPanel,
                 showSettingsPanel,
+                showVideoModePanel,
+                showDurationPanel,
                 autoMode,
                 showModelSelect,
+                isVideoMode,
+                computingPower,
                 hasUploadedImage,
                 uploadedImageUrl,
                 fileInputRef,
                 triggerUpload,
                 handleFileChange,
                 clearUploadedImage,
+                isDragging,
+                handleDragOver,
+                handleDragLeave,
+                handleDrop,
                 taskConfigReady,
                 availableRatios,
                 availableResolutions,
@@ -1385,7 +2243,36 @@
                 imageResults,
                 sendImageRequest,
                 startImageStatusCheck,
-                clearImageStatusCheck
+                clearImageStatusCheck,
+                videoProjectIds,
+                videoStatus,
+                videoResults,
+                selectedDuration,
+                sendVideoRequest,
+                startVideoStatusCheck,
+                clearVideoStatusCheck,
+                videoImageMode,
+                currentDurationOptions,
+                showAddSubject,
+                referenceImageFiles,
+                referenceInputRef,
+                triggerReferenceUpload,
+                handleReferenceFileChange,
+                removeReferenceImage,
+                clearReferenceImages,
+                mediaItems,
+                mediaCounters,
+                mentionDropdown,
+                mentionableItems,
+                filteredMentionItems,
+                showVideoModeBtn,
+                addMediaItem,
+                removeMediaItem,
+                onPromptInput,
+                onPromptKeydown,
+                onPromptBlur,
+                insertMention,
+                triggerMention
             };
         }
     }).mount('#app');

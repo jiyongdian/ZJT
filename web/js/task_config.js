@@ -370,7 +370,8 @@
         taskType: task.id,
         computingPower: task.computing_power,
         key: task.key,
-        supportsGridImage: task.supports_grid_image || false
+        supportsGridImage: task.supports_grid_image || false,
+        supportedImageModes: task.supported_image_modes || ['first_last_frame']
       };
     });
   }
