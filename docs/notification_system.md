@@ -72,7 +72,19 @@ def generate_client_id(install_path: str) -> str:
       "current_version": "1.5.2",
       "latest_version": "1.6.0",
       "release_notes": "1. 修复了xxx问题\n2. 新增xxx功能\n3. 优化xxx性能",
-      "changelog_url": "https://github.com/jeffstric/ZJT/releases/tag/v1.6.0"
+      "changelog_url": "https://github.com/jeffstric/ZJT/releases/tag/v1.6.0",
+      "required_binaries": [
+        {
+          "name": "ffmpeg",
+          "description": "音视频处理工具",
+          "download_url": "https://cdn.zjt.com/bin/ffmpeg-6.0-win64.zip",
+          "check_paths": {
+            "windows": "bin/ffmpeg/ffmpeg.exe",
+            "linux": "bin/ffmpeg/ffmpeg",
+            "macos": "bin/ffmpeg/ffmpeg"
+          }
+        }
+      ]
     },
     "announcements": [
       {
@@ -114,6 +126,16 @@ def generate_client_id(install_path: str) -> str:
 | `latest_version` | string | 最新版本号 |
 | `release_notes` | string | 更新日志（纯文本，支持换行） |
 | `changelog_url` | string\|null | 完整更新日志链接（可选） |
+| `required_binaries` | array | 该版本依赖的二进制工具列表（可选，为空表示无依赖） |
+
+`required_binaries[]` — 二进制依赖（不在 git 中，需管理员手动下载）:
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `name` | string | 工具名（如 `ffmpeg`） |
+| `description` | string | 工具描述 |
+| `download_url` | string\|null | 下载链接 |
+| `check_paths` | object | 按平台的检查路径，key 为 `windows`/`linux`/`macos` |
 
 `announcements[]` — 系统公告:
 

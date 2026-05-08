@@ -1809,6 +1809,86 @@ body {
     text-decoration: underline;
 }
 
+/* 二进制依赖警告 */
+.binary-deps-warning {
+    margin-bottom: 20px;
+    padding: 16px 20px;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-left: 4px solid #f97316;
+    border-radius: 6px;
+}
+
+.binary-deps-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.binary-deps-header h4 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #9a3412;
+}
+
+.binary-deps-icon {
+    font-size: 18px;
+}
+
+.binary-deps-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 12px;
+}
+
+.binary-deps-list li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: #fff;
+    border: 1px solid #fed7aa;
+    border-radius: 4px;
+    margin-bottom: 6px;
+}
+
+.binary-dep-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.binary-dep-info strong {
+    color: #9a3412;
+    font-size: 13px;
+}
+
+.binary-dep-desc {
+    color: #78716c;
+    font-size: 12px;
+}
+
+.binary-dep-download {
+    color: #ea580c;
+    font-size: 12px;
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.binary-dep-download:hover {
+    text-decoration: underline;
+}
+
+.binary-deps-hint {
+    margin: 0;
+    font-size: 12px;
+    color: #9a3412;
+    opacity: 0.8;
+}
+
 /* 通知条目 */
 .notification-item {
     padding: 16px 20px;

@@ -560,6 +560,27 @@
                     </div>
                 </div>
 
+                <!-- 二进制依赖警告 -->
+                <div v-if="versionUpdate && versionUpdate.required_binaries && versionUpdate.required_binaries.length > 0"
+                     class="binary-deps-warning">
+                    <div class="binary-deps-header">
+                        <span class="binary-deps-icon">&#9888;&#65039;</span>
+                        <h4>此版本需要以下二进制工具</h4>
+                    </div>
+                    <ul class="binary-deps-list">
+                        <li v-for="dep in versionUpdate.required_binaries" :key="dep.name">
+                            <div class="binary-dep-info">
+                                <strong>{{ dep.name }}</strong>
+                                <span class="binary-dep-desc">{{ dep.description }}</span>
+                            </div>
+                            <a v-if="dep.download_url" :href="dep.download_url" target="_blank" class="binary-dep-download">
+                                下载 &#8594;
+                            </a>
+                        </li>
+                    </ul>
+                    <p class="binary-deps-hint">请手动下载并放置到对应目录后，再进行升级。</p>
+                </div>
+
                 <!-- 通知列表 -->
                 <div class="table-container">
                     <div class="table-header">

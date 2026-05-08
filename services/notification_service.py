@@ -26,6 +26,7 @@ class NotificationService:
     _client_id: Optional[str] = None
     _local_version: Optional[str] = None
     _version_status: Dict[str, Any] = {}
+    _required_binaries: List[Dict[str, Any]] = []
     _task: Optional[asyncio.Task] = None
     _check_interval: int = NotificationConstants.CHECK_INTERVAL
     _initialized: bool = False
@@ -137,7 +138,9 @@ class NotificationService:
                 "latest_version": version_update.get("latest_version", ""),
                 "release_notes": version_update.get("release_notes", ""),
                 "changelog_url": version_update.get("changelog_url"),
+                "required_binaries": version_update.get("required_binaries", []),
             }
+            cls._required_binaries = version_update.get("required_binaries", [])
             if cls._version_status["has_update"]:
                 logger.info(
                     f"[Notification] New version available: "
