@@ -170,7 +170,7 @@ class BaseVideoDriver(ABC):
         """
         pass
     
-    def _request(self, url: str, method: str = "POST", json: dict = None, headers: dict = None, **kwargs) -> dict:
+    def _request(self, url: str, method: str = "POST", json: dict = None, headers: dict = None, timeout: float = None, **kwargs) -> dict:
         """
         统一 HTTP 请求方法。所有外部 API 调用都通过此方法。
         请求和响应会记录到 logs/api_requests.log
@@ -198,7 +198,9 @@ class BaseVideoDriver(ABC):
         api_logger.info(f"Payload: {self._mask_sensitive_payload(json)}")
 
         try:
-            response = requests.request(method, url, json=json, headers=headers, **kwargs)
+            if timeout is None:
+                timeout = getattr(self, '_timeout', 30)
+            response = requests.request(method, url, json=json, headers=headers, timeout=timeout, **kwargs)
             response_time = datetime.now().isoformat()
 
             # 记录响应日志
