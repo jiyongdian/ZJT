@@ -8096,13 +8096,6 @@ async def serve_marketing_agent():
         return Response(content=content, media_type="text/html")
     raise HTTPException(status_code=404, detail="Marketing agent page not found")
 
-@app.get("/marketing-home")
-async def serve_marketing_home():
-    file_path = os.path.join(static_dir, "marketing_home.html")
-    if os.path.isfile(file_path):
-        content = _get_processed_html(file_path)
-        return Response(content=content, media_type="text/html")
-    raise HTTPException(status_code=404, detail="Marketing home page not found")
 
 @app.get(f"{MP_VERIFY_ROUTE}")
 async def get_mp_verify_file():

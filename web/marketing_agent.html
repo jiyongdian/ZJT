@@ -118,14 +118,6 @@
                             <option value="text">文本</option>
                         </select>
                     </div>
-                    <div class="filter-dropdown">
-                        <select v-model="selectedActionType">
-                            <option value="">操作类型</option>
-                            <option value="create">创作</option>
-                            <option value="edit">编辑</option>
-                            <option value="review">审核</option>
-                        </select>
-                    </div>
                 </div>
             </header>
 
@@ -533,7 +525,7 @@
             const searchQuery = ref('');
             const selectedDate = ref('');
             const selectedGenType = ref('');
-            const selectedActionType = ref('');
+
             const sessions = ref([]);
             const currentSessionId = ref(null);
             const showContinue = ref(false);
@@ -665,6 +657,28 @@
             // 是否显示参考图上传（全能参考模式下）
             const showAddSubject = Vue.computed(() => {
                 return isVideoMode.value && videoImageMode.value === 'multi_reference';
+            });
+
+            // 当前模型是否支持尾帧
+            const supportsLastFrame = Vue.computed(() => {
+                if (!isVideoMode.value || !selectedModelKey.value) return true;
+                const model = currentModels.value.find(m => m.key === selectedModelKey.value);
+                const shortKey = model ? model.value : '';
+                const config = shortKey ? videoModelConfigs.value[shortKey] : null;
+                return config?.supports_last_frame !== false;
+            });
+
+            // 当前模式下最大图片数量
+            const maxImageCount = Vue.computed(() => {
+                if (!isVideoMode.value) return 99;
+                if (videoImageMode.value === 'first_last_frame') {
+                    return supportsLastFrame.value ? 2 : 1;
+                }
+                // 全能参考模式
+                const model = currentModels.value.find(m => m.key === selectedModelKey.value);
+                const shortKey = model ? model.value : '';
+                const config = shortKey ? videoModelConfigs.value[shortKey] : null;
+                return config?.max_multi_ref_images || 5;
             });
 
             // 算力消耗（根据当前模式和模型动态计算）
@@ -1790,10 +1804,35 @@
                     showError('请上传图片文件');
                     return;
                 }
-                const isVideoMode = selectedType.value === '视频生成' ||
+                const isVideoModeVal = selectedType.value === '视频生成' ||
                                     (selectedType.value === 'Agent 模式' && mediaType.value === 'video');
+                // 首尾帧模式下，不支持尾帧的模型只允许1张图片
+                if (isVideoModeVal && videoImageMode.value === 'first_last_frame' && !supportsLastFrame.value) {
+                    const imageCount = mediaItems.value.filter(m => m.type === 'image').length;
+                    if (imageCount >= 1) {
+                        showError('当前模型仅支持单图，不支持尾帧');
+                        if (fileInputRef.value) fileInputRef.value.value = '';
+                        return;
+                    }
+                }
+                // 首尾帧模式下，已有主图时，第二张作为尾帧
+                if (isVideoModeVal && videoImageMode.value === 'first_last_frame' && hasUploadedImage.value) {
+                    if (referenceImageFiles.value.length >= 1) {
+                        showError('首尾帧模式最多2张图片');
+                        if (fileInputRef.value) fileInputRef.value.value = '';
+                        return;
+                    }
+                    const refUrl = URL.createObjectURL(file);
+                    referenceImageFiles.value.push({
+                        file: file,
+                        url: refUrl
+                    });
+                    addMediaItem(file, 'image', refUrl);
+                    if (fileInputRef.value) fileInputRef.value.value = '';
+                    return;
+                }
                 // 视频+全能参考模式下，已有主图时添加为参考图
-                if (isVideoMode && videoImageMode.value === 'multi_reference' && hasUploadedImage.value) {
+                if (isVideoModeVal && videoImageMode.value === 'multi_reference' && hasUploadedImage.value) {
                     if (referenceImageFiles.value.length >= 5) {
                         showError('参考图最多5张');
                         return;
@@ -1824,6 +1863,12 @@
                     const mainImage = mediaItems.value.find(m => m.fileUrl === uploadedImageUrl.value);
                     if (mainImage) removeMediaItem(mainImage.id);
                 }
+                // 清理尾帧/参考图
+                referenceImageFiles.value.forEach(ref => {
+                    const refItem = mediaItems.value.find(m => m.fileUrl === ref.url);
+                    if (refItem) removeMediaItem(refItem.id);
+                });
+                referenceImageFiles.value = [];
                 hasUploadedImage.value = false;
                 uploadedImageUrl.value = '';
                 uploadedImageFile.value = null;
@@ -1841,7 +1886,7 @@
             function handleReferenceFileChange(e) {
                 const files = Array.from(e.target.files || []);
                 if (files.length === 0) return;
-                const maxRef = 5;
+                const maxRef = maxImageCount.value - (hasUploadedImage.value ? 1 : 0);
                 const remaining = maxRef - referenceImageFiles.value.length;
                 if (remaining <= 0) {
                     showError('参考图最多5张');
@@ -2026,6 +2071,28 @@
                 }
                 const isVideoMode = selectedType.value === '视频生成' ||
                                     (selectedType.value === 'Agent 模式' && mediaType.value === 'video');
+                // 首尾帧模式下，不支持尾帧的模型只允许1张图片
+                if (isVideoMode && videoImageMode.value === 'first_last_frame' && !supportsLastFrame.value) {
+                    const imageCount = mediaItems.value.filter(m => m.type === 'image').length;
+                    if (imageCount >= 1) {
+                        showError('当前模型仅支持单图，不支持尾帧');
+                        return;
+                    }
+                }
+                // 首尾帧模式下，已有主图时，第二张作为尾帧
+                if (isVideoMode && videoImageMode.value === 'first_last_frame' && hasUploadedImage.value) {
+                    if (referenceImageFiles.value.length >= 1) {
+                        showError('首尾帧模式最多2张图片');
+                        return;
+                    }
+                    const refUrl = URL.createObjectURL(file);
+                    referenceImageFiles.value.push({
+                        file: file,
+                        url: refUrl
+                    });
+                    addMediaItem(file, 'image', refUrl);
+                    return;
+                }
                 // 视频+全能参考模式下，已有主图时添加为参考图
                 if (isVideoMode && videoImageMode.value === 'multi_reference' && hasUploadedImage.value) {
                     if (referenceImageFiles.value.length >= 5) {
@@ -2167,6 +2234,16 @@
                         selectedDuration.value = config.default_duration || config.durations[0];
                     }
                 }
+                // 如果不支持尾帧且当前有多张图片，只保留第一张
+                const supportsLastFrame = config?.supports_last_frame !== false;
+                if (!supportsLastFrame) {
+                    const imageItems = mediaItems.value.filter(m => m.type === 'image');
+                    if (imageItems.length > 1) {
+                        const toRemove = imageItems.slice(1).map(item => item.id);
+                        toRemove.forEach(id => removeMediaItem(id));
+                        referenceImageFiles.value = [];
+                    }
+                }
             });
 
             return {
@@ -2178,7 +2255,7 @@
                 searchQuery,
                 selectedDate,
                 selectedGenType,
-                selectedActionType,
+
                 sessions,
                 currentSessionId,
                 showContinue,
@@ -2266,6 +2343,8 @@
                 mentionableItems,
                 filteredMentionItems,
                 showVideoModeBtn,
+                supportsLastFrame,
+                maxImageCount,
                 addMediaItem,
                 removeMediaItem,
                 onPromptInput,

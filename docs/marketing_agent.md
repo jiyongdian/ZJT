@@ -32,38 +32,6 @@
 
 ## 页面结构
 
-### 营销首页（`/marketing-home`）
-
-营销模式首页为**独立页面** `web/marketing_home.html`，采用 Vue 3 单文件应用实现，与短剧模式的 `index.html` 完全解耦。用户选择营销模式后，从 `index.html` 跳转至该页面。
-
-页面包含以下区块：
-
-| 区块 | 说明 |
-|------|------|
-| 左侧导航 | 灵感、生成、资产、工作流（纯 UI 展示，未实现跳转） |
-| 大标题 | "开启你的 Agent 模式 即刻造梦！" |
-| 中央输入区 | 文本输入框 + 上传按钮 + 功能按钮条 |
-| 创作类型 | Agent 模式 / 图片生成 / 视频生成（纯 UI 展示） |
-| 功能卡片 | 无限画布、Agent 模式、图片生成、视频生成（纯 UI 展示） |
-
-输入框中输入内容并点击发送（或按 Enter）后，会跳转至 `/marketing-agent` 对话界面，并通过 URL 参数 `initial_message` 传递初始消息。
-
-样式定义：`web/css/index.css` 末尾的"营销模式首页样式"区块（`.marketing-*` 类前缀）。
-
-#### 后端路由
-
-由 `server.py` 中的 `serve_marketing_home` 函数服务静态 HTML：
-
-```python
-@app.get("/marketing-home")
-async def serve_marketing_home():
-    file_path = os.path.join(static_dir, "marketing_home.html")
-    if os.path.isfile(file_path):
-        content = _get_processed_html(file_path)
-        return Response(content=content, media_type="text/html")
-    raise HTTPException(status_code=404, detail="Marketing home page not found")
-```
-
 ### 营销智能体对话页面（`/marketing-agent`）
 
 营销智能体对话界面位于 `web/marketing_agent.html`，使用 Vue 3 单文件应用实现。页面布局参考"营销智能体参考图/智能体对话.png"。
@@ -74,7 +42,7 @@ async def serve_marketing_home():
 |------|------|
 | 左侧窄导航 | 灵感（置灰禁用）、生成（高亮）、资产、工作流 |
 | 左侧边栏 | 新对话按钮、搜索框、默认创作、最近对话列表、用户信息 |
-| 顶部栏 | 当前日期、搜索框、时间/生成类型/操作类型筛选器 |
+| 顶部栏 | 当前日期、搜索框、时间/生成类型筛选器 |
 | 消息流 | 欢迎卡片 + 用户/AI 消息气泡，支持 Markdown 渲染 |
 | 底部输入区 | 文本输入框 + 上传按钮 + 类型选择 + 模型选择 + 比例/分辨率选择 + 技能/主体（置灰）+ 发送按钮 |
 
@@ -133,12 +101,11 @@ async def serve_marketing_agent():
 
 | 文件路径 | 类型 | 说明 |
 |----------|------|------|
-| `web/index.html` | 修改 | 模式选择器（电商模式→营销模式）、选择后跳转 `/marketing-home` |
-| `web/marketing_home.html` | 新建 | 营销模式首页（Vue 3 独立页面） |
+| `web/index.html` | 修改 | 模式选择器（电商模式→营销模式）、选择后跳转 `/marketing-agent` |
 | `web/css/index.css` | 修改 | 末尾追加"营销模式首页样式"区块 |
 | `web/marketing_agent.html` | 新建 | 营销智能体对话页面（Vue 3） |
 | `web/css/marketing_agent.css` | 新建 | 对话页面样式（浅色主题） |
-| `server.py` | 修改 | 新增 `/marketing-home` 和 `/marketing-agent` 路由 |
+| `server.py` | 修改 | 新增 `/marketing-agent` 路由 |
 
 ## 本地存储键
 
@@ -150,6 +117,6 @@ async def serve_marketing_agent():
 ## 后续可扩展点
 
 1. **左侧导航功能**：当前左侧"灵感、生成、资产、画布"和"无限画布、Agent 模式、图片生成、视频生成"功能卡片为纯 UI 展示，可逐步实现实际页面跳转。
-2. **筛选器联动**：顶部"时间、生成类型、操作类型"筛选器目前仅有 UI，可结合后端实现历史记录筛选。
+2. **筛选器联动**：顶部"时间、生成类型"筛选器目前仅有 UI，可结合后端实现历史记录筛选。
 3. **营销技能库**：可在 `script_writer_core/skills/` 下新增营销专用 skill（如 `marketing-script-writer`、`product-copy-writer`），并通过 `system_prompt` 切换使营销 Agent 拥有专属能力。
 4. **营销专用世界**：当前自动创建"营销世界"，未来可根据营销主题（如"美妆"、"3C数码"）创建多个细分世界。
