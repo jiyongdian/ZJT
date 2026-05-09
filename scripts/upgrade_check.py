@@ -107,6 +107,83 @@ def _read_config_from_yaml(defaults):
         return defaults
 
 
+def read_remote_binaries_config(git_cmd, project_dir, branch, timeout):
+    """从远程仓库读取二进制依赖配置
+
+    使用 git show 读取远程分支中的 config/required_binaries.yml 文件。
+    返回: 配置字典，读取失败时返回空字典
+    """
+    rc, out, err = run_git(
+        git_cmd,
+        ["show", f"origin/{branch}:config/required_binaries.yml"],
+        project_dir,
+        timeout=timeout
+    )
+
+    if rc != 0:
+        # 文件不存在或读取失败，返回空配置
+        return {}
+
+    try:
+        import yaml
+        return yaml.safe_load(out) or {}
+    except ImportError:
+        # PyYAML 不可用，跳过检查
+        print("[upgrade] PyYAML 未安装，跳过二进制依赖检查")
+        return {}
+    except Exception as e:
+        print(f"[upgrade] 解析二进制配置失败（忽略）: {e}")
+        return {}
+
+
+def check_binaries_for_version(project_dir, binaries_config, target_version):
+    """检查目标版本需要的二进制依赖是否存在
+
+    Args:
+        project_dir: 项目目录
+        binaries_config: 二进制配置（从 YAML 读取）
+        target_version: 目标版本号
+
+    Returns:
+        缺失的二进制列表
+    """
+    if not binaries_config or "binaries" not in binaries_config:
+        return []
+
+    # 平台映射
+    platform_map = {
+        "win32": "windows",
+        "linux": "linux",
+        "darwin": "macos",
+    }
+    current_platform = platform_map.get(sys.platform, "linux")
+
+    missing = []
+    for name, config in binaries_config["binaries"].items():
+        # 检查版本要求
+        required_since = config.get("required_since", "0.0.0")
+        if compare_version(target_version, required_since) < 0:
+            # 目标版本早于此依赖的最低要求版本，跳过
+            continue
+
+        # 检查文件是否存在
+        check_paths = config.get("check_paths", {})
+        check_path = check_paths.get(current_platform)
+
+        if not check_path:
+            continue
+
+        full_path = project_dir / check_path
+        if not full_path.exists():
+            missing.append({
+                "name": name,
+                "description": config.get("description", ""),
+                "download_url": config.get("download_url", ""),
+            })
+
+    return missing
+
+
 def parse_version(v):
     """解析版本号为可比较的数字列表
 
@@ -524,7 +601,20 @@ def main():
             print("[upgrade] 跳过更新，使用本地版本")
             return 0
 
-    # 6. 执行更新
+    # 7. 检查二进制依赖（从仓库配置文件读取）
+    binaries_config = read_remote_binaries_config(git_cmd, project_dir, branch, timeout)
+    missing = check_binaries_for_version(project_dir, binaries_config, latest_tag)
+    if missing:
+        print(f"\n[upgrade] ⚠ 新版本 {latest_tag} 需要以下二进制依赖，但本地缺失:")
+        for b in missing:
+            url = b.get('download_url', '无')
+            print(f"  - {b['name']}: {b.get('description', '')}")
+            print(f"    下载地址: {url}")
+        print(f"\n[upgrade] 跳过自动更新，请先下载上述文件后再升级")
+        print("[upgrade] 使用当前版本继续启动...")
+        return 0
+
+    # 8. 执行更新
     success, message = perform_update(git_cmd, project_dir, branch, timeout)
     if not success:
         print(f"[upgrade] 更新失败: {message}")
@@ -533,7 +623,7 @@ def main():
     if message:
         print(f"[upgrade] 警告: {message}")
 
-    # 7. 检查依赖变化
+    # 9. 检查依赖变化
     check_requirements_changed(git_cmd, project_dir, timeout)
 
     print("[upgrade] 更新完成，继续启动...")

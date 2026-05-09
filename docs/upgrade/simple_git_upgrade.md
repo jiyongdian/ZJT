@@ -112,6 +112,37 @@ python3 scripts/running/run_prod.py
 
 ## 四、新增脚本：`scripts/upgrade_check.py`
 
+### 4.0 二进制依赖检查
+
+在执行 git 更新前，脚本会从仓库读取二进制依赖配置：
+
+1. 使用 `git show` 读取远程分支中的 `config/required_binaries.yml` 文件
+2. 解析配置文件中的 `binaries` 字段
+3. 根据当前平台（windows/linux/macos）和目标版本检查二进制文件是否存在
+4. 如果存在缺失的二进制文件：
+   - 打印缺失文件清单及下载地址
+   - **跳过自动更新**（不执行 git pull）
+   - 允许程序以当前版本继续启动
+
+**配置文件格式**：`config/required_binaries.yml`
+
+```yaml
+binaries:
+  ffmpeg:
+    description: "音视频处理工具"
+    download_url: "https://cdn.zjt.com/bin/ffmpeg-6.0-win64.zip"
+    check_paths:
+      windows: "bin/ffmpeg/ffmpeg.exe"
+      linux: "bin/ffmpeg/ffmpeg"
+      macos: "bin/ffmpeg/ffmpeg"
+    required_since: "2.0.0"  # 从 v2.0.0 开始需要此依赖
+```
+
+**设计意图**：
+- 每个版本的二进制依赖都记录在仓库中，随版本发布
+- 依赖源就是本项目，不依赖外部 API
+- 支持多版本场景（v2.0 需要 A，v2.1 需要 A+B）
+
 ### 4.1 完整逻辑
 
 ```python
@@ -343,6 +374,7 @@ if __name__ == "__main__":
 | 无差异 | 静默通过，返回 0 |
 | 有差异 | 显示前 5 条 commit，问用户（input） |
 | 用户拒绝 | 返回 0，正常启动本地版本 |
+| 二进制依赖缺失 | 跳过更新，返回 0，允许以当前版本启动 |
 | 本地修改冲突 | `git stash` → `git pull` → `git stash pop` → pop 冲突则 `stash drop` |
 | requirements.txt 变化 | 检测并提示，uv 启动时自动安装 |
 | 数据库迁移 | git pull 后 Alembic 脚本更新，启动时 `run_prod.py` 自动执行 `alembic upgrade head` |
@@ -459,7 +491,7 @@ upgrade:
 
 | 文件 | 作用 |
 |------|------|
-| `scripts/upgrade_check.py` | 启动前检查更新（核心脚本） |
+| `scripts/upgrade_check.py` | 启动前检查更新 + 二进制依赖检查（核心脚本） |
 
 ### 修改
 
@@ -513,16 +545,17 @@ upgrade:
 | 3 | fetch 超时 | 提示网络超时，跳过更新 |
 | 4 | fetch 失败（仓库不存在/权限不足） | 提示失败，跳过更新 |
 | 5 | 用户拒绝更新 | 正常启动本地版本 |
-| 6 | git pull 失败（非 fast-forward） | 提示失败，stash pop 恢复，启动本地版 |
-| 7 | stash pop 冲突 | 丢弃 stash，提示用户，继续启动 |
-| 8 | 中文路径 | pathlib + utf-8，git 原生支持 |
-| 9 | 升级后 requirements.txt 变了 | 提示"依赖更新"，uv 启动时自动安装 |
-| 10 | 升级后 Alembic 迁移失败 | run_prod.py 抛错 → 启动失败 → 用户需手动回滚（`git reset --hard HEAD@{1}`） |
-| 11 | 并发启动 | 无问题（顺序执行，无并发状态） |
-| 12 | 用户改了被 git 跟踪的文件 | stash → pull → pop，冲突则丢弃 |
-| 13 | 启动脚本升级 | start.bat 本身被 git 跟踪，升级后下次启动用新版脚本 |
-| 14 | Windows 下 git 锁定 | 无问题（主程序未启动） |
-| 15 | macOS ARM/Intel | git 命令一致，跨平台 |
+| 6 | 二进制依赖缺失 | 跳过更新，打印缺失清单及下载地址，正常启动本地版本 |
+| 7 | git pull 失败（非 fast-forward） | 提示失败，stash pop 恢复，启动本地版 |
+| 8 | stash pop 冲突 | 丢弃 stash，提示用户，继续启动 |
+| 9 | 中文路径 | pathlib + utf-8，git 原生支持 |
+| 10 | 升级后 requirements.txt 变了 | 提示"依赖更新"，uv 启动时自动安装 |
+| 11 | 升级后 Alembic 迁移失败 | run_prod.py 抛错 → 启动失败 → 用户需手动回滚（`git reset --hard HEAD@{1}`） |
+| 12 | 并发启动 | 无问题（顺序执行，无并发状态） |
+| 13 | 用户改了被 git 跟踪的文件 | stash → pull → pop，冲突则丢弃 |
+| 14 | 启动脚本升级 | start.bat 本身被 git 跟踪，升级后下次启动用新版脚本 |
+| 15 | Windows 下 git 锁定 | 无问题（主程序未启动） |
+| 16 | macOS ARM/Intel | git 命令一致，跨平台 |
 
 ---
 
