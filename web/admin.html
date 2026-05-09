@@ -560,7 +560,7 @@
                     </div>
                 </div>
 
-                <!-- 二进制依赖警告 -->
+                <!-- 二进制依赖警告（版本升级相关） -->
                 <div v-if="versionUpdate && versionUpdate.required_binaries && versionUpdate.required_binaries.length > 0"
                      class="binary-deps-warning">
                     <div class="binary-deps-header">
@@ -579,6 +579,32 @@
                         </li>
                     </ul>
                     <p class="binary-deps-hint">请手动下载并放置到对应目录后，再进行升级。</p>
+                </div>
+
+                <!-- 缺失的二进制依赖 -->
+                <div v-if="missingBinaries.length > 0" class="binary-deps-warning" style="border-left-color: #f59e0b;">
+                    <div class="binary-deps-header">
+                        <span class="binary-deps-icon">&#128230;</span>
+                        <h4>缺少以下二进制依赖</h4>
+                    </div>
+                    <p style="color: #92400e; margin: 0 0 12px 0; font-size: 13px;">
+                        以下工具在系统中缺失，部分功能可能无法正常使用。请下载后放置到指定目录。
+                    </p>
+                    <ul class="binary-deps-list">
+                        <li v-for="dep in missingBinaries" :key="dep.name">
+                            <div class="binary-dep-info">
+                                <strong>{{ dep.name }}</strong>
+                                <span class="binary-dep-desc">{{ dep.description }}</span>
+                                <div class="binary-dep-path">
+                                    <span style="color: #6b7280;">放置路径：</span>
+                                    <code>{{ dep.check_path }}</code>
+                                </div>
+                            </div>
+                            <a v-if="dep.download_url" :href="dep.download_url" target="_blank" class="binary-dep-download">
+                                下载 &#8594;
+                            </a>
+                        </li>
+                    </ul>
                 </div>
 
                 <!-- 通知列表 -->

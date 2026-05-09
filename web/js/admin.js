@@ -643,6 +643,7 @@ const AdminApp = {
             // 通知中心
             notifications: [],
             versionUpdate: null,
+            missingBinaries: [],
             unreadCount: 0,
             typeLabels: {
                 announcement: '公告',
@@ -2511,6 +2512,7 @@ const AdminApp = {
                     const data = response.data.data;
                     this.versionUpdate = data.version_update || null;
                     this.notifications = data.notifications || [];
+                    this.missingBinaries = data.missing_binaries || [];
                     this.unreadCount = data.unread_count || 0;
                 }
             } catch (error) {

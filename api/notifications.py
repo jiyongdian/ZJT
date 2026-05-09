@@ -50,7 +50,7 @@ async def poll_notifications():
     """
     客户端轮询接口（每 30 秒调用一次）
 
-    返回版本升级状态 + 未读通知列表 + 未读数量
+    返回版本升级状态 + 未读通知列表 + 未读数量 + 缺失的二进制依赖
     无需认证，全局公告。
     """
     try:
@@ -61,12 +61,16 @@ async def poll_notifications():
         notifications = await asyncio.to_thread(NotificationService.get_unread_notifications)
         unread_count = await asyncio.to_thread(NotificationService.get_unread_count)
 
+        # 检查本地缺失的二进制依赖
+        missing_binaries = await asyncio.to_thread(NotificationService.get_missing_binaries)
+
         return {
             "code": 0,
             "data": {
                 "version_update": version_status if version_status.get("has_update") else None,
                 "notifications": notifications,
                 "unread_count": unread_count,
+                "missing_binaries": missing_binaries,
             }
         }
     except Exception as e:

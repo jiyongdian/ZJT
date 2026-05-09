@@ -166,25 +166,27 @@ from pathlib import Path
 def find_git_binary():
     """查找 git 二进制
 
-    Windows: 优先使用项目内置的 MinGit，其次查找系统 PATH。
-    macOS/Linux: 直接使用系统 PATH 中的 git（需用户提前安装）。
+    仅使用项目内置的 bin/git，不回退到系统 PATH。
+    Windows: bin/git/cmd/git.exe 或 bin/git/git.exe
+    macOS/Linux: bin/git/bin/git
     """
     project_dir = Path(__file__).parent.parent.resolve()
 
-    # Windows: 优先查找项目自带的 MinGit
+    # 平台相关的候选路径
     if sys.platform == "win32":
-        bundled_paths = [
+        candidates = [
             project_dir / "bin" / "git" / "cmd" / "git.exe",   # MinGit 标准路径
             project_dir / "bin" / "git" / "git.exe",            # 旧路径兼容
         ]
-        for p in bundled_paths:
-            if p.exists():
-                return str(p)
+    else:
+        candidates = [
+            project_dir / "bin" / "git" / "bin" / "git",       # Linux/macOS
+            project_dir / "bin" / "git" / "git",                # 备用路径
+        ]
 
-    # 所有平台: 在系统 PATH 中查找
-    git_cmd = shutil.which("git")
-    if git_cmd:
-        return git_cmd
+    for p in candidates:
+        if p.exists():
+            return str(p)
 
     return None
 
@@ -195,8 +197,6 @@ def get_config(key, default=None):
     # 这里简化示意
     configs = {
         "upgrade.branch": "main",
-        "upgrade.auto_update": False,
-        "upgrade.check_on_startup": True,
         "upgrade.repo_urls": [
             "https://gitee.com/owner/repo.git",
             "https://github.com/owner/repo.git",
@@ -252,13 +252,7 @@ def check_and_update():
 
     # 2. 读配置
     branch = get_config("upgrade.branch", "main")
-    auto_update = get_config("upgrade.auto_update", False)
-    check_on_startup = get_config("upgrade.check_on_startup", True)
     repo_urls = get_config("upgrade.repo_urls", [])
-
-    if not check_on_startup:
-        print("[upgrade] 已关闭启动时检查")
-        return 0
 
     # 3. 检查 .git 目录
     git_dir = project_dir / ".git"
@@ -303,18 +297,8 @@ def check_and_update():
     if commit_count > 5:
         print(f"  ... 还有 {commit_count - 5} 个更新")
 
-    # 7. 静默模式？
-    if auto_update:
-        print("[upgrade] 自动更新模式，开始更新...")
-    else:
-        # 询问用户（Windows 用 input，macOS/Linux 也可用）
-        try:
-            answer = input("是否更新并启动？(Y/n): ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            answer = "n"
-        if answer not in ("", "y", "yes"):
-            print("[upgrade] 跳过更新，使用本地版本")
-            return 0
+    # 7. 发现新版本，开始更新
+    print(f"[upgrade] 发现新版本，开始更新...")
 
     # 8. 执行更新
     # 8.1 暂存用户本地修改（防止冲突）
@@ -368,7 +352,8 @@ if __name__ == "__main__":
 
 | 设计点 | 处理 |
 |--------|------|
-| git 二进制 | Windows: 内置 MinGit；macOS/Linux: 系统 PATH 中的 git |
+| 本地版本检测 | 优先 `git describe --tags --abbrev=0`，回退读取 `pyproject.toml` |
+| git 二进制 | 仅使用项目内置 bin/git，不回退系统 PATH |
 | .git 不存在 | 自动 `git init` + `remote add` + `fetch --depth 1` + `reset --hard origin/{branch}` |
 | 网络不通 | timeout 30s，失败返回 1（跳过更新，继续启动） |
 | 无差异 | 静默通过，返回 0 |
@@ -427,36 +412,27 @@ bin/git/
 └── LICENSE.txt
 ```
 
-### 6.2 macOS：依赖系统自带
+### 6.2 macOS / Linux：内置 git
 
-macOS **不内置** git 二进制，依赖用户系统自带的 git。
+macOS/Linux 分发包同样内置 git 二进制，放置于 `bin/git/` 目录下。
 
-- **来源**: 安装 Xcode Command Line Tools 后自带
-- **安装命令**: `xcode-select --install`
-- **查找方式**: 直接使用系统 PATH 中的 git
+- 查找路径: `bin/git/bin/git` 或 `bin/git/git`
+- **不回退**到系统 PATH，确保版本一致性
 
-如果用户未安装 git，升级检查会跳过（返回 0），不影响正常启动。
+如果内置 git 不存在，升级检查会跳过（返回 0），不影响正常启动。
 
-### 6.3 Linux：依赖系统安装
-
-Linux **不内置** git 二进制，需用户提前安装。
-
-- **Ubuntu/Debian**: `sudo apt install git`
-- **CentOS/RHEL**: `sudo yum install git`
-- **Alpine**: `apk add git`
-- **Docker**: Docker 镜像中通常已包含
-
-### 6.4 查找优先级
+### 6.3 查找优先级
 
 ```
-find_git_binary() 逻辑：
+find_git_binary() 逻辑（仅使用内置 bin/git）：
 
 Windows:
-  1. bin/git/cmd/git.exe  (内置 MinGit)
-  2. 系统 PATH 中的 git
+  1. bin/git/cmd/git.exe  (MinGit 标准路径)
+  2. bin/git/git.exe       (旧路径兼容)
 
 macOS/Linux:
-  1. 系统 PATH 中的 git
+  1. bin/git/bin/git
+  2. bin/git/git           (备用路径)
 ```
 
 ---
@@ -467,13 +443,11 @@ macOS/Linux:
 
 ```yaml
 upgrade:
-  enabled: true              # 总开关
+  enabled: true              # 总开关，启动时检查并自动更新
   repo_urls:                 # Git 仓库地址（多源，按顺序尝试）
     - "https://gitee.com/owner/repo.git"       # 优先 Gitee（国内快）
     - "https://github.com/owner/repo.git"      # 备用 GitHub
   branch: "main"             # 跟踪分支
-  check_on_startup: true     # 启动时是否检查
-  auto_update: false         # 静默自动更新（不询问）
   timeout_seconds: 30        # fetch 超时
 ```
 
@@ -582,7 +556,10 @@ upgrade:
 # 1. 开发完成 → 测试通过
 # 2. 更新 pyproject.toml 版本号
 # 3. commit + push
-# 4. 完毕
+# 4. 打 tag（如 v1.5.0）并推送 tag
+#    git tag v1.5.0
+#    git push origin v1.5.0
+# 5. 完毕
 
 # 不需要：
 # - manifest.json

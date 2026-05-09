@@ -568,8 +568,8 @@ class UpgradeConstants:
 
 class NotificationConstants:
     """远程通知系统配置"""
-    REMOTE_API_BASE = "https://api.zjt.com/v1"  # 远程通知 API 地址
-    CHECK_INTERVAL = 3600                        # 默认检查间隔（秒）
+    REMOTE_API_BASE = "https://ailive.perseids.cn:11443/api/v1"  # 远程通知 API 地址
+    CHECK_INTERVAL = 3600                            # 默认检查间隔（秒）
 
     # 通知类型
     TYPE_ANNOUNCEMENT = "announcement"

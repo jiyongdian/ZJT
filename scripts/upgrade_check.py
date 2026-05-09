@@ -14,7 +14,6 @@
 """
 
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -33,25 +32,27 @@ def get_project_dir() -> Path:
 def find_git_binary():
     """查找 git 二进制
 
-    Windows: 优先使用项目内置的 MinGit，其次查找系统 PATH。
-    macOS/Linux: 直接使用系统 PATH 中的 git（需用户提前安装）。
+    仅使用项目内置的 bin/git，不回退到系统 PATH。
+    Windows: bin/git/cmd/git.exe 或 bin/git/git.exe
+    macOS/Linux: bin/git/bin/git
     """
     project_dir = get_project_dir()
 
-    # Windows: 优先查找项目自带的 MinGit
+    # 平台相关的候选路径
     if sys.platform == "win32":
-        bundled_paths = [
+        candidates = [
             project_dir / "bin" / "git" / "cmd" / "git.exe",   # MinGit 标准路径
             project_dir / "bin" / "git" / "git.exe",            # 旧路径兼容
         ]
-        for p in bundled_paths:
-            if p.exists():
-                return str(p)
+    else:
+        candidates = [
+            project_dir / "bin" / "git" / "bin" / "git",       # Linux/macOS
+            project_dir / "bin" / "git" / "git",                # 备用路径
+        ]
 
-    # 所有平台: 在系统 PATH 中查找
-    git_cmd = shutil.which("git")
-    if git_cmd:
-        return git_cmd
+    for p in candidates:
+        if p.exists():
+            return str(p)
 
     return None
 
@@ -66,8 +67,6 @@ def get_upgrade_config():
         "enabled": True,
         "repo_urls": [],       # 多源配置，按顺序尝试
         "branch": "main",
-        "check_on_startup": True,
-        "auto_update": True,
         "timeout_seconds": 30,
     }
 
@@ -147,7 +146,7 @@ def check_binaries_for_version(project_dir, binaries_config, target_version):
     Returns:
         缺失的二进制列表
     """
-    if not binaries_config or "binaries" not in binaries_config:
+    if not binaries_config or not binaries_config.get("binaries"):
         return []
 
     # 平台映射
@@ -216,8 +215,36 @@ def compare_version(v1, v2):
     return len(p1) - len(p2)
 
 
-def get_local_version(project_dir):
-    """读取本地 pyproject.toml 版本号"""
+def get_local_version(project_dir, git_cmd=None):
+    """读取本地版本号
+
+    优先使用 git tag --points-at HEAD 检查当前 commit 是否有 tag。
+    其次尝试 git describe --tags --abbrev=0。
+    如果都失败（无 tag 或无 git），回退到读取 pyproject.toml。
+    """
+    if git_cmd:
+        # 优先: git tag --points-at HEAD（精确匹配当前 commit 的 tag）
+        rc, out, _ = run_git(
+            git_cmd,
+            ["tag", "--points-at", "HEAD"],
+            project_dir, timeout=10
+        )
+        if rc == 0 and out.strip():
+            # 可能有多个 tag，取版本号最大的
+            tags = [t.strip() for t in out.strip().split("\n") if t.strip()]
+            tags.sort(key=parse_version, reverse=True)
+            return tags[0]
+
+        # 其次: git describe --tags --abbrev=0
+        rc, out, _ = run_git(
+            git_cmd,
+            ["describe", "--tags", "--abbrev=0"],
+            project_dir, timeout=10
+        )
+        if rc == 0 and out.strip():
+            return out.strip()
+
+    # 回退: 读取 pyproject.toml
     pyproject = project_dir / "pyproject.toml"
     if pyproject.exists():
         try:
@@ -412,24 +439,6 @@ def perform_update(git_cmd, project_dir, branch, timeout):
     return True, ""
 
 
-def ask_user_yes_no(prompt, default=True):
-    """询问用户 yes/no
-
-    在非交互式环境（如 CI）下返回默认值。
-    """
-    if not sys.stdin.isatty():
-        return default
-
-    suffix = "(Y/n): " if default else "(y/N): "
-    try:
-        answer = input(f"{prompt} {suffix}").strip().lower()
-    except (EOFError, KeyboardInterrupt):
-        return False
-
-    if answer == "":
-        return default
-    return answer in ("y", "yes")
-
 
 def check_requirements_changed(git_cmd, project_dir, timeout):
     """检查 requirements.txt 是否有变化"""
@@ -522,13 +531,8 @@ def main():
         print("[upgrade] 已禁用")
         return 0
 
-    if not cfg.get("check_on_startup", True):
-        print("[upgrade] 已关闭启动时检查")
-        return 0
-
     branch = cfg.get("branch", "main")
     timeout = cfg.get("timeout_seconds", 30)
-    auto_update = cfg.get("auto_update", False)
     repo_urls = cfg.get("repo_urls", [])
 
     git_cmd = find_git_binary()
@@ -560,8 +564,8 @@ def main():
         print("[upgrade] 无法设置有效的远程源，跳过更新检查")
         return 0
 
-    # 2. 读取本地版本
-    local_version = get_local_version(project_dir)
+    # 2. 读取本地版本（优先 git tag，回退 pyproject.toml）
+    local_version = get_local_version(project_dir, git_cmd)
     print(f"[upgrade] 当前版本: {local_version}")
 
     # 3. fetch 远程（包含 tag）
@@ -591,15 +595,9 @@ def main():
             print(f"[upgrade] 本地版本 ({local_version}) 高于远程 ({latest_tag})，无需更新")
         return 0
 
-    # 6. 提示更新
+    # 6. 发现新版本，开始更新
     print(f"[upgrade] 发现新版本: {local_version} -> {latest_tag}")
-
-    if auto_update:
-        print("[upgrade] 自动更新模式，开始更新...")
-    else:
-        if not ask_user_yes_no("是否更新并启动？"):
-            print("[upgrade] 跳过更新，使用本地版本")
-            return 0
+    print("[upgrade] 开始更新...")
 
     # 7. 检查二进制依赖（从仓库配置文件读取）
     binaries_config = read_remote_binaries_config(git_cmd, project_dir, branch, timeout)

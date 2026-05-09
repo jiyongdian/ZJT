@@ -8,6 +8,7 @@ import json
 import logging
 import platform
 import socket
+import sys
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
@@ -198,6 +199,90 @@ class NotificationService:
     def get_version_status(cls) -> Dict[str, Any]:
         """返回版本升级状态"""
         return cls._version_status.copy()
+
+    @classmethod
+    def get_missing_binaries(cls) -> List[Dict[str, Any]]:
+        """检查本地缺失的二进制依赖
+
+        从 config/required_binaries.yml 读取配置，检查本地文件是否存在。
+        返回缺失的二进制列表，每项包含: name, description, download_url, check_path
+        """
+        project_dir = Path(__file__).parent.parent
+        config_file = project_dir / "config" / "required_binaries.yml"
+
+        if not config_file.exists():
+            return []
+
+        try:
+            import yaml
+            with open(config_file, "r", encoding="utf-8") as f:
+                config = yaml.safe_load(f) or {}
+        except Exception as e:
+            logger.warning(f"[Notification] Failed to read required_binaries.yml: {e}")
+            return []
+
+        binaries_config = config.get("binaries")
+        if not binaries_config:
+            return []
+
+        # 平台映射
+        platform_map = {
+            "win32": "windows",
+            "linux": "linux",
+            "darwin": "macos",
+        }
+        current_platform = platform_map.get(sys.platform, "linux")
+
+        # 获取当前版本
+        current_version = cls._local_version or "0.0.0"
+
+        missing = []
+        for name, binary_config in binaries_config.items():
+            # 检查版本要求
+            required_since = binary_config.get("required_since", "0.0.0")
+            if cls._compare_version(current_version, required_since) < 0:
+                continue
+
+            # 检查文件是否存在
+            check_paths = binary_config.get("check_paths", {})
+            check_path = check_paths.get(current_platform)
+
+            if not check_path:
+                continue
+
+            full_path = project_dir / check_path
+            if not full_path.exists():
+                missing.append({
+                    "name": name,
+                    "description": binary_config.get("description", ""),
+                    "download_url": binary_config.get("download_url", ""),
+                    "check_path": check_path,
+                })
+
+        return missing
+
+    @staticmethod
+    def _compare_version(v1: str, v2: str) -> int:
+        """比较两个版本号
+
+        返回: 1 if v1 > v2, -1 if v1 < v2, 0 if v1 == v2
+        """
+        def parse(v: str) -> List[int]:
+            v = v.lstrip("vV")
+            num_part = v.split("-")[0]
+            result = []
+            for p in num_part.split("."):
+                try:
+                    result.append(int(p))
+                except ValueError:
+                    result.append(0)
+            return result
+
+        p1, p2 = parse(v1), parse(v2)
+        for a, b in zip(p1, p2):
+            if a != b:
+                return 1 if a > b else -1
+        return len(p1) - len(p2)
 
     @classmethod
     def get_unread_notifications(cls) -> List[Dict[str, Any]]:

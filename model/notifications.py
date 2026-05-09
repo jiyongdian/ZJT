@@ -106,8 +106,8 @@ class NotificationsModel:
             LIMIT %s
         """
         try:
-            results = execute_query(sql, (limit,))
-            return [NotificationEntity(**row) for row in results]
+            results = execute_query(sql, (limit,), fetch_all=True)
+            return [NotificationEntity(**row) for row in (results or [])]
         except Exception as e:
             logger.error(f"Failed to get unread notifications: {e}")
             raise
@@ -175,8 +175,8 @@ class NotificationsModel:
             LIMIT %s OFFSET %s
         """
         try:
-            results = execute_query(sql, (page_size, offset))
-            items = [NotificationEntity(**row) for row in results]
+            results = execute_query(sql, (page_size, offset), fetch_all=True)
+            items = [NotificationEntity(**row) for row in (results or [])]
             return {
                 'items': items,
                 'total': total,
