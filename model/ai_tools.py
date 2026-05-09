@@ -771,7 +771,7 @@ CREATE TABLE IF NOT EXISTS `ai_tools` (
   `video_path` text CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '参考视频路径',
   PRIMARY KEY (`id`),
   KEY `idx_user_id_type_create_time` (`user_id`,`type`,`create_time`),
-  KEY `idx_user_id_create_time` (`user_id`,`create_time`),
+  KEY `idx_status_create_time` (`status`,`create_time`),
   KEY `idx_impl_type_status_create` (`implementation`,`type`,`status`,`create_time`),
   KEY `idx_media_mapping_id` (`media_mapping_id`),
   CONSTRAINT `fk_ai_tools_media_mapping_id` FOREIGN KEY (`media_mapping_id`) REFERENCES `media_file_mapping` (`id`)
