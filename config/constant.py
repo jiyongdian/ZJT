@@ -550,3 +550,35 @@ MODEL_PREFIX_VENDOR_MAP = {
     'qwen3.6': LLMVendor.ZJT_API,  # ZJT API 的 Qwen 3.6 Plus 模型
     'deepseek': LLMVendor.DEEPSEEK,  # DeepSeek 的 DeepSeek-V4 模型
 }
+
+
+# ============ 自动升级相关常量 ============
+
+class UpgradeConstants:
+    """自动升级配置常量"""
+    ENABLED = True                          # 是否启用启动时检查更新
+    CHECK_ON_STARTUP = True                 # 启动时是否检查
+    AUTO_UPDATE = False                     # 是否静默自动更新
+    BRANCH = "main"                         # 跟踪分支
+    TIMEOUT_SECONDS = 30                    # git fetch/pull 超时（秒）
+    DEFAULT_REPO_URL = ""                   # 默认仓库地址（为空时跳过检查）
+
+
+# ============ 通知系统常量 ============
+
+class NotificationConstants:
+    """远程通知系统配置"""
+    REMOTE_API_BASE = "https://ailive.perseids.cn:11443/api/v1"  # 远程通知 API 地址
+    CHECK_INTERVAL = 3600                            # 默认检查间隔（秒）
+
+    # 通知类型
+    TYPE_ANNOUNCEMENT = "announcement"
+    TYPE_MAINTENANCE = "maintenance"
+    TYPE_FEATURE = "feature"
+    TYPE_SECURITY = "security"
+
+    # 通知级别
+    LEVEL_INFO = "info"
+    LEVEL_WARNING = "warning"
+    LEVEL_ERROR = "error"
+    LEVEL_SUCCESS = "success"

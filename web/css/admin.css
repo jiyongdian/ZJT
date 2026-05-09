@@ -1741,3 +1741,332 @@ body {
     border-color: #e2e8f0;
     box-shadow: none;
 }
+
+
+/* ============ 通知系统样式 ============ */
+
+/* 未读角标 */
+.notification-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    margin-left: 6px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 9px;
+    line-height: 1;
+}
+
+/* 版本升级横幅 */
+.upgrade-banner {
+    display: flex;
+    gap: 16px;
+    padding: 20px;
+    margin-bottom: 20px;
+    background: linear-gradient(135deg, #dcfce7 0%, #c6f6d5 100%);
+    border: 1px solid #22c55e;
+    border-left: 4px solid #16a34a;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(34, 197, 94, 0.1);
+}
+
+.upgrade-banner-icon {
+    font-size: 32px;
+    flex-shrink: 0;
+    margin-top: -2px;
+}
+
+.upgrade-banner-content h4 {
+    margin: 0 0 8px;
+    color: #166534;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.release-notes {
+    margin: 12px 0;
+    padding: 12px 16px;
+    background: rgba(255,255,255,0.7);
+    border: 1px solid rgba(22, 163, 74, 0.2);
+    border-radius: 6px;
+    font-size: 13px;
+    color: #166534;
+    white-space: pre-wrap;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    max-height: 140px;
+    overflow-y: auto;
+    line-height: 1.5;
+}
+
+.changelog-link {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 6px 12px;
+    background: #22c55e;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.changelog-link:hover {
+    background: #16a34a;
+    box-shadow: 0 2px 4px rgba(34, 197, 94, 0.3);
+}
+
+/* 二进制依赖警告 */
+.binary-deps-warning {
+    margin-bottom: 20px;
+    padding: 16px 20px;
+    background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+    border: 1px solid #fca5a5;
+    border-left: 4px solid #ef4444;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.1);
+}
+
+.binary-deps-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.binary-deps-header h4 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: #991b1b;
+}
+
+.binary-deps-icon {
+    font-size: 20px;
+}
+
+.binary-deps-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 12px;
+}
+
+.binary-deps-list li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    background: #fff;
+    border: 1px solid #fca5a5;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    gap: 12px;
+}
+
+.binary-dep-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+}
+
+.binary-dep-info strong {
+    color: #991b1b;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.binary-dep-desc {
+    color: #7f1d1d;
+    font-size: 12px;
+}
+
+.binary-dep-download {
+    display: inline-block;
+    padding: 8px 16px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    border-radius: 6px;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.binary-dep-download:hover {
+    background: #dc2626;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+}
+
+.binary-deps-hint {
+    margin: 0;
+    padding: 8px 0;
+    font-size: 12px;
+    color: #991b1b;
+    opacity: 0.9;
+    font-weight: 500;
+}
+
+.binary-dep-path {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #7f1d1d;
+}
+
+.binary-dep-path code {
+    background: rgba(255, 255, 255, 0.5);
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 12px;
+    color: #991b1b;
+    font-weight: 500;
+}
+
+/* 通知条目 */
+.notification-item {
+    padding: 16px 20px;
+    border-bottom: 1px solid #e2e8f0;
+    transition: all 0.15s;
+}
+
+.notification-item:last-child {
+    border-bottom: none;
+}
+
+.notification-item:hover {
+    background: #f8fafc;
+}
+
+.notification-item.unread {
+    background: #eff6ff;
+    border-left: 4px solid #3b82f6;
+    padding-left: 16px;
+}
+
+.notification-item.level-warning.unread {
+    border-left-color: #f59e0b;
+    background: #fffbeb;
+}
+
+.notification-item.level-error.unread {
+    border-left-color: #ef4444;
+    background: #fef2f2;
+}
+
+.notification-item.level-success.unread {
+    border-left-color: #10b981;
+    background: #f0fdf4;
+}
+
+.notification-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.notification-type-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 6px;
+    background: #e2e8f0;
+    color: #475569;
+}
+
+.notification-type-badge.type-announcement {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.notification-type-badge.type-maintenance {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.notification-type-badge.type-feature {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.notification-type-badge.type-security {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.notification-title {
+    font-weight: 600;
+    color: #1e293b;
+    font-size: 14px;
+}
+
+.notification-content {
+    color: #475569;
+    font-size: 13px;
+    line-height: 1.6;
+    margin-bottom: 8px;
+}
+
+.notification-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+    color: #94a3b8;
+    margin-top: 10px;
+}
+
+.notification-meta .action-btn.small {
+    padding: 4px 10px;
+    font-size: 12px;
+    background: #e0e7ff;
+    color: var(--admin-primary);
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.notification-meta .action-btn.small:hover {
+    background: var(--admin-primary);
+    color: #fff;
+}
+
+.notification-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: #3b82f6;
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.notification-link:hover {
+    color: #1d4ed8;
+    text-decoration: underline;
+}
+
+/* 通知中心整体容器 */
+.admin-main section:has(.table-container) {
+    margin-bottom: 20px;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #94a3b8;
+}
+
+.empty-state p {
+    font-size: 14px;
+}

@@ -46,7 +46,20 @@ if not exist "!UV_CMD!" (
 ) else (
     echo [OK] uv found
 )
+
+REM === 启动前检查更新 ===
+echo [1.5/4] Checking for updates...
+"!UV_CMD!" run --python cpython-3.10-windows-x86_64-none --with-requirements requirements.txt scripts\upgrade_check.py
+if errorlevel 2 (
+    echo [ERROR] 更新检查遇到严重错误
+    pause
+    exit /b 1
+)
+if errorlevel 1 (
+    echo [WARN] 更新检查失败，继续使用本地版本
+)
 echo.
+REM =====================
 
 echo [2/4] Checking config file...
 if not exist "config_%comfyui_env%.yml" (

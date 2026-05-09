@@ -19,6 +19,7 @@ from .grid_image_tasks import GridImageTasksModel, GridImageTask, GridImageTaskS
 from .location_multi_angle_tasks import LocationMultiAngleTasksModel, LocationMultiAngleTask, LocationMultiAngleTaskStatus
 from .media_file_mapping import MediaFileMappingModel, MediaFileMapping
 from .skill_definitions import SkillDefinitionsModel, SkillDefinition
+from .notifications import NotificationsModel, NotificationEntity
 
 __all__ = [
     'AIToolsModel',
@@ -61,4 +62,6 @@ __all__ = [
     'MediaFileMapping',
     'SkillDefinitionsModel',
     'SkillDefinition',
+    'NotificationsModel',
+    'NotificationEntity',
 ]

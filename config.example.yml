@@ -269,4 +269,13 @@ zjt:
   token: ""
 
 
+# 自动升级配置
+# 支持通过 git 在启动时检查并更新代码
+upgrade:
+  enabled: true              # 是否启用启动时检查更新
+  repo_urls:                 # Git 仓库地址（多源，按顺序尝试）
+    - "https://gitee.com/jeffstric/ZJT.git"       # 优先 Gitee（国内快）
+    - "https://github.com/jeffstric/ZJT.git"      # 备用 GitHub
+  branch: "main"             # 跟踪分支
+  timeout_seconds: 30        # git fetch/pull 超时（秒）
 

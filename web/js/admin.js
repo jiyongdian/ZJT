@@ -638,7 +638,20 @@ const AdminApp = {
                 loading: false
             },
 
-            isCommunityEdition: false
+            isCommunityEdition: false,
+
+            // 通知中心
+            notifications: [],
+            versionUpdate: null,
+            missingBinaries: [],
+            unreadCount: 0,
+            typeLabels: {
+                announcement: '公告',
+                maintenance: '维护',
+                feature: '新功能',
+                security: '安全'
+            },
+            notificationsPollTimer: null
         };
     },
     
@@ -781,6 +794,8 @@ const AdminApp = {
     mounted() {
         this.initAuth();
         this.fetchServerConfig();
+        this.pollNotifications();
+        this.notificationsPollTimer = setInterval(() => this.pollNotifications(), 30000);
     },
     
     methods: {
@@ -2486,6 +2501,49 @@ const AdminApp = {
                 return values.join(' / ');
             }
             return power;
+        },
+
+        // ============ 通知中心 ============
+
+        async pollNotifications() {
+            try {
+                const response = await axios.get('/api/notifications/poll');
+                if (response.data.code === 0) {
+                    const data = response.data.data;
+                    this.versionUpdate = data.version_update || null;
+                    this.notifications = data.notifications || [];
+                    this.missingBinaries = data.missing_binaries || [];
+                    this.unreadCount = data.unread_count || 0;
+                }
+            } catch (error) {
+                console.error('Poll notifications failed:', error);
+            }
+        },
+
+        async markNotificationRead(id) {
+            try {
+                const n = this.notifications.find(n => n.id === id);
+                if (!n || n.is_read) return;
+                const response = await axios.post(`/api/notifications/${id}/read`);
+                if (response.data.code === 0) {
+                    n.is_read = true;
+                    this.unreadCount = Math.max(0, this.unreadCount - 1);
+                }
+            } catch (error) {
+                console.error('Mark read failed:', error);
+            }
+        },
+
+        async markAllNotificationsRead() {
+            try {
+                const response = await axios.post('/api/notifications/read-all');
+                if (response.data.code === 0) {
+                    this.notifications.forEach(n => n.is_read = true);
+                    this.unreadCount = 0;
+                }
+            } catch (error) {
+                console.error('Mark all read failed:', error);
+            }
         }
     }
 };
