@@ -1,0 +1,205 @@
+name: Sync to Gitee
+
+on:
+  push:
+    branches:
+      - main
+  release:
+    types:
+      - published
+
+env:
+  GITEE_OWNER: jeffstric
+  GITEE_REPO: ZJT
+  GITEE_REPO_URL: https://gitee.com/jeffstric/ZJT.git
+
+jobs:
+  sync-main:
+    name: Sync main branch to Gitee
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Push main branch to Gitee
+        run: |
+          git remote add gitee https://oauth2:${{ secrets.GITEE_TOKEN }}@gitee.com/${{ env.GITEE_OWNER }}/${{ env.GITEE_REPO }}.git
+          git push gitee main:main --force
+
+  sync-release:
+    name: Sync Release to Gitee
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push tag to Gitee
+        env:
+          TAG_NAME: ${{ github.event.release.tag_name }}
+        run: |
+          git remote add gitee https://oauth2:${{ secrets.GITEE_TOKEN }}@gitee.com/${{ env.GITEE_OWNER }}/${{ env.GITEE_REPO }}.git
+          # Check if tag already exists on Gitee
+          EXISTING=$(git ls-remote --tags gitee "refs/tags/$TAG_NAME" 2>/dev/null || true)
+          if [ -z "$EXISTING" ]; then
+            echo "Pushing tag $TAG_NAME to Gitee"
+            git push gitee "$TAG_NAME"
+          else
+            echo "Tag $TAG_NAME already exists on Gitee, skipping push"
+          fi
+
+      - name: Get GitHub Release info
+        id: gh_release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const release = await github.rest.repos.getRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: context.payload.release.id
+            });
+            core.setOutput('tag_name', release.data.tag_name);
+            core.setOutput('name', release.data.name || release.data.tag_name);
+            core.setOutput('body', release.data.body || '');
+            core.setOutput('prerelease', release.data.prerelease);
+            core.setOutput('assets', JSON.stringify(
+              release.data.assets.map(a => ({
+                name: a.name,
+                url: a.browser_download_url,
+                size: a.size
+              }))
+            ));
+
+      - name: Check if Gitee release exists
+        id: check_release
+        continue-on-error: true
+        run: |
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://gitee.com/api/v5/repos/${{ env.GITEE_OWNER }}/${{ env.GITEE_REPO }}/releases/tags/${{ steps.gh_release.outputs.tag_name }}?access_token=${{ secrets.GITEE_TOKEN }}")
+          echo "http_code=$HTTP_CODE"
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Gitee Release
+        if: steps.check_release.outputs.exists == 'false'
+        id: create_release
+        run: |
+          # Write release body to file to handle special characters safely
+          cat > /tmp/release_body.txt << 'BODY_EOF'
+          ${{ steps.gh_release.outputs.body }}
+          BODY_EOF
+          BODY_JSON=$(jq -Rs . /tmp/release_body.txt)
+
+          RESPONSE=$(curl -s -X POST \
+            "https://gitee.com/api/v5/repos/${{ env.GITEE_OWNER }}/${{ env.GITEE_REPO }}/releases" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"access_token\": \"${{ secrets.GITEE_TOKEN }}\",
+              \"tag_name\": \"${{ steps.gh_release.outputs.tag_name }}\",
+              \"name\": \"${{ steps.gh_release.outputs.name }}\",
+              \"body\": ${BODY_JSON},
+              \"target_commitish\": \"main\",
+              \"prerelease\": ${{ steps.gh_release.outputs.prerelease }}
+            }")
+
+          RELEASE_ID=$(echo "$RESPONSE" | jq -r '.id')
+          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
+            echo "::error::Failed to create Gitee release"
+            echo "$RESPONSE" | jq . 2>/dev/null || echo "$RESPONSE"
+            exit 1
+          fi
+          echo "release_id=$RELEASE_ID" >> $GITHUB_OUTPUT
+          echo "Created Gitee release: $RELEASE_ID"
+
+      - name: Get existing Gitee release ID
+        if: steps.check_release.outputs.exists == 'true'
+        id: get_release
+        run: |
+          RESPONSE=$(curl -s \
+            "https://gitee.com/api/v5/repos/${{ env.GITEE_OWNER }}/${{ env.GITEE_REPO }}/releases/tags/${{ steps.gh_release.outputs.tag_name }}?access_token=${{ secrets.GITEE_TOKEN }}")
+          RELEASE_ID=$(echo "$RESPONSE" | jq -r '.id')
+          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
+            echo "::error::Failed to get existing Gitee release"
+            echo "$RESPONSE" | jq . 2>/dev/null || echo "$RESPONSE"
+            exit 1
+          fi
+          echo "release_id=$RELEASE_ID" >> $GITHUB_OUTPUT
+          echo "Found existing Gitee release: $RELEASE_ID"
+
+      - name: Resolve release ID
+        id: resolve_id
+        run: |
+          if [ -n "${{ steps.create_release.outputs.release_id }}" ]; then
+            echo "id=${{ steps.create_release.outputs.release_id }}" >> $GITHUB_OUTPUT
+          else
+            echo "id=${{ steps.get_release.outputs.release_id }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download GitHub Release assets
+        run: |
+          mkdir -p release_assets
+          ASSETS='${{ steps.gh_release.outputs.assets }}'
+          if [ "$ASSETS" = "[]" ] || [ -z "$ASSETS" ]; then
+            echo "No assets to download"
+            exit 0
+          fi
+          echo "$ASSETS" | jq -c '.[]' | while read -r asset; do
+            NAME=$(echo "$asset" | jq -r '.name')
+            URL=$(echo "$asset" | jq -r '.url')
+            echo "Downloading: $NAME"
+            curl -L -o "release_assets/$NAME" \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              "$URL"
+          done
+          echo "--- Downloaded files ---"
+          ls -lh release_assets/ 2>/dev/null || echo "(empty)"
+
+      - name: Upload assets to Gitee Release
+        run: |
+          RELEASE_ID="${{ steps.resolve_id.outputs.id }}"
+          if [ -z "$RELEASE_ID" ]; then
+            echo "::error::No valid Gitee release ID"
+            exit 1
+          fi
+
+          FAILED=0
+          TOTAL=0
+          for FILE in release_assets/*; do
+            [ -f "$FILE" ] || continue
+            TOTAL=$((TOTAL + 1))
+            FILENAME=$(basename "$FILE")
+            FILESIZE=$(stat -c%s "$FILE" 2>/dev/null || stat -f%z "$FILE" 2>/dev/null || echo "unknown")
+            echo "Uploading: $FILENAME ($FILESIZE bytes)"
+
+            HTTP_CODE=$(curl -s -o /tmp/upload_response.json -w "%{http_code}" \
+              -X POST \
+              "https://gitee.com/api/v5/repos/${{ env.GITEE_OWNER }}/${{ env.GITEE_REPO }}/releases/$RELEASE_ID/attach_files" \
+              -F "access_token=${{ secrets.GITEE_TOKEN }}" \
+              -F "file=@$FILE" \
+              -F "name=$FILENAME")
+
+            if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+              echo "  [OK] $FILENAME uploaded"
+            else
+              echo "::warning::Failed to upload $FILENAME (HTTP $HTTP_CODE)"
+              cat /tmp/upload_response.json 2>/dev/null || true
+              FAILED=$((FAILED + 1))
+            fi
+          done
+
+          if [ "$TOTAL" -eq 0 ]; then
+            echo "No assets to upload"
+          elif [ "$FAILED" -gt 0 ]; then
+            echo "::warning::$FAILED of $TOTAL asset(s) failed to upload"
+          else
+            echo "All $TOTAL asset(s) uploaded successfully"
+          fi
