@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - '*'
   release:
     types:
       - published
@@ -16,7 +18,7 @@ env:
 jobs:
   sync-main:
     name: Sync main branch to Gitee
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -30,6 +32,28 @@ jobs:
           git remote add gitee https://oauth2:${{ secrets.GITEE_TOKEN }}@gitee.com/${{ env.GITEE_OWNER }}/${{ env.GITEE_REPO }}.git
           git push gitee main:main --force
 
+  sync-tag:
+    name: Sync tag to Gitee
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push tag to Gitee
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          git remote add gitee https://oauth2:${{ secrets.GITEE_TOKEN }}@gitee.com/${{ env.GITEE_OWNER }}/${{ env.GITEE_REPO }}.git
+          EXISTING=$(git ls-remote --tags gitee "refs/tags/$TAG_NAME" 2>/dev/null || true)
+          if [ -z "$EXISTING" ]; then
+            echo "Pushing tag $TAG_NAME to Gitee"
+            git push gitee "$TAG_NAME"
+          else
+            echo "Tag $TAG_NAME already exists on Gitee, skipping"
+          fi
+
   sync-release:
     name: Sync Release to Gitee
     if: github.event_name == 'release'
@@ -41,17 +65,15 @@ jobs:
           fetch-depth: 0
 
       - name: Push tag to Gitee
-        env:
-          TAG_NAME: ${{ github.event.release.tag_name }}
         run: |
+          TAG_NAME="${{ github.event.release.tag_name }}"
           git remote add gitee https://oauth2:${{ secrets.GITEE_TOKEN }}@gitee.com/${{ env.GITEE_OWNER }}/${{ env.GITEE_REPO }}.git
-          # Check if tag already exists on Gitee
           EXISTING=$(git ls-remote --tags gitee "refs/tags/$TAG_NAME" 2>/dev/null || true)
           if [ -z "$EXISTING" ]; then
             echo "Pushing tag $TAG_NAME to Gitee"
             git push gitee "$TAG_NAME"
           else
-            echo "Tag $TAG_NAME already exists on Gitee, skipping push"
+            echo "Tag $TAG_NAME already exists on Gitee, skipping"
           fi
 
       - name: Get GitHub Release info
@@ -76,73 +98,51 @@ jobs:
               }))
             ));
 
-      - name: Check if Gitee release exists
-        id: check_release
-        continue-on-error: true
+      - name: Get or create Gitee Release
+        id: gitee_release
         run: |
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://gitee.com/api/v5/repos/${{ env.GITEE_OWNER }}/${{ env.GITEE_REPO }}/releases/tags/${{ steps.gh_release.outputs.tag_name }}?access_token=${{ secrets.GITEE_TOKEN }}")
-          echo "http_code=$HTTP_CODE"
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
+          TAG="${{ steps.gh_release.outputs.tag_name }}"
+          API_BASE="https://gitee.com/api/v5/repos/${{ env.GITEE_OWNER }}/${{ env.GITEE_REPO }}"
+
+          # Try to get existing release by tag
+          echo "Checking if release exists for tag $TAG..."
+          GET_RESP=$(curl -s "$API_BASE/releases/tags/$TAG?access_token=${{ secrets.GITEE_TOKEN }}")
+          RELEASE_ID=$(echo "$GET_RESP" | jq -r '.id // empty')
+
+          if [ -n "$RELEASE_ID" ] && [ "$RELEASE_ID" != "null" ]; then
+            echo "Found existing Gitee release: $RELEASE_ID"
+            echo "release_id=$RELEASE_ID" >> $GITHUB_OUTPUT
+            exit 0
           fi
 
-      - name: Create Gitee Release
-        if: steps.check_release.outputs.exists == 'false'
-        id: create_release
-        run: |
-          # Write release body to file to handle special characters safely
+          # Create new release
+          echo "Release not found, creating..."
           cat > /tmp/release_body.txt << 'BODY_EOF'
           ${{ steps.gh_release.outputs.body }}
           BODY_EOF
           BODY_JSON=$(jq -Rs . /tmp/release_body.txt)
 
-          RESPONSE=$(curl -s -X POST \
-            "https://gitee.com/api/v5/repos/${{ env.GITEE_OWNER }}/${{ env.GITEE_REPO }}/releases" \
+          CREATE_RESP=$(curl -s -X POST \
+            "$API_BASE/releases" \
             -H "Content-Type: application/json" \
             -d "{
               \"access_token\": \"${{ secrets.GITEE_TOKEN }}\",
-              \"tag_name\": \"${{ steps.gh_release.outputs.tag_name }}\",
+              \"tag_name\": \"$TAG\",
               \"name\": \"${{ steps.gh_release.outputs.name }}\",
-              \"body\": ${BODY_JSON},
+              \"body\": $BODY_JSON,
               \"target_commitish\": \"main\",
               \"prerelease\": ${{ steps.gh_release.outputs.prerelease }}
             }")
 
-          RELEASE_ID=$(echo "$RESPONSE" | jq -r '.id')
+          RELEASE_ID=$(echo "$CREATE_RESP" | jq -r '.id // empty')
           if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
             echo "::error::Failed to create Gitee release"
-            echo "$RESPONSE" | jq . 2>/dev/null || echo "$RESPONSE"
+            echo "$CREATE_RESP"
             exit 1
           fi
-          echo "release_id=$RELEASE_ID" >> $GITHUB_OUTPUT
+
           echo "Created Gitee release: $RELEASE_ID"
-
-      - name: Get existing Gitee release ID
-        if: steps.check_release.outputs.exists == 'true'
-        id: get_release
-        run: |
-          RESPONSE=$(curl -s \
-            "https://gitee.com/api/v5/repos/${{ env.GITEE_OWNER }}/${{ env.GITEE_REPO }}/releases/tags/${{ steps.gh_release.outputs.tag_name }}?access_token=${{ secrets.GITEE_TOKEN }}")
-          RELEASE_ID=$(echo "$RESPONSE" | jq -r '.id')
-          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
-            echo "::error::Failed to get existing Gitee release"
-            echo "$RESPONSE" | jq . 2>/dev/null || echo "$RESPONSE"
-            exit 1
-          fi
           echo "release_id=$RELEASE_ID" >> $GITHUB_OUTPUT
-          echo "Found existing Gitee release: $RELEASE_ID"
-
-      - name: Resolve release ID
-        id: resolve_id
-        run: |
-          if [ -n "${{ steps.create_release.outputs.release_id }}" ]; then
-            echo "id=${{ steps.create_release.outputs.release_id }}" >> $GITHUB_OUTPUT
-          else
-            echo "id=${{ steps.get_release.outputs.release_id }}" >> $GITHUB_OUTPUT
-          fi
 
       - name: Download GitHub Release assets
         run: |
@@ -165,7 +165,7 @@ jobs:
 
       - name: Upload assets to Gitee Release
         run: |
-          RELEASE_ID="${{ steps.resolve_id.outputs.id }}"
+          RELEASE_ID="${{ steps.gitee_release.outputs.release_id }}"
           if [ -z "$RELEASE_ID" ]; then
             echo "::error::No valid Gitee release ID"
             exit 1
