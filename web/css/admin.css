@@ -182,6 +182,123 @@ body {
     margin-top: 8px;
 }
 
+/* 模型分析区域 */
+.model-analysis-section {
+    margin-top: 30px;
+}
+
+.model-analysis-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.model-analysis-header h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--admin-text-primary);
+}
+
+.time-range-tabs {
+    display: flex;
+    gap: 4px;
+}
+
+.time-range-tabs button {
+    padding: 6px 16px;
+    border: 1px solid var(--admin-border);
+    border-radius: 6px;
+    background: var(--admin-card-bg);
+    color: var(--admin-text-muted);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.time-range-tabs button:hover {
+    border-color: var(--admin-primary);
+    color: var(--admin-primary);
+}
+
+.time-range-tabs button.active {
+    background: var(--admin-primary);
+    color: #fff;
+    border-color: var(--admin-primary);
+}
+
+.model-analysis-table .model-row {
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.model-analysis-table .model-row:hover {
+    background: #f1f5f9;
+}
+
+.model-analysis-table .provider-row {
+    background: #f8fafc;
+    font-weight: 400;
+}
+
+.expand-icon {
+    margin-right: 8px;
+    font-size: 10px;
+    color: var(--admin-text-muted);
+}
+
+.provider-count {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--admin-text-muted);
+    margin-left: 4px;
+}
+
+.provider-name {
+    padding-left: 36px !important;
+    font-weight: 400;
+    color: var(--admin-text-muted);
+}
+
+.provider-impl-id {
+    font-size: 11px;
+    color: #94a3b8;
+    margin-left: 4px;
+}
+
+.rate-bar-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.rate-bar {
+    height: 8px;
+    border-radius: 4px;
+    min-width: 4px;
+    max-width: 120px;
+    transition: width 0.3s ease;
+}
+
+.rate-bar.rate-high { background: var(--admin-success); }
+.rate-bar.rate-medium { background: #f59e0b; }
+.rate-bar.rate-low { background: #ef4444; }
+
+.rate-text {
+    font-size: 13px;
+    font-weight: 500;
+    min-width: 48px;
+}
+
+.avg-duration {
+    font-size: 11px;
+    color: #94a3b8;
+    margin-left: 4px;
+}
+
+.text-success { color: var(--admin-success); }
+.text-danger { color: #ef4444; }
+
 /* 表格容器 */
 .table-container {
     background: var(--admin-card-bg);

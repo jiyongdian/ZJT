@@ -487,6 +487,12 @@ const AdminApp = {
                     year: null,
                     month: null,
                     loading: false
+                },
+                modelAnalysis: {
+                    days: 1,
+                    loading: false,
+                    models: [],
+                    expandedTypes: {}
                 }
             },
             
@@ -969,6 +975,55 @@ const AdminApp = {
             } finally {
                 this.dashboard.monthlyActiveUsers.loading = false;
             }
+        },
+
+        // 加载模型分析数据
+        async loadModelAnalysis() {
+            this.dashboard.modelAnalysis.loading = true;
+            try {
+                const response = await axios.get('/api/admin/dashboard/model-analysis', {
+                    params: { days: this.dashboard.modelAnalysis.days },
+                    headers: { 'Authorization': `Bearer ${this.authToken}` }
+                });
+
+                if (response.data.code === 0) {
+                    this.dashboard.modelAnalysis.models = response.data.data.models;
+                }
+            } catch (error) {
+                console.error('Load model analysis failed:', error);
+                this.showToast('加载模型分析失败', 'error');
+            } finally {
+                this.dashboard.modelAnalysis.loading = false;
+            }
+        },
+
+        // 切换模型分析时间范围
+        setModelAnalysisDays(days) {
+            this.dashboard.modelAnalysis.days = days;
+            this.dashboard.modelAnalysis.expandedTypes = {};
+            this.loadModelAnalysis();
+        },
+
+        // 展开/折叠模型供应商详情
+        toggleModelExpand(type) {
+            this.dashboard.modelAnalysis.expandedTypes[type] = !this.dashboard.modelAnalysis.expandedTypes[type];
+        },
+
+        // 成功率颜色类
+        getRateClass(rate) {
+            if (rate >= 90) return 'rate-high';
+            if (rate >= 70) return 'rate-medium';
+            return 'rate-low';
+        },
+
+        // 格式化耗时（毫秒 → 可读字符串）
+        formatDuration(ms) {
+            if (ms < 1000) return ms + 'ms';
+            const seconds = Math.round(ms / 1000);
+            if (seconds < 60) return seconds + 's';
+            const minutes = Math.floor(seconds / 60);
+            const remainSeconds = seconds % 60;
+            return minutes + 'm' + (remainSeconds > 0 ? remainSeconds + 's' : '');
         },
 
         // 加载用户列表

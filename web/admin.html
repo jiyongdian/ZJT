@@ -133,9 +133,85 @@
                         </div>
                     </div>
                 </div>
-            </section>
 
-            <!-- 用户管理页面 -->
+                <!-- 模型分析 -->
+                <div class="model-analysis-section">
+                    <div class="model-analysis-header">
+                        <h3>模型成功率分析</h3>
+                        <div class="time-range-tabs">
+                            <button :class="{ active: dashboard.modelAnalysis.days === 1 }"
+                                    @click="setModelAnalysisDays(1)">今天</button>
+                            <button :class="{ active: dashboard.modelAnalysis.days === 3 }"
+                                    @click="setModelAnalysisDays(3)">3天</button>
+                            <button :class="{ active: dashboard.modelAnalysis.days === 7 }"
+                                    @click="setModelAnalysisDays(7)">7天</button>
+                        </div>
+                    </div>
+
+                    <div v-if="dashboard.modelAnalysis.loading" class="loading">
+                        <div class="loading-spinner"></div>
+                        <p>加载中...</p>
+                    </div>
+
+                    <div v-else-if="dashboard.modelAnalysis.models.length" class="table-container" style="padding: 0;">
+                        <table class="admin-table model-analysis-table">
+                            <thead>
+                                <tr>
+                                    <th>模型</th>
+                                    <th>总数</th>
+                                    <th>成功</th>
+                                    <th>失败</th>
+                                    <th>成功率</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template v-for="model in dashboard.modelAnalysis.models" :key="'m-' + model.type">
+                                    <tr class="model-row" @click="toggleModelExpand(model.type)">
+                                        <td>
+                                            <span class="expand-icon">{{ dashboard.modelAnalysis.expandedTypes[model.type] ? '&#9660;' : '&#9654;' }}</span>
+                                            {{ model.name }}
+                                            <span v-if="model.providers.length > 1" class="provider-count">({{ model.providers.length }}个供应商)</span>
+                                        </td>
+                                        <td>{{ model.total }}</td>
+                                        <td class="text-success">{{ model.success }}</td>
+                                        <td class="text-danger">{{ model.fail }}</td>
+                                        <td>
+                                            <div class="rate-bar-container">
+                                                <div class="rate-bar" :style="{ width: model.success_rate + '%' }"
+                                                     :class="getRateClass(model.success_rate)"></div>
+                                                <span class="rate-text">{{ model.success_rate.toFixed(1) }}%</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <template v-if="dashboard.modelAnalysis.expandedTypes[model.type]">
+                                        <tr v-for="provider in model.providers" :key="'p-' + provider.implementation" class="provider-row">
+                                            <td class="provider-name">
+                                                {{ provider.display_name }}
+                                                <span class="provider-impl-id">(ID:{{ provider.implementation }})</span>
+                                            </td>
+                                            <td>{{ provider.total }}</td>
+                                            <td class="text-success">{{ provider.success }}</td>
+                                            <td class="text-danger">{{ provider.fail }}</td>
+                                            <td>
+                                                <div class="rate-bar-container">
+                                                    <div class="rate-bar" :style="{ width: provider.success_rate + '%' }"
+                                                         :class="getRateClass(provider.success_rate)"></div>
+                                                    <span class="rate-text">{{ provider.success_rate.toFixed(1) }}%</span>
+                                                    <span v-if="provider.avg_duration_ms" class="avg-duration">均耗{{ formatDuration(provider.avg_duration_ms) }}</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div v-else class="empty-state" style="padding: 30px; text-align: center; color: #94a3b8;">
+                        请选择时间范围查询模型分析数据
+                    </div>
+                </div>
+            </section>
             <section v-if="currentPage === 'users'">
                 <div class="table-container">
                     <div class="table-header">
