@@ -71,6 +71,8 @@ PLATFORMS = {
         "mysql_dst": "mysql",
         "ffmpeg_src": "ffmpeg",
         "ffmpeg_dst": "ffmpeg",
+        "git_src": "git",
+        "git_dst": "git",
         "uv_src": "uv.exe",
         "uv_dst": "uv.exe",
         "extra_files": ["start.bat"],
@@ -224,6 +226,13 @@ def copy_binaries(dst_dir: Path, platform_config: dict):
     print(f"    - FFmpeg: {platform_config['ffmpeg_src']} -> {platform_config['ffmpeg_dst']}")
     shutil.copytree(ffmpeg_src, ffmpeg_dst)
 
+    # 复制 Git（仅 Windows 需要，macOS/Linux 自带）
+    if "git_src" in platform_config:
+        git_src = NAS_PATH / "bin" / platform_config["git_src"]
+        git_dst = bin_dir / platform_config["git_dst"]
+        print(f"    - Git: {platform_config['git_src']} -> {platform_config['git_dst']}")
+        shutil.copytree(git_src, git_dst)
+
     # 复制 UV
     uv_src = NAS_PATH / "bin" / "uv" / platform_config["uv_src"]
     uv_dst_dir = bin_dir / "uv"
@@ -242,6 +251,9 @@ def is_executable_file(file_path: Path, rel_path: Path) -> bool:
 
     # FFmpeg 可执行文件
     ffmpeg_executables = {"ffmpeg", "ffprobe", "ffplay"}
+
+    # Git 可执行文件
+    git_executables = {"git", "git-upload-pack", "git-upload-archive", "git-receive-pack", "git-shell"}
 
     # UV 可执行文件
     uv_executables = {"uv"}
@@ -263,6 +275,8 @@ def is_executable_file(file_path: Path, rel_path: Path) -> bool:
         if subdir == "mysql" and filename in mysql_executables:
             return True
         if subdir == "ffmpeg" and filename in ffmpeg_executables:
+            return True
+        if subdir == "git" and filename in git_executables:
             return True
         if subdir == "uv" and filename in uv_executables:
             return True

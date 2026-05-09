@@ -1,0 +1,632 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+启动前检查更新脚本
+由 start.bat / start.command / linux_start_prod.sh 在主程序启动前调用
+
+通过监控远程 git tag 变化判断是否需要升级。
+升级时执行 git stash -> git pull --ff-only -> git stash pop。
+
+返回值：
+  0 - 正常（已更新 / 无需更新 / 跳过），继续启动
+  1 - 更新失败但可继续，使用本地版本
+  2 - 严重错误，应暂停并提示用户
+"""
+
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+
+# 确保项目根目录在 sys.path 中，以便 import config.config_util
+_project_dir = Path(__file__).parent.parent.resolve()
+if str(_project_dir) not in sys.path:
+    sys.path.insert(0, str(_project_dir))
+
+def get_project_dir() -> Path:
+    """获取项目根目录"""
+    return Path(__file__).parent.parent.resolve()
+
+
+def find_git_binary():
+    """查找 git 二进制
+
+    仅使用项目内置的 bin/git，不回退到系统 PATH。
+    Windows: bin/git/cmd/git.exe 或 bin/git/git.exe
+    macOS/Linux: bin/git/bin/git
+    """
+    project_dir = get_project_dir()
+
+    # 平台相关的候选路径
+    if sys.platform == "win32":
+        candidates = [
+            project_dir / "bin" / "git" / "cmd" / "git.exe",   # MinGit 标准路径
+            project_dir / "bin" / "git" / "git.exe",            # 旧路径兼容
+        ]
+    else:
+        candidates = [
+            project_dir / "bin" / "git" / "bin" / "git",       # Linux/macOS
+            project_dir / "bin" / "git" / "git",                # 备用路径
+        ]
+
+    for p in candidates:
+        if p.exists():
+            return str(p)
+
+    return None
+
+
+def get_upgrade_config():
+    """读取升级相关配置
+
+    优先使用 config_util 读取配置（如果可用）。
+    如果 import 失败（如 Python 环境未就绪），回退到直接解析 YAML。
+    """
+    defaults = {
+        "enabled": True,
+        "repo_urls": [],       # 多源配置，按顺序尝试
+        "branch": "main",
+        "timeout_seconds": 30,
+    }
+
+    try:
+        from config.config_util import get_config_value
+        result = {}
+        for key in defaults:
+            result[key] = get_config_value("upgrade", key, default=defaults[key])
+        return result
+    except Exception:
+        return _read_config_from_yaml(defaults)
+
+
+def _read_config_from_yaml(defaults):
+    """直接解析配置文件读取 upgrade 配置（回退方案）"""
+    project_dir = get_project_dir()
+    env = os.environ.get("comfyui_env", "dev")
+    config_file = project_dir / f"config_{env}.yml"
+
+    if not config_file.exists():
+        base_file = project_dir / f"config_{env}.base.yaml"
+        if base_file.exists():
+            config_file = base_file
+        else:
+            return defaults
+
+    try:
+        import yaml
+        with open(config_file, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f) or {}
+        upgrade = config.get("upgrade", {})
+        result = {}
+        for key in defaults:
+            result[key] = upgrade.get(key, defaults[key])
+        return result
+    except Exception:
+        return defaults
+
+
+def read_remote_binaries_config(git_cmd, project_dir, branch, timeout):
+    """从远程仓库读取二进制依赖配置
+
+    使用 git show 读取远程分支中的 config/required_binaries.yml 文件。
+    返回: 配置字典，读取失败时返回空字典
+    """
+    rc, out, err = run_git(
+        git_cmd,
+        ["show", f"origin/{branch}:config/required_binaries.yml"],
+        project_dir,
+        timeout=timeout
+    )
+
+    if rc != 0:
+        # 文件不存在或读取失败，返回空配置
+        return {}
+
+    try:
+        import yaml
+        return yaml.safe_load(out) or {}
+    except ImportError:
+        # PyYAML 不可用，跳过检查
+        print("[upgrade] PyYAML 未安装，跳过二进制依赖检查")
+        return {}
+    except Exception as e:
+        print(f"[upgrade] 解析二进制配置失败（忽略）: {e}")
+        return {}
+
+
+def check_binaries_for_version(project_dir, binaries_config, target_version):
+    """检查目标版本需要的二进制依赖是否存在
+
+    Args:
+        project_dir: 项目目录
+        binaries_config: 二进制配置（从 YAML 读取）
+        target_version: 目标版本号
+
+    Returns:
+        缺失的二进制列表
+    """
+    if not binaries_config or not binaries_config.get("binaries"):
+        return []
+
+    # 平台映射
+    platform_map = {
+        "win32": "windows",
+        "linux": "linux",
+        "darwin": "macos",
+    }
+    current_platform = platform_map.get(sys.platform, "linux")
+
+    missing = []
+    for name, config in binaries_config["binaries"].items():
+        # 检查版本要求
+        required_since = config.get("required_since", "0.0.0")
+        if compare_version(target_version, required_since) < 0:
+            # 目标版本早于此依赖的最低要求版本，跳过
+            continue
+
+        # 检查文件是否存在
+        check_paths = config.get("check_paths", {})
+        check_path = check_paths.get(current_platform)
+
+        if not check_path:
+            continue
+
+        full_path = project_dir / check_path
+        if not full_path.exists():
+            missing.append({
+                "name": name,
+                "description": config.get("description", ""),
+                "download_url": config.get("download_url", ""),
+            })
+
+    return missing
+
+
+def parse_version(v):
+    """解析版本号为可比较的数字列表
+
+    支持格式: "1.5.1", "v1.5.1", "1.5.1-beta"
+    返回: [1, 5, 1]
+    """
+    v = v.lstrip("vV")
+    num_part = v.split("-")[0]
+    result = []
+    for p in num_part.split("."):
+        try:
+            result.append(int(p))
+        except ValueError:
+            result.append(0)
+    return result
+
+
+def compare_version(v1, v2):
+    """比较两个版本号
+
+    返回:
+        1  if v1 > v2
+        -1 if v1 < v2
+        0  if v1 == v2
+    """
+    p1, p2 = parse_version(v1), parse_version(v2)
+    for a, b in zip(p1, p2):
+        if a != b:
+            return 1 if a > b else -1
+    return len(p1) - len(p2)
+
+
+def get_local_version(project_dir, git_cmd=None):
+    """读取本地版本号
+
+    优先使用 git tag --points-at HEAD 检查当前 commit 是否有 tag。
+    其次尝试 git describe --tags --abbrev=0。
+    如果都失败（无 tag 或无 git），回退到读取 pyproject.toml。
+    """
+    if git_cmd:
+        # 优先: git tag --points-at HEAD（精确匹配当前 commit 的 tag）
+        rc, out, _ = run_git(
+            git_cmd,
+            ["tag", "--points-at", "HEAD"],
+            project_dir, timeout=10
+        )
+        if rc == 0 and out.strip():
+            # 可能有多个 tag，取版本号最大的
+            tags = [t.strip() for t in out.strip().split("\n") if t.strip()]
+            tags.sort(key=parse_version, reverse=True)
+            return tags[0]
+
+        # 其次: git describe --tags --abbrev=0
+        rc, out, _ = run_git(
+            git_cmd,
+            ["describe", "--tags", "--abbrev=0"],
+            project_dir, timeout=10
+        )
+        if rc == 0 and out.strip():
+            return out.strip()
+
+    # 回退: 读取 pyproject.toml
+    pyproject = project_dir / "pyproject.toml"
+    if pyproject.exists():
+        try:
+            content = pyproject.read_text(encoding="utf-8")
+            for line in content.split("\n"):
+                line = line.strip()
+                if line.startswith("version"):
+                    parts = line.split("=", 1)
+                    if len(parts) == 2:
+                        return parts[1].strip().strip('"').strip("'")
+        except Exception:
+            pass
+    return "unknown"
+
+
+def run_git(git_cmd, args, cwd, timeout=30, capture=True):
+    """运行 git 命令
+
+    返回 (returncode, stdout, stderr)
+    """
+    cmd = [git_cmd] + args
+    try:
+        if capture:
+            result = subprocess.run(
+                cmd,
+                cwd=str(cwd),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+            )
+            return result.returncode, result.stdout, result.stderr
+        else:
+            result = subprocess.run(cmd, cwd=str(cwd), timeout=timeout)
+            return result.returncode, "", ""
+    except subprocess.TimeoutExpired:
+        return -1, "", "timeout"
+    except Exception as e:
+        return -1, "", str(e)
+
+
+def get_remote_latest_tag(git_cmd, project_dir, timeout):
+    """获取远程最新的 tag 版本号
+
+    使用 git ls-remote 获取远程所有 tag，本地排序找出最新的。
+    过滤掉 peeled refs (^{}) 和非版本格式的 tag。
+    """
+    rc, out, _ = run_git(
+        git_cmd, ["ls-remote", "--tags", "origin"],
+        project_dir, timeout=timeout
+    )
+    if rc != 0 or not out.strip():
+        return None
+
+    tags = []
+    for line in out.strip().split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        ref = parts[1]
+        if not ref.startswith("refs/tags/"):
+            continue
+        tag = ref.replace("refs/tags/", "")
+        # 过滤 peeled refs
+        if tag.endswith("^{}"):
+            continue
+        # 只保留类似 v1.5.1 或 1.5.1 的 tag（至少有一个点号）
+        clean = tag.lstrip("vV").split("-")[0]
+        if "." in clean:
+            tags.append(tag)
+
+    if not tags:
+        return None
+
+    tags.sort(key=parse_version, reverse=True)
+    return tags[0]
+
+
+def init_git_repo(project_dir, git_cmd, repo_urls, branch, timeout):
+    """首次启动：.git 不存在，自动初始化
+
+    支持多源 fallback，按顺序尝试每个源。
+    """
+    print("[upgrade] 首次运行，初始化 git 仓库...")
+
+    # git init 只需执行一次
+    rc, _, err = run_git(git_cmd, ["init"], project_dir, timeout=timeout)
+    if rc != 0:
+        print(f"[upgrade] git init 失败: {err}")
+        return False
+
+    # 尝试每个源
+    for url in repo_urls:
+        print(f"[upgrade] 尝试源: {url}")
+
+        # 清除已有的 remote（如果有）
+        run_git(git_cmd, ["remote", "remove", "origin"], project_dir, timeout=10)
+
+        # 添加 remote
+        rc, _, err = run_git(
+            git_cmd, ["remote", "add", "origin", url],
+            project_dir, timeout=timeout
+        )
+        if rc != 0:
+            print(f"[upgrade] 添加远程仓库失败: {err}")
+            continue
+
+        # fetch
+        rc, _, err = run_git(
+            git_cmd, ["fetch", "origin", branch, "--depth", "1", "--tags"],
+            project_dir, timeout=timeout
+        )
+        if rc != 0:
+            print(f"[upgrade] fetch 失败: {err}")
+            continue
+
+        # reset
+        rc, _, err = run_git(
+            git_cmd, ["reset", "--hard", f"origin/{branch}"],
+            project_dir, timeout=timeout
+        )
+        if rc != 0:
+            print(f"[upgrade] reset 失败: {err}")
+            continue
+
+        print(f"[upgrade] 初始化完成，使用源: {url}")
+        return True
+
+    print("[upgrade] 所有源都失败，无法初始化")
+    return False
+
+
+
+def perform_update(git_cmd, project_dir, branch, timeout):
+    """执行更新（stash + reset + stash pop）
+
+    使用 fetch + reset --hard 替代 pull，避免分支分叉导致 --ff-only 失败。
+    返回 (success, message)
+    """
+    stashed = False
+    rc, _, _ = run_git(
+        git_cmd, ["stash", "push", "--include-untracked", "-m", "auto-upgrade-stash"],
+        project_dir, timeout=timeout
+    )
+    if rc == 0:
+        stashed = True
+        print("[upgrade] 本地修改已暂存")
+
+
+    # fetch 最新代码
+    rc, out, err = run_git(
+        git_cmd, ["fetch", "origin", branch],
+        project_dir, timeout=timeout
+    )
+    if rc != 0:
+        msg = err or out or "未知错误"
+        if stashed:
+            run_git(git_cmd, ["stash", "pop"], project_dir, timeout=timeout)
+        return False, f"fetch 失败: {msg}"
+
+    # reset 到远程最新版本
+    rc, out, err = run_git(
+        git_cmd, ["reset", "--hard", f"origin/{branch}"],
+        project_dir, timeout=timeout
+    )
+    if rc != 0:
+        msg = err or out or "未知错误"
+        if stashed:
+            run_git(git_cmd, ["stash", "pop"], project_dir, timeout=timeout)
+        return False, f"reset 失败: {msg}"
+
+    print("[upgrade] 代码更新成功")
+
+    if stashed:
+        rc, _, _ = run_git(
+            git_cmd, ["stash", "pop"],
+            project_dir, timeout=timeout
+        )
+        if rc == 0:
+            print("[upgrade] 本地修改已恢复")
+        else:
+            # 冲突时清理工作区，确保仓库可用
+            run_git(git_cmd, ["checkout", "--", "."], project_dir, timeout=timeout)
+            run_git(git_cmd, ["clean", "-fd"], project_dir, timeout=timeout)
+            run_git(git_cmd, ["stash", "drop"], project_dir, timeout=10)
+            return True, "本地修改与新版冲突，已自动丢弃"
+
+    return True, ""
+
+
+
+def check_requirements_changed(git_cmd, project_dir, timeout):
+    """检查 requirements.txt 是否有变化"""
+    rc, out, _ = run_git(
+        git_cmd, ["diff", "--name-only", "HEAD@{1}", "HEAD"],
+        project_dir, timeout=timeout
+    )
+    if rc == 0 and out:
+        if "requirements.txt" in out:
+            print("[upgrade] 注意：依赖有更新，启动时将自动安装")
+
+
+
+def get_current_remote_url(git_cmd, project_dir, timeout):
+    """获取当前 origin 的 URL"""
+    rc, out, _ = run_git(
+        git_cmd, ["remote", "get-url", "origin"],
+        project_dir, timeout=timeout
+    )
+    if rc == 0 and out.strip():
+        return out.strip()
+    return None
+
+
+def update_remote_url_if_needed(git_cmd, project_dir, repo_urls, timeout):
+    """检查并更新 origin URL
+
+    如果当前 origin URL 不在配置的 repo_urls 中，则更新为第一个可用的源。
+    返回 True 表示 origin URL 有效（无需更新或更新成功）。
+    """
+    current_url = get_current_remote_url(git_cmd, project_dir, timeout)
+
+    if not current_url:
+        # 没有 origin，添加第一个源
+        if repo_urls:
+            rc, _, err = run_git(
+                git_cmd, ["remote", "add", "origin", repo_urls[0]],
+                project_dir, timeout=timeout
+            )
+            if rc == 0:
+                print(f"[upgrade] 添加 origin: {repo_urls[0]}")
+                return True
+            print(f"[upgrade] 添加 origin 失败: {err}")
+        return False
+
+    # 标准化 URL（去掉末尾 .git 和 /）
+    def normalize_url(url):
+        url = url.rstrip("/")
+        if url.endswith(".git"):
+            url = url[:-4]
+        return url
+
+    current_normalized = normalize_url(current_url)
+
+    # 检查当前 URL 是否在配置的 repo_urls 中
+    for url in repo_urls:
+        if normalize_url(url) == current_normalized:
+            return True  # 当前 URL 有效
+
+    # 当前 URL 不在配置中，更新为第一个可用的源
+    print(f"[upgrade] 当前 origin ({current_url}) 不在配置的源中")
+    for url in repo_urls:
+        rc, _, err = run_git(
+            git_cmd, ["remote", "set-url", "origin", url],
+            project_dir, timeout=timeout
+        )
+        if rc == 0:
+            # 验证新源是否可用
+            rc, _, _ = run_git(
+                git_cmd, ["ls-remote", "--heads", "origin"],
+                project_dir, timeout=timeout
+            )
+            if rc == 0:
+                print(f"[upgrade] 已更新 origin: {url}")
+                return True
+            else:
+                print(f"[upgrade] 源 {url} 不可用，尝试下一个")
+
+    print("[upgrade] 所有配置的源都不可用")
+    return False
+
+
+def main():
+    """主入口"""
+    project_dir = get_project_dir()
+
+    cfg = get_upgrade_config()
+
+    if not cfg.get("enabled", True):
+        print("[upgrade] 已禁用")
+        return 0
+
+    branch = cfg.get("branch", "main")
+    timeout = cfg.get("timeout_seconds", 30)
+    repo_urls = cfg.get("repo_urls", [])
+
+    git_cmd = find_git_binary()
+    if not git_cmd:
+        print("[upgrade] 未找到 git，跳过更新检查")
+        return 0
+
+    git_dir = project_dir / ".git"
+
+    if not git_dir.exists():
+        if not repo_urls:
+            print("[upgrade] 未配置仓库地址，跳过更新检查")
+            print("[upgrade] 提示：如需自动更新，请在配置中设置 upgrade.repo_urls")
+            return 0
+
+        if not init_git_repo(project_dir, git_cmd, repo_urls, branch, timeout):
+            print("[upgrade] 初始化失败，使用本地版本")
+            return 1
+
+        return 0
+
+
+    # 1. 检查并更新 origin URL
+    if not repo_urls:
+        print("[upgrade] 未配置仓库地址，跳过更新检查")
+        return 0
+
+    if not update_remote_url_if_needed(git_cmd, project_dir, repo_urls, timeout):
+        print("[upgrade] 无法设置有效的远程源，跳过更新检查")
+        return 0
+
+    # 2. 读取本地版本（优先 git tag，回退 pyproject.toml）
+    local_version = get_local_version(project_dir, git_cmd)
+    print(f"[upgrade] 当前版本: {local_version}")
+
+    # 3. fetch 远程（包含 tag）
+    rc, _, err = run_git(
+        git_cmd, ["fetch", "origin", branch, "--tags"],
+        project_dir, timeout=timeout
+    )
+    if rc != 0:
+        print(f"[upgrade] fetch 远程信息失败: {err}")
+        return 1
+
+
+    # 4. 获取远程最新 tag
+    latest_tag = get_remote_latest_tag(git_cmd, project_dir, timeout)
+    if not latest_tag:
+        print("[upgrade] 远程无可用版本 tag，跳过更新检查")
+        return 0
+
+    print(f"[upgrade] 远程最新版本: {latest_tag}")
+
+    # 5. 比较版本
+    cmp = compare_version(latest_tag, local_version)
+    if cmp <= 0:
+        if cmp == 0:
+            print("[upgrade] 已是最新版本")
+        else:
+            print(f"[upgrade] 本地版本 ({local_version}) 高于远程 ({latest_tag})，无需更新")
+        return 0
+
+    # 6. 发现新版本，开始更新
+    print(f"[upgrade] 发现新版本: {local_version} -> {latest_tag}")
+    print("[upgrade] 开始更新...")
+
+    # 7. 检查二进制依赖（从仓库配置文件读取）
+    binaries_config = read_remote_binaries_config(git_cmd, project_dir, branch, timeout)
+    missing = check_binaries_for_version(project_dir, binaries_config, latest_tag)
+    if missing:
+        print(f"\n[upgrade] ⚠ 新版本 {latest_tag} 需要以下二进制依赖，但本地缺失:")
+        for b in missing:
+            url = b.get('download_url', '无')
+            print(f"  - {b['name']}: {b.get('description', '')}")
+            print(f"    下载地址: {url}")
+        print(f"\n[upgrade] 跳过自动更新，请先下载上述文件后再升级")
+        print("[upgrade] 使用当前版本继续启动...")
+        return 0
+
+    # 8. 执行更新
+    success, message = perform_update(git_cmd, project_dir, branch, timeout)
+    if not success:
+        print(f"[upgrade] 更新失败: {message}")
+        return 1
+
+    if message:
+        print(f"[upgrade] 警告: {message}")
+
+    # 9. 检查依赖变化
+    check_requirements_changed(git_cmd, project_dir, timeout)
+
+    print("[upgrade] 更新完成，继续启动...")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

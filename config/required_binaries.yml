@@ -1,0 +1,30 @@
+# 二进制依赖配置
+# 记录系统运行所需的二进制工具及其版本要求
+#
+# 字段说明：
+#   name: 工具名称
+#   description: 工具描述
+#   download_url: 下载地址（可选）
+#   check_paths: 按平台的检查路径
+#   required_since: 从哪个版本开始需要此依赖（语义化版本号）
+
+binaries:
+  # 示例：ffmpeg 从 v2.0.0 开始需要
+  # ffmpeg:
+  #   description: "音视频处理工具"
+  #   download_url: "https://cdn.zjt.com/bin/ffmpeg-6.0-win64.zip"
+  #   check_paths:
+  #     windows: "bin/ffmpeg/ffmpeg.exe"
+  #     linux: "bin/ffmpeg/ffmpeg"
+  #     macos: "bin/ffmpeg/ffmpeg"
+  #   required_since: "2.0.0"
+
+  # 示例：imagemagick 从 v2.1.0 开始需要
+  # imagick:
+  #   description: "图片处理工具"
+  #   download_url: "https://cdn.zjt.com/bin/imagemagick.zip"
+  #   check_paths:
+  #     windows: "bin/imagemagick/convert.exe"
+  #     linux: "bin/imagemagick/convert"
+  #     macos: "bin/imagemagick/convert"
+  #   required_since: "2.1.0"

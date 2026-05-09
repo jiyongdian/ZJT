@@ -47,6 +47,20 @@ fi
 
 echo "[OK] uv found"
 
+# [1.5/4] 检查更新（在 uv 就绪后执行）
+echo ""
+echo "[1.5/4] Checking for updates..."
+"$UV_CMD" run --with-requirements requirements.txt scripts/upgrade_check.py
+UPGRADE_RC=$?
+if [ $UPGRADE_RC -eq 2 ]; then
+    echo "[ERROR] 更新检查遇到严重错误"
+    read -p "按回车键继续..."
+    exit 1
+elif [ $UPGRADE_RC -eq 1 ]; then
+    echo "[WARN] 更新检查失败，继续使用本地版本"
+fi
+echo ""
+
 # [2/4] 检查配置文件
 echo ""
 echo "[2/4] Checking configuration file..."

@@ -12,6 +12,8 @@ from model.user_tokens import UserTokensModel
 from model.computing_power import ComputingPowerModel
 from model.computing_power_log import ComputingPowerLogModel
 from model.video_workflow import VideoWorkflowModel
+from model.ai_tools import AIToolsModel
+from config.unified_config import UnifiedConfigRegistry, IMPLEMENTATION_FROM_ID
 from model.system_config import SystemConfigModel
 from model.system_config_history import SystemConfigHistoryModel
 from config.config_util import get_current_env, invalidate_dynamic_cache
@@ -109,6 +111,82 @@ async def admin_monthly_active_users(
         }
     except Exception as e:
         logger.error(f"Failed to get monthly active users: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/dashboard/model-analysis")
+async def admin_model_analysis(
+    days: int = Query(1, ge=1, le=30),
+    auth_token: str = Header(None, alias="Authorization")
+):
+    """
+    模型分析 - 各模型及其供应商的成功/失败统计
+    按模型类型分组聚合，支持展开查看各供应商详情
+    """
+    await require_admin(auth_token)
+
+    try:
+        raw_stats = AIToolsModel.get_implementation_stats(days=days)
+
+        # 获取类型ID -> 名称映射
+        type_name_map = UnifiedConfigRegistry.get_name_map()
+
+        # 按 type 分组
+        type_groups = {}
+        for row in raw_stats:
+            t = row['type']
+            if t not in type_groups:
+                type_groups[t] = []
+            type_groups[t].append(row)
+
+        # 构建模型列表
+        models = []
+        for task_type, providers_raw in sorted(type_groups.items(), key=lambda x: -sum(r['total_count'] for r in x[1])):
+            total = sum(r['total_count'] for r in providers_raw)
+            success = sum(r['success_count'] for r in providers_raw)
+            fail = sum(r['fail_count'] for r in providers_raw)
+            success_rate = (success / total * 100) if total > 0 else 0.0
+
+            # 构建供应商列表
+            providers = []
+            for r in sorted(providers_raw, key=lambda x: -x['total_count']):
+                impl_id = r['implementation']
+                impl_name = IMPLEMENTATION_FROM_ID.get(impl_id, f'unknown_{impl_id}')
+                display_name = impl_name
+                impl_config = UnifiedConfigRegistry.get_implementation(impl_name)
+                if impl_config and impl_config.display_name:
+                    display_name = impl_config.display_name
+
+                providers.append({
+                    'implementation': impl_id,
+                    'name': impl_name,
+                    'display_name': display_name,
+                    'total': r['total_count'],
+                    'success': r['success_count'],
+                    'fail': r['fail_count'],
+                    'success_rate': r['success_rate'],
+                    'avg_duration_ms': r['avg_duration_ms']
+                })
+
+            models.append({
+                'type': task_type,
+                'name': type_name_map.get(task_type, f'未知类型({task_type})'),
+                'total': total,
+                'success': success,
+                'fail': fail,
+                'success_rate': round(success_rate, 2),
+                'providers': providers
+            })
+
+        return {
+            "code": 0,
+            "data": {
+                "days": days,
+                "models": models
+            }
+        }
+    except Exception as e:
+        logger.error(f"Failed to get model analysis: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1063,7 +1141,6 @@ async def admin_test_qwen_connection(
 # ==================== 实现方算力配置 API ====================
 
 from model.implementation_power import ImplementationPowerModel
-from config.unified_config import UnifiedConfigRegistry
 
 
 @router.get("/implementation-powers")

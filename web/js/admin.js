@@ -487,6 +487,12 @@ const AdminApp = {
                     year: null,
                     month: null,
                     loading: false
+                },
+                modelAnalysis: {
+                    days: 1,
+                    loading: false,
+                    models: [],
+                    expandedTypes: {}
                 }
             },
             
@@ -638,7 +644,20 @@ const AdminApp = {
                 loading: false
             },
 
-            isCommunityEdition: false
+            isCommunityEdition: false,
+
+            // 通知中心
+            notifications: [],
+            versionUpdate: null,
+            missingBinaries: [],
+            unreadCount: 0,
+            typeLabels: {
+                announcement: '公告',
+                maintenance: '维护',
+                feature: '新功能',
+                security: '安全'
+            },
+            notificationsPollTimer: null
         };
     },
     
@@ -781,6 +800,8 @@ const AdminApp = {
     mounted() {
         this.initAuth();
         this.fetchServerConfig();
+        this.pollNotifications();
+        this.notificationsPollTimer = setInterval(() => this.pollNotifications(), 30000);
     },
     
     methods: {
@@ -954,6 +975,55 @@ const AdminApp = {
             } finally {
                 this.dashboard.monthlyActiveUsers.loading = false;
             }
+        },
+
+        // 加载模型分析数据
+        async loadModelAnalysis() {
+            this.dashboard.modelAnalysis.loading = true;
+            try {
+                const response = await axios.get('/api/admin/dashboard/model-analysis', {
+                    params: { days: this.dashboard.modelAnalysis.days },
+                    headers: { 'Authorization': `Bearer ${this.authToken}` }
+                });
+
+                if (response.data.code === 0) {
+                    this.dashboard.modelAnalysis.models = response.data.data.models;
+                }
+            } catch (error) {
+                console.error('Load model analysis failed:', error);
+                this.showToast('加载模型分析失败', 'error');
+            } finally {
+                this.dashboard.modelAnalysis.loading = false;
+            }
+        },
+
+        // 切换模型分析时间范围
+        setModelAnalysisDays(days) {
+            this.dashboard.modelAnalysis.days = days;
+            this.dashboard.modelAnalysis.expandedTypes = {};
+            this.loadModelAnalysis();
+        },
+
+        // 展开/折叠模型供应商详情
+        toggleModelExpand(type) {
+            this.dashboard.modelAnalysis.expandedTypes[type] = !this.dashboard.modelAnalysis.expandedTypes[type];
+        },
+
+        // 成功率颜色类
+        getRateClass(rate) {
+            if (rate >= 90) return 'rate-high';
+            if (rate >= 70) return 'rate-medium';
+            return 'rate-low';
+        },
+
+        // 格式化耗时（毫秒 → 可读字符串）
+        formatDuration(ms) {
+            if (ms < 1000) return ms + 'ms';
+            const seconds = Math.round(ms / 1000);
+            if (seconds < 60) return seconds + 's';
+            const minutes = Math.floor(seconds / 60);
+            const remainSeconds = seconds % 60;
+            return minutes + 'm' + (remainSeconds > 0 ? remainSeconds + 's' : '');
         },
 
         // 加载用户列表
@@ -2486,6 +2556,49 @@ const AdminApp = {
                 return values.join(' / ');
             }
             return power;
+        },
+
+        // ============ 通知中心 ============
+
+        async pollNotifications() {
+            try {
+                const response = await axios.get('/api/notifications/poll');
+                if (response.data.code === 0) {
+                    const data = response.data.data;
+                    this.versionUpdate = data.version_update || null;
+                    this.notifications = data.notifications || [];
+                    this.missingBinaries = data.missing_binaries || [];
+                    this.unreadCount = data.unread_count || 0;
+                }
+            } catch (error) {
+                console.error('Poll notifications failed:', error);
+            }
+        },
+
+        async markNotificationRead(id) {
+            try {
+                const n = this.notifications.find(n => n.id === id);
+                if (!n || n.is_read) return;
+                const response = await axios.post(`/api/notifications/${id}/read`);
+                if (response.data.code === 0) {
+                    n.is_read = true;
+                    this.unreadCount = Math.max(0, this.unreadCount - 1);
+                }
+            } catch (error) {
+                console.error('Mark read failed:', error);
+            }
+        },
+
+        async markAllNotificationsRead() {
+            try {
+                const response = await axios.post('/api/notifications/read-all');
+                if (response.data.code === 0) {
+                    this.notifications.forEach(n => n.is_read = true);
+                    this.unreadCount = 0;
+                }
+            } catch (error) {
+                console.error('Mark all read failed:', error);
+            }
         }
     }
 };
