@@ -383,21 +383,12 @@ def init_git_repo(project_dir, git_cmd, repo_urls, branch, timeout):
 
 
 def perform_update(git_cmd, project_dir, branch, timeout):
-    """执行更新（stash + reset + stash pop）
+    """执行更新（强制覆盖本地代码）
 
-    使用 fetch + reset --hard 替代 pull，避免分支分叉导致 --ff-only 失败。
+    使用 fetch + reset --hard 强制同步到远程最新版本。
+    不保留本地修改，确保升级过程无冲突，对小白用户透明。
     返回 (success, message)
     """
-    stashed = False
-    rc, _, _ = run_git(
-        git_cmd, ["stash", "push", "--include-untracked", "-m", "auto-upgrade-stash"],
-        project_dir, timeout=timeout
-    )
-    if rc == 0:
-        stashed = True
-        print("[upgrade] 本地修改已暂存")
-
-
     # fetch 最新代码
     rc, out, err = run_git(
         git_cmd, ["fetch", "origin", branch],
@@ -405,37 +396,18 @@ def perform_update(git_cmd, project_dir, branch, timeout):
     )
     if rc != 0:
         msg = err or out or "未知错误"
-        if stashed:
-            run_git(git_cmd, ["stash", "pop"], project_dir, timeout=timeout)
         return False, f"fetch 失败: {msg}"
 
-    # reset 到远程最新版本
+    # reset 到远程最新版本（强制覆盖，不保留本地修改，不会产生冲突）
     rc, out, err = run_git(
         git_cmd, ["reset", "--hard", f"origin/{branch}"],
         project_dir, timeout=timeout
     )
     if rc != 0:
         msg = err or out or "未知错误"
-        if stashed:
-            run_git(git_cmd, ["stash", "pop"], project_dir, timeout=timeout)
         return False, f"reset 失败: {msg}"
 
     print("[upgrade] 代码更新成功")
-
-    if stashed:
-        rc, _, _ = run_git(
-            git_cmd, ["stash", "pop"],
-            project_dir, timeout=timeout
-        )
-        if rc == 0:
-            print("[upgrade] 本地修改已恢复")
-        else:
-            # 冲突时清理工作区，确保仓库可用
-            run_git(git_cmd, ["checkout", "--", "."], project_dir, timeout=timeout)
-            run_git(git_cmd, ["clean", "-fd"], project_dir, timeout=timeout)
-            run_git(git_cmd, ["stash", "drop"], project_dir, timeout=10)
-            return True, "本地修改与新版冲突，已自动丢弃"
-
     return True, ""
 
 
