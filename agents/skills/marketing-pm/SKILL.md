@@ -68,7 +68,7 @@ load_sop(sop_name="sop-image-generation")
 
 ### 步骤3：按SOP执行
 
-加载SOP后，严格按照SOP中定义的步骤执行。SOP会包含：
+加载
 - 具体的执行步骤
 - 需要调用的专家智能体
 - 用户确认节点
@@ -98,3 +98,4 @@ load_sop(sop_name="sop-image-generation")
 ## 可用工作流程
 
 {{SOP_INDEX}}
+SOP后，严格按照SOP中定义的步骤执行。SOP会包含：

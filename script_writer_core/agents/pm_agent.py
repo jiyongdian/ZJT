@@ -6,10 +6,11 @@ from .expert_agent import ExpertAgent
 from .ask_user_mixin import AskUserMixin
 from .summarizer import ConversationSummarizer
 from .task_manager import TaskManager, AgentTask
-from .tool_definitions import ASK_USER_TOOL_DEFINITION
+from .tool_definitions import ASK_USER_TOOL_DEFINITION, LOAD_SOP_TOOL_DEFINITION
 from llm.llm_client_factory import get_llm_client
 from script_writer_core.file_manager import FileManager
 from script_writer_core.skill_loader import SkillLoader
+from agents.skill_loader import SopLoader
 from model.model import ModelModel
 import json
 
@@ -32,15 +33,24 @@ class PMAgent(BaseAgent, AskUserMixin):
         auth_token: str,
         max_consecutive_failures: int = 3,
         max_total_failures: int = 7,
-        context_window: Optional[int] = None
+        context_window: Optional[int] = None,
+        base_prompt: Optional[str] = None,
+        skill_loader: Optional[SkillLoader] = None,
+        sop_loader: Optional[SopLoader] = None,
+        skill_names: Optional[List[str]] = None,
+        skip_env_context: bool = False
     ):
         agent_id = "pm_agent"
 
         # 初始化技能加载器（支持用户级自定义 skill）
-        self.skill_loader = SkillLoader(user_id=int(user_id) if user_id else None)
+        self.skill_loader = skill_loader or SkillLoader(user_id=int(user_id) if user_id else None)
 
         # 从配置文件获取技能名称列表
-        pm_skill_names = agents_config.get("pm_agent", {}).get("skills", ["script-orchestrator"])
+        pm_skill_names = skill_names or agents_config.get("pm_agent", {}).get("skills", ["script-orchestrator"])
+
+        # 保存自定义 base_prompt（用于 _build_system_prompt）
+        self._custom_base_prompt = base_prompt
+        self.sop_loader = sop_loader
 
         # 构建基础 system prompt
         base_system_prompt = self._build_system_prompt(pm_skill_names)
@@ -55,33 +65,39 @@ class PMAgent(BaseAgent, AskUserMixin):
         self.auth_token = auth_token
 
         # 获取环境上下文并构建增强的 system prompt（只在初始化时执行一次）
-        # 使用摘要模式，只返回前200字符，避免初始化时加载过多内容
-        env_context = self.file_manager.get_context_for_ai(user_id, world_id, summary_only=True)
+        if skip_env_context:
+            enhanced_system_prompt = base_system_prompt
+        else:
+            # 使用摘要模式，只返回前200字符，避免初始化时加载过多内容
+            env_context = self.file_manager.get_context_for_ai(user_id, world_id, summary_only=True)
 
-        # 如果环境上下文超过5万字，进行截断
-        max_chars = 5000
-        if len(env_context) > max_chars:
-            logger.info(f"{agent_id}: Environment context exceeds {max_chars} chars ({len(env_context)}), truncating...")
-            env_context = self._truncate_environment_context(env_context, user_id, world_id, max_chars)
+            # 如果环境上下文超过5万字，进行截断
+            max_chars = 5000
+            if len(env_context) > max_chars:
+                logger.info(f"{agent_id}: Environment context exceeds {max_chars} chars ({len(env_context)}), truncating...")
+                env_context = self._truncate_environment_context(env_context, user_id, world_id, max_chars)
 
-        # 构建增强的 system prompt（包含环境上下文）
-        enhanced_system_prompt = (
-            f"{base_system_prompt}\n\n"
-            f"{'='*60}\n"
-            f"# 【重要】当前项目已有的环境内容\n\n"
-            f"**注意**：以下是项目中已经存在的所有内容，包括世界设定、剧本、角色、场景、道具。\n"
-            f"在制定创作计划时，你必须：\n"
-            f"1. 仔细阅读已有的剧本内容，了解故事进展\n"
-            f"2. 确保新内容与现有角色、场景、道具保持一致\n"
-            f"3. 续集剧本要承接已有剧情，保持连贯性\n\n"
-            f"{'='*60}\n\n"
-            f"{env_context}\n\n"
-            f"{'='*60}\n"
-            f"以上是已有内容。请基于这些信息进行创作规划。\n"
-            f"{'='*60}"
-        )
+            # 构建增强的 system prompt（包含环境上下文）
+            enhanced_system_prompt = (
+                f"{base_system_prompt}\n\n"
+                f"{'='*60}\n"
+                f"# 【重要】当前项目已有的环境内容\n\n"
+                f"**注意**：以下是项目中已经存在的所有内容，包括世界设定、剧本、角色、场景、道具。\n"
+                f"在制定创作计划时，你必须：\n"
+                f"1. 仔细阅读已有的剧本内容，了解故事进展\n"
+                f"2. 确保新内容与现有角色、场景、道具保持一致\n"
+                f"3. 续集剧本要承接已有剧情，保持连贯性\n\n"
+                f"{'='*60}\n\n"
+                f"{env_context}\n\n"
+                f"{'='*60}\n"
+                f"以上是已有内容。请基于这些信息进行创作规划。\n"
+                f"{'='*60}"
+            )
         
-        logger.info(f"{agent_id}: Built enhanced system prompt with environment context ({len(env_context)} chars, total: {len(enhanced_system_prompt)} chars)")
+        if skip_env_context:
+            logger.info(f"{agent_id}: Built system prompt without environment context (total: {len(enhanced_system_prompt)} chars)")
+        else:
+            logger.info(f"{agent_id}: Built enhanced system prompt with environment context ({len(env_context)} chars, total: {len(enhanced_system_prompt)} chars)")
         
         super().__init__(
             agent_id=agent_id,
@@ -113,7 +129,7 @@ class PMAgent(BaseAgent, AskUserMixin):
     
     def _build_system_prompt(self, skill_names: List[str]) -> str:
         """构建系统提示"""
-        base_prompt = """你是剧本架构师（Script Orchestrator），负责协调专家智能体完成剧本创作。
+        base_prompt = self._custom_base_prompt or """你是剧本架构师（Script Orchestrator），负责协调专家智能体完成剧本创作。
 
 **核心原则**：
 - 你是协调者，不是内容创作者
@@ -161,8 +177,17 @@ class PMAgent(BaseAgent, AskUserMixin):
         self.total_failures = 0
 
         try:
-            # 添加用户消息到历史
-            self.add_to_history("user", task.user_message)
+            # 添加用户消息到历史（支持多模态消息）
+            if task.image_urls:
+                # 构建多模态 content（OpenAI 格式）
+                content_parts = []
+                for url in task.image_urls:
+                    # url 已经是 base64 格式: data:image/png;base64,...
+                    content_parts.append({"type": "image_url", "image_url": {"url": url}})
+                content_parts.append({"type": "text", "text": task.user_message})
+                self.add_to_history("user", content_parts)
+            else:
+                self.add_to_history("user", task.user_message)
 
             # 执行 PM 循环
             result = self._run_pm_loop(task, session_data)
@@ -386,6 +411,8 @@ class PMAgent(BaseAgent, AskUserMixin):
                 return self._handle_agent_call(tool_args, task, session_data)
             elif tool_name == "ask_user":
                 return self._handle_ask_user(tool_args)
+            elif tool_name == "load_sop":
+                return self._handle_load_sop(tool_args)
             else:
                 # Delegate to tool_executor for non-PM specific tools
                 return self.tool_executor.execute_tool(
@@ -402,7 +429,24 @@ class PMAgent(BaseAgent, AskUserMixin):
             self.total_failures += 1
             self.consecutive_failures += 1
             return {"error": str(e)}
-    
+
+    def _handle_load_sop(self, tool_args: Dict[str, Any]) -> Dict[str, Any]:
+        """处理 load_sop 工具调用 - 加载 SOP 完整流程内容"""
+        sop_name = tool_args.get("sop_name")
+        if not sop_name:
+            return {"error": "缺少 sop_name 参数"}
+
+        if not self.sop_loader:
+            return {"error": "SOP 加载器未初始化"}
+
+        sop_content = self.sop_loader.get_sop_content(sop_name)
+        if not sop_content:
+            available = self.sop_loader.list_sops()
+            return {"error": f"SOP '{sop_name}' 不存在。可用的 SOP: {available}"}
+
+        logger.info(f"{self.agent_id}: 已加载 SOP '{sop_name}' ({len(sop_content)} 字符)")
+        return {"success": True, "sop_name": sop_name, "content": sop_content}
+
     def _handle_agent_call(
         self, 
         tool_args: Dict[str, Any],
@@ -827,6 +871,12 @@ class PMAgent(BaseAgent, AskUserMixin):
                     "reasoning_content": ""
                 }
                 messages.append(assistant_msg)
+            elif role == "user" and isinstance(content, list):
+                # 多模态消息（包含图片）
+                messages.append({
+                    "role": "user",
+                    "content": content
+                })
             else:
                 messages.append({
                     "role": role,
@@ -883,7 +933,7 @@ class PMAgent(BaseAgent, AskUserMixin):
         ]
         
         # 2. 获取 allowed_tools 中的其他工具
-        core_tool_names = ["call_agent", "ask_user"]
+        core_tool_names = ["call_agent", "ask_user", "load_sop"]
         other_allowed_tools = [t for t in self.allowed_tools if t not in core_tool_names]
 
         if other_allowed_tools:
@@ -893,6 +943,10 @@ class PMAgent(BaseAgent, AskUserMixin):
         # 3. 添加 ask_user 工具定义（PM 可直接向用户提问）
         if "ask_user" in self.allowed_tools:
             pm_tools.append(ASK_USER_TOOL_DEFINITION)
+
+        # 4. 添加 load_sop 工具定义（PM 可加载 SOP 流程内容）
+        if "load_sop" in self.allowed_tools:
+            pm_tools.append(LOAD_SOP_TOOL_DEFINITION)
 
         return pm_tools
 

@@ -409,12 +409,12 @@ class ImplementationPowerModel:
         if site_number is not None:
             try:
                 site_name = get_config_value('api_aggregator', f'site_{site_number}', 'name')
-                logger.info(f"Site {site_number} config name: {site_name} for {implementation_name}")
+                # logger.info(f"Site {site_number} config name: {site_name} for {implementation_name}")
                 if site_name:
                     logger.debug(f"Using site config name for {implementation_name}: {site_name}")
                     return site_name
-                else:
-                    logger.warning(f"Site {site_number} name config is empty for {implementation_name}")
+                # else:
+                #     logger.warning(f"Site {site_number} name config is empty for {implementation_name}")
             except Exception as e:
                 logger.error(f"Failed to get site config for {implementation_name}: {e}")
                 import traceback

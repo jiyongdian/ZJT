@@ -154,6 +154,7 @@ class AgentTask:
     model_id: int
     enable_thinking: bool = False
     thinking_effort: str = "medium"
+    image_urls: Optional[List[str]] = None
     status: TaskStatus = TaskStatus.PENDING
     created_at: datetime = field(default_factory=datetime.now)
     started_at: Optional[datetime] = None
@@ -177,6 +178,7 @@ class AgentTask:
             "model_id":self.model_id,
             "enable_thinking": self.enable_thinking,
             "thinking_effort": self.thinking_effort,
+            "image_urls": self.image_urls,
             "status": self.status.value,
             "created_at": self.created_at.isoformat(),
             "started_at": self.started_at.isoformat() if self.started_at else None,
@@ -207,7 +209,8 @@ class TaskManager:
         vendor_id: int,
         model_id: int,
         enable_thinking: bool = False,
-        thinking_effort: str = "medium"
+        thinking_effort: str = "medium",
+        image_urls: Optional[List[str]] = None
     ) -> str:
         """创建新任务，返回 task_id"""
         # 处理长文本输入
@@ -238,7 +241,8 @@ class TaskManager:
             vendor_id=vendor_id,
             model_id=model_id,
             enable_thinking=enable_thinking,
-            thinking_effort=thinking_effort
+            thinking_effort=thinking_effort,
+            image_urls=image_urls
         )
 
         # 写入数据库（唯一数据源，跨进程共享）

@@ -107,9 +107,9 @@ class SessionStorage:
             auth_token=entity.auth_token or '',
             model=entity.model,
             model_id=entity.model_id,
-            text_to_image_model_id=entity.text_to_image_model_id
+            text_to_image_model_id=entity.text_to_image_model_id,
+            session_type=entity.session_type
         )
-        session.session_type = entity.session_type
 
         # 同步生图模型配置到内存（解决页面刷新/服务重启后配置丢失问题）
         if entity.text_to_image_model_id is not None:

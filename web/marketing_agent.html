@@ -145,13 +145,22 @@
                         <div class="message-avatar">{{ msg.role === 'user' ? '👤' : '🤖' }}</div>
                         <div class="message-content">
                             <div class="message-bubble" v-html="renderMarkdown(msg.content)"></div>
+                            <!-- Verification 选项按钮 -->
+                            <div v-if="msg.isVerification && msg.verificationOptions && msg.verificationOptions.length > 0" style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px;">
+                                <button v-for="opt in msg.verificationOptions" :key="opt"
+                                    @click="selectVerificationOption(opt)"
+                                    :disabled="!pendingVerificationId"
+                                    style="padding: 6px 16px; border: 1px solid #d0d5dd; border-radius: 8px; background: #fff; cursor: pointer; font-size: 14px; color: #344054; transition: all 0.2s;">
+                                    {{ opt }}
+                                </button>
+                            </div>
                             <div class="message-time">{{ formatTime(msg.timestamp) }}</div>
                         </div>
                     </div>
                 </template>
 
-                <!-- 打字指示器 -->
-                <div v-if="isLoading" class="message ai">
+                <!-- 打字指示器（等待用户验证回答时不显示） -->
+                <div v-if="isLoading && !pendingVerificationId" class="message ai">
                     <div class="message-avatar">🤖</div>
                     <div class="message-content">
                         <div class="message-bubble">
@@ -320,30 +329,71 @@
                                         <div>
                                             <span style="font-size: 14px; font-weight: 500; color: #1a1a1a; display: block; margin-bottom: 12px;">其他设置</span>
                                             <div style="display: flex; gap: 12px;">
-                                                <div style="flex: 1.6;">
+                                                <div style="flex: 1;">
                                                     <button @click.stop="showModelSelect = !showModelSelect" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #f5f5f5; border: none; border-radius: 10px; cursor: pointer; font-size: 13px; color: #1a1a1a;">
                                                         <span style="display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px;">
-                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                                                <path d="M12 5c-2.5 0-4.5 1.5-4.5 3.5 0 1.5 1 2.8 2.5 3.4-.3.8-.5 1.6-.5 2.6 0 3 2.5 5.5 5.5 5.5s5.5-2.5 5.5-5.5c0-1-.2-1.8-.5-2.6 1.5-.6 2.5-1.9 2.5-3.4 0-2-2-3.5-4.5-3.5z"/>
+                                                                <path d="M12 5c0-1.5-1-2.5-2.5-2.5s-2.5 1-2.5 2.5"/>
+                                                                <path d="M12 5c0-1.5 1-2.5 2.5-2.5s2.5 1 2.5 2.5"/>
+                                                                <path d="M7.5 8c-1 0-2 .5-2.5 1.5"/>
+                                                                <path d="M16.5 8c1 0 2 .5 2.5 1.5"/>
+                                                                <path d="M9 12c0 1.5 1 3 3 3s3-1.5 3-3"/>
+                                                            </svg>
                                                             <span style="overflow: hidden; text-overflow: ellipsis;">{{ selectedModel }}</span>
                                                         </span>
                                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :style="{ transform: showModelSelect ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }"><path d="M6 9l6 6 6-6"/></svg>
                                                     </button>
                                                 </div>
-                                                <div v-if="!isVideoMode" style="flex: 1;">
-                                                    <button style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #f5f5f5; border: none; border-radius: 10px; cursor: pointer; font-size: 13px; color: #1a1a1a;">
-                                                        <span style="display: flex; align-items: center; gap: 6px;">
-                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-                                                            {{ selectedResolution }}
-                                                        </span>
-                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
-                                                    </button>
+                                            </div>
+
+                                            <!-- LLM 模型选择（Agent 模式） -->
+                                            <div v-if="allLLMModels.length > 0" style="margin-top: 12px;">
+                                                <button @click.stop="showLLMModelSelect = !showLLMModelSelect" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #f5f5f5; border: none; border-radius: 10px; cursor: pointer; font-size: 13px; color: #1a1a1a;">
+                                                    <span style="display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                                                        <span style="overflow: hidden; text-overflow: ellipsis;">{{ selectedLLMModel ? selectedLLMModel.name : '选择对话模型' }}</span>
+                                                        <span v-if="selectedLLMModel && selectedLLMModel.supportsVl" style="font-size: 10px; color: #7c3aed; background: #f3e8ff; padding: 1px 6px; border-radius: 4px;">VL</span>
+                                                    </span>
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :style="{ transform: showLLMModelSelect ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }"><path d="M6 9l6 6 6-6"/></svg>
+                                                </button>
+                                                <!-- LLM 模型选择列表 -->
+                                                <div v-if="showLLMModelSelect" style="background: #fafafa; border-radius: 12px; padding: 12px; margin-top: 8px; max-height: 200px; overflow-y: auto;">
+                                                    <div style="font-size: 12px; color: #999; margin-bottom: 10px;">选择对话模型：{{ selectedLLMModel ? selectedLLMModel.name : '' }}</div>
+                                                    <div v-for="model in allLLMModels" :key="model.id" @click.stop="selectLLMModel(model)" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: background 0.2s; margin-bottom: 4px;" :style="{ background: selectedLLMModel && selectedLLMModel.id === model.id ? '#fff' : 'transparent', border: selectedLLMModel && selectedLLMModel.id === model.id ? '1px solid #e8e8e8' : '1px solid transparent', boxShadow: selectedLLMModel && selectedLLMModel.id === model.id ? '0 1px 4px rgba(0,0,0,0.05)' : 'none' }">
+                                                        <div style="width: 36px; height: 36px; background: #f0f0f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px;">🤖</div>
+                                                        <div style="flex: 1;">
+                                                            <div style="font-size: 14px; font-weight: 500; color: #1a1a1a; display: flex; align-items: center; gap: 6px;">
+                                                                {{ model.name }}
+                                                                <span v-if="model.supportsVl" style="font-size: 10px; color: #7c3aed; background: #f3e8ff; padding: 1px 6px; border-radius: 4px;">VL</span>
+                                                                <span v-if="model.supportsThinking" style="font-size: 10px; color: #059669; background: #d1fae5; padding: 1px 6px; border-radius: 4px;">思考</span>
+                                                            </div>
+                                                            <div style="font-size: 12px; color: #999; margin-top: 2px;">{{ model.vendor }}</div>
+                                                        </div>
+                                                        <span v-if="selectedLLMModel && selectedLLMModel.id === model.id" style="color: #1a1a1a; font-size: 18px;">✓</span>
+                                                    </div>
                                                 </div>
                                             </div>
                                             <!-- 模型选择列表（内联展开） -->
                                             <div v-if="showModelSelect" style="background: #fafafa; border-radius: 12px; padding: 12px; margin-top: 8px;">
                                                 <div style="font-size: 12px; color: #999; margin-bottom: 10px;">选择模型：{{ selectedModel }}</div>
                                                 <div v-for="model in currentModels" :key="model.name" @click.stop="selectModel(model)" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: background 0.2s; margin-bottom: 4px;" :style="{ background: selectedModel === model.name ? '#fff' : 'transparent', border: selectedModel === model.name ? '1px solid #e8e8e8' : '1px solid transparent', boxShadow: selectedModel === model.name ? '0 1px 4px rgba(0,0,0,0.05)' : 'none' }">
-                                                    <div style="width: 36px; height: 36px; background: #f0f0f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px;">{{ model.icon }}</div>
+                                                    <div style="width: 36px; height: 36px; background: #f0f0f0; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                                        <!-- 图片模型 icon -->
+                                                        <svg v-if="!isVideoMode" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                                            <path d="M12 5c-2.5 0-4.5 1.5-4.5 3.5 0 1.5 1 2.8 2.5 3.4-.3.8-.5 1.6-.5 2.6 0 3 2.5 5.5 5.5 5.5s5.5-2.5 5.5-5.5c0-1-.2-1.8-.5-2.6 1.5-.6 2.5-1.9 2.5-3.4 0-2-2-3.5-4.5-3.5z"/>
+                                                            <path d="M12 5c0-1.5-1-2.5-2.5-2.5s-2.5 1-2.5 2.5"/>
+                                                            <path d="M12 5c0-1.5 1-2.5 2.5-2.5s2.5 1 2.5 2.5"/>
+                                                            <path d="M7.5 8c-1 0-2 .5-2.5 1.5"/>
+                                                            <path d="M16.5 8c1 0 2 .5 2.5 1.5"/>
+                                                            <path d="M9 12c0 1.5 1 3 3 3s3-1.5 3-3"/>
+                                                        </svg>
+                                                        <!-- 视频模型 icon -->
+                                                        <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                                            <rect x="2" y="4" width="20" height="16" rx="2"/>
+                                                            <path d="M10 9l5 3-5 3V9z"/>
+                                                        </svg>
+                                                    </div>
                                                     <div style="flex: 1;">
                                                         <div style="font-size: 14px; font-weight: 500; color: #1a1a1a; display: flex; align-items: center; gap: 6px;">
                                                             {{ model.name }}
@@ -374,7 +424,22 @@
                                     <div v-if="showModelPanel" class="marketing-panel" @click.stop style="position: absolute; bottom: 100%; left: 0; margin-bottom: 8px; background: #fff; border: 1px solid #e8e8e8; border-radius: 16px; box-shadow: 0 -8px 32px rgba(0,0,0,0.12); padding: 16px; min-width: 360px; z-index: 100;">
                                         <div style="font-size: 12px; color: #999; margin-bottom: 12px;">选择模型：{{ selectedModel }}</div>
                                         <div v-for="model in currentModels" :key="model.name" @click.stop="selectModel(model)" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: background 0.2s; margin-bottom: 4px;" :style="{ background: selectedModel === model.name ? '#fff' : 'transparent', border: selectedModel === model.name ? '1px solid #e8e8e8' : '1px solid transparent', boxShadow: selectedModel === model.name ? '0 1px 4px rgba(0,0,0,0.05)' : 'none' }">
-                                            <div style="width: 36px; height: 36px; background: #f0f0f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px;">{{ model.icon }}</div>
+                                            <div style="width: 36px; height: 36px; background: #f0f0f0; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                                <!-- 图片模型 icon -->
+                                                <svg v-if="!isVideoMode" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                                    <path d="M12 5c-2.5 0-4.5 1.5-4.5 3.5 0 1.5 1 2.8 2.5 3.4-.3.8-.5 1.6-.5 2.6 0 3 2.5 5.5 5.5 5.5s5.5-2.5 5.5-5.5c0-1-.2-1.8-.5-2.6 1.5-.6 2.5-1.9 2.5-3.4 0-2-2-3.5-4.5-3.5z"/>
+                                                    <path d="M12 5c0-1.5-1-2.5-2.5-2.5s-2.5 1-2.5 2.5"/>
+                                                    <path d="M12 5c0-1.5 1-2.5 2.5-2.5s2.5 1 2.5 2.5"/>
+                                                    <path d="M7.5 8c-1 0-2 .5-2.5 1.5"/>
+                                                    <path d="M16.5 8c1 0 2 .5 2.5 1.5"/>
+                                                    <path d="M9 12c0 1.5 1 3 3 3s3-1.5 3-3"/>
+                                                </svg>
+                                                <!-- 视频模型 icon -->
+                                                <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                                    <rect x="2" y="4" width="20" height="16" rx="2"/>
+                                                    <path d="M10 9l5 3-5 3V9z"/>
+                                                </svg>
+                                            </div>
                                             <div style="flex: 1;">
                                                 <div style="font-size: 14px; font-weight: 500; color: #1a1a1a; display: flex; align-items: center; gap: 6px;">
                                                     {{ model.name }}
@@ -594,6 +659,14 @@
             const videoModelConfigs = ref({});
             const availableRatios = ref([]);
             const availableResolutions = ref([]);
+
+            // LLM 模型数据（用于 Agent 模式对话）
+            const allLLMModels = ref([]);
+            const selectedLLMModel = ref(null);
+            const showLLMModelSelect = ref(false);
+
+            // Verification（ask_user 交互）状态
+            const pendingVerificationId = ref(null);
 
             const aspectRatioMap = {
                 'auto':  { label: '智能', value: 'auto', w: 20, h: 20 },
@@ -938,11 +1011,18 @@
                 const text = inputText.value.trim();
                 if (!text || isLoading.value) return;
 
-                // 判断生成模式
-                const isImageMode = selectedType.value === '图片生成' ||
-                                    (selectedType.value === 'Agent 模式' && mediaType.value === 'image');
-                const isVideoMode = selectedType.value === '视频生成' ||
-                                    (selectedType.value === 'Agent 模式' && mediaType.value === 'video');
+                // 如果有待回答的 verification，提交自定义回答
+                if (pendingVerificationId.value) {
+                    inputText.value = '';
+                    autoResize();
+                    await submitVerificationAnswer(pendingVerificationId.value, text);
+                    return;
+                }
+
+                // 判断生成模式（Agent 模式始终走 LLM 对话流程）
+                const isImageMode = selectedType.value === '图片生成';
+                const isVideoMode = selectedType.value === '视频生成';
+                const isAgentMode = selectedType.value === 'Agent 模式';
 
                 if (isImageMode) {
                     // 构建用户消息内容（含缩略图）
@@ -987,16 +1067,21 @@
                     return;
                 }
 
+                // Agent 模式或默认模式：走 LLM 对话流程
                 // 确保有 session
                 if (!currentSessionId.value) {
                     const sid = await createSession();
                     if (!sid) return;
                 }
 
-                // 添加用户消息
+                // 添加用户消息（含图片缩略图）
+                let userContent = text;
+                if (hasUploadedImage.value && uploadedImageUrl.value) {
+                    userContent += `\n\n<img src="${uploadedImageUrl.value}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${uploadedImageUrl.value}'" alt="参考图">`;
+                }
                 messages.value.push({
                     role: 'user',
-                    content: text,
+                    content: userContent,
                     timestamp: new Date().toISOString()
                 });
                 inputText.value = '';
@@ -1327,12 +1412,84 @@
                 await sendMessageToApi('继续');
             }
 
+            // 图片压缩函数：压缩到指定大小以下并转为 base64
+            async function compressImageToBase64(file, maxSizeMB = 2) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+
+                            // 智能选择起始质量
+                            const sizeRatio = file.size / (maxSizeMB * 1024 * 1024);
+                            let quality = sizeRatio <= 1.2 ? 0.95 : sizeRatio <= 1.5 ? 0.85 : sizeRatio <= 2 ? 0.75 : 0.70;
+
+                            let width = img.width;
+                            let height = img.height;
+
+                            // 尝试压缩
+                            const tryCompress = () => {
+                                canvas.width = width;
+                                canvas.height = height;
+                                ctx.drawImage(img, 0, 0, width, height);
+
+                                canvas.toBlob((blob) => {
+                                    if (!blob) {
+                                        reject(new Error('图片压缩失败'));
+                                        return;
+                                    }
+                                    if (blob.size <= maxSizeMB * 1024 * 1024 || quality <= 0.6) {
+                                        // 转为 base64
+                                        const reader2 = new FileReader();
+                                        reader2.onload = () => resolve(reader2.result);
+                                        reader2.onerror = () => reject(new Error('base64 转换失败'));
+                                        reader2.readAsDataURL(blob);
+                                    } else {
+                                        // 降低质量或缩小尺寸
+                                        if (quality > 0.6) {
+                                            quality -= 0.05;
+                                        } else {
+                                            width = Math.floor(width * 0.9);
+                                            height = Math.floor(height * 0.9);
+                                        }
+                                        tryCompress();
+                                    }
+                                }, 'image/jpeg', quality);
+                            };
+
+                            tryCompress();
+                        };
+                        img.onerror = () => reject(new Error('图片加载失败'));
+                        img.src = e.target.result;
+                    };
+                    reader.onerror = () => reject(new Error('文件读取失败'));
+                    reader.readAsDataURL(file);
+                });
+            }
+
             // 调用 API 发送消息
             async function sendMessageToApi(text) {
                 isLoading.value = true;
                 const sessionId = currentSessionId.value;
 
                 try {
+                    // 收集图片并压缩为 base64
+                    const imageUrls = [];
+                    if (hasUploadedImage.value && uploadedImageFile.value) {
+                        try {
+                            const base64 = await compressImageToBase64(uploadedImageFile.value, 2);
+                            imageUrls.push(base64);
+                            console.log('[VL] 图片已压缩并转为 base64，大小:', Math.round(base64.length * 3 / 4 / 1024), 'KB');
+                        } catch (compressErr) {
+                            console.error('[VL] 图片压缩失败:', compressErr);
+                            showError('图片压缩失败，请重试');
+                            isLoading.value = false;
+                            return;
+                        }
+                    }
+
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 300000);
 
@@ -1342,7 +1499,11 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             message: text,
-                            auth_token: authToken.value
+                            auth_token: authToken.value,
+                            image_urls: imageUrls.length > 0 ? imageUrls : undefined,
+                            model: selectedLLMModel.value ? selectedLLMModel.value.name : '',
+                            model_id: selectedLLMModel.value ? selectedLLMModel.value.id : undefined,
+                            vendor_id: 1
                         }),
                         signal: controller.signal
                     });
@@ -1389,33 +1550,68 @@
                     const eventSource = new EventSource(`/api/task/${taskId}/stream`);
                     let fullContent = '';
                     let hasReceivedData = false;
+                    let msgIndex = -1; // 懒创建：收到首个 message 时才 push 占位消息
 
-                    // 添加占位消息
-                    const msgIndex = messages.value.length;
-                    messages.value.push({
-                        role: 'ai',
-                        content: '',
-                        timestamp: new Date().toISOString()
-                    });
+                    // 确保 msgIndex 对应的占位消息存在
+                    function ensurePlaceholder() {
+                        if (msgIndex === -1) {
+                            msgIndex = messages.value.length;
+                            messages.value.push({
+                                role: 'ai',
+                                content: '',
+                                timestamp: new Date().toISOString()
+                            });
+                        }
+                        return msgIndex;
+                    }
 
                     eventSource.onmessage = (event) => {
                         try {
                             const data = JSON.parse(event.data);
 
-                            if (data.type === 'content') {
+                            if (data.type === 'message') {
                                 hasReceivedData = true;
                                 fullContent += data.content || '';
-                                messages.value[msgIndex].content = fullContent;
+                                const idx = ensurePlaceholder();
+                                messages.value[idx].content = fullContent;
                                 scrollToBottom();
                             } else if (data.type === 'status') {
-                                // 状态更新，可忽略或显示
+                                // 状态更新，可忽略
+                            } else if (data.type === 'progress') {
+                                // 进度更新，可忽略
+                            } else if (data.type === 'human_verification_required') {
+                                // AI 向用户提问（ask_user 工具）
+                                hasReceivedData = true;
+                                handleHumanVerification(data.verification);
+                            } else if (data.type === 'verification_timeout') {
+                                // 验证超时
+                                pendingVerificationId.value = null;
+                                messages.value.push({
+                                    role: 'ai',
+                                    content: '等待回答超时，请重新发送消息。',
+                                    timestamp: new Date().toISOString()
+                                });
+                                scrollToBottom();
+                            } else if (data.type === 'context_compression') {
+                                // 上下文压缩，可忽略
                             } else if (data.type === 'error') {
                                 eventSource.close();
-                                messages.value[msgIndex].content = fullContent || '处理出错，请重试';
-                                reject(new Error(data.message || 'Stream error'));
-                            } else if (data.type === 'complete' || data.type === 'done') {
+                                pendingVerificationId.value = null;
+                                if (msgIndex !== -1) {
+                                    messages.value[msgIndex].content = fullContent || '处理出错，请重试';
+                                } else {
+                                    messages.value.push({
+                                        role: 'ai',
+                                        content: '处理出错，请重试',
+                                        timestamp: new Date().toISOString()
+                                    });
+                                }
+                                reject(new Error(data.error || data.message || 'Stream error'));
+                            } else if (data.type === 'done') {
                                 eventSource.close();
-                                messages.value[msgIndex].content = fullContent || data.content || '';
+                                if (msgIndex !== -1) {
+                                    messages.value[msgIndex].content = fullContent;
+                                }
                                 showContinue.value = true;
                                 resolve();
                             }
@@ -1423,18 +1619,23 @@
                             // 非 JSON 数据，直接追加
                             hasReceivedData = true;
                             fullContent += event.data;
-                            messages.value[msgIndex].content = fullContent;
+                            const idx = ensurePlaceholder();
+                            messages.value[idx].content = fullContent;
                             scrollToBottom();
                         }
                     };
 
                     eventSource.onerror = (e) => {
                         eventSource.close();
+                        pendingVerificationId.value = null;
                         if (!hasReceivedData) {
-                            messages.value[msgIndex].content = '连接出错，请重试';
+                            messages.value.push({
+                                role: 'ai',
+                                content: '连接出错，请重试',
+                                timestamp: new Date().toISOString()
+                            });
                             reject(new Error('EventSource error'));
                         } else {
-                            // 已经收到部分数据，视为完成
                             showContinue.value = true;
                             resolve();
                         }
@@ -1443,8 +1644,13 @@
                     // 超时处理
                     setTimeout(() => {
                         eventSource.close();
+                        pendingVerificationId.value = null;
                         if (!hasReceivedData) {
-                            messages.value[msgIndex].content = '请求超时，请重试';
+                            messages.value.push({
+                                role: 'ai',
+                                content: '请求超时，请重试',
+                                timestamp: new Date().toISOString()
+                            });
                             reject(new Error('Stream timeout'));
                         } else {
                             showContinue.value = true;
@@ -1452,6 +1658,69 @@
                         }
                     }, 300000);
                 });
+            }
+
+            // 处理 AI 向用户提问（ask_user 工具）
+            function handleHumanVerification(verification) {
+                if (!verification) return;
+                pendingVerificationId.value = verification.verification_id;
+
+                const title = verification.title || 'AI 向您提问';
+                const description = verification.description || '';
+                const options = verification.options || [];
+
+                // 构建问题消息
+                let questionContent = `**${title}**\n\n${description}`;
+
+                // 添加到消息列表（作为 AI 消息）
+                messages.value.push({
+                    role: 'ai',
+                    content: questionContent,
+                    timestamp: new Date().toISOString(),
+                    verificationId: verification.verification_id,
+                    verificationOptions: options,
+                    isVerification: true
+                });
+                scrollToBottom();
+            }
+
+            // 用户选择预设选项回答 AI 提问
+            async function selectVerificationOption(option) {
+                if (!pendingVerificationId.value) return;
+                await submitVerificationAnswer(pendingVerificationId.value, option);
+            }
+
+            // 提交验证回答
+            async function submitVerificationAnswer(verificationId, userInput) {
+                try {
+                    // 显示用户回答
+                    messages.value.push({
+                        role: 'user',
+                        content: userInput,
+                        timestamp: new Date().toISOString()
+                    });
+
+                    const response = await fetch(`/api/verification/${verificationId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': authToken.value
+                        },
+                        body: JSON.stringify({
+                            approved: true,
+                            user_input: userInput
+                        })
+                    });
+
+                    const data = await response.json();
+                    if (data.success) {
+                        pendingVerificationId.value = null;
+                    } else {
+                        showError(data.error || '提交回答失败');
+                    }
+                } catch (e) {
+                    showError('提交回答失败: ' + e.message);
+                }
             }
 
             // 新建对话
@@ -1507,11 +1776,32 @@
                         if (typeof content === 'object' && content.tool_calls && Array.isArray(content.tool_calls)) return false;
                     }
                     return true;
-                }).map(h => ({
-                    role: h.role === 'assistant' ? 'ai' : h.role,
-                    content: typeof h.content === 'string' ? h.content : (h.content?.text || JSON.stringify(h.content)),
-                    timestamp: h.timestamp
-                }));
+                }).map(h => {
+                    // 处理 verification 消息：还原为前端渲染格式
+                    if (h.role === 'verification') {
+                        let vData = h.content;
+                        if (typeof vData === 'string') {
+                            try { vData = JSON.parse(vData); } catch (e) { /* 不是 JSON，当作普通文本 */ }
+                        }
+                        if (typeof vData === 'object' && vData !== null) {
+                            return {
+                                role: 'ai',
+                                content: `**${vData.title || 'AI 向您提问'}**\n\n${vData.description || ''}`,
+                                timestamp: h.timestamp,
+                                isVerification: true,
+                                verificationOptions: vData.options || [],
+                                verificationId: null
+                            };
+                        }
+                        // 降级为普通消息
+                        return { role: 'ai', content: typeof h.content === 'string' ? h.content : JSON.stringify(h.content), timestamp: h.timestamp };
+                    }
+                    return {
+                        role: h.role === 'assistant' ? 'ai' : h.role,
+                        content: typeof h.content === 'string' ? h.content : (h.content?.text || JSON.stringify(h.content)),
+                        timestamp: h.timestamp
+                    };
+                });
                 scrollToBottom();
             }
 
@@ -1719,9 +2009,37 @@
                     // 刷新比例和分辨率
                     refreshModelSettings();
                     taskConfigReady.value = true;
+
+                    // 加载 LLM 模型列表
+                    await loadLLMModels();
                 } catch (e) {
                     console.error('加载 TaskConfig 失败:', e);
                     loadDefaultModels();
+                }
+            }
+
+            // 加载 LLM 模型列表
+            async function loadLLMModels() {
+                try {
+                    const response = await fetch('/api/models');
+                    const data = await response.json();
+                    if (data.success && data.models) {
+                        allLLMModels.value = data.models.map(m => ({
+                            id: m.model_id,
+                            name: m.name,
+                            vendor: m.vendor_name,
+                            supportsVl: m.supports_vl || false,
+                            supportsThinking: m.supports_thinking || false
+                        }));
+                        // 默认选中 doubao-seed-2-0-lite，如果没有则选第一个
+                        if (!selectedLLMModel.value && allLLMModels.value.length > 0) {
+                            const defaultModel = allLLMModels.value.find(m => m.name === 'doubao-seed-2-0-lite');
+                            selectedLLMModel.value = defaultModel || allLLMModels.value[0];
+                        }
+                        console.log('[LLM] 加载了', allLLMModels.value.length, '个 LLM 模型');
+                    }
+                } catch (e) {
+                    console.error('[LLM] 加载 LLM 模型列表失败:', e);
                 }
             }
 
@@ -1997,7 +2315,17 @@
                 // mention dropdown 不可见时，Enter（不带 Shift）发送消息
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
-                    handleSend();
+                    // 如果有待回答的 verification，提交自定义回答
+                    if (pendingVerificationId.value) {
+                        const text = inputText.value.trim();
+                        if (text) {
+                            inputText.value = '';
+                            autoResize();
+                            submitVerificationAnswer(pendingVerificationId.value, text);
+                        }
+                    } else {
+                        handleSend();
+                    }
                 }
             }
 
@@ -2147,6 +2475,13 @@
                 showModelPanel.value = false;
                 showModelSelect.value = false;
                 refreshModelSettings();
+            }
+
+            // 选择 LLM 模型
+            function selectLLMModel(model) {
+                selectedLLMModel.value = model;
+                showLLMModelSelect.value = false;
+                console.log('[LLM] 选择模型:', model.name, 'supports_vl:', model.supportsVl);
             }
 
             // 互斥切换下拉
@@ -2352,7 +2687,17 @@
                 onPromptKeydown,
                 onPromptBlur,
                 insertMention,
-                triggerMention
+                triggerMention,
+                // LLM 模型相关
+                allLLMModels,
+                selectedLLMModel,
+                showLLMModelSelect,
+                selectLLMModel,
+                loadLLMModels,
+                // Verification（ask_user 交互）
+                pendingVerificationId,
+                selectVerificationOption,
+                submitVerificationAnswer
             };
         }
     }).mount('#app');

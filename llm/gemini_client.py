@@ -198,9 +198,37 @@ class GeminiClient(BaseLLMClient):
                     "parts": [{"text": msg["content"]}]
                 }
             elif role == "user":
+                parts = []
+                if isinstance(msg["content"], list):
+                    # 多模态消息（包含图片）
+                    for part in msg["content"]:
+                        if part.get("type") == "text":
+                            parts.append({"text": part["text"]})
+                        elif part.get("type") == "image_url":
+                            url = part["image_url"]["url"]
+                            # base64 格式: data:image/jpeg;base64,...
+                            if url.startswith("data:"):
+                                mime_type = url.split(";")[0].split(":")[1]
+                                data = url.split(",", 1)[1]
+                                parts.append({
+                                    "inlineData": {
+                                        "mimeType": mime_type,
+                                        "data": data
+                                    }
+                                })
+                            else:
+                                # URL 格式（备用）
+                                parts.append({
+                                    "fileData": {
+                                        "mimeType": "image/jpeg",
+                                        "fileUri": url
+                                    }
+                                })
+                else:
+                    parts = [{"text": msg["content"]}]
                 gemini_data["contents"].append({
                     "role": "user",
-                    "parts": [{"text": msg["content"]}]
+                    "parts": parts
                 })
             elif role == "assistant":
                 parts = []

@@ -165,10 +165,10 @@ class OpenAIBaseClient(BaseLLMClient):
 
             # 脱敏后打印完整请求 payload
             safe_kwargs = json.loads(json.dumps(kwargs, ensure_ascii=False, default=str))
-            if "messages" in safe_kwargs:
-                for msg in safe_kwargs["messages"]:
-                    if "content" in msg and isinstance(msg["content"], str) and len(msg["content"]) > 200:
-                        msg["content"] = msg["content"][:200] + "... [truncated]"
+            # if "messages" in safe_kwargs:
+            #     for msg in safe_kwargs["messages"]:
+            #         if "content" in msg and isinstance(msg["content"], str) and len(msg["content"]) > 200:
+            #             msg["content"] = msg["content"][:200] + "... [truncated]"
             payload_str = json.dumps(safe_kwargs, ensure_ascii=False, indent=2)
             llm_logger.info(f"{self.vendor_name.upper()} API request payload:\n{payload_str}")
 

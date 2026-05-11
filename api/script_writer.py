@@ -674,6 +674,7 @@ class TaskCreateRequest(BaseModel):
     vendor_id: int = 1
     enable_thinking: bool = False
     thinking_effort: str = "medium"
+    image_urls: Optional[List[str]] = None
 
 class ModelChangeRequest(BaseModel):
     model: str
@@ -744,9 +745,9 @@ async def create_session(request: Request, session_request: SessionCreateRequest
             world_id=session_request.world_id,
             auth_token=session_request.auth_token,
             model=session_request.model,
-            model_id=session_request.model_id
+            model_id=session_request.model_id,
+            session_type=session_request.session_type
         )
-        session.session_type = session_request.session_type
 
         # 存储会话到数据库
         if not session_storage.save_session(session, expires_hours=24):
@@ -1775,7 +1776,8 @@ async def create_agent_task(request: Request, session_id: str, task_request: Tas
             vendor_id=vendor_id,
             model_id=model_id,
             enable_thinking=task_request.enable_thinking,
-            thinking_effort=task_request.thinking_effort
+            thinking_effort=task_request.thinking_effort,
+            image_urls=task_request.image_urls
         )
         
         # 获取任务对象
