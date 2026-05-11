@@ -38,7 +38,7 @@ def upgrade() -> None:
             'driver_key': 'gpt_image_2',
             'site_number': 0,
             'power_config': '{"fixed": 2}',
-            'sort_order': 3210.0,
+            'sort_order': 3100.0,
         },
         {
             'implementation_name': 'gpt_image_common_site1_v1',
