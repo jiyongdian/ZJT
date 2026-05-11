@@ -1,0 +1,10 @@
+{
+  "sop-image-generation": {
+    "allowed_tools": [
+    ]
+  },
+  "sop-video-generation": {
+    "allowed_tools": [
+    ]
+  }
+}
