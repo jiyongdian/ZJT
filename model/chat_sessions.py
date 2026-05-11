@@ -19,6 +19,7 @@ class ChatSessionEntity:
         self.session_id = kwargs.get('session_id')
         self.user_id = kwargs.get('user_id')
         self.world_id = kwargs.get('world_id')
+        self.session_type = kwargs.get('session_type', 1)
         self.auth_token = kwargs.get('auth_token', '')
         self.model = kwargs.get('model', 'gemini-3-flash-preview')
         self.model_id = kwargs.get('model_id')
@@ -52,6 +53,7 @@ class ChatSessionEntity:
             'session_id': self.session_id,
             'user_id': self.user_id,
             'world_id': self.world_id,
+            'session_type': self.session_type,
             'auth_token': self.auth_token,
             'model': self.model,
             'model_id': self.model_id,
@@ -81,7 +83,8 @@ class ChatSessionsModel:
         model_id: Optional[int] = None,
         text_to_image_model_id: Optional[int] = None,
         conversation_history: list = None,
-        expires_at: Optional[datetime] = None
+        expires_at: Optional[datetime] = None,
+        session_type: int = 1
     ) -> int:
         """
         Create a new chat session
@@ -96,18 +99,19 @@ class ChatSessionsModel:
             text_to_image_model_id: Text-to-image model task ID
             conversation_history: Initial conversation history (default: empty list)
             expires_at: Session expiration time (None = never expires)
+            session_type: Session type (1=script writer, 2=marketing agent)
 
         Returns:
             Inserted record ID
         """
         sql = """
             INSERT INTO chat_sessions
-            (session_id, user_id, world_id, auth_token, model, model_id,
+            (session_id, user_id, world_id, session_type, auth_token, model, model_id,
              text_to_image_model_id, conversation_history, expires_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         history_json = json.dumps(conversation_history or [], ensure_ascii=False)
-        params = (session_id, user_id, world_id, auth_token, model,
+        params = (session_id, user_id, world_id, session_type, auth_token, model,
                   model_id, text_to_image_model_id, history_json, expires_at)
 
         try:
@@ -145,7 +149,8 @@ class ChatSessionsModel:
         user_id: str,
         world_id: Optional[str] = None,
         active_only: bool = True,
-        limit: int = 100
+        limit: int = 100,
+        session_type: Optional[int] = None
     ) -> List[ChatSessionEntity]:
         """
         List sessions by user
@@ -155,27 +160,29 @@ class ChatSessionsModel:
             world_id: Optional world ID filter
             active_only: Only return active sessions
             limit: Maximum number of sessions to return
+            session_type: Optional session type filter (1=script, 2=marketing)
 
         Returns:
             List of ChatSessionEntity objects
         """
+        conditions = ["user_id = %s", "is_active = %s"]
+        params = [user_id, 1 if active_only else 0]
+
         if world_id:
-            sql = """
-                SELECT * FROM chat_sessions
-                WHERE user_id = %s AND world_id = %s
-                AND is_active = %s
-                ORDER BY updated_at DESC
-                LIMIT %s
-            """
-            params = (user_id, world_id, 1 if active_only else 0, limit)
-        else:
-            sql = """
-                SELECT * FROM chat_sessions
-                WHERE user_id = %s AND is_active = %s
-                ORDER BY updated_at DESC
-                LIMIT %s
-            """
-            params = (user_id, 1 if active_only else 0, limit)
+            conditions.append("world_id = %s")
+            params.append(world_id)
+
+        if session_type is not None:
+            conditions.append("session_type = %s")
+            params.append(session_type)
+
+        params.append(limit)
+        sql = f"""
+            SELECT * FROM chat_sessions
+            WHERE {' AND '.join(conditions)}
+            ORDER BY updated_at DESC
+            LIMIT %s
+        """
 
         try:
             results = execute_query(sql, params, fetch_all=True)
@@ -462,6 +469,7 @@ CREATE TABLE IF NOT EXISTS `chat_sessions` (
   `session_id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'UUID session identifier',
   `user_id` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'User ID',
   `world_id` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'World ID',
+  `session_type` tinyint NOT NULL DEFAULT '1' COMMENT '会话类型: 1=剧本智能体, 2=营销智能体',
   `auth_token` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Authentication token',
   `model` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'gemini-3-flash-preview' COMMENT 'AI model name',
   `model_id` int DEFAULT NULL COMMENT 'Model ID from vendor',
@@ -477,7 +485,7 @@ CREATE TABLE IF NOT EXISTS `chat_sessions` (
   `is_active` tinyint(1) NOT NULL DEFAULT '1' COMMENT 'Whether session is active (1=active, 0=inactive)',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_session_id` (`session_id`),
-  KEY `idx_user_world` (`user_id`,`world_id`),
+  KEY `idx_user_world_type` (`user_id`,`world_id`,`session_type`),
   KEY `idx_expires_at` (`expires_at`),
   KEY `idx_updated_at` (`updated_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Chat sessions table'

@@ -664,6 +664,7 @@ class SessionCreateRequest(BaseModel):
     auth_token: str = ""
     model: Optional[str] = None
     model_id: Optional[int] = None
+    session_type: int = 1
 
 class TaskCreateRequest(BaseModel):
     message: str
@@ -745,6 +746,7 @@ async def create_session(request: Request, session_request: SessionCreateRequest
             model=session_request.model,
             model_id=session_request.model_id
         )
+        session.session_type = session_request.session_type
 
         # 存储会话到数据库
         if not session_storage.save_session(session, expires_hours=24):
@@ -1124,7 +1126,8 @@ async def get_current_text_to_image_model(
 @router.get('/sessions')
 async def list_sessions(
     user_id: Optional[str] = QueryParam(None),
-    world_id: Optional[str] = QueryParam(None)
+    world_id: Optional[str] = QueryParam(None),
+    session_type: Optional[int] = QueryParam(None)
 ):
     """列出所有会话"""
     try:
@@ -1132,7 +1135,7 @@ async def list_sessions(
 
         if user_id:
             # 从数据库查询用户的会话
-            entities = ChatSessionsModel.list_by_user(user_id, world_id, active_only=True, limit=100)
+            entities = ChatSessionsModel.list_by_user(user_id, world_id, active_only=True, limit=100, session_type=session_type)
             session_list = [
                 {
                     'session_id': e.session_id,

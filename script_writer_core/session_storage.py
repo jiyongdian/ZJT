@@ -109,6 +109,7 @@ class SessionStorage:
             model_id=entity.model_id,
             text_to_image_model_id=entity.text_to_image_model_id
         )
+        session.session_type = entity.session_type
 
         # 同步生图模型配置到内存（解决页面刷新/服务重启后配置丢失问题）
         if entity.text_to_image_model_id is not None:
@@ -278,7 +279,8 @@ class SessionStorage:
                     model_id=session.model_id,
                     text_to_image_model_id=session.text_to_image_model_id,
                     conversation_history=session.get_history(),
-                    expires_at=expires_at
+                    expires_at=expires_at,
+                    session_type=getattr(session, 'session_type', 1)
                 )
                 logger.info(f"Session {session.session_id} created in database")
                 

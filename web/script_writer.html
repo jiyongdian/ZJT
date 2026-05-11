@@ -1685,7 +1685,7 @@
         async function initOrReuseSession() {
             try {
                 // 先尝试获取当前用户的最新活跃会话
-                const response = await fetch(`/api/sessions?user_id=${USER_ID}&world_id=${WORLD_ID}&limit=1`, {
+                const response = await fetch(`/api/sessions?user_id=${USER_ID}&world_id=${WORLD_ID}&session_type=1&limit=1`, {
                     headers: {
                         'Authorization': `Bearer ${AUTH_TOKEN}`
                     }
@@ -1746,7 +1746,8 @@
                         system_prompt: systemPrompt,
                         user_id: USER_ID,
                         world_id: WORLD_ID,
-                        auth_token: AUTH_TOKEN
+                        auth_token: AUTH_TOKEN,
+                        session_type: 1
                     })
                 });
 

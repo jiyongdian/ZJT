@@ -887,7 +887,8 @@
                         body: JSON.stringify({
                             user_id: userId.value,
                             world_id: worldId.value,
-                            auth_token: authToken.value
+                            auth_token: authToken.value,
+                            session_type: 2
                         })
                     });
                     const data = await response.json();
@@ -1538,7 +1539,7 @@
             // 从后端加载会话列表
             async function loadSessionsFromBackend() {
                 try {
-                    const response = await fetch(`/api/sessions?user_id=${encodeURIComponent(userId.value)}&world_id=${encodeURIComponent(worldId.value)}&limit=50`, {
+                    const response = await fetch(`/api/sessions?user_id=${encodeURIComponent(userId.value)}&world_id=${encodeURIComponent(worldId.value)}&session_type=2&limit=50`, {
                         headers: {
                             'Authorization': authToken.value,
                             'X-User-Id': userId.value
