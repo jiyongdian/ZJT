@@ -3031,22 +3031,31 @@
 
         function restoreThinkingState() {
             const savedStateRaw = localStorage.getItem('lastThinkingState');
-            if (!savedStateRaw) return;
+            const toggle = document.getElementById('thinking-toggle');
+            const effortSelect = document.getElementById('thinking-effort');
+            if (!toggle) return;
 
-            try {
-                const state = JSON.parse(savedStateRaw);
-                const toggle = document.getElementById('thinking-toggle');
-                const effortSelect = document.getElementById('thinking-effort');
-
-                if (toggle) {
+            if (savedStateRaw) {
+                try {
+                    const state = JSON.parse(savedStateRaw);
                     toggle.checked = state.enabled || false;
+                    if (effortSelect && state.effort) {
+                        effortSelect.value = state.effort;
+                    }
+                    updateThinkingEffortVisibility();
+                } catch (e) {
+                    console.warn('[思考模式] 恢复状态失败:', e);
                 }
-                if (effortSelect && state.effort) {
-                    effortSelect.value = state.effort;
+            } else {
+                // 无缓存：DeepSeek 模型默认开启思考模式
+                const selector = document.getElementById('model-selector');
+                const selectedOption = selector?.options?.[selector.selectedIndex];
+                const vendorName = selectedOption?.dataset?.vendorName || '';
+                if (vendorName === LLMVendor.DEEPSEEK) {
+                    toggle.checked = true;
                 }
                 updateThinkingEffortVisibility();
-            } catch (e) {
-                console.warn('[思考模式] 恢复状态失败:', e);
+                saveThinkingState();
             }
         }
 
