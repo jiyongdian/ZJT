@@ -1,15 +1,17 @@
 """
 清理 config_prod.yml 中虚假的填充值
 
-将 runninghub.api_key 的假值 "9549532f3c3d435eXXXX" 和 duomi.token 的假值 "5q26ybqAXXXXX"
-替换为空字符串，避免系统误判密钥已配置。
+将以下虚假填充值替换为空字符串，避免系统误判密钥已配置：
+- runninghub.api_key: "9549532f3c3d435eXXXX"
+- duomi.token: "5q26ybqAXXXXX"
+- sk-f3694dd0XXXX, sk_xxxxx, your_volcengine_api_key, vda_xxxx
 
 Revision ID: 20260512_clear_fake_cfg_vals
 Revises: 20260509_opt_ai_tools_idx
 Create Date: 2026-05-12
 """
-import os
 import re
+from pathlib import Path
 
 from alembic import op
 
@@ -21,11 +23,8 @@ branch_labels = None
 depends_on = None
 
 
-# 项目根目录下的 config_prod.yml
-CONFIG_FILE = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    'config_prod.yml'
-)
+# 项目根目录下的 config_prod.yml（Path 跨平台兼容 Windows/Linux/macOS）
+CONFIG_FILE = Path(__file__).resolve().parent.parent.parent / 'config_prod.yml'
 
 # 虚假填充值 -> 正确值的替换映射
 REPLACEMENTS = [
@@ -33,14 +32,22 @@ REPLACEMENTS = [
     (r'api_key:\s*["\']9549532f3c3d435eXXXX["\']', 'api_key: ""'),
     # duomi.token 假值
     (r'token:\s*["\']5q26ybqAXXXXX["\']', 'token: ""'),
+    # LLM API Key 假值
+    (r'api_key:\s*["\']sk-f3694dd0XXXX["\']', 'api_key: ""'),
+    (r'api_key:\s*["\']sk_xxxxx["\']', 'api_key: ""'),
+    # 火山引擎 API Key 假值
+    (r'api_key:\s*["\']your_volcengine_api_key["\']', 'api_key: ""'),
+    # vidu token 假值
+    (r'token:\s*["\']vda_xxxx["\']', 'token: ""'),
 ]
 
 
 def upgrade():
-    if not os.path.exists(CONFIG_FILE):
+    if not CONFIG_FILE.exists():
         return
 
-    with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+    # newline='' 保留原始行尾符（Windows \r\n / Linux \n），避免跨平台写入时破坏行尾
+    with open(CONFIG_FILE, 'r', encoding='utf-8', newline='') as f:
         content = f.read()
 
     new_content = content
@@ -48,7 +55,7 @@ def upgrade():
         new_content = re.sub(pattern, replacement, new_content)
 
     if new_content != content:
-        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        with open(CONFIG_FILE, 'w', encoding='utf-8', newline='') as f:
             f.write(new_content)
 
 
