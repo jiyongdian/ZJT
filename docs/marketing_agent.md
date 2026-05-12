@@ -62,7 +62,7 @@ async def serve_marketing_agent():
 
 #### 接口复用
 
-营销智能体的对话能力**复用 `script_writer` 的现有接口**，无需新增后端 API：
+营销智能体的对话能力**复用 `script_writer` 的现有接口**：
 
 | 用途 | 接口 | 方法 |
 |------|------|------|
@@ -71,6 +71,8 @@ async def serve_marketing_agent():
 | 接收流式响应 | `/api/task/{task_id}/stream` | GET (SSE) |
 | 加载历史 | `/api/session/{session_id}/history` | GET |
 | 获取/创建世界 | `/api/worlds` | GET / POST |
+
+**图片 VL 流程**：用户上传图片后，前端在客户端压缩到 ~2MB 并转为 base64。发送消息时通过 `image_urls` 字段将 base64 传给后端，后端直接透传给 LLM，使大模型能够"看到"图片。
 
 页面初始化流程：
 1. 从 URL 参数获取 `user_id`，从 `localStorage` 获取 `auth_token`

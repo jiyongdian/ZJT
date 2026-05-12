@@ -238,6 +238,264 @@ def get_task_status(user_id: str, world_id: str, auth_token: str, item_type: int
         }
 
 
+def check_image_status(user_id: str, world_id: str, auth_token: str, project_id: str) -> Dict[str, Any]:
+    """
+    通过 project_id 查询图片生成结果（一次性查询，非轮询）
+
+    后台 scheduler 会自动轮询 ComfyUI 状态并更新数据库，本函数直接读取数据库最终状态。
+    适用于通用生图任务（营销等场景，不绑定 item_type/item_name）。
+
+    建议在调用 generate_text_to_image 后等待一段时间再查询，确保后台有足够时间处理。
+
+    Args:
+        user_id: 用户ID（必填）
+        world_id: 世界ID（必填）
+        auth_token: 认证令牌（必填）
+        project_id: 图片生成任务返回的 project_id（必填）
+
+    Returns:
+        Dict[str, Any]: 包含任务状态和图片URL的结果
+    """
+    try:
+        from model import GridImageTasksModel, GridImageTaskStatus
+
+        # 构造通用任务的 task_key（格式与 generate_text_to_image 中一致）
+        task_key = f"{user_id}_0_{project_id}"
+
+        task = GridImageTasksModel.get_by_task_key(task_key)
+        if not task:
+            return {
+                'success': True,
+                'status': 'not_found',
+                'message': f'未找到 project_id={project_id} 对应的任务记录',
+                'project_id': project_id
+            }
+
+        # 将数据库状态码转换为可读状态
+        status_map = {
+            GridImageTaskStatus.QUEUED: 'queued',
+            GridImageTaskStatus.PROCESSING: 'processing',
+            GridImageTaskStatus.COMPLETED: 'completed',
+            GridImageTaskStatus.FAILED: 'failed',
+            GridImageTaskStatus.TIMEOUT: 'timeout',
+            GridImageTaskStatus.CANCELLED: 'cancelled',
+            GridImageTaskStatus.DOWNLOAD_FAILED: 'download_failed',
+        }
+        readable_status = status_map.get(task.status, 'unknown')
+
+        result = {
+            'success': True,
+            'status': readable_status,
+            'project_id': project_id,
+            'message': f'任务状态: {readable_status}'
+        }
+
+        # 如果完成，返回图片URL
+        if task.status == GridImageTaskStatus.COMPLETED and task.result_url:
+            result['image_url'] = task.result_url
+            result['message'] = f'图片生成完成，图片URL: {task.result_url}'
+
+        # 如果失败，返回错误信息
+        if task.status in [GridImageTaskStatus.FAILED, GridImageTaskStatus.TIMEOUT,
+                           GridImageTaskStatus.DOWNLOAD_FAILED]:
+            result['error_message'] = task.error_message
+            result['message'] = f'图片生成失败: {task.error_message or "未知错误"}'
+
+        return result
+
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e),
+            'message': f"查询图片状态失败: {str(e)}",
+            'project_id': project_id
+        }
+
+
+def edit_image(user_id: str, world_id: str, auth_token: str, prompt: str,
+               image_url: str, aspect_ratio: str = "16:9", count: int = 1,
+               image_size: Optional[str] = None) -> Dict[str, Any]:
+    """
+    图片编辑（图生图）- MCP工具函数（非阻塞版本，支持后台任务处理）
+
+    根据用户提供的图片 URL 和编辑指令，调用图片编辑 API 生成新图片。
+    后台 scheduler 会自动跟踪进度，可通过 check_image_status 查询结果。
+
+    注意：图片编辑模型由用户在前端界面选择，不同模型算力价格不同，请先调用 get_text_to_image_model_info 了解当前模型。
+
+    Args:
+        user_id: 用户ID（必填）
+        world_id: 世界ID（必填）
+        auth_token: 认证令牌（必填）
+        prompt: 图片编辑指令（必填），例如："将背景替换为海滩"、"转为水彩画风格"
+        image_url: 原始图片URL（必填），需要编辑的源图片地址
+        aspect_ratio: 图片宽高比（默认：16:9）
+        count: 生成图片数量（默认：1）
+        image_size: 图片分辨率（可选），如 1K/2K/3K/4K
+
+    Returns:
+        dict: 操作结果，包含 success 状态、project_ids、task_id 等
+    """
+    # 获取用户配置的生图模型 task_id（图片编辑复用同一模型配置）
+    text_to_image_task_id = _get_text_to_image_task_id(user_id, world_id)
+
+    # 验证模型是否支持图片编辑
+    from config.unified_config import UnifiedConfigRegistry, TaskCategory
+    config = UnifiedConfigRegistry.get_by_id(text_to_image_task_id)
+    if config and config.category != TaskCategory.IMAGE_EDIT and TaskCategory.IMAGE_EDIT not in getattr(config, 'categories', []):
+        # 当前选中的模型不支持图片编辑，尝试查找默认的图片编辑模型
+        image_edit_models = UnifiedConfigRegistry.get_by_category(TaskCategory.IMAGE_EDIT)
+        if image_edit_models:
+            # 优先使用默认模型（id=7），否则使用第一个可用的图片编辑模型
+            fallback = next((m for m in image_edit_models if m.id == DEFAULT_TEXT_TO_IMAGE_TASK_ID), image_edit_models[0])
+            text_to_image_task_id = fallback.id
+            logger.warning(f"当前选中的模型不支持图片编辑，自动切换到: {fallback.name} (id={fallback.id})")
+        else:
+            return {
+                'success': False,
+                'error': f'当前选中的模型（id={text_to_image_task_id}）不支持图片编辑，且系统中没有可用的图片编辑模型'
+            }
+
+    model_name = _get_model_name_by_task_id(text_to_image_task_id)
+
+    try:
+        # 验证参数
+        if not auth_token:
+            return {'success': False, 'error': '认证令牌不能为空'}
+
+        if not prompt or not isinstance(prompt, str):
+            return {'success': False, 'error': '编辑指令不能为空且必须是字符串'}
+
+        if not image_url or not isinstance(image_url, str):
+            return {'success': False, 'error': '图片URL不能为空且必须是字符串'}
+
+        server_config = get_config().get("server", {})
+        comfyui_base_url = server_config.get("comfyui_base_url_inner") or server_config.get("host", "")
+
+        if not comfyui_base_url:
+            return {'success': False, 'error': '配置文件中未找到comfyui_base_url_inner或host配置'}
+
+        # 确定 image_size
+        config = UnifiedConfigRegistry.get_by_id(text_to_image_task_id)
+        if image_size:
+            if config and config.supported_sizes:
+                supported_lower = [s.lower() for s in config.supported_sizes]
+                if image_size.lower() not in supported_lower:
+                    return {
+                        'success': False,
+                        'error': f'不支持的图片尺寸: {image_size}，当前模型支持: {config.supported_sizes}'
+                    }
+        elif config and config.default_size:
+            image_size = config.default_size
+
+        # 计算预估算力
+        from utils.computing_power import get_computing_power_for_task
+        context_for_power = {}
+        if image_size:
+            context_for_power['resolution'] = image_size
+        elif config and config.default_size:
+            context_for_power['resolution'] = config.default_size
+        computing_power_per_image = get_computing_power_for_task(
+            text_to_image_task_id, context=context_for_power or None
+        )
+        computing_power_total = computing_power_per_image * count
+
+        # 调用图片编辑 API
+        api_url = f"{comfyui_base_url.rstrip('/')}/api/image-edit"
+
+        request_data = {
+            'prompt': prompt,
+            'task_id': text_to_image_task_id,
+            'ratio': aspect_ratio,
+            'count': count,
+            'user_id': user_id,
+            'auth_token': auth_token,
+            'ref_image_urls': image_url,
+        }
+        if image_size:
+            request_data['image_size'] = image_size
+
+        try:
+            response = requests.post(api_url, data=request_data, timeout=30)
+            response.raise_for_status()
+
+            result_data = response.json()
+            project_ids = result_data.get('project_ids', [])
+
+            if not project_ids:
+                return {
+                    'success': False,
+                    'error': '图片编辑请求成功但未返回project_ids'
+                }
+
+            # 创建通用后台任务记录（复用 item_type=0 机制）
+            task_id = None
+            try:
+                from model import GridImageTasksModel, GridImageTaskStatus
+                general_task_key = f"{user_id}_0_{project_ids[0]}"
+                existing = GridImageTasksModel.get_by_task_key(general_task_key)
+                if existing and existing.status not in [GridImageTaskStatus.QUEUED, GridImageTaskStatus.PROCESSING]:
+                    GridImageTasksModel.delete_by_task_key(general_task_key)
+                GridImageTasksModel.create(
+                    task_key=general_task_key,
+                    project_id=project_ids[0],
+                    item_type=0,
+                    item_name=project_ids[0],
+                    user_id=user_id,
+                    world_id=world_id,
+                    comfyui_base_url=comfyui_base_url,
+                    auth_token=auth_token,
+                    max_attempts=60
+                )
+                task_id = general_task_key
+                logger.info(f"创建图片编辑后台任务: {general_task_key}, project_id: {project_ids[0]}")
+            except Exception as e:
+                logger.warning(f"图片编辑后台任务创建失败（不影响编辑请求）: {e}")
+
+            result = {
+                'success': True,
+                'project_ids': project_ids,
+                'status': 'submitted',
+                'comfyui_base_url': comfyui_base_url,
+                'model_used': model_name,
+                'image_size_used': image_size,
+                'computing_power_required': computing_power_per_image,
+                'computing_power_total': computing_power_total,
+                'item_type': 0,
+                'item_name': project_ids[0],
+            }
+
+            if task_id:
+                result.update({
+                    'task_id': task_id,
+                    'message': f'图片编辑请求已提交（使用模型: {model_name}），后台任务已创建。project_ids: {project_ids}, task_id: {task_id}'
+                })
+            else:
+                result['message'] = f'图片编辑请求已提交（使用模型: {model_name}），project_ids: {project_ids}'
+
+            return result
+
+        except requests.exceptions.RequestException as e:
+            error_detail = f'图片编辑请求失败: {str(e)}'
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    resp_data = e.response.json()
+                    detail = resp_data.get('detail', '')
+                    if detail:
+                        error_detail = detail
+                except Exception:
+                    pass
+            return {
+                'success': False,
+                'error': error_detail,
+                'model_used': model_name
+            }
+
+    except Exception as e:
+        logger.error(f"edit_image error: {e}", exc_info=True)
+        return {'success': False, 'error': f'图片编辑失败: {str(e)}'}
+
+
 def validate_name_for_filename(name: str, field_name: str = "名称") -> Dict[str, Any]:
     """
     验证名称是否只包含中文、英文、数字、点号、下划线，确保可以用作文件名
@@ -2447,6 +2705,50 @@ MCP_TOOLS = [
             },
             "required": ["item_type", "item_name"]
         }
+    },
+    {
+        "name": "check_image_status",
+        "description": "通过 project_id 查询图片生成结果（一次性查询）。后台会自动跟踪生图进度，调用此函数直接从数据库读取最终状态和图片URL。适用于不绑定item的通用生图场景（如营销图片）。建议在 generate_text_to_image 或 edit_image 返回后等待一段时间再调用，给后台留出处理时间。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "generate_text_to_image 或 edit_image 返回的 project_ids 数组中的第一个元素"
+                }
+            },
+            "required": ["project_id"]
+        }
+    },
+    {
+        "name": "edit_image",
+        "description": "图片编辑（图生图）。根据用户提供的原始图片URL和编辑指令，调用图片编辑API生成新图片。非阻塞，立即返回project_ids。后台会自动跟踪进度，通过 check_image_status 查询结果。注意：图片编辑模型由用户在前端界面选择，不同模型算力价格不同，请先调用 get_text_to_image_model_info 了解当前模型。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "图片编辑指令（必填），例如：'将背景替换为海滩'、'转为水彩画风格'、'添加圣诞装饰'"
+                },
+                "image_url": {
+                    "type": "string",
+                    "description": "原始图片URL（必填），需要编辑的源图片地址"
+                },
+                "aspect_ratio": {
+                    "type": "string",
+                    "description": "图片宽高比（可选，默认：16:9），支持格式如：16:9, 4:3, 1:1, 9:16等"
+                },
+                "count": {
+                    "type": "integer",
+                    "description": "生成图片数量（可选，默认：1）"
+                },
+                "image_size": {
+                    "type": "string",
+                    "description": "图片分辨率（可选），如 1K/2K/3K/4K，不填则使用模型默认值"
+                }
+            },
+            "required": ["prompt", "image_url"]
+        }
     }
 ]
 
@@ -2765,9 +3067,10 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
                     'error': '图片生成请求成功但未返回project_ids'
                 }
             
-            # 如果指定了item_type和item_name，创建后台任务
+            # 创建后台任务跟踪记录
             task_id = None
             if item_type is not None and item_name:
+                # 绑定到具体角色/场景/道具的任务
                 try:
                     task_manager = get_task_manager()
                     task_id = task_manager.create_image_task(
@@ -2795,6 +3098,31 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
                         'warning': f'后台任务创建失败: {str(e)}',
                         'comfyui_base_url': comfyui_base_url
                     }
+            else:
+                # 通用生图任务（营销等场景，不绑定item），直接创建数据库记录
+                # 后台 scheduler 会自动轮询 ComfyUI 状态并更新 result_url
+                try:
+                    from model import GridImageTasksModel, GridImageTaskStatus
+                    general_task_key = f"{user_id}_0_{project_ids[0]}"
+                    # 清理同 key 的终态旧记录
+                    existing = GridImageTasksModel.get_by_task_key(general_task_key)
+                    if existing and existing.status not in [GridImageTaskStatus.QUEUED, GridImageTaskStatus.PROCESSING]:
+                        GridImageTasksModel.delete_by_task_key(general_task_key)
+                    GridImageTasksModel.create(
+                        task_key=general_task_key,
+                        project_id=project_ids[0],
+                        item_type=0,
+                        item_name=project_ids[0],
+                        user_id=user_id,
+                        world_id=world_id,
+                        comfyui_base_url=comfyui_base_url,
+                        auth_token=auth_token,
+                        max_attempts=60
+                    )
+                    task_id = general_task_key
+                    logger.info(f"创建通用生图后台任务: {general_task_key}, project_id: {project_ids[0]}")
+                except Exception as e:
+                    logger.warning(f"通用生图后台任务创建失败（不影响生图请求）: {e}")
             
             result = {
                 'success': True,
@@ -2811,8 +3139,8 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
             if task_id:
                 result.update({
                     'task_id': task_id,
-                    'item_type': item_type,
-                    'item_name': item_name,
+                    'item_type': item_type if item_type is not None else 0,
+                    'item_name': item_name if item_name else project_ids[0],
                     'message': f'图片生成请求已提交（使用模型: {model_name}），后台任务已创建。project_ids: {project_ids}, task_id: {task_id}'
                 })
             else:

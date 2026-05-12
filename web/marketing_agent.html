@@ -623,6 +623,7 @@
             const hasUploadedImage = ref(false);
             const uploadedImageUrl = ref('');
             const uploadedImageFile = ref(null);
+            const uploadedImageBase64 = ref('');  // 服务端压缩后的 base64
             const fileInputRef = ref(null);
             const isDragging = ref(false);
 
@@ -1475,18 +1476,25 @@
                 const sessionId = currentSessionId.value;
 
                 try {
-                    // 收集图片并压缩为 base64
+                    // 收集图片 base64
                     const imageUrls = [];
-                    if (hasUploadedImage.value && uploadedImageFile.value) {
-                        try {
-                            const base64 = await compressImageToBase64(uploadedImageFile.value, 2);
-                            imageUrls.push(base64);
-                            console.log('[VL] 图片已压缩并转为 base64，大小:', Math.round(base64.length * 3 / 4 / 1024), 'KB');
-                        } catch (compressErr) {
-                            console.error('[VL] 图片压缩失败:', compressErr);
-                            showError('图片压缩失败，请重试');
-                            isLoading.value = false;
-                            return;
+                    if (hasUploadedImage.value) {
+                        if (uploadedImageBase64.value) {
+                            // 已提前压缩好的缓存
+                            imageUrls.push(uploadedImageBase64.value);
+                            console.log('[VL] 使用已缓存图片，大小:', Math.round(uploadedImageBase64.value.length * 3 / 4 / 1024), 'KB');
+                        } else if (uploadedImageFile.value) {
+                            // 图片还在压缩中，等待完成
+                            try {
+                                const base64 = await compressImageToBase64(uploadedImageFile.value, 2);
+                                imageUrls.push(base64);
+                                console.log('[VL] 实时压缩图片，大小:', Math.round(base64.length * 3 / 4 / 1024), 'KB');
+                            } catch (compressErr) {
+                                console.error('[VL] 图片压缩失败:', compressErr);
+                                showError('图片压缩失败，请重试');
+                                isLoading.value = false;
+                                return;
+                            }
                         }
                     }
 
@@ -1540,6 +1548,8 @@
                     });
                 } finally {
                     isLoading.value = false;
+                    // 清理已使用的图片 base64（下次发消息需重新上传）
+                    uploadedImageBase64.value = '';
                     scrollToBottom();
                 }
             }
@@ -1737,6 +1747,7 @@
                 hasUploadedImage.value = false;
                 uploadedImageUrl.value = '';
                 uploadedImageFile.value = null;
+                uploadedImageBase64.value = '';
                 if (fileInputRef.value) fileInputRef.value.value = '';
                 if (referenceInputRef.value) referenceInputRef.value.value = '';
                 // 创建后端新会话
@@ -2174,6 +2185,15 @@
                 addMediaItem(file, 'image', previewUrl);
                 // 切换模型后刷新设置
                 refreshModelSettings();
+
+                // 立即在客户端压缩为 base64（供发送给 LLM 使用）
+                uploadedImageBase64.value = '';
+                compressImageToBase64(file, 2).then(b64 => {
+                    uploadedImageBase64.value = b64;
+                    console.log('[VL] 图片已压缩，大小:', Math.round(b64.length * 3 / 4 / 1024), 'KB');
+                }).catch(err => {
+                    console.error('[VL] 图片压缩失败:', err);
+                });
             }
 
             function clearUploadedImage() {
@@ -2191,6 +2211,7 @@
                 hasUploadedImage.value = false;
                 uploadedImageUrl.value = '';
                 uploadedImageFile.value = null;
+                uploadedImageBase64.value = '';
                 if (fileInputRef.value) fileInputRef.value.value = '';
                 refreshModelSettings();
             }
@@ -2442,9 +2463,16 @@
                 hasUploadedImage.value = true;
                 addMediaItem(file, 'image', previewUrl);
                 refreshModelSettings();
-            }
 
-            // 选择创作类型
+                // 立即在客户端压缩为 base64（供发送给 LLM 使用）
+                uploadedImageBase64.value = '';
+                compressImageToBase64(file, 2).then(b64 => {
+                    uploadedImageBase64.value = b64;
+                    console.log('[VL] 图片已压缩，大小:', Math.round(b64.length * 3 / 4 / 1024), 'KB');
+                }).catch(err => {
+                    console.error('[VL] 图片压缩失败:', err);
+                });
+            }
             function selectType(type) {
                 selectedType.value = type.name;
                 showDropdown.value = false;

@@ -157,6 +157,19 @@
         "ask_user"
       ],
       "summary_only": true
+    },
+    "marketing-image": {
+      "skills": ["marketing-image"],
+      "model": "gemini/gemini-3-flash-preview",
+      "allowed_tools": [
+        "generate_text_to_image",
+        "edit_image",
+        "check_image_status",
+        "get_text_to_image_model_info",
+        "get_user_computing_power",
+        "ask_user"
+      ],
+      "summary_only": true
     }
   }
 }

@@ -31,7 +31,7 @@ class TaskManager:
         统一生成任务键的方法，供全局使用
         
         Args:
-            item_type: 项目类型 (1=character, 2=location, 3=props)
+            item_type: 项目类型 (0=general, 1=character, 2=location, 3=props)
             item_name: 项目名称
             user_id: 用户ID（可选，保留供未来使用）
         

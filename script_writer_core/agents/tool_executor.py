@@ -29,6 +29,8 @@ from script_writer_core.mcp_tool import (
     generate_4grid_location_images,
     generate_4grid_prop_images,
     get_task_status,
+    check_image_status,
+    edit_image,
     get_text_to_image_model_info,
     get_user_computing_power,
 )
@@ -70,6 +72,8 @@ class ToolExecutor:
             "generate_4grid_location_images": generate_4grid_location_images,
             "generate_4grid_prop_images": generate_4grid_prop_images,
             "get_task_status": get_task_status,
+            "check_image_status": check_image_status,
+            "edit_image": edit_image,
             "get_text_to_image_model_info": get_text_to_image_model_info,
             "get_user_computing_power": get_user_computing_power,
         }
@@ -101,8 +105,8 @@ class ToolExecutor:
                 "update_character_json", "update_script_json", "update_location_json",
                 "update_prop_json", "get_long_user_input", "generate_text_to_image",
                 "generate_4grid_character_images", "generate_4grid_location_images",
-                "generate_4grid_prop_images", "get_task_status",
-                "get_text_to_image_model_info", "get_user_computing_power"
+                "generate_4grid_prop_images", "get_task_status", "check_image_status",
+                "edit_image", "get_text_to_image_model_info", "get_user_computing_power"
             ]
             
             if tool_name in mcp_tool_names:
