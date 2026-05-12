@@ -2,9 +2,13 @@
 清理 config_prod.yml 中虚假的填充值
 
 将以下虚假填充值替换为空字符串，避免系统误判密钥已配置：
-- runninghub.api_key: "9549532f3c3d435eXXXX"
-- duomi.token: "5q26ybqAXXXXX"
-- sk-f3694dd0XXXX, sk_xxxxx, your_volcengine_api_key, vda_xxxx
+- runninghub.api_key: 9549532f3c3d435eXXXX
+- duomi.token: 5q26ybqAXXXXX
+- llm.google.api_key: sk_xxxxx
+- llm.qwen.api_key: sk-f3694dd0XXXX
+- llm.baidu.api_key: bce-v3/ALTAK-RW7XXXX
+- volcengine.api_key: your_volcengine_api_key
+- vidu.token: vda_xxxx
 
 Revision ID: 20260512_clear_fake_cfg_vals
 Revises: 20260509_opt_ai_tools_idx
@@ -27,18 +31,22 @@ depends_on = None
 CONFIG_FILE = Path(__file__).resolve().parent.parent.parent / 'config_prod.yml'
 
 # 虚假填充值 -> 正确值的替换映射
+# 正则兼容有引号（"vda_xxxx"）和无引号（vda_xxxx）两种 YAML 写法
 REPLACEMENTS = [
     # runninghub.api_key 假值
-    (r'api_key:\s*["\']9549532f3c3d435eXXXX["\']', 'api_key: ""'),
+    (r'api_key:\s*["\']?9549532f3c3d435eXXXX["\']?', 'api_key: ""'),
     # duomi.token 假值
-    (r'token:\s*["\']5q26ybqAXXXXX["\']', 'token: ""'),
-    # LLM API Key 假值
-    (r'api_key:\s*["\']sk-f3694dd0XXXX["\']', 'api_key: ""'),
-    (r'api_key:\s*["\']sk_xxxxx["\']', 'api_key: ""'),
-    # 火山引擎 API Key 假值
-    (r'api_key:\s*["\']your_volcengine_api_key["\']', 'api_key: ""'),
-    # vidu token 假值
-    (r'token:\s*["\']vda_xxxx["\']', 'token: ""'),
+    (r'token:\s*["\']?5q26ybqAXXXXX["\']?', 'token: ""'),
+    # llm.google.api_key 假值
+    (r'api_key:\s*["\']?sk_xxxxx["\']?', 'api_key: ""'),
+    # llm.qwen.api_key 假值
+    (r'api_key:\s*["\']?sk-f3694dd0XXXX["\']?', 'api_key: ""'),
+    # llm.baidu.api_key 假值
+    (r'api_key:\s*["\']?bce-v3/ALTAK-RW7XXXX["\']?', 'api_key: ""'),
+    # volcengine.api_key 假值
+    (r'api_key:\s*["\']?your_volcengine_api_key["\']?', 'api_key: ""'),
+    # vidu.token 假值
+    (r'token:\s*["\']?vda_xxxx["\']?', 'token: ""'),
 ]
 
 
