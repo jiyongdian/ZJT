@@ -438,7 +438,9 @@ def get_current_remote_url(git_cmd, project_dir, timeout):
 def update_remote_url_if_needed(git_cmd, project_dir, repo_urls, timeout):
     """检查并更新 origin URL
 
-    如果当前 origin URL 不在配置的 repo_urls 中，则更新为第一个可用的源。
+    优先使用 repo_urls 中第一个源（最高优先级）。
+    如果当前 origin 不是第一个源，尝试切换过去。
+    如果最高优先级源不可用，降级接受当前已在列表中的源。
     返回 True 表示 origin URL 有效（无需更新或更新成功）。
     """
     current_url = get_current_remote_url(git_cmd, project_dir, timeout)
@@ -464,21 +466,48 @@ def update_remote_url_if_needed(git_cmd, project_dir, repo_urls, timeout):
         return url
 
     current_normalized = normalize_url(current_url)
+    first_url_normalized = normalize_url(repo_urls[0]) if repo_urls else None
 
-    # 检查当前 URL 是否在配置的 repo_urls 中
+    # 当前已经是最高优先级源，无需切换
+    if first_url_normalized and current_normalized == first_url_normalized:
+        return True
+
+    # 尝试切换到最高优先级源
+    if repo_urls:
+        first_url = repo_urls[0]
+        rc, _, err = run_git(
+            git_cmd, ["remote", "set-url", "origin", first_url],
+            project_dir, timeout=timeout
+        )
+        if rc == 0:
+            rc, _, _ = run_git(
+                git_cmd, ["ls-remote", "--heads", "origin"],
+                project_dir, timeout=timeout
+            )
+            if rc == 0:
+                print(f"[upgrade] 已切换到优先源: {first_url}")
+                return True
+            else:
+                # 最高优先级源不可用，恢复原 URL
+                print(f"[upgrade] 优先源 {first_url} 不可用，保持当前源")
+                run_git(
+                    git_cmd, ["remote", "set-url", "origin", current_url],
+                    project_dir, timeout=timeout
+                )
+
+    # 检查当前 origin 是否在配置列表中（降级接受）
     for url in repo_urls:
         if normalize_url(url) == current_normalized:
-            return True  # 当前 URL 有效
+            return True
 
-    # 当前 URL 不在配置中，更新为第一个可用的源
+    # 当前 origin 不在配置中，按顺序找第一个可用的
     print(f"[upgrade] 当前 origin ({current_url}) 不在配置的源中")
-    for url in repo_urls:
+    for url in repo_urls[1:]:  # 跳过第一个（已尝试过）
         rc, _, err = run_git(
             git_cmd, ["remote", "set-url", "origin", url],
             project_dir, timeout=timeout
         )
         if rc == 0:
-            # 验证新源是否可用
             rc, _, _ = run_git(
                 git_cmd, ["ls-remote", "--heads", "origin"],
                 project_dir, timeout=timeout
