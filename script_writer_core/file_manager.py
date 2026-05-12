@@ -4,11 +4,19 @@
 """
 
 import os
+import re
 import json
+import shutil
+import zipfile
+import tempfile
+import logging
+from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Optional, Any
-from config.constant import FilePathConstants
+from typing import List, Dict, Optional, Any, Set, Tuple
+from config.constant import FilePathConstants, UploadPathConstants
 from utils.project_path import get_project_root
+
+logger = logging.getLogger(__name__)
 
 
 class FileManager:
@@ -1002,7 +1010,321 @@ class FileManager:
         except Exception as e:
             print(f"✗ 清空用户世界目录失败: {e}")
             return False
-    
+
+    # ==================== 导出/导入 ====================
+
+    # 匹配 reference_image URL 的正则：{SERVER_HOST}/upload/{type}/pic/{filename}
+    _IMAGE_URL_PATTERN = re.compile(r'/upload/(character|location|props)/pic/([^"\s\'}\]]+)')
+
+    def _collect_image_from_url(self, url: str) -> Optional[Tuple[str, str, Path]]:
+        """
+        从图片 URL 中提取类型、文件名和实际文件路径
+
+        Args:
+            url: 图片 URL，如 http://host/upload/character/pic/uuid.png
+
+        Returns:
+            (image_type, filename, file_path) 或 None
+        """
+        if not url or not isinstance(url, str):
+            return None
+        match = self._IMAGE_URL_PATTERN.search(url)
+        if not match:
+            return None
+        image_type = match.group(1)  # character / location / props
+        filename = match.group(2)    # uuid.png
+        file_path = self.base_dir / UploadPathConstants.UPLOAD_ROOT / image_type / "pic" / filename
+        if file_path.exists():
+            return (image_type, filename, file_path)
+        return None
+
+    def _rewrite_image_urls(self, data: Any, image_mapping: Dict[str, str], collected: Set[str],
+                             zipf: Optional[zipfile.ZipFile] = None) -> Any:
+        """
+        递归扫描 JSON 数据，替换图片 URL 为相对路径，并收集图片到 zip
+
+        Args:
+            data: JSON 数据（dict/list/str/其他）
+            image_mapping: URL → 相对路径 的映射表（会被修改）
+            collected: 已收集的图片文件名集合（会被修改）
+            zipf: zipfile 对象，如果提供则将图片写入 zip
+
+        Returns:
+            处理后的数据
+        """
+        if isinstance(data, dict):
+            result = {}
+            for key, value in data.items():
+                if key == 'reference_image' and isinstance(value, str) and value.strip():
+                    # 单张参考图
+                    info = self._collect_image_from_url(value)
+                    if info:
+                        image_type, filename, file_path = info
+                        rel_path = f"images/{filename}"
+                        if filename not in collected and zipf:
+                            zipf.write(file_path, rel_path)
+                            collected.add(filename)
+                        result[key] = rel_path
+                        image_mapping[filename] = f"/upload/{image_type}/pic/{filename}"
+                    else:
+                        result[key] = value
+                elif key == 'reference_images' and isinstance(value, list):
+                    # 多角度参考图列表
+                    new_list = []
+                    for item in value:
+                        if isinstance(item, dict) and 'url' in item:
+                            info = self._collect_image_from_url(item['url'])
+                            if info:
+                                image_type, filename, file_path = info
+                                rel_path = f"images/{filename}"
+                                if filename not in collected and zipf:
+                                    zipf.write(file_path, rel_path)
+                                    collected.add(filename)
+                                new_item = {**item, 'url': rel_path}
+                                image_mapping[filename] = f"/upload/{image_type}/pic/{filename}"
+                            else:
+                                new_item = item
+                            new_list.append(new_item)
+                        else:
+                            new_list.append(item)
+                    result[key] = new_list
+                else:
+                    result[key] = self._rewrite_image_urls(value, image_mapping, collected, zipf)
+            return result
+        elif isinstance(data, list):
+            return [self._rewrite_image_urls(item, image_mapping, collected, zipf) for item in data]
+        else:
+            return data
+
+    def export_world(self, user_id: str, world_id: str) -> str:
+        """
+        导出世界完整数据（含图片）为 zip 包
+
+        Args:
+            user_id: 用户ID
+            world_id: 世界ID
+
+        Returns:
+            zip 文件的临时路径
+        """
+        base_path = self._get_user_world_path(user_id, world_id)
+        if not base_path.exists():
+            raise FileNotFoundError(f"世界目录不存在: {base_path}")
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        zip_name = f"world_export_{world_id}_{timestamp}.zip"
+        zip_path = Path(tempfile.gettempdir()) / zip_name
+
+        collected_images: Set[str] = set()
+        image_mapping: Dict[str, str] = {}  # filename → original_url_path
+
+        export_subdirs = ['characters', 'locations', 'props', 'scripts', 'worlds']
+
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            # 1. 打包各子目录的 JSON 文件（重写图片 URL）
+            for subdir in export_subdirs:
+                subdir_path = base_path / subdir
+                if not subdir_path.exists():
+                    continue
+                for json_file in sorted(subdir_path.glob('*.json')):
+                    try:
+                        json_content = json_file.read_text(encoding='utf-8')
+                        data = json.loads(json_content)
+                        # 重写 URL 并收集图片
+                        data = self._rewrite_image_urls(data, image_mapping, collected_images, zipf)
+                        zipf.writestr(
+                            f"{subdir}/{json_file.name}",
+                            json.dumps(data, ensure_ascii=False, indent=2)
+                        )
+                    except Exception as e:
+                        logger.warning(f"导出文件失败 {json_file}: {e}")
+
+            # 2. 打包 script_problem.json
+            problem_file = base_path / "script_problem.json"
+            if problem_file.exists():
+                zipf.write(problem_file, "script_problem.json")
+
+            # 3. 写入 image_mapping.json（导入时用于还原 URL）
+            if image_mapping:
+                zipf.writestr(
+                    "image_mapping.json",
+                    json.dumps(image_mapping, ensure_ascii=False, indent=2)
+                )
+
+            # 4. 写入 metadata.json
+            metadata = {
+                "export_version": "1.0",
+                "export_time": datetime.now().isoformat(),
+                "world_id": str(world_id),
+                "user_id": str(user_id),
+                "image_count": len(collected_images),
+                "subdirs": export_subdirs
+            }
+            zipf.writestr("metadata.json", json.dumps(metadata, ensure_ascii=False, indent=2))
+
+        logger.info(f"世界导出完成: {zip_path} (图片 {len(collected_images)} 张)")
+        return str(zip_path)
+
+    def _restore_image_urls(self, data: Any, reverse_mapping: Dict[str, str],
+                              uploaded: Dict[str, str], upload_base: Path) -> Any:
+        """
+        递归扫描 JSON 数据，将相对路径还原为完整 URL，并复制图片到 upload 目录
+
+        Args:
+            data: JSON 数据
+            reverse_mapping: 相对路径(filename) → 原始 URL路径 的映射
+            uploaded: filename → 新的完整URL路径 的映射（会被修改）
+            upload_base: upload 根目录
+
+        Returns:
+            处理后的数据
+        """
+        if isinstance(data, dict):
+            result = {}
+            for key, value in data.items():
+                if key == 'reference_image' and isinstance(value, str):
+                    filename = value.replace('images/', '') if value.startswith('images/') else None
+                    if filename and filename in reverse_mapping:
+                        # 复制图片到 upload 目录
+                        src_path = filename  # zip 内路径
+                        url_path = reverse_mapping[filename]
+                        result[key] = url_path
+                        uploaded[filename] = url_path
+                    else:
+                        result[key] = value
+                elif key == 'reference_images' and isinstance(value, list):
+                    new_list = []
+                    for item in value:
+                        if isinstance(item, dict) and 'url' in item:
+                            url_val = item['url']
+                            filename = url_val.replace('images/', '') if url_val.startswith('images/') else None
+                            if filename and filename in reverse_mapping:
+                                url_path = reverse_mapping[filename]
+                                new_item = {**item, 'url': url_path}
+                                uploaded[filename] = url_path
+                            else:
+                                new_item = item
+                            new_list.append(new_item)
+                        else:
+                            new_list.append(item)
+                    result[key] = new_list
+                else:
+                    result[key] = self._restore_image_urls(value, reverse_mapping, uploaded, upload_base)
+            return result
+        elif isinstance(data, list):
+            return [self._restore_image_urls(item, reverse_mapping, uploaded, upload_base) for item in data]
+        else:
+            return data
+
+    def import_world(self, user_id: str, world_id: str, zip_path: str) -> Dict[str, Any]:
+        """
+        从 zip 包导入世界数据
+
+        Args:
+            user_id: 用户ID
+            world_id: 世界ID
+            zip_path: zip 文件路径
+
+        Returns:
+            导入结果统计
+        """
+        base_path = self._get_user_world_path(user_id, world_id)
+        self._ensure_directories(user_id, world_id)
+
+        upload_base = self.base_dir / UploadPathConstants.UPLOAD_ROOT
+        result = {
+            "scripts": 0, "characters": 0, "locations": 0, "props": 0,
+            "worlds": 0, "images": 0, "errors": []
+        }
+
+        with zipfile.ZipFile(zip_path, 'r') as zipf:
+            # 1. 读取 image_mapping.json
+            image_mapping = {}
+            if "image_mapping.json" in zipf.namelist():
+                try:
+                    image_mapping = json.loads(zipf.read("image_mapping.json").decode('utf-8'))
+                except Exception as e:
+                    logger.warning(f"读取 image_mapping.json 失败: {e}")
+
+            # 2. 复制图片到 upload 目录
+            uploaded_images: Dict[str, str] = {}  # filename → url_path
+            for zip_name in zipf.namelist():
+                if not zip_name.startswith('images/'):
+                    continue
+                filename = zip_name[len('images/'):]
+                if not filename or filename.endswith('/'):
+                    continue
+                if filename not in image_mapping:
+                    continue
+
+                url_path = image_mapping[filename]  # /upload/{type}/pic/{filename}
+                # 从 url_path 解析目标目录
+                match = self._IMAGE_URL_PATTERN.search(url_path)
+                if not match:
+                    continue
+                image_type = match.group(1)
+                dest_dir = upload_base / image_type / "pic"
+                dest_dir.mkdir(parents=True, exist_ok=True)
+                dest_file = dest_dir / filename
+
+                if not dest_file.exists():
+                    try:
+                        image_data = zipf.read(zip_name)
+                        dest_file.write_bytes(image_data)
+                        result["images"] += 1
+                    except Exception as e:
+                        result["errors"].append(f"图片导入失败 {filename}: {e}")
+
+                uploaded_images[filename] = url_path
+
+            # 3. 导入各子目录的 JSON 文件
+            subdir_map = {
+                'characters': 'characters',
+                'locations': 'locations',
+                'props': 'props',
+                'scripts': 'scripts',
+                'worlds': 'worlds'
+            }
+
+            for zip_name in zipf.namelist():
+                # 匹配 subdir/filename.json 模式
+                parts = zip_name.split('/', 1)
+                if len(parts) != 2:
+                    continue
+                subdir, filename = parts
+                if subdir not in subdir_map or not filename.endswith('.json'):
+                    continue
+
+                try:
+                    content = zipf.read(zip_name).decode('utf-8')
+                    data = json.loads(content)
+
+                    # 还原图片 URL
+                    data = self._restore_image_urls(data, image_mapping, uploaded_images, upload_base)
+
+                    # 写入文件
+                    dest_dir = base_path / subdir
+                    dest_dir.mkdir(parents=True, exist_ok=True)
+                    dest_file = dest_dir / filename
+                    dest_file.write_text(
+                        json.dumps(data, ensure_ascii=False, indent=2),
+                        encoding='utf-8'
+                    )
+                    result[subdir_map[subdir]] += 1
+                except Exception as e:
+                    result["errors"].append(f"导入失败 {zip_name}: {e}")
+
+            # 4. 导入 script_problem.json
+            if "script_problem.json" in zipf.namelist():
+                try:
+                    content = zipf.read("script_problem.json").decode('utf-8')
+                    (base_path / "script_problem.json").write_text(content, encoding='utf-8')
+                except Exception as e:
+                    result["errors"].append(f"导入 script_problem.json 失败: {e}")
+
+        logger.info(f"世界导入完成: {result}")
+        return result
+
     def get_stats(self, user_id: str = "0", world_id: str = "0") -> Dict:
         """
         获取统计信息

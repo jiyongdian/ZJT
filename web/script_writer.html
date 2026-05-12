@@ -404,6 +404,26 @@
                 <div class="sidebar-header">
                     <h3 class="sidebar-title">📁 暂存文件管理</h3>
                     <div class="sidebar-header-actions">
+                        <button class="add-file-btn" id="add-file-btn" style="display:none" onclick="showNewScriptModal()" title="新建剧本">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 5v14M5 12h14"/>
+                            </svg>
+                        </button>
+                        <button class="export-icon-btn" onclick="exportWorld()" title="导出世界数据">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                        </button>
+                        <button class="import-icon-btn" onclick="triggerImportWorld()" title="导入世界数据">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="17 8 12 3 7 8"/>
+                                <line x1="12" y1="3" x2="12" y2="15"/>
+                            </svg>
+                        </button>
+                        <input type="file" id="import-world-file" accept=".zip" style="display:none" onchange="handleImportWorld(event)">
                         <button class="refresh-icon-btn" onclick="refreshFiles()" title="刷新文件列表">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="23 4 23 10 17 10"/>
@@ -973,6 +993,42 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeNewWorldModal()">取消</button>
                 <button class="btn btn-primary" onclick="createNewWorld()">创建世界</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新建剧本弹窗 -->
+    <div id="new-script-modal" class="modal">
+        <div class="modal-overlay" onclick="closeNewScriptModal()"></div>
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3 class="modal-title">📜 新建剧本</h3>
+                <button class="modal-close-btn" onclick="closeNewScriptModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6L6 18M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label class="form-label">剧本标题 *</label>
+                        <input type="text" id="new-script-title" class="form-input" placeholder="输入剧本标题" maxlength="200">
+                    </div>
+                    <div class="form-group full-width">
+                        <label class="form-label">集数 *</label>
+                        <input type="number" id="new-script-episode" class="form-input" min="1" placeholder="输入集数" oninput="checkEpisodeDuplicate()">
+                        <span class="form-hint" id="episode-hint" style="display:none; font-size: 12px; margin-top: 4px;"></span>
+                    </div>
+                    <div class="form-group full-width">
+                        <label class="form-label">剧本内容</label>
+                        <textarea id="new-script-content" class="form-textarea" rows="6" placeholder="输入剧本内容（可选）"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeNewScriptModal()">取消</button>
+                <button class="btn btn-primary" id="create-script-btn" onclick="createNewScript()">创建剧本</button>
             </div>
         </div>
     </div>
@@ -3427,7 +3483,81 @@
             currentFileType = fileType;
             document.querySelectorAll('.tab-btn').forEach(tab => tab.classList.remove('active'));
             event.target.closest('.tab-btn').classList.add('active');
+            // 新建按钮仅在剧本标签页显示
+            const addBtn = document.getElementById('add-file-btn');
+            if (addBtn) addBtn.style.display = (fileType === 'scripts') ? 'inline-flex' : 'none';
             loadFiles(fileType);
+        }
+
+        async function exportWorld() {
+            try {
+                updateStatus('正在打包导出世界数据...');
+                const response = await fetch(`/api/export-world?user_id=${USER_ID}&world_id=${WORLD_ID}&auth_token=${AUTH_TOKEN}`);
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    showError('导出失败: ' + (errData.error || response.statusText));
+                    updateStatus('导出失败');
+                    return;
+                }
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `world_${WORLD_ID}_export.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showSuccess('✓ 世界数据导出成功');
+                updateStatus('导出完成');
+            } catch (error) {
+                showError('导出失败: ' + error.message);
+                updateStatus('导出失败');
+            }
+        }
+
+        function triggerImportWorld() {
+            document.getElementById('import-world-file').click();
+        }
+
+        async function handleImportWorld(event) {
+            const fileInput = event.target;
+            const file = fileInput.files[0];
+            if (!file) return;
+            if (!file.name.endsWith('.zip')) {
+                showError('请选择 .zip 格式的文件');
+                fileInput.value = '';
+                return;
+            }
+            if (!confirm(`确定要导入 "${file.name}" 吗？\n\n导入会覆盖当前世界的同名数据，请确认。`)) {
+                fileInput.value = '';
+                return;
+            }
+            try {
+                updateStatus('正在导入世界数据...');
+                const formData = new FormData();
+                formData.append('user_id', USER_ID);
+                formData.append('world_id', WORLD_ID);
+                formData.append('file', file);
+                const response = await fetch(`/api/import-world?auth_token=${AUTH_TOKEN}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showSuccess('✓ ' + data.message);
+                    updateStatus('导入完成');
+                    await loadFiles(currentFileType);
+                } else {
+                    showError('导入失败: ' + (data.error || '未知错误'));
+                    updateStatus('导入失败');
+                }
+            } catch (error) {
+                showError('导入失败: ' + error.message);
+                updateStatus('导入失败');
+            } finally {
+                fileInput.value = '';
+            }
         }
 
         async function loadFiles(fileType) {
@@ -5335,6 +5465,126 @@
                 }
             } catch (error) {
                 showError('创建世界失败: ' + error.message);
+                updateStatus('创建失败');
+            }
+        }
+
+        // 新建剧本相关函数
+        let existingEpisodes = []; // 缓存已有集数
+
+        function showNewScriptModal() {
+            document.getElementById('new-script-title').value = '';
+            document.getElementById('new-script-episode').value = '';
+            document.getElementById('new-script-content').value = '';
+            const hint = document.getElementById('episode-hint');
+            hint.style.display = 'none';
+            hint.textContent = '';
+            // 加载已有集数列表用于校验
+            fetchExistingEpisodes();
+            document.getElementById('new-script-modal').classList.add('show');
+            document.getElementById('new-script-title').focus();
+        }
+
+        function closeNewScriptModal() {
+            document.getElementById('new-script-modal').classList.remove('show');
+        }
+
+        async function fetchExistingEpisodes() {
+            try {
+                const response = await fetch(`/api/scripts-files?user_id=${USER_ID}&world_id=${WORLD_ID}&auth_token=${AUTH_TOKEN}&raw_json=true`);
+                const data = await response.json();
+                const scripts = data.scripts || data.data?.data || [];
+                existingEpisodes = scripts
+                    .map(s => parseInt(s.episode_number))
+                    .filter(n => !isNaN(n));
+            } catch (e) {
+                console.warn('获取已有剧本集数失败:', e);
+                existingEpisodes = [];
+            }
+        }
+
+        function checkEpisodeDuplicate() {
+            const episodeInput = document.getElementById('new-script-episode');
+            const hint = document.getElementById('episode-hint');
+            const value = parseInt(episodeInput.value);
+
+            if (!episodeInput.value) {
+                hint.style.display = 'none';
+                hint.textContent = '';
+                return;
+            }
+
+            if (isNaN(value) || value < 1) {
+                hint.style.display = 'block';
+                hint.style.color = 'var(--error-color, #e74c3c)';
+                hint.textContent = '集数必须为正整数';
+                return;
+            }
+
+            if (existingEpisodes.includes(value)) {
+                hint.style.display = 'block';
+                hint.style.color = 'var(--error-color, #e74c3c)';
+                hint.textContent = `第 ${value} 集已存在，请选择其他集数`;
+            } else {
+                hint.style.display = 'block';
+                hint.style.color = 'var(--success-color, #27ae60)';
+                hint.textContent = `第 ${value} 集可用`;
+            }
+        }
+
+        async function createNewScript() {
+            const title = document.getElementById('new-script-title').value.trim();
+            const episodeValue = document.getElementById('new-script-episode').value;
+            const content = document.getElementById('new-script-content').value.trim();
+            const episode = parseInt(episodeValue);
+
+            if (!title) {
+                showError('请输入剧本标题');
+                return;
+            }
+            if (!episodeValue || isNaN(episode) || episode < 1) {
+                showError('请输入有效的集数（正整数）');
+                return;
+            }
+            if (existingEpisodes.includes(episode)) {
+                showError(`第 ${episode} 集已存在，请选择其他集数`);
+                return;
+            }
+
+            try {
+                updateStatus('正在创建剧本...');
+                const now = new Date().toISOString();
+                const scriptData = JSON.stringify({
+                    title: title,
+                    episode_number: episode,
+                    content: content || '',
+                    create_time: now,
+                    update_time: now
+                }, null, 2);
+
+                const response = await fetch(`/api/scripts-files/${encodeURIComponent(title)}?user_id=${USER_ID}&world_id=${WORLD_ID}&auth_token=${AUTH_TOKEN}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        content: scriptData,
+                        user_id: USER_ID,
+                        world_id: WORLD_ID,
+                        auth_token: AUTH_TOKEN
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showSuccess(`✓ 剧本 "${title}"（第${episode}集）创建成功！`);
+                    closeNewScriptModal();
+                    await loadFiles('scripts');
+                    updateStatus('剧本创建完成');
+                } else {
+                    showError('创建剧本失败: ' + (data.error || '未知错误'));
+                    updateStatus('创建失败');
+                }
+            } catch (error) {
+                showError('创建剧本失败: ' + error.message);
                 updateStatus('创建失败');
             }
         }

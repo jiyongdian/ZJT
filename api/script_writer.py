@@ -3141,3 +3141,65 @@ async def delete_skill(
     except Exception as e:
         logger.error(f"删除技能自定义失败: {e}", exc_info=True)
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+# ==================== 世界导出/导入 ====================
+
+@router.get('/export-world')
+@require_permission("script:list")
+async def export_world(
+    request: Request,
+    user_id: str = QueryParam(...),
+    world_id: str = QueryParam(...)
+):
+    """导出世界完整数据（含图片）为 zip 包下载"""
+    try:
+        from fastapi.responses import FileResponse
+        zip_path = file_manager.export_world(user_id, world_id)
+        filename = os.path.basename(zip_path)
+        return FileResponse(
+            path=zip_path,
+            filename=filename,
+            media_type='application/zip'
+        )
+    except FileNotFoundError as e:
+        return JSONResponse({'success': False, 'error': str(e)}, status_code=404)
+    except Exception as e:
+        logger.error(f'导出世界失败: {str(e)}')
+        return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
+
+
+@router.post('/import-world')
+@require_permission("script:create")
+async def import_world(
+    request: Request,
+    user_id: str = Form(...),
+    world_id: str = Form(...),
+    file: UploadFile = File(...)
+):
+    """从 zip 包导入世界数据"""
+    try:
+        import tempfile as _tempfile
+        suffix = '.zip'
+        with _tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            content = await file.read()
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        try:
+            result = file_manager.import_world(user_id, world_id, tmp_path)
+            return JSONResponse({
+                'success': True,
+                'message': f'导入完成: 剧本{result["scripts"]}个, 角色{result["characters"]}个, '
+                           f'场景{result["locations"]}个, 道具{result["props"]}个, 图片{result["images"]}张',
+                'result': result
+            })
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+    except Exception as e:
+        logger.error(f'导入世界失败: {str(e)}')
+        return JSONResponse({'success': False, 'error': str(e)}, status_code=500)

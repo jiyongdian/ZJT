@@ -1463,6 +1463,50 @@ body {
     gap: 4px;
 }
 
+.add-file-btn {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: var(--primary-color);
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.add-file-btn:hover {
+    background: var(--primary-dark);
+    transform: scale(1.05);
+}
+
+.export-icon-btn,
+.import-icon-btn {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.export-icon-btn:hover {
+    background: var(--bg-light);
+    color: var(--success-color, #27ae60);
+}
+
+.import-icon-btn:hover {
+    background: var(--bg-light);
+    color: var(--primary-color);
+}
+
 .refresh-icon-btn {
     width: 32px;
     height: 32px;
