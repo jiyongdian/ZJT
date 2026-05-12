@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '20260511_add_session_type'
-down_revision: str = '20260509_opt_ai_tools_idx'
+down_revision: str = '20260512_clear_fake_cfg_vals'
 branch_labels = None
 depends_on = None
 

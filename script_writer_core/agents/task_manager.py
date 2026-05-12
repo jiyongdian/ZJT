@@ -258,6 +258,7 @@ class TaskManager:
                 model_id=model_id,
                 enable_thinking=enable_thinking,
                 thinking_effort=thinking_effort,
+                image_urls=image_urls,
                 status='pending'
             )
         except Exception as e:
@@ -295,6 +296,7 @@ class TaskManager:
                     model_id=db_task.model_id,
                     enable_thinking=str(getattr(db_task, 'enable_thinking', False)).lower() == 'true',
                     thinking_effort=getattr(db_task, 'thinking_effort', 'medium'),
+                    image_urls=getattr(db_task, 'image_urls', None),
                     status=TaskStatus(db_task.status),
                     progress=db_task.progress,
                     current_step=db_task.current_step,
