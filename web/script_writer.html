@@ -404,6 +404,21 @@
                 <div class="sidebar-header">
                     <h3 class="sidebar-title">📁 暂存文件管理</h3>
                     <div class="sidebar-header-actions">
+                        <button class="export-icon-btn" onclick="exportWorld()" title="导出世界数据">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                        </button>
+                        <button class="import-icon-btn" onclick="triggerImportWorld()" title="导入世界数据">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="17 8 12 3 7 8"/>
+                                <line x1="12" y1="3" x2="12" y2="15"/>
+                            </svg>
+                        </button>
+                        <input type="file" id="import-world-file" accept=".zip" style="display:none" onchange="handleImportWorld(event)">
                         <button class="refresh-icon-btn" onclick="refreshFiles()" title="刷新文件列表">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="23 4 23 10 17 10"/>
@@ -444,7 +459,16 @@
                     </button>
                 </div>
                 <div class="file-list-container" id="file-list">
-                    <div class="file-empty">加载中...</div>
+                    <div class="file-list-header">
+                        <button class="add-file-btn-fab" id="add-file-btn" style="display:none" onclick="showNewScriptModal()" title="新建剧本">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M12 5v14M5 12h14"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <div id="file-items-container">
+                        <div class="file-empty">加载中...</div>
+                    </div>
                 </div>
             </aside>
         </main>
@@ -977,6 +1001,160 @@
         </div>
     </div>
 
+    <!-- 新建剧本弹窗 -->
+    <div id="new-script-modal" class="modal">
+        <div class="modal-overlay" onclick="closeNewScriptModal()"></div>
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3 class="modal-title">📜 新建剧本</h3>
+                <button class="modal-close-btn" onclick="closeNewScriptModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6L6 18M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label class="form-label">剧本标题 *</label>
+                        <input type="text" id="new-script-title" class="form-input" placeholder="输入剧本标题" maxlength="200">
+                    </div>
+                    <div class="form-group full-width">
+                        <label class="form-label">集数 *</label>
+                        <input type="number" id="new-script-episode" class="form-input" min="1" placeholder="输入集数" oninput="checkEpisodeDuplicate()">
+                        <span class="form-hint" id="episode-hint" style="display:none; font-size: 12px; margin-top: 4px;"></span>
+                    </div>
+                    <div class="form-group full-width">
+                        <label class="form-label">剧本内容</label>
+                        <textarea id="new-script-content" class="form-textarea" rows="6" placeholder="输入剧本内容（可选）"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeNewScriptModal()">取消</button>
+                <button class="btn btn-primary" id="create-script-btn" onclick="createNewScript()">创建剧本</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新建角色弹窗 -->
+    <div id="new-character-modal" class="modal">
+        <div class="modal-overlay" onclick="closeNewCharacterModal()"></div>
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3 class="modal-title">👥 新建角色</h3>
+                <button class="modal-close-btn" onclick="closeNewCharacterModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label class="form-label">角色名称 *</label>
+                        <input type="text" id="new-char-name" class="form-input" placeholder="输入角色名称" maxlength="200">
+                        <span class="form-hint" id="char-name-hint" style="display:none; font-size: 12px; margin-top: 4px;"></span>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">年龄</label>
+                        <input type="text" id="new-char-age" class="form-input" placeholder="如：25岁">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">身份</label>
+                        <input type="text" id="new-char-identity" class="form-input" placeholder="如：学生、剑客">
+                    </div>
+                    <div class="form-group full-width">
+                        <label class="form-label">外貌</label>
+                        <textarea id="new-char-appearance" class="form-textarea" rows="3" placeholder="描述角色外貌特征"></textarea>
+                    </div>
+                    <div class="form-group full-width">
+                        <label class="form-label">性格</label>
+                        <textarea id="new-char-personality" class="form-textarea" rows="3" placeholder="描述角色性格特点"></textarea>
+                    </div>
+                    <div class="form-group full-width">
+                        <label class="form-label">行为习惯</label>
+                        <textarea id="new-char-behavior" class="form-textarea" rows="3" placeholder="描述角色行为习惯"></textarea>
+                    </div>
+                    <div class="form-group full-width">
+                        <label class="form-label">其他信息</label>
+                        <textarea id="new-char-other" class="form-textarea" rows="3" placeholder="补充信息（可选）"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeNewCharacterModal()">取消</button>
+                <button class="btn btn-primary" onclick="createNewCharacter()">创建角色</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新建场景弹窗 -->
+    <div id="new-location-modal" class="modal">
+        <div class="modal-overlay" onclick="closeNewLocationModal()"></div>
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3 class="modal-title">🏛️ 新建场景</h3>
+                <button class="modal-close-btn" onclick="closeNewLocationModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label class="form-label">场景名称 *</label>
+                        <input type="text" id="new-loc-name" class="form-input" placeholder="输入场景名称" maxlength="200">
+                        <span class="form-hint" id="loc-name-hint" style="display:none; font-size: 12px; margin-top: 4px;"></span>
+                    </div>
+                    <div class="form-group full-width">
+                        <label class="form-label">父级场景</label>
+                        <input type="text" id="new-loc-parent" class="form-input" placeholder="所属父级场景名称（可选）">
+                    </div>
+                    <div class="form-group full-width">
+                        <label class="form-label">场景描述</label>
+                        <textarea id="new-loc-description" class="form-textarea" rows="5" placeholder="描述场景的环境、氛围、关键元素等"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeNewLocationModal()">取消</button>
+                <button class="btn btn-primary" onclick="createNewLocation()">创建场景</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新建道具弹窗 -->
+    <div id="new-prop-modal" class="modal">
+        <div class="modal-overlay" onclick="closeNewPropModal()"></div>
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3 class="modal-title">🎁 新建道具</h3>
+                <button class="modal-close-btn" onclick="closeNewPropModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label class="form-label">道具名称 *</label>
+                        <input type="text" id="new-prop-name" class="form-input" placeholder="输入道具名称" maxlength="200">
+                        <span class="form-hint" id="prop-name-hint" style="display:none; font-size: 12px; margin-top: 4px;"></span>
+                    </div>
+                    <div class="form-group full-width">
+                        <label class="form-label">道具类型</label>
+                        <input type="text" id="new-prop-type" class="form-input" placeholder="如：武器、饰品、工具">
+                    </div>
+                    <div class="form-group full-width">
+                        <label class="form-label">道具描述</label>
+                        <textarea id="new-prop-description" class="form-textarea" rows="5" placeholder="描述道具的外观、功能、来历等"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeNewPropModal()">取消</button>
+                <button class="btn btn-primary" onclick="createNewProp()">创建道具</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 编辑世界弹窗 -->
     <div id="edit-world-modal" class="modal">
         <div class="modal-overlay" onclick="closeEditWorldModal()"></div>
@@ -1091,6 +1269,7 @@
         let pendingVerificationId = null;
         let pendingVerificationData = null;
         let needsNewMessageDiv = false;
+        let fullText = ''; // 全局变量，用于累积消息内容
         const urlParams = new URLSearchParams(window.location.search);
         
         // 全局参数：从URL获取并存储，供所有接口使用
@@ -2181,11 +2360,12 @@
                 const taskId = taskData.task_id;
                 
                 const eventSource = new EventSource(`/api/task/${taskId}/stream`);
-                hideTypingIndicator();
+                // 保持打字指示器，直到收到第一个消息
                 const messageDiv = addMessage('assistant', '');
                 let contentDiv = messageDiv.querySelector('.message-content');
 
-                let fullText = '';
+                // 重置全局 fullText 变量
+                fullText = '';
                 let startTime = Date.now();
 
                 eventSource.onmessage = (event) => {
@@ -2194,6 +2374,7 @@
                         
                         if (!hasStartedReceiving) {
                             hasStartedReceiving = true;
+                            hideTypingIndicator(); // 收到第一个消息时才移除打字指示器
                             const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
                             updateStatus(`AI 正在回复... (等待了 ${elapsed}s)`);
                             clearTimeout(timeoutId);
@@ -2219,6 +2400,7 @@
                             console.log('[SSE] 上下文压缩事件:', data.reason);
                         } else if (data.type === 'done') {
                             eventSource.close();
+                            hideTypingIndicator(); // 确保移除打字指示器
                             updateStatus('完成');
                             isProcessing = false;
                             pendingVerificationId = null;
@@ -2266,16 +2448,28 @@
                 };
                 
                 eventSource.onerror = (error) => {
+                    // 关闭当前连接
                     eventSource.close();
-                    if (!hasStartedReceiving) {
-                        showError('连接失败，请重试');
-                    }
-                    isProcessing = false;
-                    pendingVerificationId = null;
-                    pendingVerificationData = null;
-                    const sendBtn = document.getElementById('send-btn');
-                    sendBtn.disabled = false;
-                    sendBtn.classList.remove('sending');
+
+                    // 检查后端任务状态，确认是否真的完成
+                    checkTaskStatus(taskId).then(taskStatus => {
+                        if (taskStatus === 'completed' || taskStatus === 'failed' || taskStatus === 'cancelled') {
+                            // 任务已结束，安全重置状态
+                            resetProcessingState();
+                            if (!hasStartedReceiving) {
+                                showError('连接失败，请重试');
+                            }
+                        } else {
+                            // 任务仍在运行，保持旋转状态并尝试重连
+                            updateStatus('连接中断，正在重连...');
+                            setTimeout(() => {
+                                reconnectSSE(taskId, messageDiv, contentDiv, startTime);
+                            }, 2000);
+                        }
+                    }).catch(() => {
+                        // 无法获取任务状态，保守处理：保持旋转但显示提示
+                        updateStatus('连接中断，请等待或刷新页面');
+                    });
                 };
 
                 updateStatus('就绪');
@@ -2293,6 +2487,121 @@
                 sendBtn.disabled = false;
                 sendBtn.classList.remove('sending');
             }
+        }
+
+        // 检查任务状态
+        async function checkTaskStatus(taskId) {
+            const response = await fetch(`/api/task/${taskId}/status`);
+            if (!response.ok) throw new Error('Failed to check task status');
+            const data = await response.json();
+            return data.status;
+        }
+
+        // 重置处理状态
+        function resetProcessingState() {
+            isProcessing = false;
+            pendingVerificationId = null;
+            pendingVerificationData = null;
+            const sendBtn = document.getElementById('send-btn');
+            if (sendBtn) {
+                sendBtn.disabled = false;
+                sendBtn.classList.remove('sending');
+            }
+            updateStatus('就绪');
+        }
+
+        // 重连SSE（最多重连5次）
+        function reconnectSSE(taskId, messageDiv, contentDiv, startTime, retryCount = 0) {
+            const MAX_RETRIES = 5;
+
+            if (retryCount >= MAX_RETRIES) {
+                updateStatus('重连失败，请刷新页面重试');
+                resetProcessingState();
+                showError('连接中断，已尝试重连5次失败，请刷新页面');
+                return null;
+            }
+
+            const newEventSource = new EventSource(`/api/task/${taskId}/stream`);
+            let hasStartedReceiving = false;
+
+            newEventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+
+                    if (!hasStartedReceiving) {
+                        hasStartedReceiving = true;
+                        hideTypingIndicator();
+                        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                        updateStatus(`AI 正在回复... (等待了 ${elapsed}s)`);
+                    }
+
+                    if (data.type === 'message') {
+                        if (data.content) {
+                            if (needsNewMessageDiv) {
+                                const newDiv = addMessage('assistant', '');
+                                contentDiv = newDiv.querySelector('.message-content');
+                                fullText = '';
+                                needsNewMessageDiv = false;
+                            }
+                            fullText += data.content + '\n\n';
+                            contentDiv.innerHTML = renderMarkdown(fullText);
+                            scrollToBottom();
+                        }
+                    } else if (data.type === 'progress') {
+                        updateStatus(`执行中: ${data.step || ''}`);
+                    } else if (data.type === 'context_compression') {
+                        updateStatus('上下文已自动压缩，继续回复中...');
+                    } else if (data.type === 'done') {
+                        newEventSource.close();
+                        updateStatus('完成');
+                        resetProcessingState();
+                        loadComputingPower();
+                        try {
+                            refreshFiles().catch(err => console.error('刷新文件列表失败:', err));
+                        } catch (err) {
+                            console.error('调用refreshFiles失败:', err);
+                        }
+                    } else if (data.type === 'error') {
+                        newEventSource.close();
+                        showError('任务执行错误: ' + data.error);
+                        resetProcessingState();
+                    } else if (data.type === 'human_verification_required') {
+                        const verification = data.verification || {};
+                        handleHumanVerification(verification);
+                    } else if (data.type === 'verification_timeout') {
+                        if (pendingVerificationId === data.verification_id) {
+                            pendingVerificationId = null;
+                            pendingVerificationData = null;
+                            const input = document.getElementById('message-input');
+                            input.value = '';
+                            input.placeholder = '输入消息...';
+                        }
+                        showError('验证已超时，请重新发送消息');
+                    } else if (data.type === 'status') {
+                        if (data.status) updateStatus(data.status);
+                    }
+                } catch (e) {
+                    console.error('[SSE-CLIENT] 解析失败:', e);
+                }
+            };
+
+            newEventSource.onerror = (error) => {
+                newEventSource.close();
+                checkTaskStatus(taskId).then(taskStatus => {
+                    if (taskStatus === 'completed' || taskStatus === 'failed' || taskStatus === 'cancelled') {
+                        resetProcessingState();
+                    } else {
+                        updateStatus(`重连失败，2秒后再次尝试 (${retryCount + 1}/${MAX_RETRIES})...`);
+                        setTimeout(() => {
+                            reconnectSSE(taskId, messageDiv, contentDiv, startTime, retryCount + 1);
+                        }, 2000);
+                    }
+                }).catch(() => {
+                    updateStatus('重连失败，请刷新页面');
+                });
+            };
+
+            return newEventSource;
         }
 
         function configureMarked() {
@@ -3017,41 +3326,84 @@
             }
         }
 
-        function saveThinkingState() {
+        function saveThinkingState(isUserAction = false) {
             const toggle = document.getElementById('thinking-toggle');
             const effortSelect = document.getElementById('thinking-effort');
             if (!toggle) return;
 
             const state = {
                 enabled: toggle.checked,
-                effort: effortSelect ? effortSelect.value : 'medium'
+                effort: effortSelect ? effortSelect.value : 'medium',
+                // 记录用户是否明确关闭了思考模式（只有用户手动切换时才更新此字段）
+                explicitlyDisabled: isUserAction ? !toggle.checked : (JSON.parse(localStorage.getItem('lastThinkingState') || '{}').explicitlyDisabled || false)
             };
             localStorage.setItem('lastThinkingState', JSON.stringify(state));
         }
 
         function restoreThinkingState() {
             const savedStateRaw = localStorage.getItem('lastThinkingState');
-            if (!savedStateRaw) return;
+            const toggle = document.getElementById('thinking-toggle');
+            const effortSelect = document.getElementById('thinking-effort');
+            if (!toggle) return;
 
-            try {
-                const state = JSON.parse(savedStateRaw);
-                const toggle = document.getElementById('thinking-toggle');
-                const effortSelect = document.getElementById('thinking-effort');
+            // 获取当前选中模型的信息
+            const selector = document.getElementById('model-selector');
+            const selectedOption = selector?.options?.[selector.selectedIndex];
+            const vendorName = (selectedOption?.dataset?.vendorName || '').toLowerCase();
+            const modelValue = (selectedOption?.value || '').toLowerCase();
+            const conciseName = (selectedOption?.dataset?.conciseName || '').toLowerCase();
 
-                if (toggle) {
-                    toggle.checked = state.enabled || false;
+            // 判断是否为 DeepSeek 模型（使用多种方式判断，确保可靠性）
+            const isDeepSeek = vendorName === 'deepseek' ||
+                modelValue.includes('deepseek') ||
+                conciseName.includes('deepseek') ||
+                (LLMVendor.DEEPSEEK && vendorName === LLMVendor.DEEPSEEK.toLowerCase());
+
+            console.log('[思考模式] restoreThinkingState:', {
+                savedStateRaw,
+                vendorName,
+                modelValue,
+                conciseName,
+                isDeepSeek,
+                LLMVendor_DEEPSEEK: LLMVendor.DEEPSEEK,
+                selectedOptionValue: selectedOption?.value
+            });
+
+            if (savedStateRaw) {
+                try {
+                    const state = JSON.parse(savedStateRaw);
+                    // 对于 DeepSeek 模型，如果用户没有明确设置过不开启思考模式，默认开启
+                    // 只有当 state.explicitlyDisabled 为 true 时，才保持关闭
+                    if (isDeepSeek && !state.explicitlyDisabled) {
+                        toggle.checked = true;
+                        console.log('[思考模式] DeepSeek 模型默认开启思考模式');
+                    } else {
+                        toggle.checked = state.enabled || false;
+                    }
+                    if (effortSelect && state.effort) {
+                        effortSelect.value = state.effort;
+                    }
+                    updateThinkingEffortVisibility();
+                } catch (e) {
+                    console.warn('[思考模式] 恢复状态失败:', e);
+                    // 恢复失败时，对于 DeepSeek 模型默认开启
+                    if (isDeepSeek) {
+                        toggle.checked = true;
+                    }
                 }
-                if (effortSelect && state.effort) {
-                    effortSelect.value = state.effort;
+            } else {
+                // 无缓存：DeepSeek 模型默认开启思考模式
+                if (isDeepSeek) {
+                    toggle.checked = true;
+                    console.log('[思考模式] DeepSeek 模型无缓存，默认开启思考模式');
                 }
                 updateThinkingEffortVisibility();
-            } catch (e) {
-                console.warn('[思考模式] 恢复状态失败:', e);
+                saveThinkingState();
             }
         }
 
         function onThinkingToggleChange() {
-            saveThinkingState();
+            saveThinkingState(true);  // 传入 true 表示是用户手动切换
             updateThinkingEffortVisibility();
         }
 
@@ -3418,11 +3770,102 @@
             currentFileType = fileType;
             document.querySelectorAll('.tab-btn').forEach(tab => tab.classList.remove('active'));
             event.target.closest('.tab-btn').classList.add('active');
+            // 新建按钮：世界标签页不显示，其他都显示
+            const addBtn = document.getElementById('add-file-btn');
+            if (addBtn) {
+                if (fileType === 'worlds') {
+                    addBtn.style.display = 'none';
+                } else {
+                    addBtn.style.display = 'flex';
+                    const addBtnConfig = {
+                        'scripts': { onclick: 'showNewScriptModal()', title: '新建剧本' },
+                        'characters': { onclick: 'showNewCharacterModal()', title: '新建角色' },
+                        'locations': { onclick: 'showNewLocationModal()', title: '新建场景' },
+                        'props': { onclick: 'showNewPropModal()', title: '新建道具' }
+                    };
+                    const cfg = addBtnConfig[fileType];
+                    if (cfg) {
+                        addBtn.setAttribute('onclick', cfg.onclick);
+                        addBtn.title = cfg.title;
+                    }
+                }
+            }
             loadFiles(fileType);
         }
 
+        async function exportWorld() {
+            try {
+                updateStatus('正在打包导出世界数据...');
+                const response = await fetch(`/api/export-world?user_id=${USER_ID}&world_id=${WORLD_ID}&auth_token=${AUTH_TOKEN}`);
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    showError('导出失败: ' + (errData.error || response.statusText));
+                    updateStatus('导出失败');
+                    return;
+                }
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `world_${WORLD_ID}_export.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showSuccess('✓ 世界数据导出成功');
+                updateStatus('导出完成');
+            } catch (error) {
+                showError('导出失败: ' + error.message);
+                updateStatus('导出失败');
+            }
+        }
+
+        function triggerImportWorld() {
+            document.getElementById('import-world-file').click();
+        }
+
+        async function handleImportWorld(event) {
+            const fileInput = event.target;
+            const file = fileInput.files[0];
+            if (!file) return;
+            if (!file.name.endsWith('.zip')) {
+                showError('请选择 .zip 格式的文件');
+                fileInput.value = '';
+                return;
+            }
+            if (!confirm(`确定要导入 "${file.name}" 吗？\n\n导入会覆盖当前世界的同名数据，请确认。`)) {
+                fileInput.value = '';
+                return;
+            }
+            try {
+                updateStatus('正在导入世界数据...');
+                const formData = new FormData();
+                formData.append('user_id', USER_ID);
+                formData.append('world_id', WORLD_ID);
+                formData.append('file', file);
+                const response = await fetch(`/api/import-world?auth_token=${AUTH_TOKEN}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showSuccess('✓ ' + data.message);
+                    updateStatus('导入完成');
+                    await loadFiles(currentFileType);
+                } else {
+                    showError('导入失败: ' + (data.error || '未知错误'));
+                    updateStatus('导入失败');
+                }
+            } catch (error) {
+                showError('导入失败: ' + error.message);
+                updateStatus('导入失败');
+            } finally {
+                fileInput.value = '';
+            }
+        }
+
         async function loadFiles(fileType) {
-            const fileList = document.getElementById('file-list');
+            const fileItemsContainer = document.getElementById('file-items-container');
             try {
                 const apiMap = {
                     'worlds': '/api/world-files',
@@ -3431,21 +3874,21 @@
                     'locations': '/api/locations-files',
                     'props': '/api/props-files'
                 };
-                
+
                 // 添加 raw_json=true 参数以获取完整的JSON数据（包括reference_image）
                 const response = await fetch(`${apiMap[fileType]}?user_id=${USER_ID}&world_id=${WORLD_ID}&auth_token=${AUTH_TOKEN}&raw_json=true`);
                 const data = await response.json();
-                
+
                 if (checkTokenExpired(data, response)) {
                     return;
                 }
-                
+
                 // 兼容两种返回格式: {success, xxx:[]} 和 {code:0, data:{data:[]}}
                 const isSuccess = data.success || data.code === 0;
                 if (isSuccess) {
                     // 优先从 data.data.data 获取（server.py格式），否则从对应字段获取（script_writer_api格式）
                     let files = data.data?.data || data.worlds || data.characters || data.scripts || data.locations || data.props || [];
-                    
+
                     // 对于世界文件，只显示当前世界的文件
                     if (fileType === 'worlds') {
                         files = files.filter(file => file.name === `world_${WORLD_ID}.json`);
@@ -3461,13 +3904,13 @@
                             return episodeA - episodeB;
                         });
                     }
-                    
+
                     if (files.length === 0) {
-                        fileList.innerHTML = '<div class="file-empty">暂无文件</div>';
+                        fileItemsContainer.innerHTML = '<div class="file-empty">暂无文件</div>';
                         return;
                     }
-                    
-                    fileList.innerHTML = '';
+
+                    fileItemsContainer.innerHTML = '';
                     files.forEach(file => {
                         const fileItem = document.createElement('div');
                         fileItem.className = 'file-item';
@@ -3546,13 +3989,13 @@
                                 </button>
                             </div>
                         `;
-                        fileList.appendChild(fileItem);
+                        fileItemsContainer.appendChild(fileItem);
                     });
                 } else {
-                    fileList.innerHTML = '<div class="file-empty">加载失败</div>';
+                    fileItemsContainer.innerHTML = '<div class="file-empty">加载失败</div>';
                 }
             } catch (error) {
-                fileList.innerHTML = '<div class="file-empty">加载失败</div>';
+                fileItemsContainer.innerHTML = '<div class="file-empty">加载失败</div>';
             }
         }
 
@@ -5327,6 +5770,381 @@
             } catch (error) {
                 showError('创建世界失败: ' + error.message);
                 updateStatus('创建失败');
+            }
+        }
+
+        // 新建剧本相关函数
+        let existingEpisodes = []; // 缓存已有集数
+
+        function showNewScriptModal() {
+            document.getElementById('new-script-title').value = '';
+            document.getElementById('new-script-episode').value = '';
+            document.getElementById('new-script-content').value = '';
+            const hint = document.getElementById('episode-hint');
+            hint.style.display = 'none';
+            hint.textContent = '';
+            // 加载已有集数列表用于校验
+            fetchExistingEpisodes();
+            document.getElementById('new-script-modal').classList.add('show');
+            document.getElementById('new-script-title').focus();
+        }
+
+        function closeNewScriptModal() {
+            document.getElementById('new-script-modal').classList.remove('show');
+        }
+
+        async function fetchExistingEpisodes() {
+            try {
+                const response = await fetch(`/api/scripts-files?user_id=${USER_ID}&world_id=${WORLD_ID}&auth_token=${AUTH_TOKEN}&raw_json=true`);
+                const data = await response.json();
+                const scripts = data.scripts || data.data?.data || [];
+                existingEpisodes = scripts
+                    .map(s => parseInt(s.episode_number))
+                    .filter(n => !isNaN(n));
+            } catch (e) {
+                console.warn('获取已有剧本集数失败:', e);
+                existingEpisodes = [];
+            }
+        }
+
+        function checkEpisodeDuplicate() {
+            const episodeInput = document.getElementById('new-script-episode');
+            const hint = document.getElementById('episode-hint');
+            const value = parseInt(episodeInput.value);
+
+            if (!episodeInput.value) {
+                hint.style.display = 'none';
+                hint.textContent = '';
+                return;
+            }
+
+            if (isNaN(value) || value < 1) {
+                hint.style.display = 'block';
+                hint.style.color = 'var(--error-color, #e74c3c)';
+                hint.textContent = '集数必须为正整数';
+                return;
+            }
+
+            if (existingEpisodes.includes(value)) {
+                hint.style.display = 'block';
+                hint.style.color = 'var(--error-color, #e74c3c)';
+                hint.textContent = `第 ${value} 集已存在，请选择其他集数`;
+            } else {
+                hint.style.display = 'block';
+                hint.style.color = 'var(--success-color, #27ae60)';
+                hint.textContent = `第 ${value} 集可用`;
+            }
+        }
+
+        async function createNewScript() {
+            const title = document.getElementById('new-script-title').value.trim();
+            const episodeValue = document.getElementById('new-script-episode').value;
+            const content = document.getElementById('new-script-content').value.trim();
+            const episode = parseInt(episodeValue);
+
+            if (!title) {
+                showError('请输入剧本标题');
+                return;
+            }
+            if (!episodeValue || isNaN(episode) || episode < 1) {
+                showError('请输入有效的集数（正整数）');
+                return;
+            }
+            if (existingEpisodes.includes(episode)) {
+                showError(`第 ${episode} 集已存在，请选择其他集数`);
+                return;
+            }
+
+            try {
+                updateStatus('正在创建剧本...');
+                const now = new Date().toISOString();
+                const scriptData = JSON.stringify({
+                    user_id: USER_ID,
+                    world_id: WORLD_ID,
+                    title: title,
+                    episode_number: episode,
+                    content: content || '',
+                    create_time: now,
+                    update_time: now
+                }, null, 2);
+
+                const response = await fetch(`/api/scripts-files/${encodeURIComponent(title)}?user_id=${USER_ID}&world_id=${WORLD_ID}&auth_token=${AUTH_TOKEN}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        content: scriptData,
+                        user_id: USER_ID,
+                        world_id: WORLD_ID,
+                        auth_token: AUTH_TOKEN
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showSuccess(`✓ 剧本 "${title}"（第${episode}集）创建成功！`);
+                    closeNewScriptModal();
+                    await loadFiles('scripts');
+                    updateStatus('剧本创建完成');
+                } else {
+                    showError('创建剧本失败: ' + (data.error || '未知错误'));
+                    updateStatus('创建失败');
+                }
+            } catch (error) {
+                showError('创建剧本失败: ' + error.message);
+                updateStatus('创建失败');
+            }
+        }
+
+        // ==================== 新建角色 ====================
+        let existingCharacters = [];
+
+        async function fetchExistingCharacters() {
+            try {
+                const response = await fetch(`/api/characters-files?user_id=${USER_ID}&world_id=${WORLD_ID}&auth_token=${AUTH_TOKEN}&raw_json=true`);
+                const data = await response.json();
+                const chars = data.characters || data.data?.data || [];
+                existingCharacters = chars.map(c => c.name).filter(Boolean);
+            } catch (e) {
+                console.warn('获取已有角色列表失败:', e);
+                existingCharacters = [];
+            }
+        }
+
+        function checkCharacterNameDuplicate() {
+            const nameInput = document.getElementById('new-char-name');
+            const hint = document.getElementById('char-name-hint');
+            const value = nameInput.value.trim();
+            if (!value) { hint.style.display = 'none'; return; }
+            if (existingCharacters.includes(value)) {
+                hint.style.display = 'block';
+                hint.style.color = 'var(--error-color, #e74c3c)';
+                hint.textContent = `角色"${value}"已存在，请使用其他名称`;
+            } else {
+                hint.style.display = 'block';
+                hint.style.color = 'var(--success-color, #27ae60)';
+                hint.textContent = `名称"${value}"可用`;
+            }
+        }
+
+        function showNewCharacterModal() {
+            ['new-char-name','new-char-age','new-char-identity'].forEach(id => document.getElementById(id).value = '');
+            ['new-char-appearance','new-char-personality','new-char-behavior','new-char-other'].forEach(id => document.getElementById(id).value = '');
+            const hint = document.getElementById('char-name-hint');
+            hint.style.display = 'none'; hint.textContent = '';
+            fetchExistingCharacters();
+            document.getElementById('new-character-modal').classList.add('show');
+            document.getElementById('new-char-name').focus();
+            // 绑定实时校验
+            document.getElementById('new-char-name').oninput = checkCharacterNameDuplicate;
+        }
+
+        function closeNewCharacterModal() {
+            document.getElementById('new-character-modal').classList.remove('show');
+        }
+
+        async function createNewCharacter() {
+            const name = document.getElementById('new-char-name').value.trim();
+            if (!name) { showError('请输入角色名称'); return; }
+            if (existingCharacters.includes(name)) { showError(`角色"${name}"已存在`); return; }
+
+            try {
+                updateStatus('正在创建角色...');
+                const now = new Date().toISOString();
+                const data = {
+                    user_id: USER_ID,
+                    world_id: WORLD_ID,
+                    name: name,
+                    age: document.getElementById('new-char-age').value.trim(),
+                    identity: document.getElementById('new-char-identity').value.trim(),
+                    appearance: document.getElementById('new-char-appearance').value.trim(),
+                    personality: document.getElementById('new-char-personality').value.trim(),
+                    behavior: document.getElementById('new-char-behavior').value.trim(),
+                    other_info: document.getElementById('new-char-other').value.trim(),
+                    reference_image: '',
+                    reference_images: [],
+                    create_time: now,
+                    update_time: now
+                };
+                const response = await fetch(`/api/characters-files/${encodeURIComponent(name)}?user_id=${USER_ID}&world_id=${WORLD_ID}&auth_token=${AUTH_TOKEN}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: JSON.stringify(data, null, 2), user_id: USER_ID, world_id: WORLD_ID, auth_token: AUTH_TOKEN })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    showSuccess(`✓ 角色"${name}"创建成功！`);
+                    closeNewCharacterModal();
+                    await loadFiles('characters');
+                } else {
+                    showError('创建角色失败: ' + (result.error || '未知错误'));
+                }
+            } catch (error) {
+                showError('创建角色失败: ' + error.message);
+            }
+        }
+
+        // ==================== 新建场景 ====================
+        let existingLocations = [];
+
+        async function fetchExistingLocations() {
+            try {
+                const response = await fetch(`/api/locations-files?user_id=${USER_ID}&world_id=${WORLD_ID}&auth_token=${AUTH_TOKEN}&raw_json=true`);
+                const data = await response.json();
+                const locs = data.locations || data.data?.data || [];
+                existingLocations = locs.map(l => l.name).filter(Boolean);
+            } catch (e) {
+                console.warn('获取已有场景列表失败:', e);
+                existingLocations = [];
+            }
+        }
+
+        function checkLocationNameDuplicate() {
+            const nameInput = document.getElementById('new-loc-name');
+            const hint = document.getElementById('loc-name-hint');
+            const value = nameInput.value.trim();
+            if (!value) { hint.style.display = 'none'; return; }
+            if (existingLocations.includes(value)) {
+                hint.style.display = 'block';
+                hint.style.color = 'var(--error-color, #e74c3c)';
+                hint.textContent = `场景"${value}"已存在，请使用其他名称`;
+            } else {
+                hint.style.display = 'block';
+                hint.style.color = 'var(--success-color, #27ae60)';
+                hint.textContent = `名称"${value}"可用`;
+            }
+        }
+
+        function showNewLocationModal() {
+            ['new-loc-name','new-loc-parent'].forEach(id => document.getElementById(id).value = '');
+            document.getElementById('new-loc-description').value = '';
+            const hint = document.getElementById('loc-name-hint');
+            hint.style.display = 'none'; hint.textContent = '';
+            fetchExistingLocations();
+            document.getElementById('new-location-modal').classList.add('show');
+            document.getElementById('new-loc-name').focus();
+            document.getElementById('new-loc-name').oninput = checkLocationNameDuplicate;
+        }
+
+        function closeNewLocationModal() {
+            document.getElementById('new-location-modal').classList.remove('show');
+        }
+
+        async function createNewLocation() {
+            const name = document.getElementById('new-loc-name').value.trim();
+            if (!name) { showError('请输入场景名称'); return; }
+            if (existingLocations.includes(name)) { showError(`场景"${name}"已存在`); return; }
+
+            try {
+                updateStatus('正在创建场景...');
+                const now = new Date().toISOString();
+                const data = {
+                    user_id: USER_ID,
+                    world_id: WORLD_ID,
+                    name: name,
+                    parent_id: document.getElementById('new-loc-parent').value.trim() || null,
+                    description: document.getElementById('new-loc-description').value.trim(),
+                    reference_image: '',
+                    reference_images: [],
+                    create_time: now,
+                    update_time: now
+                };
+                const response = await fetch(`/api/locations-files/${encodeURIComponent(name)}?user_id=${USER_ID}&world_id=${WORLD_ID}&auth_token=${AUTH_TOKEN}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: JSON.stringify(data, null, 2), user_id: USER_ID, world_id: WORLD_ID, auth_token: AUTH_TOKEN })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    showSuccess(`✓ 场景"${name}"创建成功！`);
+                    closeNewLocationModal();
+                    await loadFiles('locations');
+                } else {
+                    showError('创建场景失败: ' + (result.error || '未知错误'));
+                }
+            } catch (error) {
+                showError('创建场景失败: ' + error.message);
+            }
+        }
+
+        // ==================== 新建道具 ====================
+        let existingProps = [];
+
+        async function fetchExistingProps() {
+            try {
+                const response = await fetch(`/api/props-files?user_id=${USER_ID}&world_id=${WORLD_ID}&auth_token=${AUTH_TOKEN}&raw_json=true`);
+                const data = await response.json();
+                const props = data.props || data.data?.data || [];
+                existingProps = props.map(p => p.name).filter(Boolean);
+            } catch (e) {
+                console.warn('获取已有道具列表失败:', e);
+                existingProps = [];
+            }
+        }
+
+        function checkPropNameDuplicate() {
+            const nameInput = document.getElementById('new-prop-name');
+            const hint = document.getElementById('prop-name-hint');
+            const value = nameInput.value.trim();
+            if (!value) { hint.style.display = 'none'; return; }
+            if (existingProps.includes(value)) {
+                hint.style.display = 'block';
+                hint.style.color = 'var(--error-color, #e74c3c)';
+                hint.textContent = `道具"${value}"已存在，请使用其他名称`;
+            } else {
+                hint.style.display = 'block';
+                hint.style.color = 'var(--success-color, #27ae60)';
+                hint.textContent = `名称"${value}"可用`;
+            }
+        }
+
+        function showNewPropModal() {
+            ['new-prop-name','new-prop-type'].forEach(id => document.getElementById(id).value = '');
+            document.getElementById('new-prop-description').value = '';
+            const hint = document.getElementById('prop-name-hint');
+            hint.style.display = 'none'; hint.textContent = '';
+            fetchExistingProps();
+            document.getElementById('new-prop-modal').classList.add('show');
+            document.getElementById('new-prop-name').focus();
+            document.getElementById('new-prop-name').oninput = checkPropNameDuplicate;
+        }
+
+        function closeNewPropModal() {
+            document.getElementById('new-prop-modal').classList.remove('show');
+        }
+
+        async function createNewProp() {
+            const name = document.getElementById('new-prop-name').value.trim();
+            if (!name) { showError('请输入道具名称'); return; }
+            if (existingProps.includes(name)) { showError(`道具"${name}"已存在`); return; }
+
+            try {
+                updateStatus('正在创建道具...');
+                const now = new Date().toISOString();
+                const data = {
+                    user_id: USER_ID,
+                    world_id: WORLD_ID,
+                    name: name,
+                    type: document.getElementById('new-prop-type').value.trim(),
+                    description: document.getElementById('new-prop-description').value.trim(),
+                    reference_image: '',
+                    create_time: now,
+                    update_time: now
+                };
+                const response = await fetch(`/api/props-files/${encodeURIComponent(name)}?user_id=${USER_ID}&world_id=${WORLD_ID}&auth_token=${AUTH_TOKEN}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: JSON.stringify(data, null, 2), user_id: USER_ID, world_id: WORLD_ID, auth_token: AUTH_TOKEN })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    showSuccess(`✓ 道具"${name}"创建成功！`);
+                    closeNewPropModal();
+                    await loadFiles('props');
+                } else {
+                    showError('创建道具失败: ' + (result.error || '未知错误'));
+                }
+            } catch (error) {
+                showError('创建道具失败: ' + error.message);
             }
         }
 
