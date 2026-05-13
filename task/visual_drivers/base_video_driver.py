@@ -224,6 +224,11 @@ class BaseVideoDriver(ABC):
             api_logger.error(f"Request Error: {str(e)}")
             api_logger.error(f"Traceback: {traceback.format_exc()}")
             api_logger.info(f"========== API 请求失败 ==========")
+            # 将 requests 异常转换为内置异常，便于所有子类统一用 (ConnectionError, TimeoutError) 捕获
+            if isinstance(e, requests.exceptions.Timeout):
+                raise TimeoutError(str(e)) from e
+            elif isinstance(e, requests.exceptions.ConnectionError):
+                raise ConnectionError(str(e)) from e
             raise
 
     def _mask_sensitive_headers(self, headers: dict) -> dict:
