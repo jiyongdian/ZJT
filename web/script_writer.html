@@ -1269,6 +1269,7 @@
         let pendingVerificationId = null;
         let pendingVerificationData = null;
         let needsNewMessageDiv = false;
+        let fullText = ''; // 全局变量，用于累积消息内容
         const urlParams = new URLSearchParams(window.location.search);
         
         // 全局参数：从URL获取并存储，供所有接口使用
@@ -2359,11 +2360,12 @@
                 const taskId = taskData.task_id;
                 
                 const eventSource = new EventSource(`/api/task/${taskId}/stream`);
-                hideTypingIndicator();
+                // 保持打字指示器，直到收到第一个消息
                 const messageDiv = addMessage('assistant', '');
                 let contentDiv = messageDiv.querySelector('.message-content');
 
-                let fullText = '';
+                // 重置全局 fullText 变量
+                fullText = '';
                 let startTime = Date.now();
 
                 eventSource.onmessage = (event) => {
@@ -2372,6 +2374,7 @@
                         
                         if (!hasStartedReceiving) {
                             hasStartedReceiving = true;
+                            hideTypingIndicator(); // 收到第一个消息时才移除打字指示器
                             const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
                             updateStatus(`AI 正在回复... (等待了 ${elapsed}s)`);
                             clearTimeout(timeoutId);
@@ -2397,6 +2400,7 @@
                             console.log('[SSE] 上下文压缩事件:', data.reason);
                         } else if (data.type === 'done') {
                             eventSource.close();
+                            hideTypingIndicator(); // 确保移除打字指示器
                             updateStatus('完成');
                             isProcessing = false;
                             pendingVerificationId = null;
@@ -2444,16 +2448,28 @@
                 };
                 
                 eventSource.onerror = (error) => {
+                    // 关闭当前连接
                     eventSource.close();
-                    if (!hasStartedReceiving) {
-                        showError('连接失败，请重试');
-                    }
-                    isProcessing = false;
-                    pendingVerificationId = null;
-                    pendingVerificationData = null;
-                    const sendBtn = document.getElementById('send-btn');
-                    sendBtn.disabled = false;
-                    sendBtn.classList.remove('sending');
+
+                    // 检查后端任务状态，确认是否真的完成
+                    checkTaskStatus(taskId).then(taskStatus => {
+                        if (taskStatus === 'completed' || taskStatus === 'failed' || taskStatus === 'cancelled') {
+                            // 任务已结束，安全重置状态
+                            resetProcessingState();
+                            if (!hasStartedReceiving) {
+                                showError('连接失败，请重试');
+                            }
+                        } else {
+                            // 任务仍在运行，保持旋转状态并尝试重连
+                            updateStatus('连接中断，正在重连...');
+                            setTimeout(() => {
+                                reconnectSSE(taskId, messageDiv, contentDiv, startTime);
+                            }, 2000);
+                        }
+                    }).catch(() => {
+                        // 无法获取任务状态，保守处理：保持旋转但显示提示
+                        updateStatus('连接中断，请等待或刷新页面');
+                    });
                 };
 
                 updateStatus('就绪');
@@ -2471,6 +2487,121 @@
                 sendBtn.disabled = false;
                 sendBtn.classList.remove('sending');
             }
+        }
+
+        // 检查任务状态
+        async function checkTaskStatus(taskId) {
+            const response = await fetch(`/api/task/${taskId}/status`);
+            if (!response.ok) throw new Error('Failed to check task status');
+            const data = await response.json();
+            return data.status;
+        }
+
+        // 重置处理状态
+        function resetProcessingState() {
+            isProcessing = false;
+            pendingVerificationId = null;
+            pendingVerificationData = null;
+            const sendBtn = document.getElementById('send-btn');
+            if (sendBtn) {
+                sendBtn.disabled = false;
+                sendBtn.classList.remove('sending');
+            }
+            updateStatus('就绪');
+        }
+
+        // 重连SSE（最多重连5次）
+        function reconnectSSE(taskId, messageDiv, contentDiv, startTime, retryCount = 0) {
+            const MAX_RETRIES = 5;
+
+            if (retryCount >= MAX_RETRIES) {
+                updateStatus('重连失败，请刷新页面重试');
+                resetProcessingState();
+                showError('连接中断，已尝试重连5次失败，请刷新页面');
+                return null;
+            }
+
+            const newEventSource = new EventSource(`/api/task/${taskId}/stream`);
+            let hasStartedReceiving = false;
+
+            newEventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+
+                    if (!hasStartedReceiving) {
+                        hasStartedReceiving = true;
+                        hideTypingIndicator();
+                        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                        updateStatus(`AI 正在回复... (等待了 ${elapsed}s)`);
+                    }
+
+                    if (data.type === 'message') {
+                        if (data.content) {
+                            if (needsNewMessageDiv) {
+                                const newDiv = addMessage('assistant', '');
+                                contentDiv = newDiv.querySelector('.message-content');
+                                fullText = '';
+                                needsNewMessageDiv = false;
+                            }
+                            fullText += data.content + '\n\n';
+                            contentDiv.innerHTML = renderMarkdown(fullText);
+                            scrollToBottom();
+                        }
+                    } else if (data.type === 'progress') {
+                        updateStatus(`执行中: ${data.step || ''}`);
+                    } else if (data.type === 'context_compression') {
+                        updateStatus('上下文已自动压缩，继续回复中...');
+                    } else if (data.type === 'done') {
+                        newEventSource.close();
+                        updateStatus('完成');
+                        resetProcessingState();
+                        loadComputingPower();
+                        try {
+                            refreshFiles().catch(err => console.error('刷新文件列表失败:', err));
+                        } catch (err) {
+                            console.error('调用refreshFiles失败:', err);
+                        }
+                    } else if (data.type === 'error') {
+                        newEventSource.close();
+                        showError('任务执行错误: ' + data.error);
+                        resetProcessingState();
+                    } else if (data.type === 'human_verification_required') {
+                        const verification = data.verification || {};
+                        handleHumanVerification(verification);
+                    } else if (data.type === 'verification_timeout') {
+                        if (pendingVerificationId === data.verification_id) {
+                            pendingVerificationId = null;
+                            pendingVerificationData = null;
+                            const input = document.getElementById('message-input');
+                            input.value = '';
+                            input.placeholder = '输入消息...';
+                        }
+                        showError('验证已超时，请重新发送消息');
+                    } else if (data.type === 'status') {
+                        if (data.status) updateStatus(data.status);
+                    }
+                } catch (e) {
+                    console.error('[SSE-CLIENT] 解析失败:', e);
+                }
+            };
+
+            newEventSource.onerror = (error) => {
+                newEventSource.close();
+                checkTaskStatus(taskId).then(taskStatus => {
+                    if (taskStatus === 'completed' || taskStatus === 'failed' || taskStatus === 'cancelled') {
+                        resetProcessingState();
+                    } else {
+                        updateStatus(`重连失败，2秒后再次尝试 (${retryCount + 1}/${MAX_RETRIES})...`);
+                        setTimeout(() => {
+                            reconnectSSE(taskId, messageDiv, contentDiv, startTime, retryCount + 1);
+                        }, 2000);
+                    }
+                }).catch(() => {
+                    updateStatus('重连失败，请刷新页面');
+                });
+            };
+
+            return newEventSource;
         }
 
         function configureMarked() {
@@ -3195,14 +3326,16 @@
             }
         }
 
-        function saveThinkingState() {
+        function saveThinkingState(isUserAction = false) {
             const toggle = document.getElementById('thinking-toggle');
             const effortSelect = document.getElementById('thinking-effort');
             if (!toggle) return;
 
             const state = {
                 enabled: toggle.checked,
-                effort: effortSelect ? effortSelect.value : 'medium'
+                effort: effortSelect ? effortSelect.value : 'medium',
+                // 记录用户是否明确关闭了思考模式（只有用户手动切换时才更新此字段）
+                explicitlyDisabled: isUserAction ? !toggle.checked : (JSON.parse(localStorage.getItem('lastThinkingState') || '{}').explicitlyDisabled || false)
             };
             localStorage.setItem('lastThinkingState', JSON.stringify(state));
         }
@@ -3213,24 +3346,56 @@
             const effortSelect = document.getElementById('thinking-effort');
             if (!toggle) return;
 
+            // 获取当前选中模型的信息
+            const selector = document.getElementById('model-selector');
+            const selectedOption = selector?.options?.[selector.selectedIndex];
+            const vendorName = (selectedOption?.dataset?.vendorName || '').toLowerCase();
+            const modelValue = (selectedOption?.value || '').toLowerCase();
+            const conciseName = (selectedOption?.dataset?.conciseName || '').toLowerCase();
+
+            // 判断是否为 DeepSeek 模型（使用多种方式判断，确保可靠性）
+            const isDeepSeek = vendorName === 'deepseek' ||
+                modelValue.includes('deepseek') ||
+                conciseName.includes('deepseek') ||
+                (LLMVendor.DEEPSEEK && vendorName === LLMVendor.DEEPSEEK.toLowerCase());
+
+            console.log('[思考模式] restoreThinkingState:', {
+                savedStateRaw,
+                vendorName,
+                modelValue,
+                conciseName,
+                isDeepSeek,
+                LLMVendor_DEEPSEEK: LLMVendor.DEEPSEEK,
+                selectedOptionValue: selectedOption?.value
+            });
+
             if (savedStateRaw) {
                 try {
                     const state = JSON.parse(savedStateRaw);
-                    toggle.checked = state.enabled || false;
+                    // 对于 DeepSeek 模型，如果用户没有明确设置过不开启思考模式，默认开启
+                    // 只有当 state.explicitlyDisabled 为 true 时，才保持关闭
+                    if (isDeepSeek && !state.explicitlyDisabled) {
+                        toggle.checked = true;
+                        console.log('[思考模式] DeepSeek 模型默认开启思考模式');
+                    } else {
+                        toggle.checked = state.enabled || false;
+                    }
                     if (effortSelect && state.effort) {
                         effortSelect.value = state.effort;
                     }
                     updateThinkingEffortVisibility();
                 } catch (e) {
                     console.warn('[思考模式] 恢复状态失败:', e);
+                    // 恢复失败时，对于 DeepSeek 模型默认开启
+                    if (isDeepSeek) {
+                        toggle.checked = true;
+                    }
                 }
             } else {
                 // 无缓存：DeepSeek 模型默认开启思考模式
-                const selector = document.getElementById('model-selector');
-                const selectedOption = selector?.options?.[selector.selectedIndex];
-                const vendorName = selectedOption?.dataset?.vendorName || '';
-                if (vendorName === LLMVendor.DEEPSEEK) {
+                if (isDeepSeek) {
                     toggle.checked = true;
+                    console.log('[思考模式] DeepSeek 模型无缓存，默认开启思考模式');
                 }
                 updateThinkingEffortVisibility();
                 saveThinkingState();
@@ -3238,7 +3403,7 @@
         }
 
         function onThinkingToggleChange() {
-            saveThinkingState();
+            saveThinkingState(true);  // 传入 true 表示是用户手动切换
             updateThinkingEffortVisibility();
         }
 
