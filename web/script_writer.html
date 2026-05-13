@@ -404,11 +404,6 @@
                 <div class="sidebar-header">
                     <h3 class="sidebar-title">📁 暂存文件管理</h3>
                     <div class="sidebar-header-actions">
-                        <button class="add-file-btn" id="add-file-btn" style="display:none" onclick="showNewScriptModal()" title="新建剧本">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M12 5v14M5 12h14"/>
-                            </svg>
-                        </button>
                         <button class="export-icon-btn" onclick="exportWorld()" title="导出世界数据">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -464,7 +459,16 @@
                     </button>
                 </div>
                 <div class="file-list-container" id="file-list">
-                    <div class="file-empty">加载中...</div>
+                    <div class="file-list-header">
+                        <button class="add-file-btn-fab" id="add-file-btn" style="display:none" onclick="showNewScriptModal()" title="新建剧本">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M12 5v14M5 12h14"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <div id="file-items-container">
+                        <div class="file-empty">加载中...</div>
+                    </div>
                 </div>
             </aside>
         </main>
@@ -3607,7 +3611,7 @@
                 if (fileType === 'worlds') {
                     addBtn.style.display = 'none';
                 } else {
-                    addBtn.style.display = 'inline-flex';
+                    addBtn.style.display = 'flex';
                     const addBtnConfig = {
                         'scripts': { onclick: 'showNewScriptModal()', title: '新建剧本' },
                         'characters': { onclick: 'showNewCharacterModal()', title: '新建角色' },
@@ -3696,7 +3700,7 @@
         }
 
         async function loadFiles(fileType) {
-            const fileList = document.getElementById('file-list');
+            const fileItemsContainer = document.getElementById('file-items-container');
             try {
                 const apiMap = {
                     'worlds': '/api/world-files',
@@ -3705,21 +3709,21 @@
                     'locations': '/api/locations-files',
                     'props': '/api/props-files'
                 };
-                
+
                 // 添加 raw_json=true 参数以获取完整的JSON数据（包括reference_image）
                 const response = await fetch(`${apiMap[fileType]}?user_id=${USER_ID}&world_id=${WORLD_ID}&auth_token=${AUTH_TOKEN}&raw_json=true`);
                 const data = await response.json();
-                
+
                 if (checkTokenExpired(data, response)) {
                     return;
                 }
-                
+
                 // 兼容两种返回格式: {success, xxx:[]} 和 {code:0, data:{data:[]}}
                 const isSuccess = data.success || data.code === 0;
                 if (isSuccess) {
                     // 优先从 data.data.data 获取（server.py格式），否则从对应字段获取（script_writer_api格式）
                     let files = data.data?.data || data.worlds || data.characters || data.scripts || data.locations || data.props || [];
-                    
+
                     // 对于世界文件，只显示当前世界的文件
                     if (fileType === 'worlds') {
                         files = files.filter(file => file.name === `world_${WORLD_ID}.json`);
@@ -3735,13 +3739,13 @@
                             return episodeA - episodeB;
                         });
                     }
-                    
+
                     if (files.length === 0) {
-                        fileList.innerHTML = '<div class="file-empty">暂无文件</div>';
+                        fileItemsContainer.innerHTML = '<div class="file-empty">暂无文件</div>';
                         return;
                     }
-                    
-                    fileList.innerHTML = '';
+
+                    fileItemsContainer.innerHTML = '';
                     files.forEach(file => {
                         const fileItem = document.createElement('div');
                         fileItem.className = 'file-item';
@@ -3820,13 +3824,13 @@
                                 </button>
                             </div>
                         `;
-                        fileList.appendChild(fileItem);
+                        fileItemsContainer.appendChild(fileItem);
                     });
                 } else {
-                    fileList.innerHTML = '<div class="file-empty">加载失败</div>';
+                    fileItemsContainer.innerHTML = '<div class="file-empty">加载失败</div>';
                 }
             } catch (error) {
-                fileList.innerHTML = '<div class="file-empty">加载失败</div>';
+                fileItemsContainer.innerHTML = '<div class="file-empty">加载失败</div>';
             }
         }
 
@@ -5690,6 +5694,8 @@
                 updateStatus('正在创建剧本...');
                 const now = new Date().toISOString();
                 const scriptData = JSON.stringify({
+                    user_id: USER_ID,
+                    world_id: WORLD_ID,
                     title: title,
                     episode_number: episode,
                     content: content || '',
@@ -5780,6 +5786,8 @@
                 updateStatus('正在创建角色...');
                 const now = new Date().toISOString();
                 const data = {
+                    user_id: USER_ID,
+                    world_id: WORLD_ID,
                     name: name,
                     age: document.getElementById('new-char-age').value.trim(),
                     identity: document.getElementById('new-char-identity').value.trim(),
@@ -5865,6 +5873,8 @@
                 updateStatus('正在创建场景...');
                 const now = new Date().toISOString();
                 const data = {
+                    user_id: USER_ID,
+                    world_id: WORLD_ID,
                     name: name,
                     parent_id: document.getElementById('new-loc-parent').value.trim() || null,
                     description: document.getElementById('new-loc-description').value.trim(),
@@ -5946,6 +5956,8 @@
                 updateStatus('正在创建道具...');
                 const now = new Date().toISOString();
                 const data = {
+                    user_id: USER_ID,
+                    world_id: WORLD_ID,
                     name: name,
                     type: document.getElementById('new-prop-type').value.trim(),
                     description: document.getElementById('new-prop-description').value.trim(),
