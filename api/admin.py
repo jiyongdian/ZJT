@@ -1442,6 +1442,21 @@ async def admin_get_implementation_configs(
 
                 except Exception:
                     logger.warning(f"无法导入配置检查工具，显示所有API聚合站实现方")
+            else:
+                # 非API聚合器实现方：检查驱动配置是否可用
+                try:
+                    from task.visual_drivers.driver_factory import VideoDriverFactory
+                    from task.visual_drivers.base_video_driver import DriverConfigError
+
+                    driver_class = VideoDriverFactory._registered_drivers.get(impl_name)
+                    if driver_class:
+                        try:
+                            driver_class()  # 尝试实例化验证配置
+                        except (DriverConfigError, Exception):
+                            # 配置缺失或其他错误，跳过该实现方
+                            continue
+                except Exception:
+                    pass  # 导入失败时不过滤
 
             # 确定该实现方属于哪些 DriverKey 组
             driver_keys = impl_to_driver_keys.get(impl_name, [])
