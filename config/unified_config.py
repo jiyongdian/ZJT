@@ -375,14 +375,12 @@ class UnifiedTaskConfig:
         result = []
         impl_names = self.implementations if self.implementations else ([self.implementation] if self.implementation else [])
 
-        # 对于 Gemini 图片任务，动态添加 API 聚合器实现方
-        if self.driver_name in [DriverKey.GEMINI_IMAGE_EDIT, DriverKey.GEMINI_IMAGE_EDIT_PRO]:
-            # 获取所有已注册的 gemini_common_* 实现方
-            for impl_name, impl_config in UnifiedConfigRegistry.get_all_implementations().items():
-                if impl_name.startswith('gemini_common_') and impl_name not in impl_names:
-                    impl_names.append(impl_name)
-
         for impl_name in impl_names:
+            # 检查驱动是否已注册（未注册的驱动不可用，如站点配置缺失的情况）
+            from task.visual_drivers import VideoDriverFactory
+            if not VideoDriverFactory.is_driver_registered(impl_name):
+                continue
+
             impl_config = UnifiedConfigRegistry.get_implementation(impl_name)
             if impl_config:
                 # 检查实现方是否启用（从数据库读取）
