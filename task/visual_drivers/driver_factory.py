@@ -241,27 +241,28 @@ class VideoDriverFactory:
                 task_key = config.key
                 user_pref = UsersModel.get_implementation_preference(user_id, task_key)
                 if user_pref:
-                    # 验证用户偏好在可选列表中（使用 _get_implementations_info 获取动态实现方）
-                    available_impls = [impl['name'] for impl in config._get_implementations_info()]
-                    if user_pref in available_impls:
+                    # 验证用户偏好是否可用（配置已就绪）
+                    if cls._is_driver_available(user_pref):
                         logger.debug(f"Using user preference for task {task_key}: {user_pref}")
                         impl_name = user_pref
                     else:
-                        logger.warning(f"User preference {user_pref} not in available implementations {available_impls}")
+                        logger.warning(f"User preference {user_pref} config not available, will auto-select")
             except Exception as e:
                 logger.warning(f"Failed to get user preference: {e}")
 
-        # 2. 如果没有用户偏好，根据排序选择排序最靠前的启用实现方
+        # 2. 如果没有用户偏好或偏好不可用，根据排序选择排序最靠前的可用实现方
         if not impl_name:
-            # 获取所有可用的实现方（已启用且已注册）
             available_impls = config._get_implementations_info()
-            if available_impls:
-                # _get_implementations_info 已经按 sort_order 排序，取第一个
-                impl_name = available_impls[0]['name']
-                logger.debug(f"Auto-selected implementation by sort_order for task {config.key}: {impl_name}")
-            else:
-                # 回退到默认实现方
+            for impl in available_impls:
+                if cls._is_driver_available(impl['name']):
+                    impl_name = impl['name']
+                    logger.debug(f"Auto-selected implementation for task {config.key}: {impl_name}")
+                    break
+
+            # 回退到默认实现方
+            if not impl_name:
                 impl_name = config.implementation
+                logger.warning(f"All implementations unavailable for task {config.key}, falling back to default: {impl_name}")
 
         # 3. 获取驱动参数
         driver_params = {}
@@ -271,6 +272,26 @@ class VideoDriverFactory:
                 driver_params = impl_config.driver_params.copy()
 
         return impl_name, driver_params
+
+    @classmethod
+    def _is_driver_available(cls, impl_name: str) -> bool:
+        """
+        检查实现方驱动是否可用（配置已就绪）
+
+        Args:
+            impl_name: 实现方名称
+
+        Returns:
+            bool: 驱动是否可用
+        """
+        driver_class = cls._registered_drivers.get(impl_name)
+        if not driver_class:
+            return False
+        try:
+            driver_class()
+            return True
+        except Exception:
+            return False
     
     @classmethod
     def get_supported_types(cls) -> list:
@@ -336,41 +357,48 @@ class VideoDriverFactory:
         for config in UnifiedConfigRegistry.get_all():
             if not config.driver_name:
                 continue
-            
+
             task_type = config.id
-            impl_name = config.implementation
-            
-            if not impl_name:
+
+            # 收集所有需要检查的实现方（默认 + 可选）
+            impl_list = list(config.implementations) if config.implementations else []
+            if config.implementation and config.implementation not in impl_list:
+                impl_list.insert(0, config.implementation)
+
+            if not impl_list:
                 result[str(task_type)] = {
                     "available": False,
                     "missing_configs": ["未配置实现驱动"]
                 }
                 continue
-            
-            driver_class = cls._registered_drivers.get(impl_name)
-            if not driver_class:
-                result[str(task_type)] = {
-                    "available": False,
-                    "missing_configs": ["驱动未注册"]
-                }
-                continue
-            
-            try:
-                driver_class()  # 尝试创建实例验证配置
+
+            # 遍历所有实现方，只要有任意一个可用就标记为可用
+            available_impl = None
+            last_error_configs = ["未配置实现驱动"]
+
+            for impl_name in impl_list:
+                driver_class = cls._registered_drivers.get(impl_name)
+                if not driver_class:
+                    continue
+                try:
+                    driver_class()  # 尝试创建实例验证配置
+                    available_impl = impl_name
+                    break
+                except DriverConfigError as e:
+                    last_error_configs = e.missing_configs
+                except Exception as e:
+                    logger.warning(f"检查 driver {impl_name} 可用性时出错: {e}")
+                    last_error_configs = [str(e)]
+
+            if available_impl:
                 result[str(task_type)] = {
                     "available": True,
                     "missing_configs": []
                 }
-            except DriverConfigError as e:
+            else:
                 result[str(task_type)] = {
                     "available": False,
-                    "missing_configs": e.missing_configs
-                }
-            except Exception as e:
-                logger.warning(f"检查 driver {impl_name} 可用性时出错: {e}")
-                result[str(task_type)] = {
-                    "available": False,
-                    "missing_configs": [str(e)]
+                    "missing_configs": last_error_configs
                 }
 
         return result
