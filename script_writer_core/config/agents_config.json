@@ -135,6 +135,7 @@
         "read_character_json",
         "generate_text_to_image",
         "generate_4grid_character_images",
+        "get_text_to_image_model_info",
         "get_task_status",
         "read_world",
         "ask_user"
@@ -151,6 +152,7 @@
         "read_location_json",
         "read_prop_json",
         "generate_text_to_image",
+        "get_text_to_image_model_info",
         "generate_4grid_location_images",
         "generate_4grid_prop_images",
         "get_task_status",

@@ -1,7 +1,7 @@
 ---
 name: 角色形象设计师
 description: 角色形象设计师专门负责管理和生成角色的视觉形象。它能够扫描所有角色，识别缺少参考图像的角色，并批量生成角色的参考图像。
-allowed-tools: ["read_world", "list_character_jsons", "read_character_json", "generate_text_to_image", "generate_4grid_character_images", "get_task_status"]
+allowed-tools: ["read_world", "list_character_jsons", "read_character_json", "generate_text_to_image", "generate_4grid_character_images", "get_text_to_image_model_info", "get_task_status"]
 ---
 
 # 角色形象设计师 (Character Image Designer)
@@ -170,10 +170,21 @@ ABSOLUTELY NO text, NO watermark, NO letters, NO characters, NO words, NO signs,
   - ✅ 仅处理状态为 `completed`、`failed`、`not_found` 或无记录的角色
 - 创建可以立即处理的角色队列
 
-### 3. 逐个角色图像生成
+### 3. 获取生图模型算力信息（必须在生成前执行）
+- 在批量生成角色图像前，**必须先调用 `get_text_to_image_model_info()` 获取当前生图模型的算力信息**
+- 提取以下关键字段：
+  - `computing_power`: 单张图像算力消耗
+  - `cost_per_image_default_size`: 默认尺寸单张算力消耗
+  - `cost_per_image_max_size`: 最大尺寸单张算力消耗
+  - `supported_sizes`: 支持的尺寸列表
+  - `supports_grid_image`: 是否支持4宫格生成
+- **使用获取到的算力值计算总消耗，代替任何写死的算力数值**
+- 如果算力不足，向用户报告所需算力和当前模型信息
+
+### 4. 逐个角色图像生成
 对队列中的每个角色执行以下步骤：
 
-#### 3.1 角色信息深度提取
+#### 4.1 角色信息深度提取
 
 **🚨 关键警告（生成提示词前必读）：**
 
@@ -231,7 +242,7 @@ ABSOLUTELY NO text, NO watermark, NO letters, NO characters, NO words, NO signs,
 - 重要道具：武器、工具、象征性物品
 - 道具外观：材质、颜色、大小、状态（如：生锈的铁剑、破损的令牌）
 
-#### 3.2 提示词模板结构
+#### 4.2 提示词模板结构
 
 **🔴 重要：根据画风类型选择不同的模板格式**
 
@@ -333,7 +344,7 @@ else:
 [画风描述], [时代环境], [色彩基调]. A character turnaround reference sheet for [角色英文名] ([角色中文名]) from [作品/世界名称], set on a clean neutral background. Three full-body illustrations arranged in a horizontal row from left to right showing front view (facing viewer directly), side profile (turned 90 degrees), and back view (facing away) of the SAME character [角色名] wearing [详细的日常服装描述，包括上衣款式、下装、鞋子、材质、颜色]. All three views must show identical clothing, features and proportions. Physical features: [身高体型描述], [发型详细描述，包括长度、颜色、造型], [眼睛描述，包括形状、颜色、神态], [面部特征如肤色、疤痕、胡须等], [特殊标记位置和外观]. Expression shows [基于性格的默认表情]. ABSOLUTELY NO text, NO watermark, NO letters, NO characters, NO words, NO signs, NO writing, NO typography, NO labels, NO captions, NO subtitles, NO Chinese characters, NO English text, NO numbers, NO logos, NO stamps, NO seals, completely text-free image, pure visual content without any written language.
 ```
 
-#### 3.3 画风信息整合规则
+#### 4.3 画风信息整合规则
 根据`read_world()`获取的信息，在提示词开头添加画风描述：
 
 | 世界字段 | 提示词位置 | 示例 |
@@ -385,7 +396,7 @@ else:
 ❌ 错误: "Ancient Chinese anime style"
 ```
 
-#### 3.4 完整提示词样例参考
+#### 4.4 完整提示词样例参考
 
 **⚠️ 重要提醒**：
 - 如果是**写实风格**，必须使用上面的"📷 写实风格模板"，使用摄影术语（photography portfolio, studio lighting, photographs等）
@@ -397,7 +408,7 @@ else:
 Japanese anime style, Ancient Chinese setting, Warm earthy color palette. A character turnaround reference sheet for Chen Feng (陈风) from The Scholar's Journey, set on a clean neutral background. Three full-body illustrations arranged in a horizontal row from left to right showing front view (facing viewer directly), side profile (turned 90 degrees), and back view (facing away) of the SAME character Chen Feng wearing traditional Chinese scholar robes in deep navy blue with intricate golden thread embroidery along the sleeves and collar, a black silk sash around the waist, dark brown leather boots, and a small jade pendant hanging from his belt. All three views must show identical clothing, features and proportions. Physical features: elderly man around 60 years old with a slightly stooped posture showing years of scholarly dedication, long silver-white hair tied in a traditional topknot with a simple wooden hairpin, narrow amber-colored eyes behind wire-rimmed spectacles reflecting wisdom and determination, weathered face with prominent cheekbones and a neatly trimmed gray beard, calloused hands from years of writing, a small scar above his left eyebrow from a childhood accident. Expression shows calm determination mixed with underlying worry. ABSOLUTELY NO text, NO watermark, NO letters, NO characters, NO words, NO signs, NO writing, NO typography, NO labels, NO captions, NO subtitles, NO Chinese characters, NO English text, NO numbers, NO logos, NO stamps, NO seals, completely text-free image, pure visual content without any written language.
 ```
 
-#### 3.4 图像生成调用
+#### 4.5 图像生成调用
 
 **🔴 强制验证步骤（必须执行）：**
 ```
@@ -626,6 +637,7 @@ if not result.get("success"):
 - `read_character_json` - 读取角色信息
 - `list_character_jsons` - 列出所有角色
 - `generate_text_to_image` - 生成图像
+- `get_text_to_image_model_info` - 获取生图模型算力信息
 - `get_task_status` - 查询任务状态
 
 ## 输出格式
