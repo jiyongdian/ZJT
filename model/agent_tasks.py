@@ -27,6 +27,19 @@ class AgentTaskEntity:
         self.model_id = kwargs.get('model_id')
         self.enable_thinking = kwargs.get('enable_thinking', False)
         self.thinking_effort = kwargs.get('thinking_effort', 'medium')
+
+        # Deserialize image_urls from JSON
+        image_urls_json = kwargs.get('image_urls')
+        if isinstance(image_urls_json, str) and image_urls_json:
+            try:
+                self.image_urls = json.loads(image_urls_json)
+            except json.JSONDecodeError:
+                self.image_urls = None
+        elif isinstance(image_urls_json, list):
+            self.image_urls = image_urls_json
+        else:
+            self.image_urls = None
+
         self.status = kwargs.get('status', 'pending')
         self.progress = kwargs.get('progress', 0.0)
         self.current_step = kwargs.get('current_step', '')
@@ -60,6 +73,7 @@ class AgentTaskEntity:
             'model_id': self.model_id,
             'enable_thinking': self.enable_thinking,
             'thinking_effort': self.thinking_effort,
+            'image_urls': self.image_urls,
             'status': self.status,
             'progress': self.progress,
             'current_step': self.current_step,
@@ -86,6 +100,7 @@ class AgentTasksModel:
         model_id: Optional[int] = None,
         enable_thinking: bool = False,
         thinking_effort: str = 'medium',
+        image_urls: Optional[List[str]] = None,
         status: str = 'pending'
     ) -> int:
         """
@@ -97,13 +112,15 @@ class AgentTasksModel:
         sql = """
             INSERT INTO agent_tasks
             (task_id, session_id, user_id, world_id, user_message,
-             auth_token, vendor_id, model_id, enable_thinking, thinking_effort, status)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+             auth_token, vendor_id, model_id, enable_thinking, thinking_effort, image_urls, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         # enable_thinking: bool/str -> str（数据库存字符串，支持 true/false/auto）
         enable_thinking_str = str(enable_thinking).lower() if isinstance(enable_thinking, bool) else str(enable_thinking)
+        # image_urls: list -> JSON 字符串
+        image_urls_json = json.dumps(image_urls, ensure_ascii=False) if image_urls else None
         params = (task_id, session_id, user_id, world_id, user_message,
-                  auth_token, vendor_id, model_id, enable_thinking_str, thinking_effort, status)
+                  auth_token, vendor_id, model_id, enable_thinking_str, thinking_effort, image_urls_json, status)
 
         try:
             record_id = execute_insert(sql, params)
@@ -285,6 +302,7 @@ CREATE TABLE IF NOT EXISTS `agent_tasks` (
   `model_id` int DEFAULT NULL COMMENT 'Model ID',
   `enable_thinking` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'false' COMMENT 'Thinking mode: true/false/auto',
   `thinking_effort` varchar(16) COLLATE utf8mb4_unicode_ci DEFAULT 'medium' COMMENT 'Thinking effort level (low/medium/high)',
+  `image_urls` longtext COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '图片URL列表（JSON数组，HTTP URL格式）',
   `status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending' COMMENT 'Task status: pending/running/waiting_human/completed/failed/cancelled',
   `progress` float NOT NULL DEFAULT '0' COMMENT 'Task progress 0-1',
   `current_step` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT 'Current step description',

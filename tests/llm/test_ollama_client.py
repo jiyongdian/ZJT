@@ -73,9 +73,8 @@ class TestOllamaClient(unittest.TestCase):
         self.assertEqual(actual_model, expected)
 
     @patch('llm.ollama_client.get_dynamic_config_value')
-    @patch('llm.ollama_client.OpenAI')
-    def test_call_api_disabled(self, mock_openai, mock_config):
-        """测试禁用时调用 API 返回 None"""
+    def test_call_api_disabled(self, mock_config):
+        """测试禁用时调用 API 抛出异常"""
         mock_config.side_effect = lambda *args, default=None: {
             ('llm', 'ollama', 'enabled'): False,
         }.get(args, default)
@@ -83,13 +82,12 @@ class TestOllamaClient(unittest.TestCase):
         from llm.ollama_client import OllamaClient
         client = OllamaClient()
 
-        result = client.call_api(
-            model="ollama:test-model",
-            messages=[{"role": "user", "content": "test"}]
-        )
-
-        self.assertIsNone(result)
-        mock_openai.assert_not_called()
+        with self.assertRaises(Exception) as ctx:
+            client.call_api(
+                model="ollama:test-model",
+                messages=[{"role": "user", "content": "test"}]
+            )
+        self.assertIn("Ollama 未启用", str(ctx.exception))
 
     @patch('llm.ollama_client.get_dynamic_config_value')
     @patch('llm.ollama_client.OpenAI')
@@ -178,36 +176,26 @@ class TestLLMClientFactory(unittest.TestCase):
 
     def test_model_prefix_map_contains_ollama(self):
         """测试模型前缀映射包含 ollama"""
+        from config.constant import MODEL_PREFIX_VENDOR_MAP, LLMVendor
+
+        self.assertIn('ollama', MODEL_PREFIX_VENDOR_MAP)
+        self.assertEqual(MODEL_PREFIX_VENDOR_MAP['ollama'], LLMVendor.OLLAMA)
+
+    def test_get_vendor_by_model_ollama(self):
+        """测试 Ollama 模型前缀正确映射到 vendor"""
         from llm.llm_client_factory import LLMClientFactory
+        from config.constant import LLMVendor
 
-        self.assertIn('ollama', LLMClientFactory._MODEL_PREFIX_MAP)
-        self.assertEqual(LLMClientFactory._MODEL_PREFIX_MAP['ollama'], 'ollama')
+        vendor = LLMClientFactory._get_vendor_by_model("ollama:qwen3.6:35b-a3b")
+        self.assertEqual(vendor, LLMVendor.OLLAMA)
 
-    @patch('llm.llm_client_factory.get_ollama_client')
-    def test_get_client_for_ollama_model(self, mock_get_ollama):
-        """测试获取 Ollama 模型的客户端"""
-        mock_client = MagicMock()
-        mock_get_ollama.return_value = mock_client
-
+    def test_get_vendor_by_model_qwen(self):
+        """测试 Qwen 模型前缀正确映射到 aliyun vendor"""
         from llm.llm_client_factory import LLMClientFactory
+        from config.constant import LLMVendor
 
-        client = LLMClientFactory.get_client("ollama:qwen3.6:35b-a3b")
-
-        mock_get_ollama.assert_called_once()
-        self.assertEqual(client, mock_client)
-
-    @patch('llm.llm_client_factory.get_aliyun_openai_client')
-    def test_get_client_for_qwen_model(self, mock_get_aliyun):
-        """测试获取 Qwen 模型使用阿里云 OpenAI 客户端"""
-        mock_client = MagicMock()
-        mock_get_aliyun.return_value = mock_client
-
-        from llm.llm_client_factory import LLMClientFactory
-
-        client = LLMClientFactory.get_client("qwen3.5-plus")
-
-        mock_get_aliyun.assert_called_once()
-        self.assertEqual(client, mock_client)
+        vendor = LLMClientFactory._get_vendor_by_model("qwen3.5-plus")
+        self.assertEqual(vendor, LLMVendor.ALIYUN)
 
 
 if __name__ == '__main__':

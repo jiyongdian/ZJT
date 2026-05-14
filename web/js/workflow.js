@@ -742,9 +742,11 @@
         // 等待 TaskConfig 加载完成后刷新模型
         if (window.TaskConfig && window.TaskConfig.isLoaded()) {
           refreshShotGroupNodesModels();
+          refreshShotFrameNodesModels();
         } else if (window.TaskConfig) {
           window.TaskConfig.onLoaded(() => {
             refreshShotGroupNodesModels();
+            refreshShotFrameNodesModels();
           });
         }
       }, 800);
@@ -803,6 +805,67 @@
         }
       });
       console.log('[刷新模型] 已刷新所有分镜组节点的模型选择器');
+    }
+
+    /**
+     * 刷新所有分镜节点的生图模型和生视频模型选择器
+     * 在 TaskConfig 延迟加载完成后调用，用于修复分镜节点创建时
+     * TaskConfig 未就绪导致使用硬编码回退列表（缺少新模型选项）的问题。
+     */
+    function refreshShotFrameNodesModels() {
+      if (!window.TaskConfig || !window.TaskConfig.isLoaded()) return;
+
+      const shotFrameNodes = state.nodes.filter(n => n.type === 'shot_frame');
+      shotFrameNodes.forEach(node => {
+        const el = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
+        if (!el) return;
+
+        const modelEl = el.querySelector('.shot-frame-model');
+        const videoModelEl = el.querySelector('.shot-frame-video-model');
+
+        // 刷新生图模型
+        if (modelEl) {
+          const imageOptions = window.TaskConfig.getModelOptionsForCategory('image_edit');
+          if (imageOptions.length > 0) {
+            const currentModel = node.data.model;
+            modelEl.innerHTML = '';
+            imageOptions.forEach(opt => {
+              const optEl = document.createElement('option');
+              optEl.value = opt.value;
+              optEl.textContent = opt.label;
+              if (opt.value === currentModel) optEl.selected = true;
+              modelEl.appendChild(optEl);
+            });
+            // 如果当前值不在选项中，更新为第一个选项
+            if (!imageOptions.find(o => o.value === currentModel)) {
+              node.data.model = imageOptions[0].value;
+              modelEl.value = node.data.model;
+            }
+          }
+        }
+
+        // 刷新生视频模型
+        if (videoModelEl) {
+          const videoOptions = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+          if (videoOptions.length > 0) {
+            const currentVideoModel = node.data.videoModel;
+            videoModelEl.innerHTML = '';
+            videoOptions.forEach(opt => {
+              const optEl = document.createElement('option');
+              optEl.value = opt.value;
+              optEl.textContent = opt.label;
+              if (opt.value === currentVideoModel) optEl.selected = true;
+              videoModelEl.appendChild(optEl);
+            });
+            // 如果当前值不在选项中，更新为第一个选项
+            if (!videoOptions.find(o => o.value === currentVideoModel)) {
+              node.data.videoModel = videoOptions[0].value;
+              videoModelEl.value = node.data.videoModel;
+            }
+          }
+        }
+      });
+      console.log('[刷新模型] 已刷新所有分镜节点的模型选择器');
     }
 
     /**

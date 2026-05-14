@@ -8088,6 +8088,15 @@ async def serve_script_writer():
         return Response(content=content, media_type="text/html")
     raise HTTPException(status_code=404, detail="Script writer page not found")
 
+@app.get("/marketing-agent")
+async def serve_marketing_agent():
+    file_path = os.path.join(static_dir, "marketing_agent.html")
+    if os.path.isfile(file_path):
+        content = _get_processed_html(file_path)
+        return Response(content=content, media_type="text/html")
+    raise HTTPException(status_code=404, detail="Marketing agent page not found")
+
+
 @app.get(f"{MP_VERIFY_ROUTE}")
 async def get_mp_verify_file():
     """

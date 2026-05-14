@@ -107,7 +107,8 @@ class SessionStorage:
             auth_token=entity.auth_token or '',
             model=entity.model,
             model_id=entity.model_id,
-            text_to_image_model_id=entity.text_to_image_model_id
+            text_to_image_model_id=entity.text_to_image_model_id,
+            session_type=entity.session_type
         )
 
         # 同步生图模型配置到内存（解决页面刷新/服务重启后配置丢失问题）
@@ -278,7 +279,8 @@ class SessionStorage:
                     model_id=session.model_id,
                     text_to_image_model_id=session.text_to_image_model_id,
                     conversation_history=session.get_history(),
-                    expires_at=expires_at
+                    expires_at=expires_at,
+                    session_type=getattr(session, 'session_type', 1)
                 )
                 logger.info(f"Session {session.session_id} created in database")
                 
@@ -364,6 +366,15 @@ class SessionStorage:
         except Exception as e:
             logger.error(f"Failed to delete session {session_id}: {e}")
             return False
+
+    def invalidate_cache(self, session_id: str):
+        """Remove a specific session from cache"""
+        if not self.use_cache:
+            return
+        with self._lock:
+            removed = self._cache.pop(session_id, None)
+            if removed:
+                logger.info(f"Session {session_id} cache invalidated")
 
     def clear_cache(self):
         """Clear all cached sessions"""

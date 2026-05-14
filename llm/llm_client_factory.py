@@ -164,12 +164,12 @@ async def get_available_models() -> dict:
 
         # 检查 vendor 配置是否有效，无效则跳过
         if not is_vendor_configured(vendor_name):
-            logger.info(f"[模型过滤] model_id={model_id}, vendor={vendor_name} 未配置，跳过")
+            # logger.debug(f"[模型过滤] model_id={model_id}, vendor={vendor_name} 未配置，跳过")
             continue
 
         # 去重检查（配置通过后才加入集合）
         if (model_id, vendor_id) in added_model_vendor_pairs:
-            logger.info(f"[去重] model_id={model_id}, vendor_id={vendor_id} 已存在，跳过")
+            # logger.debug(f"[去重] model_id={model_id}, vendor_id={vendor_id} 已存在，跳过")
             continue
         added_model_vendor_pairs.add((model_id, vendor_id))
 
@@ -204,9 +204,10 @@ async def get_available_models() -> dict:
             'recommended': False,
             'input_token_threshold': input_token_threshold,
             'context_window': local_model.context_window,
-            'supports_thinking': local_model.supports_thinking == 1
+            'supports_thinking': local_model.supports_thinking == 1,
+            'supports_vl': local_model.supports_vl == 1
         })
 
-    logger.info(f"添加了 {len(models)} 个模型")
+    # logger.info(f"添加了 {len(models)} 个模型")
 
     return {'success': True, 'models': models}

@@ -375,14 +375,12 @@ class UnifiedTaskConfig:
         result = []
         impl_names = self.implementations if self.implementations else ([self.implementation] if self.implementation else [])
 
-        # 对于 Gemini 图片任务，动态添加 API 聚合器实现方
-        if self.driver_name in [DriverKey.GEMINI_IMAGE_EDIT, DriverKey.GEMINI_IMAGE_EDIT_PRO]:
-            # 获取所有已注册的 gemini_common_* 实现方
-            for impl_name, impl_config in UnifiedConfigRegistry.get_all_implementations().items():
-                if impl_name.startswith('gemini_common_') and impl_name not in impl_names:
-                    impl_names.append(impl_name)
-
         for impl_name in impl_names:
+            # 检查驱动是否已注册（未注册的驱动不可用，如站点配置缺失的情况）
+            from task.visual_drivers import VideoDriverFactory
+            if not VideoDriverFactory.is_driver_registered(impl_name):
+                continue
+
             impl_config = UnifiedConfigRegistry.get_implementation(impl_name)
             if impl_config:
                 # 检查实现方是否启用（从数据库读取）
@@ -1227,7 +1225,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.SORA2_TEXT_TO_VIDEO,
         key='sora2_text_to_video',
-        name='Sora2文生视频',
+        name='Sora2',
         category=TaskCategory.TEXT_TO_VIDEO,
         provider=TaskProvider.DUOMI,
         driver_name=DriverKey.SORA2_TEXT_TO_VIDEO,
@@ -1245,7 +1243,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.WAN22_IMAGE_TO_VIDEO,
         key='wan22_image_to_video',
-        name='图片生成视频 (Wan2.2)',
+        name='Wan2.2',
         category=TaskCategory.IMAGE_TO_VIDEO,
         provider=TaskProvider.RUNNINGHUB,
         driver_name=DriverKey.WAN22_IMAGE_TO_VIDEO,
@@ -1262,7 +1260,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.SORA2_IMAGE_TO_VIDEO,
         key='sora2_image_to_video',
-        name='图片生成视频 (Sora2)',
+        name='Sora2',
         category=TaskCategory.IMAGE_TO_VIDEO,
         provider=TaskProvider.DUOMI,
         driver_name=DriverKey.SORA2_IMAGE_TO_VIDEO,
@@ -1280,7 +1278,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.LTX2_IMAGE_TO_VIDEO,
         key='ltx2_image_to_video',
-        name='图片生成视频 (LTX2.0)',
+        name='LTX2.0',
         category=TaskCategory.IMAGE_TO_VIDEO,
         provider=TaskProvider.RUNNINGHUB,
         driver_name=DriverKey.LTX2_IMAGE_TO_VIDEO,
@@ -1297,7 +1295,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.LTX2_3_IMAGE_TO_VIDEO,
         key='ltx2_3_image_to_video',
-        name='图片生成视频 (LTX2.3)',
+        name='LTX2.3',
         category=TaskCategory.IMAGE_TO_VIDEO,
         provider=TaskProvider.RUNNINGHUB,
         driver_name=DriverKey.LTX2_3_IMAGE_TO_VIDEO,
@@ -1314,7 +1312,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.KLING_IMAGE_TO_VIDEO,
         key='kling_image_to_video',
-        name='图片生成视频 (可灵v2.5-turbo)',
+        name='可灵v2.5-turbo',
         category=TaskCategory.IMAGE_TO_VIDEO,
         provider=TaskProvider.DUOMI,
         driver_name=DriverKey.KLING_IMAGE_TO_VIDEO,
@@ -1350,7 +1348,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.VIDU_IMAGE_TO_VIDEO,
         key='vidu_image_to_video',
-        name='图片生成视频 (Vidu-q2-pro-fast)',
+        name='Vidu-q2-pro-fast',
         category=TaskCategory.IMAGE_TO_VIDEO,
         provider=TaskProvider.VIDU,
         driver_name=DriverKey.VIDU_IMAGE_TO_VIDEO,
@@ -1366,7 +1364,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.VIDU_Q2_IMAGE_TO_VIDEO,
         key='vidu_q2_image_to_video',
-        name='图片生成视频 (Vidu-Q2)',
+        name='Vidu-Q2',
         category=TaskCategory.IMAGE_TO_VIDEO,
         provider=TaskProvider.VIDU,
         driver_name=DriverKey.VIDU_Q2_IMAGE_TO_VIDEO,
@@ -1382,7 +1380,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.VEO3_IMAGE_TO_VIDEO,
         key='veo3_image_to_video',
-        name='图片生成视频 (VEO3.1-fast)',
+        name='VEO3.1-fast',
         category=TaskCategory.IMAGE_TO_VIDEO,
         categories=[TaskCategory.TEXT_TO_VIDEO],  # 支持文生视频
         provider=TaskProvider.DUOMI,
@@ -1409,7 +1407,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.GROK_IMAGE_TO_VIDEO,
         key='grok_image_to_video',
-        name='图片生成视频 (Grok)',
+        name='Grok',
         category=TaskCategory.IMAGE_TO_VIDEO,
         categories=[TaskCategory.TEXT_TO_VIDEO],  # 支持文生视频
         provider=TaskProvider.DUOMI,
@@ -1436,7 +1434,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.SEEDANCE_1_5_PRO_IMAGE_TO_VIDEO,
         key='seedance_1_5_pro_image_to_video',
-        name='图片生成视频 (Seedance 1.5 Pro)',
+        name='Seedance 1.5 Pro',
         category=TaskCategory.IMAGE_TO_VIDEO,
         categories=[TaskCategory.TEXT_TO_VIDEO],  # 支持文生视频
         provider=TaskProvider.VOLCENGINE,
@@ -1454,7 +1452,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.SEEDANCE_2_0_FAST_IMAGE_TO_VIDEO,
         key='seedance_2_0_fast_image_to_video',
-        name='图片生成视频 (Seedance 2.0 Fast)',
+        name='Seedance 2.0 Fast',
         category=TaskCategory.IMAGE_TO_VIDEO,
         categories=[TaskCategory.TEXT_TO_VIDEO],  # 支持文生视频
         provider=TaskProvider.VOLCENGINE,
@@ -1473,7 +1471,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.SEEDANCE_2_0_IMAGE_TO_VIDEO,
         key='seedance_2_0_image_to_video',
-        name='图片生成视频 (Seedance 2.0)',
+        name='Seedance 2.0',
         category=TaskCategory.IMAGE_TO_VIDEO,
         categories=[TaskCategory.TEXT_TO_VIDEO],  # 支持文生视频
         provider=TaskProvider.VOLCENGINE,
@@ -1492,7 +1490,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.HAPPY_HORSE_IMAGE_TO_VIDEO,
         key='happy_horse_image_to_video',
-        name='图片生成视频 (Happy Horse)',
+        name='Happy Horse (首帧)',
         category=TaskCategory.IMAGE_TO_VIDEO,
         provider=TaskProvider.DUOMI,
         driver_name=DriverKey.HAPPY_HORSE_IMAGE_TO_VIDEO,
@@ -1509,7 +1507,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.HAPPY_HORSE_REFERENCE_TO_VIDEO,
         key='happy_horse_reference_to_video',
-        name='参考生视频 (Happy Horse)',
+        name='Happy Horse (多参考)',
         category=TaskCategory.IMAGE_TO_VIDEO,
         provider=TaskProvider.DUOMI,
         driver_name=DriverKey.HAPPY_HORSE_REFERENCE_TO_VIDEO,
@@ -1527,7 +1525,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.HAPPY_HORSE_TEXT_TO_VIDEO,
         key='happy_horse_text_to_video',
-        name='文生视频 (Happy Horse)',
+        name='Happy Horse',
         category=TaskCategory.TEXT_TO_VIDEO,
         provider=TaskProvider.DUOMI,
         driver_name=DriverKey.HAPPY_HORSE_TEXT_TO_VIDEO,

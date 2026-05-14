@@ -196,6 +196,8 @@ class BaseVideoDriver(ABC):
         api_logger.info(f"URL: {url}")
         api_logger.info(f"Headers: {self._mask_sensitive_headers(headers)}")
         api_logger.info(f"Payload: {self._mask_sensitive_payload(json)}")
+        if kwargs.get('params'):
+            api_logger.info(f"Params: {kwargs['params']}")
 
         try:
             if timeout is None:

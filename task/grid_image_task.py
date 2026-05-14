@@ -31,7 +31,10 @@ def _download_and_store_image(file_url: str, item_type: int, comfyui_base_url: s
         (local_image_url, local_file_path) 元组
     """
     # 确定存储目录
-    if item_type == 1:  # character
+    if item_type == 0:  # 通用生图（营销等场景）
+        upload_dir = 'upload/marketing/pic'
+        local_url_path = 'upload/marketing/pic'
+    elif item_type == 1:  # character
         upload_dir = 'upload/character/pic'
         local_url_path = 'upload/character/pic'
     elif item_type == 2:  # location
@@ -206,48 +209,53 @@ def _handle_task_success(task: Any, comfyui_task_data: Dict):
         # 更新对应的item
         update_success = False
         try:
-            import importlib
-            mcp_tool = importlib.import_module('script_writer_core.mcp_tool')
-            
-            if task.item_type == 1:  # character
-                result = mcp_tool.update_character_json(task.user_id, task.world_id, task.auth_token, 
+            if task.item_type == 0:  # 通用生图（营销等场景），不绑定任何item
+                # 只需记录图片URL到数据库，无需更新JSON文件
+                update_success = True
+                logger.info(f"通用生图任务完成，图片URL: {local_image_url}")
+            else:
+                import importlib
+                mcp_tool = importlib.import_module('script_writer_core.mcp_tool')
+
+                if task.item_type == 1:  # character
+                    result = mcp_tool.update_character_json(task.user_id, task.world_id, task.auth_token,
+                                                           task.item_name, reference_image=local_image_url)
+                    update_success = result.get('success', False)
+                elif task.item_type == 2:  # location
+                    result = mcp_tool.update_location_json(task.user_id, task.world_id, task.auth_token,
+                                                          task.item_name, reference_image=local_image_url)
+                    update_success = result.get('success', False)
+                elif task.item_type == 3:  # props
+                    result = mcp_tool.update_prop_json(task.user_id, task.world_id, task.auth_token,
                                                        task.item_name, reference_image=local_image_url)
-                update_success = result.get('success', False)
-            elif task.item_type == 2:  # location
-                result = mcp_tool.update_location_json(task.user_id, task.world_id, task.auth_token, 
-                                                      task.item_name, reference_image=local_image_url)
-                update_success = result.get('success', False)
-            elif task.item_type == 3:  # props
-                result = mcp_tool.update_prop_json(task.user_id, task.world_id, task.auth_token, 
-                                                   task.item_name, reference_image=local_image_url)
-                update_success = result.get('success', False)
-            elif task.item_type == 4:  # character_grid (4宫格角色)
-                item_names = [name.strip() for name in task.item_name.split(',')]
-                if len(item_names) == 4 and len(split_image_urls) == 4:
-                    for idx, (name, img_url) in enumerate(zip(item_names, split_image_urls)):
-                        result = mcp_tool.update_character_json(task.user_id, task.world_id, task.auth_token, 
-                                                               name, reference_image=img_url)
-                        if result.get('success', False):
-                            logger.info(f"已更新角色 {name} 的参考图")
-                    update_success = True
-            elif task.item_type == 5:  # location_grid (4宫格场景)
-                item_names = [name.strip() for name in task.item_name.split(',')]
-                if len(item_names) == 4 and len(split_image_urls) == 4:
-                    for idx, (name, img_url) in enumerate(zip(item_names, split_image_urls)):
-                        result = mcp_tool.update_location_json(task.user_id, task.world_id, task.auth_token, 
+                    update_success = result.get('success', False)
+                elif task.item_type == 4:  # character_grid (4宫格角色)
+                    item_names = [name.strip() for name in task.item_name.split(',')]
+                    if len(item_names) == 4 and len(split_image_urls) == 4:
+                        for idx, (name, img_url) in enumerate(zip(item_names, split_image_urls)):
+                            result = mcp_tool.update_character_json(task.user_id, task.world_id, task.auth_token,
+                                                                   name, reference_image=img_url)
+                            if result.get('success', False):
+                                logger.info(f"已更新角色 {name} 的参考图")
+                        update_success = True
+                elif task.item_type == 5:  # location_grid (4宫格场景)
+                    item_names = [name.strip() for name in task.item_name.split(',')]
+                    if len(item_names) == 4 and len(split_image_urls) == 4:
+                        for idx, (name, img_url) in enumerate(zip(item_names, split_image_urls)):
+                            result = mcp_tool.update_location_json(task.user_id, task.world_id, task.auth_token,
+                                                                  name, reference_image=img_url)
+                            if result.get('success', False):
+                                logger.info(f"已更新场景 {name} 的参考图")
+                        update_success = True
+                elif task.item_type == 6:  # prop_grid (4宫格道具)
+                    item_names = [name.strip() for name in task.item_name.split(',')]
+                    if len(item_names) == 4 and len(split_image_urls) == 4:
+                        for idx, (name, img_url) in enumerate(zip(item_names, split_image_urls)):
+                            result = mcp_tool.update_prop_json(task.user_id, task.world_id, task.auth_token,
                                                               name, reference_image=img_url)
-                        if result.get('success', False):
-                            logger.info(f"已更新场景 {name} 的参考图")
-                    update_success = True
-            elif task.item_type == 6:  # prop_grid (4宫格道具)
-                item_names = [name.strip() for name in task.item_name.split(',')]
-                if len(item_names) == 4 and len(split_image_urls) == 4:
-                    for idx, (name, img_url) in enumerate(zip(item_names, split_image_urls)):
-                        result = mcp_tool.update_prop_json(task.user_id, task.world_id, task.auth_token, 
-                                                          name, reference_image=img_url)
-                        if result.get('success', False):
-                            logger.info(f"已更新道具 {name} 的参考图")
-                    update_success = True
+                            if result.get('success', False):
+                                logger.info(f"已更新道具 {name} 的参考图")
+                        update_success = True
         except Exception as e:
             logger.error(f"更新item失败: {str(e)}")
             update_success = False

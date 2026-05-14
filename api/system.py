@@ -7,7 +7,7 @@ import logging
 from model.users import UsersModel
 from model.user_tokens import UserTokensModel
 from config.unified_config import UnifiedConfigRegistry
-from config.config_util import get_config_value
+from config.config_util import get_config_value, get_dynamic_config_value
 from config.version import get_app_version
 
 logger = logging.getLogger(__name__)
@@ -90,12 +90,14 @@ async def get_server_config():
         is_local = get_config_value('server', 'is_local', default=False)
         footer = get_config_value('server', 'footer', default={})
         version = get_app_version()
+        max_image_size_mb = get_dynamic_config_value('upload', 'max_image_size_mb', default=10)
 
         return {
             "code": 0,
             "data": {
                 "is_local": is_local,
                 "version": version,
+                "max_image_size_mb": max_image_size_mb,
                 "footer": {
                     "copyright": footer.get('copyright', ''),
                     "icp_number": footer.get('icp_number', ''),

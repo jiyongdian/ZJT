@@ -8,19 +8,24 @@ import logging
 import litellm
 from datetime import datetime
 from typing import Optional, Dict, Any
+from pathlib import Path
 
-from script_writer_core.agents import TaskManager, PMAgent, ToolExecutor
+from script_writer_core.agents import TaskManager, PMAgent, MarketingPMAgent, ToolExecutor
 from script_writer_core.file_manager import FileManager
 from script_writer_core.file_operation_handler import FileOperationHandler
+from script_writer_core.skill_loader import SkillLoader
 
 logger = logging.getLogger(__name__)
+
+# 项目根目录
+PROJECT_ROOT = str(Path(__file__).parent.parent)
 
 
 class ChatSession:
     """聊天会话管理类"""
-    
+
     def __init__(
-        self, 
+        self,
         session_id: str,
         task_manager: TaskManager,
         file_manager: FileManager,
@@ -32,25 +37,50 @@ class ChatSession:
         auth_token: str = "",
         model: Optional[str] = None,
         model_id: Optional[int] = None,
-        text_to_image_model_id: Optional[int] = None
+        text_to_image_model_id: Optional[int] = None,
+        session_type: int = 1
     ):
         self.session_id = session_id
         self.user_id = user_id
         self.world_id = world_id
         self.auth_token = auth_token
         self.text_to_image_model_id = text_to_image_model_id
-        
+        self.session_type = session_type
+
         # 初始化文件操作处理器（带权限控制和认证）
         self.file_handler = FileOperationHandler(user_id, world_id, auth_token, file_manager=file_manager)
 
-        # 初始化 PM Agent（多智能体模式）
-        logger.warning(f"[DEBUG] 开始初始化 PM Agent for session {session_id}")
-
+        # 根据 session_type 选择不同的配置
         pm_config = agents_config.get("pm_agent", {})
 
-        # 使用传入的 model 参数，如果没有则使用配置文件中的模型
-        pm_model = model if model else pm_config.get("model", "gemini/gemini-3-pro-preview")
-        logger.warning(f"[DEBUG] PM Agent 将使用模型: {pm_model}")
+        if session_type == 2:  # 营销智能体
+            logger.info(f"[ChatSession] 初始化营销智能体 session {session_id}")
+
+            # 从 agents/skills/marketing-pm/SKILL.md 加载提示词，并替换 {{SOP_INDEX}}
+            from agents.skill_loader import SopLoader
+            marketing_skill_loader = SkillLoader(skills_dir=os.path.join(PROJECT_ROOT, 'agents', 'skills'))
+            sop_loader = SopLoader(os.path.join(PROJECT_ROOT, 'agents', 'skills', 'marketing-pm', 'sops'))
+
+            # 加载 SKILL.md 内容，替换 {{SOP_INDEX}} 为自动扫描的 SOP 索引表
+            raw_skill_prompt = marketing_skill_loader.get_skill_prompt('marketing-pm')
+            pm_base_prompt = sop_loader.load_skill_with_index(raw_skill_prompt) if raw_skill_prompt else None
+
+            pm_model = model if model else 'gemini/gemini-3-flash-preview'
+            pm_allowed_tools = ['call_agent', 'ask_user', 'load_sop']
+            pm_skill_names = []  # 提示词已通过 base_prompt 注入，不再由 PMAgent 重复加载
+            skip_env_context = True
+        else:  # 剧本智能体（默认）
+            logger.info(f"[ChatSession] 初始化剧本智能体 session {session_id}")
+
+            marketing_skill_loader = None
+            sop_loader = None
+            pm_model = model if model else pm_config.get("model", "gemini/gemini-3-pro-preview")
+            pm_allowed_tools = pm_config.get("allowed_tools", ["skill", "ask_user"])
+            pm_skill_names = None  # 使用 agents_config 中的默认值
+            pm_base_prompt = None  # 使用 PMAgent 默认的剧本架构师提示词
+            skip_env_context = False
+
+        logger.info(f"[ChatSession] PM Agent 将使用模型: {pm_model}")
 
         # 根据 model_id 获取模型的上下文窗口配置
         context_window = None
@@ -64,21 +94,46 @@ class ChatSession:
             except Exception as e:
                 logger.warning(f"[ChatSession] Failed to load context_window for model_id={model_id}: {e}")
 
-        self.pm_agent = PMAgent(
-            model=pm_model,
-            allowed_tools=pm_config.get("allowed_tools", ["skill", "ask_user"]),
-            task_manager=task_manager,
-            file_manager=file_manager,
-            tool_executor=tool_executor,
-            agents_config=agents_config,
-            user_id=user_id,
-            world_id=world_id,
-            auth_token=auth_token,
-            max_consecutive_failures=pm_config.get("max_consecutive_failures", 3),
-            max_total_failures=pm_config.get("max_total_failures", 7),
-            context_window=context_window
-        )
-        logger.warning(f"[DEBUG] PM Agent 初始化完成: {self.pm_agent.agent_id}")
+        # 根据 session_type 创建不同的 PM Agent
+        if session_type == 2:  # 营销智能体
+            self.pm_agent = MarketingPMAgent(
+                model=pm_model,
+                allowed_tools=pm_allowed_tools,
+                task_manager=task_manager,
+                file_manager=file_manager,
+                tool_executor=tool_executor,
+                agents_config=agents_config,
+                user_id=user_id,
+                world_id=world_id,
+                auth_token=auth_token,
+                base_prompt=pm_base_prompt,
+                sop_loader=sop_loader,
+                skill_loader=marketing_skill_loader,
+                max_consecutive_failures=pm_config.get("max_consecutive_failures", 3),
+                max_total_failures=pm_config.get("max_total_failures", 7),
+                context_window=context_window,
+            )
+        else:  # 剧本智能体（默认）
+            self.pm_agent = PMAgent(
+                model=pm_model,
+                allowed_tools=pm_allowed_tools,
+                task_manager=task_manager,
+                file_manager=file_manager,
+                tool_executor=tool_executor,
+                agents_config=agents_config,
+                user_id=user_id,
+                world_id=world_id,
+                auth_token=auth_token,
+                max_consecutive_failures=pm_config.get("max_consecutive_failures", 3),
+                max_total_failures=pm_config.get("max_total_failures", 7),
+                context_window=context_window,
+                base_prompt=pm_base_prompt,
+                skill_loader=marketing_skill_loader,
+                sop_loader=sop_loader,
+                skill_names=pm_skill_names,
+                skip_env_context=skip_env_context
+            )
+        logger.info(f"[ChatSession] PM Agent 初始化完成: {self.pm_agent.agent_id}")
         
         # 配置 LiteLLM
         self._setup_litellm()

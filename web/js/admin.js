@@ -880,7 +880,10 @@ const AdminApp = {
 
                     // 默认加载用户列表
                     this.loadUsers();
-                    
+
+                    // 默认加载模型成功率分析
+                    this.loadModelAnalysis();
+
                     // 检查 URL 参数，是否需要自动打开快速配置
                     this.checkQuickConfigParam();
                 }
@@ -954,6 +957,9 @@ const AdminApp = {
             } finally {
                 this.dashboard.loading = false;
             }
+
+            // 同步加载模型成功率分析
+            this.loadModelAnalysis();
         },
 
         // 加载月活跃用户

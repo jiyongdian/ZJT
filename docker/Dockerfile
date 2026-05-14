@@ -34,6 +34,7 @@ RUN if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
 
 # Copy project files
 COPY requirements.txt pyproject.toml ./
+COPY agents/ ./agents/
 COPY api/ ./api/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
@@ -43,6 +44,7 @@ COPY model/ ./model/
 COPY perseids_server/ ./perseids_server/
 COPY script_writer_core/ ./script_writer_core/
 COPY scripts/ ./scripts/
+COPY services/ ./services/
 COPY task/ ./task/
 COPY templates/ ./templates/
 COPY tests/ ./tests/

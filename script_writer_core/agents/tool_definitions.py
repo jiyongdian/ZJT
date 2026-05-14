@@ -1,6 +1,6 @@
 """
 共享工具定义
-统一 ask_user 等跨 Agent 工具的定义，避免重复维护
+统一 ask_user、load_sop 等跨 Agent 工具的定义，避免重复维护
 """
 
 # ask_user 工具定义 - 供 ExpertAgent 和 PMAgent 共用
@@ -28,6 +28,25 @@ ASK_USER_TOOL_DEFINITION = {
                 }
             },
             "required": ["question", "options"]
+        }
+    }
+}
+
+# load_sop 工具定义 - 供 PMAgent 加载 SOP 流程内容
+LOAD_SOP_TOOL_DEFINITION = {
+    "type": "function",
+    "function": {
+        "name": "load_sop",
+        "description": "加载指定 SOP（标准操作流程）的完整内容。调用后会返回该 SOP 的详细步骤、所需工具和执行指南。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "sop_name": {
+                    "type": "string",
+                    "description": "SOP 名称，例如：'sop-image-generation'（图片生成流程）、'sop-video-generation'（视频生成流程）"
+                }
+            },
+            "required": ["sop_name"]
         }
     }
 }
