@@ -46,6 +46,16 @@ if not _pymysql_existed:
     sys.modules['pymysql'] = MagicMock()
     sys.modules['pymysql.cursors'] = MagicMock()
 
+# agents 包在测试环境中可能无法直接导入，需要 mock
+_agents_existed = 'agents' in sys.modules
+if not _agents_existed:
+    agents_pkg = types.ModuleType('agents')
+    agents_pkg.__path__ = []
+    sys.modules['agents'] = agents_pkg
+    agents_skill_loader = types.ModuleType('agents.skill_loader')
+    agents_skill_loader.SopLoader = MagicMock()
+    sys.modules['agents.skill_loader'] = agents_skill_loader
+
 from script_writer_core.agents.pm_agent import PMAgent
 from script_writer_core.agents.task_manager import AgentTask
 
@@ -56,6 +66,10 @@ if not _aiohttp_existed:
 if not _pymysql_existed:
     del sys.modules['pymysql']
     sys.modules.pop('pymysql.cursors', None)
+
+if not _agents_existed:
+    del sys.modules['agents']
+    sys.modules.pop('agents.skill_loader', None)
 
 
 class TestPMAgentMessageQueueRegression(unittest.TestCase):
