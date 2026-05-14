@@ -367,6 +367,15 @@ class SessionStorage:
             logger.error(f"Failed to delete session {session_id}: {e}")
             return False
 
+    def invalidate_cache(self, session_id: str):
+        """Remove a specific session from cache"""
+        if not self.use_cache:
+            return
+        with self._lock:
+            removed = self._cache.pop(session_id, None)
+            if removed:
+                logger.info(f"Session {session_id} cache invalidated")
+
     def clear_cache(self):
         """Clear all cached sessions"""
         with self._lock:

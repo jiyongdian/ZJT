@@ -737,6 +737,13 @@ class VerificationSubmitRequest(BaseModel):
     approved: bool
     user_input: Optional[str] = None
 
+class SessionHistoryUpdateRequest(BaseModel):
+    messages: List[Dict[str, Any]]
+
+class SessionMessageAppendRequest(BaseModel):
+    role: str
+    content: str
+
 # ==================== 会话管理 API ====================
 
 @router.post('/session/create')
@@ -939,6 +946,85 @@ async def clear_user_directory(request: SyncFilesRequest):
         'success': True,
         'message': '目录已清空'
     })
+
+@router.put('/session/{session_id}/history')
+@require_permission("script_session:update")
+async def update_session_history(request: Request, session_id: str, history_request: SessionHistoryUpdateRequest):
+    """更新会话历史消息"""
+    try:
+        from model.chat_sessions import ChatSessionsModel
+        
+        session_entity = ChatSessionsModel.get_by_session_id(session_id)
+        if not session_entity:
+            return JSONResponse({
+                'success': False,
+                'error': '会话不存在'
+            }, status_code=404)
+        
+        filtered_messages = [msg for msg in history_request.messages if msg.get('role') != 'system']
+        
+        ChatSessionsModel.update_conversation_history(
+            session_id=session_id,
+            conversation_history=filtered_messages,
+            update_tokens=False
+        )
+        
+        session_storage.invalidate_cache(session_id)
+        
+        return JSONResponse({
+            'success': True,
+            'message': '会话历史已更新'
+        })
+    except Exception as e:
+        logger.error(f'更新会话历史失败: {str(e)}')
+        return JSONResponse({
+            'success': False,
+            'error': str(e)
+        }, status_code=500)
+
+@router.post('/session/{session_id}/message')
+@require_permission("script_session:update")
+async def append_session_message(request: Request, session_id: str, message_request: SessionMessageAppendRequest):
+    """追加消息到会话历史"""
+    try:
+        from model.chat_sessions import ChatSessionsModel
+        
+        session_entity = ChatSessionsModel.get_by_session_id(session_id)
+        if not session_entity:
+            return JSONResponse({
+                'success': False,
+                'error': '会话不存在'
+            }, status_code=404)
+        
+        current_history = session_entity.conversation_history or []
+        
+        new_message = {
+            'role': message_request.role,
+            'content': message_request.content,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        current_history.append(new_message)
+        
+        ChatSessionsModel.update_conversation_history(
+            session_id=session_id,
+            conversation_history=current_history,
+            update_tokens=False
+        )
+        
+        # 清除缓存，确保下次加载时从数据库读取最新数据
+        session_storage.invalidate_cache(session_id)
+        
+        return JSONResponse({
+            'success': True,
+            'message': '消息已追加'
+        })
+    except Exception as e:
+        logger.error(f'追加消息失败: {str(e)}')
+        return JSONResponse({
+            'success': False,
+            'error': str(e)
+        }, status_code=500)
 
 @router.post('/session/{session_id}/model')
 @require_permission("script_session:change_model")

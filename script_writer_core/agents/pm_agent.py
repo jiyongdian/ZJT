@@ -185,7 +185,7 @@ class PMAgent(BaseAgent, AskUserMixin):
                 for i, image_url in enumerate(task.image_urls):
                     index = i + 1
                     # HTTP URL → base64（供 LLM 视觉理解）
-                    base64_data = url_to_base64(image_url, max_size_mb=0.2, max_pixels=500_000)
+                    base64_data = url_to_base64(image_url, max_size_mb=0.1, max_pixels=250_000)
                     if base64_data:
                         # 插入带标签的多模态内容，标签中包含 HTTP URL 供 edit_image 工具引用
                         content_parts.append({"type": "text", "text": f"[图片{index}]（URL: {image_url}）"})

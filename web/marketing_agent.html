@@ -332,6 +332,19 @@
                                             </div>
                                         </div>
 
+                                        <!-- 分辨率选择（仅图片模式） -->
+                                        <div v-if="mediaType === 'image'" style="margin-bottom: 20px;">
+                                            <span style="font-size: 14px; font-weight: 500; color: #1a1a1a; display: block; margin-bottom: 12px;">选择分辨率</span>
+                                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                                <div v-for="res in currentResolutions" :key="res" @click.stop="selectedResolution = res" style="flex: 1; min-width: 70px; text-align: center; padding: 10px; border-radius: 8px; cursor: pointer; transition: all 0.2s; font-size: 14px;" :style="{ border: selectedResolution === res ? '2px solid #00a8e6' : '1px solid #e8e8e8', background: selectedResolution === res ? '#e6f7ff' : '#f5f5f5', color: selectedResolution === res ? '#00a8e6' : '#1a1a1a' }">
+                                                    {{ res }}
+                                                </div>
+                                            </div>
+                                            <div style="font-size: 12px; color: #999; margin-top: 6px;">
+                                                {{ selectedResolution === 'auto' ? '自动根据模型选择最佳分辨率' : '指定图片生成分辨率' }}
+                                            </div>
+                                        </div>
+
                                         <!-- 其他设置 -->
                                         <div>
                                             <span style="font-size: 14px; font-weight: 500; color: #1a1a1a; display: block; margin-bottom: 12px;">其他设置</span>
@@ -1458,9 +1471,10 @@
                 let userContent = text;
                 const isAgentChatPreview = selectedType.value === 'Agent 模式' && mediaType.value !== 'video';
                 if (isAgentChatPreview && agentImageFiles.value.length > 0) {
-                    // Agent 模式多图预览
+                    // Agent 模式多图预览，使用服务器 URL 避免 blob URL 被释放后失效
                     agentImageFiles.value.forEach((img, i) => {
-                        userContent += `\n\n[图片${i + 1}] <img src="${img.previewUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${img.previewUrl}'" alt="图片${i + 1}">`;
+                        const displayUrl = img.serverUrl || img.previewUrl;
+                        userContent += `\n\n[图片${i + 1}] <img src="${displayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${displayUrl}'" alt="图片${i + 1}">`;
                     });
                 } else if (hasUploadedImage.value && uploadedImageUrl.value) {
                     userContent += `\n\n<img src="${uploadedImageUrl.value}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${uploadedImageUrl.value}'" alt="参考图">`;
@@ -1498,9 +1512,9 @@
                         form.append('image', uploadedImageFile.value);
                         form.append('ratio', selectedRatio.value);
                         form.append('count', '1');
-                        if (selectedResolution.value) {
-                            const sizeMap = { '高清 2K': '2K', '超清 4K': '4K' };
-                            const sizeVal = sizeMap[selectedResolution.value] || '2K';
+                        if (selectedResolution.value && selectedResolution.value !== 'auto') {
+                            const sizeMap = { '1K': '1K', '高清 2K': '2K', '超清 4K': '4K' };
+                            const sizeVal = sizeMap[selectedResolution.value] || selectedResolution.value;
                             form.append('image_size', sizeVal);
                         }
                         // 获取 task_id
@@ -1516,9 +1530,9 @@
                         // 文生图
                         form.append('aspect_ratio', selectedRatio.value);
                         form.append('count', '1');
-                        if (selectedResolution.value) {
-                            const sizeMap = { '高清 2K': '2K', '超清 4K': '4K' };
-                            const sizeVal = sizeMap[selectedResolution.value] || '2K';
+                        if (selectedResolution.value && selectedResolution.value !== 'auto') {
+                            const sizeMap = { '1K': '1K', '高清 2K': '2K', '超清 4K': '4K' };
+                            const sizeVal = sizeMap[selectedResolution.value] || selectedResolution.value;
                             form.append('image_size', sizeVal);
                         }
                         // 获取 task_id
@@ -1600,13 +1614,17 @@
                                 const imgUrl = r.file_url || r.url || r.image_url || '';
                                 return `<div class="generated-image-wrapper" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${imgUrl}'"><img src="${imgUrl}" class="generated-image" alt="生成结果"></div>`;
                             }).join('');
-                            messages.value[msgIndex].content = '图片已生成：\n\n' + imageHtml;
+                            const finalContent = '图片已生成：\n\n' + imageHtml;
+                            messages.value[msgIndex].content = finalContent;
                             scrollToBottom();
+                            await appendMessageToBackend('assistant', finalContent);
                         } else if (anyFailed && !anyRunning) {
                             imageStatus.value = 'FAILED';
                             clearImageStatusCheck();
-                            messages.value[msgIndex].content = '图片生成失败，请稍后重试。';
+                            const finalContent = '图片生成失败，请稍后重试。';
+                            messages.value[msgIndex].content = finalContent;
                             scrollToBottom();
+                            await appendMessageToBackend('assistant', finalContent);
                         }
                     }
                 } catch (err) {
@@ -1666,15 +1684,18 @@
 
                             if (allDone) {
                                 clearInterval(interval);
+                                let finalContent = '';
                                 if (imageUrls.length > 0) {
                                     const imageHtml = imageUrls.map(url =>
                                         `<div class="generated-image-wrapper" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${url}'"><img src="${url}" class="generated-image" alt="生成结果"></div>`
                                     ).join('');
-                                    messages.value[msgIndex].content = '图片已生成：\n\n' + imageHtml;
+                                    finalContent = '图片已生成：\n\n' + imageHtml;
                                 } else {
-                                    messages.value[msgIndex].content = '图片生成失败，请稍后重试。';
+                                    finalContent = '图片生成失败，请稍后重试。';
                                 }
+                                messages.value[msgIndex].content = finalContent;
                                 scrollToBottom();
+                                await appendMessageToBackend('assistant', finalContent);
                             } else {
                                 const doneCount = tasks.filter(t => t.status === 'SUCCESS').length;
                                 messages.value[msgIndex].content = `图片生成中... (${doneCount}/${tasks.length})`;
@@ -1704,28 +1725,34 @@
 
                     let apiUrl = '';
 
-                    const hasAnyImage = (hasUploadedImage.value && uploadedImageFile.value) || referenceImageFiles.value.length > 0 || mediaItems.value.some(m => m.type === 'image' && m.originalFile);
+                    const hasFileImage = uploadedImageFile.value || referenceImageFiles.value.length > 0 || mediaItems.value.some(m => m.type === 'image' && m.originalFile);
+                    const hasUrlImage = hasUploadedImage.value && uploadedImageUrl.value;
+                    const hasAnyImage = hasFileImage || hasUrlImage;
                     if (hasAnyImage) {
                         // 图生视频
                         form.append('image_mode', videoImageMode.value);
 
-                        // 统一收集所有图片文件，从 mediaItems 中收集确保不遗漏
-                        const allImageFiles = [];
-                        mediaItems.value.forEach(m => {
-                            if (m.type === 'image' && m.originalFile && !allImageFiles.includes(m.originalFile)) {
-                                allImageFiles.push(m.originalFile);
+                        if (hasFileImage) {
+                            // 有文件对象的情况：统一收集所有图片文件
+                            const allImageFiles = [];
+                            mediaItems.value.forEach(m => {
+                                if (m.type === 'image' && m.originalFile && !allImageFiles.includes(m.originalFile)) {
+                                    allImageFiles.push(m.originalFile);
+                                }
+                            });
+                            if (uploadedImageFile.value && !allImageFiles.includes(uploadedImageFile.value)) {
+                                allImageFiles.push(uploadedImageFile.value);
                             }
-                        });
-                        // 后备：也从 uploadedImageFile / referenceImageFiles 中收集
-                        if (uploadedImageFile.value && !allImageFiles.includes(uploadedImageFile.value)) {
-                            allImageFiles.push(uploadedImageFile.value);
+                            referenceImageFiles.value.forEach(ref => {
+                                if (ref.file && !allImageFiles.includes(ref.file)) {
+                                    allImageFiles.push(ref.file);
+                                }
+                            });
+                            allImageFiles.forEach(file => form.append('images', file));
+                        } else if (hasUrlImage) {
+                            // URL 图片（如从已生成图片直接转视频，无 File 对象）
+                            form.append('image_urls', uploadedImageUrl.value);
                         }
-                        referenceImageFiles.value.forEach(ref => {
-                            if (ref.file && !allImageFiles.includes(ref.file)) {
-                                allImageFiles.push(ref.file);
-                            }
-                        });
-                        allImageFiles.forEach(file => form.append('images', file));
 
                         // 发送媒体引用映射（用于 @ 引用解析）
                         const mediaRefs = mediaItems.value.filter(m => m.fileUrl).map(m => ({
@@ -1823,13 +1850,17 @@
                                 const vidUrl = r.file_url || r.url || '';
                                 return `<video src="${vidUrl}" controls style="max-width:100%;max-height:400px;border-radius:8px;margin:8px 0;"></video>`;
                             }).join('');
-                            messages.value[msgIndex].content = '视频已生成：\n\n' + videoHtml;
+                            const finalContent = '视频已生成：\n\n' + videoHtml;
+                            messages.value[msgIndex].content = finalContent;
                             scrollToBottom();
+                            await appendMessageToBackend('assistant', finalContent);
                         } else if (anyFailed && !anyRunning) {
                             videoStatus.value = 'FAILED';
                             clearVideoStatusCheck();
-                            messages.value[msgIndex].content = '视频生成失败，请稍后重试。';
+                            const finalContent = '视频生成失败，请稍后重试。';
+                            messages.value[msgIndex].content = finalContent;
                             scrollToBottom();
+                            await appendMessageToBackend('assistant', finalContent);
                         }
                     }
                 } catch (err) {
@@ -1960,6 +1991,16 @@
                     const timeoutId = setTimeout(() => controller.abort(), 300000);
 
                     // 1. 创建任务
+                    // 构建图片偏好（auto 分辨率不传）
+                    const imagePreferences = {
+                        ratio: selectedRatio.value,
+                        model_name: selectedModel.value
+                    };
+                    if (selectedResolution.value && selectedResolution.value !== 'auto') {
+                        const sizeMap = { '1K': '1K', '高清 2K': '2K', '超清 4K': '4K' };
+                        imagePreferences.resolution = sizeMap[selectedResolution.value] || selectedResolution.value;
+                    }
+
                     const taskResponse = await fetch(`/api/session/${sessionId}/task`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -1970,11 +2011,7 @@
                             model: selectedLLMModel.value ? selectedLLMModel.value.name : '',
                             model_id: selectedLLMModel.value ? selectedLLMModel.value.id : undefined,
                             vendor_id: 1,
-                            image_preferences: {
-                                ratio: selectedRatio.value,
-                                resolution: selectedResolution.value,
-                                model_name: selectedModel.value
-                            }
+                            image_preferences: imagePreferences
                         }),
                         signal: controller.signal
                     });
@@ -2292,14 +2329,26 @@
                         }
                     }
                     let finalContent = textParts.join('\n') || '';
-                    // 清除给 LLM 用的图片引用元数据标签（图片已通过 base64 <img> 标签展示，避免重复）
+                    // 提取 [图片N]（URL:http://...）中的原始 HTTP URL，建立 base64 → HTTP URL 映射
+                    const originalUrlMap = {};
+                    let match;
+                    const urlTagRegex = /\[图片(\d+)]（URL:\s*([^\s）]+)\s*）/g;
+                    while ((match = urlTagRegex.exec(finalContent)) !== null) {
+                        const idx = parseInt(match[1]) - 1;
+                        if (idx >= 0 && idx < images.length && images[idx].startsWith('data:')) {
+                            originalUrlMap[images[idx]] = match[2];
+                        }
+                    }
+                    // 清除给 LLM 用的图片引用元数据标签（图片已通过 <img> 标签展示，避免重复）
                     finalContent = finalContent.replace(/\[图片\d+]（URL:[\s\S]*?）\n?/g, '');
                     // 清除文本中残留的 HTML img 标签（双保险）
                     finalContent = finalContent.replace(/<img\s[^>]*>/gi, '');
                     // 清除多余空行
                     finalContent = finalContent.replace(/\n{3,}/g, '\n\n').trim();
                     for (const imgUrl of images) {
-                        finalContent += `\n\n<img src="${imgUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${imgUrl}'" alt="参考图">`;
+                        // 优先使用原始 HTTP URL，避免传递 base64 data URL
+                        const displayUrl = originalUrlMap[imgUrl] || imgUrl;
+                        finalContent += `\n\n<img src="${displayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${displayUrl}'" alt="参考图">`;
                     }
                     return {
                         role: h.role === 'assistant' ? 'ai' : h.role,
@@ -2312,6 +2361,33 @@
                     content: typeof h.content === 'string' ? h.content : (h.content?.text || JSON.stringify(h.content)),
                     timestamp: h.timestamp
                 };
+            }
+
+            // 追加消息到后端
+            async function appendMessageToBackend(role, content) {
+                if (!currentSessionId.value) return;
+                
+                try {
+                    const response = await fetch(`/api/session/${currentSessionId.value}/message`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': authToken.value,
+                            'X-User-Id': userId.value
+                        },
+                        body: JSON.stringify({
+                            role: role === 'ai' ? 'assistant' : role,
+                            content: content || ''
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    if (!data.success) {
+                        console.error('追加消息到后端失败:', data.error);
+                    }
+                } catch (e) {
+                    console.error('追加消息到后端异常:', e);
+                }
             }
 
             // 选择会话
@@ -2706,9 +2782,9 @@
                     selectedModelKey.value = m.key || '';
                 }
                 availableRatios.value = ['auto', '1:1', '16:9', '9:16', '4:3', '3:4'];
-                availableResolutions.value = ['高清 2K', '超清 4K'];
+                availableResolutions.value = ['auto', '1K', '高清 2K'];
                 selectedRatio.value = '1:1';
-                selectedResolution.value = '高清 2K';
+                selectedResolution.value = 'auto';
                 taskConfigReady.value = true;
             }
 
@@ -2729,12 +2805,19 @@
 
                 // 获取分辨率选项
                 const sizes = window.TaskConfig.getSizeOptions(modelKey);
-                availableResolutions.value = sizes.map(s => s === '1K' ? '高清 2K' : s === '2K' ? '高清 2K' : s === '4K' ? '超清 4K' : s);
-                if (availableResolutions.value.length === 0) {
-                    availableResolutions.value = ['高清 2K', '超清 4K'];
+                const mappedSizes = sizes.map(s => {
+                    if (s === '1K') return '1K';
+                    if (s === '2K') return '高清 2K';
+                    if (s === '4K') return '超清 4K';
+                    return s;
+                });
+                // 在最前面添加 auto 选项
+                availableResolutions.value = ['auto', ...mappedSizes];
+                if (availableResolutions.value.length === 1) {
+                    availableResolutions.value = ['auto', '1K', '高清 2K'];
                 }
                 if (!availableResolutions.value.includes(selectedResolution.value)) {
-                    selectedResolution.value = availableResolutions.value[0];
+                    selectedResolution.value = 'auto';
                 }
 
                 // 视频模式下更新默认时长（videoModelConfigs 使用简短 key）
@@ -3304,8 +3387,9 @@
                         ? window.TaskConfig.getTaskIdByKey(model.key, 'text_to_image') || window.TaskConfig.getTaskIdByKey(model.key, 'image_edit')
                         : null;
                     if (!taskId || !userId.value || !worldId.value) return;
-                    // 解析分辨率为后端格式
-                    const sizeMap = { '高清 2K': '2K', '超清 4K': '4K' };
+                    // 解析分辨率为后端格式（auto 不传）
+                    const sizeMap = { '1K': '1K', '高清 2K': '2K', '超清 4K': '4K' };
+                    const resolvedResolution = selectedResolution.value === 'auto' ? null : (sizeMap[selectedResolution.value] || selectedResolution.value);
                     await fetch('/api/text-to-image-model', {
                         method: 'POST',
                         headers: {
@@ -3319,7 +3403,7 @@
                             session_id: currentSessionId.value,
                             task_id: taskId,
                             ratio: selectedRatio.value,
-                            resolution: sizeMap[selectedResolution.value] || selectedResolution.value
+                            resolution: resolvedResolution
                         })
                     });
                     console.log('[图片偏好] 已同步到后端:', model.name, 'task_id:', taskId, 'ratio:', selectedRatio.value);

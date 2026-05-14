@@ -134,7 +134,7 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                 from utils.image_compressor import url_to_base64
                 content_parts = []
                 for i, img_url in enumerate(image_urls, 1):
-                    base64_data = url_to_base64(img_url, max_size_mb=0.2, max_pixels=500_000)
+                    base64_data = url_to_base64(img_url, max_size_mb=0.1, max_pixels=250_000)
                     if base64_data:
                         content_parts.append({"type": "text", "text": f"[图片{i}]（URL: {img_url}）"})
                         content_parts.append({"type": "image_url", "image_url": {"url": base64_data}})
