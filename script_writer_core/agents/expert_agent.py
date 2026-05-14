@@ -74,6 +74,7 @@ class ExpertAgent(BaseAgent, AskUserMixin):
         
         self.tool_calls_made: List[Dict[str, Any]] = []
         self.outputs: List[Any] = []
+        self.pending_project_ids: List[str] = []
     
     def _build_system_prompt(self, skill_names: List[str], context: str) -> str:
         """构建系统提示"""
@@ -156,7 +157,8 @@ class ExpertAgent(BaseAgent, AskUserMixin):
             logger.info(f"{self.agent_id}: Task completed successfully")
             return {
                 "success": True,
-                "result": result
+                "result": result,
+                "project_ids": self.pending_project_ids
             }
 
         except InsufficientComputingPowerError:
@@ -174,7 +176,8 @@ class ExpertAgent(BaseAgent, AskUserMixin):
             
             return {
                 "success": False,
-                "error": str(e)
+                "error": str(e),
+                "project_ids": self.pending_project_ids
             }
     
     def _run_task_loop(self, task_description: str, max_iterations: int = 10) -> str:
@@ -284,6 +287,11 @@ class ExpertAgent(BaseAgent, AskUserMixin):
             })
             
             result = self._execute_tool(tool_name, tool_args)
+
+            # 收集图片生成任务的 project_ids
+            if tool_name in ("generate_text_to_image", "edit_image"):
+                if isinstance(result, dict) and result.get("project_ids"):
+                    self.pending_project_ids.extend(result["project_ids"])
 
             # ask_user 工具：在 tool 回答之前，将问题写入历史（保证顺序正确）
             # 同时移除 _verification_meta，避免 LLM 看到后重复提问

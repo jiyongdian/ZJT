@@ -16,7 +16,7 @@
     <div id="app" class="app-container">
         <!-- 第一列：左侧窄导航 -->
         <nav class="marketing-nav">
-            <a href="/" class="marketing-nav-logo" title="返回短剧首页">
+            <a href="/" class="marketing-nav-logo" title="返回首页">
                 <img src="/files/logo.svg" alt="Logo" style="width: 32px; height: 32px;" />
             </a>
             <div class="marketing-nav-item" style="opacity: 0.4; cursor: not-allowed;" title="开发中">
@@ -27,13 +27,9 @@
                 <div class="marketing-nav-icon">✨</div>
                 <div class="marketing-nav-text">生成</div>
             </div>
-            <div class="marketing-nav-item">
+            <div class="marketing-nav-item" style="opacity: 0.4; cursor: not-allowed;" title="开发中">
                 <div class="marketing-nav-icon">📁</div>
                 <div class="marketing-nav-text">资产</div>
-            </div>
-            <div class="marketing-nav-item">
-                <div class="marketing-nav-icon">🔀</div>
-                <div class="marketing-nav-text">工作流</div>
             </div>
         </nav>
 
@@ -105,7 +101,6 @@
             </div>
 
             <div class="sidebar-footer">
-                <div class="user-avatar">{{ userInitial }}</div>
                 <span>{{ maskedPhone || '用户' }}</span>
             </div>
         </aside>
@@ -121,22 +116,6 @@
                     <div class="top-bar-search">
                         <span class="search-icon">🔍</span>
                         <input type="text" v-model="searchQuery" placeholder="搜索...">
-                    </div>
-                    <div class="filter-dropdown">
-                        <select v-model="selectedDate">
-                            <option value="">时间</option>
-                            <option value="today">今天</option>
-                            <option value="week">本周</option>
-                            <option value="month">本月</option>
-                        </select>
-                    </div>
-                    <div class="filter-dropdown">
-                        <select v-model="selectedGenType">
-                            <option value="">生成类型</option>
-                            <option value="video">视频</option>
-                            <option value="image">图片</option>
-                            <option value="text">文本</option>
-                        </select>
                     </div>
                     <!-- 算力显示 -->
                     <div class="computing-power-display"
@@ -711,8 +690,6 @@
             const isInitializing = ref(true);
             const errorMessage = ref('');
             const searchQuery = ref('');
-            const selectedDate = ref('');
-            const selectedGenType = ref('');
 
             const sessions = ref([]);
             const currentSessionId = ref(null);
@@ -1651,6 +1628,65 @@
                 }
             }
 
+            // Agent 图片任务提交后，前端轮询状态
+            function handleImageTaskSubmitted(data) {
+                const { project_ids, message } = data;
+                if (!project_ids || project_ids.length === 0) return;
+
+                const idx = messages.value.length;
+                messages.value.push({
+                    role: 'ai',
+                    content: (message || '已提交图片生成任务') + '，图片生成中...',
+                    timestamp: new Date().toISOString()
+                });
+                scrollToBottom();
+                pollAgentImageStatus(idx, project_ids);
+            }
+
+            function pollAgentImageStatus(msgIndex, projectIds) {
+                const interval = setInterval(async () => {
+                    try {
+                        const params = authToken.value ? { auth_token: authToken.value } : {};
+                        const projectIdsStr = projectIds.join(',');
+                        const res = await axios.get(`/api/get-status/${projectIdsStr}`, { params });
+
+                        if (res.data.tasks) {
+                            const tasks = res.data.tasks;
+                            const allDone = tasks.every(t => t.status === 'SUCCESS' || t.status === 'FAILED');
+
+                            const imageUrls = [];
+                            tasks.forEach(task => {
+                                if (task.results) {
+                                    task.results.forEach(r => {
+                                        const url = r.file_url || r.url || r.image_url;
+                                        if (url) imageUrls.push(url);
+                                    });
+                                }
+                            });
+
+                            if (allDone) {
+                                clearInterval(interval);
+                                if (imageUrls.length > 0) {
+                                    const imageHtml = imageUrls.map(url =>
+                                        `<div class="generated-image-wrapper" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${url}'"><img src="${url}" class="generated-image" alt="生成结果"></div>`
+                                    ).join('');
+                                    messages.value[msgIndex].content = '图片已生成：\n\n' + imageHtml;
+                                } else {
+                                    messages.value[msgIndex].content = '图片生成失败，请稍后重试。';
+                                }
+                                scrollToBottom();
+                            } else {
+                                const doneCount = tasks.filter(t => t.status === 'SUCCESS').length;
+                                messages.value[msgIndex].content = `图片生成中... (${doneCount}/${tasks.length})`;
+                                scrollToBottom();
+                            }
+                        }
+                    } catch (err) {
+                        console.error('Agent 图片状态轮询错误:', err);
+                    }
+                }, 5000);
+            }
+
             // 发送视频生成请求
             async function sendVideoRequest(prompt) {
                 isLoading.value = true;
@@ -2044,6 +2080,10 @@
                                 scrollToBottom();
                             } else if (data.type === 'context_compression') {
                                 // 上下文压缩，可忽略
+                            } else if (data.type === 'image_task_submitted') {
+                                // Agent 提交了图片生成任务，前端开始轮询
+                                hasReceivedData = true;
+                                handleImageTaskSubmitted(data);
                             } else if (data.type === 'error') {
                                 eventSource.close();
                                 pendingVerificationId.value = null;
@@ -3427,8 +3467,6 @@
                 isInitializing,
                 errorMessage,
                 searchQuery,
-                selectedDate,
-                selectedGenType,
 
                 sessions,
                 currentSessionId,
@@ -3525,6 +3563,8 @@
                 sendImageRequest,
                 startImageStatusCheck,
                 clearImageStatusCheck,
+                handleImageTaskSubmitted,
+                pollAgentImageStatus,
                 videoProjectIds,
                 videoStatus,
                 videoResults,
