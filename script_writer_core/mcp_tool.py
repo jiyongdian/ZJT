@@ -3045,8 +3045,9 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
             }
         
         # 强制应用用户偏好（比例和分辨率由前端界面控制，LLM 不需要传入）
+        # 4宫格模式(is_grid=True)跳过用户偏好覆盖，因为4宫格布局必须使用16:9横屏比例和最大分辨率
         user_prefs = _get_image_preferences(user_id, world_id)
-        if user_prefs:
+        if user_prefs and not is_grid:
             pref_ratio = user_prefs.get('ratio')
             if pref_ratio and pref_ratio != 'auto':
                 aspect_ratio = pref_ratio
