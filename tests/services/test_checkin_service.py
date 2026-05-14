@@ -26,9 +26,9 @@ class TestCheckinService(DatabaseTestCase):
         from model.users import UsersModel
         self.test_user_id = UsersModel.create(
             phone='13800138000',
-            password='test_password',
+            password_hash='test_password',
             role='user',
-            status=1
+            terms_agreed=1
         )
 
     def _mock_config(self, enabled=True, base_reward=10, streak_bonus_enabled=True, streak_config=None):
