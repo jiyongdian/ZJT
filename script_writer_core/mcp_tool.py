@@ -7,7 +7,7 @@ import json
 import os
 import re
 import logging
-import requests
+import httpx
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 from script_writer_core.file_manager import FileManager
@@ -16,6 +16,9 @@ from script_writer_core.cron_task_manager import get_task_manager
 from script_writer_core.constant import ItemType
 from config.config_util import get_config
 from config.constant import FilePathConstants
+
+# 模块级日志
+logger = logging.getLogger(__name__)
 
 # 设置技能调用日志
 def setup_skill_logger():
@@ -43,6 +46,8 @@ _skill_loader = None
 _file_manager = None
 # 获取生图模型 task_id 的函数引用（由 script_writer_api.py 设置）
 _get_text_to_image_model_id_func = None
+# 获取用户图片偏好的函数引用（由 script_writer_api.py 设置）
+_get_image_preferences_func = None
 
 # 默认生图模型 task_id (nano-banana-Pro)
 DEFAULT_TEXT_TO_IMAGE_TASK_ID = 7
@@ -54,11 +59,24 @@ def set_text_to_image_model_getter(func):
     _get_text_to_image_model_id_func = func
 
 
+def set_image_preferences_getter(func):
+    """设置获取用户图片偏好的函数"""
+    global _get_image_preferences_func
+    _get_image_preferences_func = func
+
+
 def _get_text_to_image_task_id(user_id: str, world_id: str) -> int:
     """获取生图模型的 task_id，默认返回 7 (nano-banana-Pro)"""
     if _get_text_to_image_model_id_func:
         return _get_text_to_image_model_id_func(user_id, world_id)
     return DEFAULT_TEXT_TO_IMAGE_TASK_ID
+
+
+def _get_image_preferences(user_id: str, world_id: str) -> Dict[str, str]:
+    """获取用户的图片偏好（比例、分辨率），默认返回空字典"""
+    if _get_image_preferences_func:
+        return _get_image_preferences_func(user_id, world_id)
+    return {}
 
 
 def _get_model_name_by_task_id(task_id: int) -> str:
@@ -328,7 +346,7 @@ def edit_image(user_id: str, world_id: str, auth_token: str, prompt: str,
         world_id: 世界ID（必填）
         auth_token: 认证令牌（必填）
         prompt: 图片编辑指令（必填），例如："将背景替换为海滩"、"转为水彩画风格"
-        image_url: 原始图片URL（必填），需要编辑的源图片地址
+        image_url: 原始图片URL（必填），支持多张图片，用英文逗号分隔。需要编辑的源图片地址。
         aspect_ratio: 图片宽高比（默认：16:9）
         count: 生成图片数量（默认：1）
         image_size: 图片分辨率（可选），如 1K/2K/3K/4K
@@ -369,11 +387,33 @@ def edit_image(user_id: str, world_id: str, auth_token: str, prompt: str,
         if not image_url or not isinstance(image_url, str):
             return {'success': False, 'error': '图片URL不能为空且必须是字符串'}
 
+        # 解析图片 URL（支持逗号分隔的多图）
+        parsed_urls = [u.strip() for u in image_url.split(',') if u.strip()]
+        if not parsed_urls:
+            return {'success': False, 'error': '解析后没有有效的图片URL'}
+        # 验证 URL 格式：仅允许 http/https 协议，防止 SSRF
+        from urllib.parse import urlparse
+        for u in parsed_urls:
+            parsed = urlparse(u)
+            if parsed.scheme not in ('http', 'https'):
+                return {'success': False, 'error': f'图片URL仅支持 http/https 协议: {u[:100]}'}
+        logger.info(f"[edit_image] 解析到 {len(parsed_urls)} 张图片: {parsed_urls}")
+
         server_config = get_config().get("server", {})
         comfyui_base_url = server_config.get("comfyui_base_url_inner") or server_config.get("host", "")
 
         if not comfyui_base_url:
             return {'success': False, 'error': '配置文件中未找到comfyui_base_url_inner或host配置'}
+
+        # 强制应用用户偏好（比例和分辨率由前端界面控制，LLM 不需要传入）
+        user_prefs = _get_image_preferences(user_id, world_id)
+        if user_prefs:
+            pref_ratio = user_prefs.get('ratio')
+            if pref_ratio and pref_ratio != 'auto':
+                aspect_ratio = pref_ratio
+            pref_resolution = user_prefs.get('resolution')
+            if pref_resolution and pref_resolution != 'auto':
+                image_size = pref_resolution
 
         # 确定 image_size
         config = UnifiedConfigRegistry.get_by_id(text_to_image_task_id)
@@ -410,13 +450,14 @@ def edit_image(user_id: str, world_id: str, auth_token: str, prompt: str,
             'count': count,
             'user_id': user_id,
             'auth_token': auth_token,
-            'ref_image_urls': image_url,
+            'ref_image_urls': ','.join(parsed_urls),
         }
         if image_size:
             request_data['image_size'] = image_size
 
         try:
-            response = requests.post(api_url, data=request_data, timeout=30)
+            # 使用 httpx 替代 requests，避免同步阻塞事件循环
+            response = httpx.post(api_url, data=request_data, timeout=30, verify=False)
             response.raise_for_status()
 
             result_data = response.json()
@@ -475,16 +516,15 @@ def edit_image(user_id: str, world_id: str, auth_token: str, prompt: str,
 
             return result
 
-        except requests.exceptions.RequestException as e:
+        except httpx.HTTPStatusError as e:
             error_detail = f'图片编辑请求失败: {str(e)}'
-            if hasattr(e, 'response') and e.response is not None:
-                try:
-                    resp_data = e.response.json()
-                    detail = resp_data.get('detail', '')
-                    if detail:
-                        error_detail = detail
-                except Exception:
-                    pass
+            try:
+                resp_data = e.response.json()
+                detail = resp_data.get('detail', '')
+                if detail:
+                    error_detail = detail
+            except Exception:
+                pass
             return {
                 'success': False,
                 'error': error_detail,
@@ -2594,7 +2634,7 @@ MCP_TOOLS = [
                 },
                 "aspect_ratio": {
                     "type": "string",
-                    "description": "图片宽高比（可选，默认：16:9），支持格式如：16:9, 4:3, 1:1等"
+                    "description": "【已由系统注入，无需传入】图片宽高比。用户在界面上已选择，系统会自动应用。"
                 },
                 "count": {
                     "type": "integer",
@@ -2602,7 +2642,7 @@ MCP_TOOLS = [
                 },
                 "image_size": {
                     "type": "string",
-                    "description": "图片分辨率（可选），如 1K/2K/3K/4K，不填则使用模型默认值。4宫格生成时自动使用模型支持的最大尺寸"
+                    "description": "【已由系统注入，无需传入】图片分辨率。用户在界面上已选择，系统会自动应用。"
                 },
                 "item_type": {
                     "type": "integer",
@@ -2732,11 +2772,11 @@ MCP_TOOLS = [
                 },
                 "image_url": {
                     "type": "string",
-                    "description": "原始图片URL（必填），需要编辑的源图片地址"
+                    "description": "原始图片URL（必填），支持多张图片用英文逗号分隔。对话中每张图片都有 [图片N]（URL: ...） 标签，请将所有需要编辑的图片 URL 用逗号拼接后传入。例如：'http://xxx/a.jpg,http://xxx/b.jpg'"
                 },
                 "aspect_ratio": {
                     "type": "string",
-                    "description": "图片宽高比（可选，默认：16:9），支持格式如：16:9, 4:3, 1:1, 9:16等"
+                    "description": "【已由系统注入，无需传入】图片宽高比。用户在界面上已选择，系统会自动应用。"
                 },
                 "count": {
                     "type": "integer",
@@ -2744,7 +2784,7 @@ MCP_TOOLS = [
                 },
                 "image_size": {
                     "type": "string",
-                    "description": "图片分辨率（可选），如 1K/2K/3K/4K，不填则使用模型默认值"
+                    "description": "【已由系统注入，无需传入】图片分辨率。用户在界面上已选择，系统会自动应用。"
                 }
             },
             "required": ["prompt", "image_url"]
@@ -2954,8 +2994,6 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
 
             # 如果是单个角色/场景/道具类型(1/2/3)，但没有设置is_grid=True，给出提示
             if item_type in ItemType.SINGLE_TYPES and not is_grid:
-                import logging
-                logger = logging.getLogger(__name__)
                 logger.warning(f"[提示] 正在为单个项目生成图像 (item_type={item_type}, item_name={item_name})。如果需要批量生成4个或更多项目，建议使用 generate_4grid_character_images() / generate_4grid_images() 函数以提高效率。")
             
             # 如果提供了item_type，必须同时提供item_name
@@ -3006,6 +3044,16 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
                 'error': '配置文件中未找到comfyui_base_url_inner或host配置'
             }
         
+        # 强制应用用户偏好（比例和分辨率由前端界面控制，LLM 不需要传入）
+        user_prefs = _get_image_preferences(user_id, world_id)
+        if user_prefs:
+            pref_ratio = user_prefs.get('ratio')
+            if pref_ratio and pref_ratio != 'auto':
+                aspect_ratio = pref_ratio
+            pref_resolution = user_prefs.get('resolution')
+            if pref_resolution and pref_resolution != 'auto':
+                image_size = pref_resolution
+
         # 准备请求数据
         request_data = {
             'prompt': prompt,
@@ -3055,7 +3103,8 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
         
         try:
             # 接口使用 Form 参数，需要使用 data 而不是 json 来发送表单数据
-            response = requests.post(api_url, data=request_data, timeout=30)
+            # 使用 httpx 替代 requests，避免同步阻塞事件循环
+            response = httpx.post(api_url, data=request_data, timeout=30, verify=False)
             response.raise_for_status()
             
             result_data = response.json()
@@ -3148,30 +3197,29 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
 
             return result
             
-        except requests.exceptions.RequestException as e:
+        except httpx.HTTPStatusError as e:
             # 尝试解析结构化错误（如算力不足）
             error_detail = f'图片生成请求失败: {str(e)}'
-            if hasattr(e, 'response') and e.response is not None:
-                try:
-                    resp_data = e.response.json()
-                    detail = resp_data.get('detail', '')
-                    if detail:
-                        error_detail = detail
-                        # 解析算力不足信息：格式如 "需要 X 算力，当前仅有 Y 算力"
-                        import re
-                        match = re.search(r'需要\s*(\d+)\s*算力.*当前仅有\s*(\d+)\s*算力', detail)
-                        if match:
-                            return {
-                                'success': False,
-                                'error': '算力不足',
-                                'detail': detail,
-                                'computing_power_required': int(match.group(1)),
-                                'computing_power_available': int(match.group(2)),
-                                'shortage': int(match.group(1)) - int(match.group(2)),
-                                'model_used': model_name,
-                            }
-                except (ValueError, KeyError):
-                    pass
+            try:
+                resp_data = e.response.json()
+                detail = resp_data.get('detail', '')
+                if detail:
+                    error_detail = detail
+                    # 解析算力不足信息：格式如 "需要 X 算力，当前仅有 Y 算力"
+                    import re
+                    match = re.search(r'需要\s*(\d+)\s*算力.*当前仅有\s*(\d+)\s*算力', detail)
+                    if match:
+                        return {
+                            'success': False,
+                            'error': '算力不足',
+                            'detail': detail,
+                            'computing_power_required': int(match.group(1)),
+                            'computing_power_available': int(match.group(2)),
+                            'shortage': int(match.group(1)) - int(match.group(2)),
+                            'model_used': model_name,
+                        }
+            except (ValueError, KeyError):
+                pass
             return {
                 'success': False,
                 'error': error_detail,

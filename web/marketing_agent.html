@@ -55,16 +55,6 @@
                 <input type="text" v-model="searchQuery" placeholder="搜索对话...">
             </div>
 
-            <div class="sidebar-nav">
-                <div class="sidebar-nav-item active" @click="newChat">
-                    <span class="sidebar-nav-icon">💬</span>
-                    <span>新对话</span>
-                </div>
-                <div class="sidebar-nav-item" @click="loadDefaultChat">
-                    <span class="sidebar-nav-icon">📝</span>
-                    <span>默认创作</span>
-                </div>
-            </div>
 
             <div class="sidebar-section">最近</div>
             <div class="sidebar-history">
@@ -74,10 +64,40 @@
                     class="sidebar-history-item"
                     :class="{active: currentSessionId === session.id}"
                     @click="selectSession(session.id)"
+                    @mouseenter="hoveredSessionId = session.id"
+                    @mouseleave="hoveredSessionId = null; activeMenuId = null"
                 >
                     <span class="sidebar-nav-icon">💬</span>
-                    <span class="history-title">{{ session.title || '新对话' }}</span>
-                    <span class="history-date">{{ formatShortDate(session.createdAt) }}</span>
+                    <span class="history-title" v-if="renamingSessionId !== session.id">{{ session.title || '新对话' }}</span>
+                    <input
+                        v-else
+                        class="history-rename-input"
+                        v-model="renamingTitle"
+                        @keyup.enter="confirmRename(session)"
+                        @keyup.escape="cancelRename"
+                        @blur="confirmRename(session)"
+                        @click.stop
+                        ref="renameInput"
+                    />
+                    <span class="history-date" :class="{'hide': renamingSessionId === session.id}">{{ formatShortDate(session.createdAt) }}</span>
+                    <button
+                        v-show="hoveredSessionId === session.id && renamingSessionId !== session.id"
+                        class="history-more-btn"
+                        @click.stop="toggleMenu(session.id)"
+                        title="更多操作"
+                    >···</button>
+                    <div
+                        v-show="activeMenuId === session.id"
+                        class="history-menu"
+                        @click.stop
+                    >
+                        <div class="history-menu-item" @click="startRename(session)">
+                            <span>✏️</span> 重命名
+                        </div>
+                        <div class="history-menu-item danger" @click="deleteSession(session.id)">
+                            <span>🗑️</span> 删除
+                        </div>
+                    </div>
                 </div>
                 <div v-if="filteredSessions.length === 0" style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 13px;">
                     暂无历史对话
@@ -86,7 +106,7 @@
 
             <div class="sidebar-footer">
                 <div class="user-avatar">{{ userInitial }}</div>
-                <span>{{ userPhone || '用户' }}</span>
+                <span>{{ maskedPhone || '用户' }}</span>
             </div>
         </aside>
 
@@ -118,6 +138,14 @@
                             <option value="text">文本</option>
                         </select>
                     </div>
+                    <!-- 算力显示 -->
+                    <div class="computing-power-display"
+                         :class="powerLevelClass"
+                         @click="openComputingPowerLogs"
+                         title="当前算力余额（点击查看日志）">
+                        <span class="power-icon">&#9889;</span>
+                        <span class="power-value">{{ computingPowerBalance }}</span>
+                    </div>
                 </div>
             </header>
 
@@ -144,6 +172,12 @@
                     <div class="message" :class="msg.role">
                         <div class="message-avatar">{{ msg.role === 'user' ? '👤' : '🤖' }}</div>
                         <div class="message-content">
+                            <!-- 多模态图片 -->
+                            <template v-if="msg.images && msg.images.length > 0">
+                                <div v-for="(img, imgIdx) in msg.images" :key="'img-'+index+'-'+imgIdx" style="margin-bottom: 8px;">
+                                    <img :src="img" style="max-height:200px;max-width:100%;border-radius:8px;cursor:zoom-in;" @click="showImageModal(img)" alt="图片">
+                                </div>
+                            </template>
                             <div class="message-bubble" v-html="renderMarkdown(msg.content)"></div>
                             <!-- Verification 选项按钮 -->
                             <div v-if="msg.isVerification && msg.verificationOptions && msg.verificationOptions.length > 0" style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px;">
@@ -279,12 +313,6 @@
                                         <div style="margin-bottom: 20px;">
                                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                                                 <span style="font-size: 14px; font-weight: 500; color: #1a1a1a;">生成偏好</span>
-                                                <div style="display: flex; align-items: center; gap: 8px;">
-                                                    <span style="font-size: 12px; color: #999;">自动</span>
-                                                    <div style="width: 36px; height: 20px; background: #e8e8e8; border-radius: 10px; position: relative; cursor: pointer;" @click.stop="autoMode = !autoMode">
-                                                        <div :style="{ position: 'absolute', width: '16px', height: '16px', background: '#fff', borderRadius: '50%', top: '2px', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)', left: autoMode ? '18px' : '2px' }"></div>
-                                                    </div>
-                                                </div>
                                             </div>
                                             <div style="display: flex; background: #f5f5f5; border-radius: 12px; padding: 4px;">
                                                 <div @click.stop="mediaType = 'image'" :style="{ flex: 1, textAlign: 'center', padding: '8px 0', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500, transition: 'all 0.2s', background: mediaType === 'image' ? '#fff' : 'transparent', color: mediaType === 'image' ? '#1a1a1a' : '#999', boxShadow: mediaType === 'image' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none' }">图片</div>
@@ -377,6 +405,7 @@
                                             <!-- 模型选择列表（内联展开） -->
                                             <div v-if="showModelSelect" style="background: #fafafa; border-radius: 12px; padding: 12px; margin-top: 8px;">
                                                 <div style="font-size: 12px; color: #999; margin-bottom: 10px;">选择模型：{{ selectedModel }}</div>
+                                                <div style="max-height: 320px; overflow-y: auto;">
                                                 <div v-for="model in currentModels" :key="model.name" @click.stop="selectModel(model)" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: background 0.2s; margin-bottom: 4px;" :style="{ background: selectedModel === model.name ? '#fff' : 'transparent', border: selectedModel === model.name ? '1px solid #e8e8e8' : '1px solid transparent', boxShadow: selectedModel === model.name ? '0 1px 4px rgba(0,0,0,0.05)' : 'none' }">
                                                     <div style="width: 36px; height: 36px; background: #f0f0f0; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
                                                         <!-- 图片模型 icon -->
@@ -397,12 +426,11 @@
                                                     <div style="flex: 1;">
                                                         <div style="font-size: 14px; font-weight: 500; color: #1a1a1a; display: flex; align-items: center; gap: 6px;">
                                                             {{ model.name }}
-                                                            <span v-if="model.tag" style="font-size: 10px; color: #00a8e6; background: #e6f7ff; padding: 1px 6px; border-radius: 4px;">{{ model.tag }}</span>
-                                                            <span v-if="model.isNew" style="font-size: 10px; color: #fff; background: #00a8e6; padding: 1px 6px; border-radius: 4px;">New</span>
                                                         </div>
                                                         <div style="font-size: 12px; color: #999; margin-top: 2px;">{{ model.desc }}</div>
                                                     </div>
                                                     <span v-if="selectedModel === model.name" style="color: #1a1a1a; font-size: 18px;">✓</span>
+                                                </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -423,6 +451,7 @@
                                     <!-- 模型选择弹窗 -->
                                     <div v-if="showModelPanel" class="marketing-panel" @click.stop style="position: absolute; bottom: 100%; left: 0; margin-bottom: 8px; background: #fff; border: 1px solid #e8e8e8; border-radius: 16px; box-shadow: 0 -8px 32px rgba(0,0,0,0.12); padding: 16px; min-width: 360px; z-index: 100;">
                                         <div style="font-size: 12px; color: #999; margin-bottom: 12px;">选择模型：{{ selectedModel }}</div>
+                                        <div style="max-height: 320px; overflow-y: auto;">
                                         <div v-for="model in currentModels" :key="model.name" @click.stop="selectModel(model)" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: background 0.2s; margin-bottom: 4px;" :style="{ background: selectedModel === model.name ? '#fff' : 'transparent', border: selectedModel === model.name ? '1px solid #e8e8e8' : '1px solid transparent', boxShadow: selectedModel === model.name ? '0 1px 4px rgba(0,0,0,0.05)' : 'none' }">
                                             <div style="width: 36px; height: 36px; background: #f0f0f0; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
                                                 <!-- 图片模型 icon -->
@@ -443,12 +472,11 @@
                                             <div style="flex: 1;">
                                                 <div style="font-size: 14px; font-weight: 500; color: #1a1a1a; display: flex; align-items: center; gap: 6px;">
                                                     {{ model.name }}
-                                                    <span v-if="model.tag" style="font-size: 10px; color: #00a8e6; background: #e6f7ff; padding: 1px 6px; border-radius: 4px;">{{ model.tag }}</span>
-                                                    <span v-if="model.isNew" style="font-size: 10px; color: #fff; background: #00a8e6; padding: 1px 6px; border-radius: 4px;">New</span>
                                                 </div>
                                                 <div style="font-size: 12px; color: #999; margin-top: 2px;">{{ model.desc }}</div>
                                             </div>
                                             <span v-if="selectedModel === model.name" style="color: #1a1a1a; font-size: 18px;">✓</span>
+                                        </div>
                                         </div>
                                     </div>
                                 </div>
@@ -486,7 +514,8 @@
                                 </div>
                             </template>
 
-                            <button class="marketing-bar-btn" style="color: #ccc; cursor: not-allowed; position: relative;" title="开发中">
+                            <!-- 使用技能 - 开发中，暂不显示 -->
+                            <button v-if="false" class="marketing-bar-btn" style="color: #ccc; cursor: not-allowed; position: relative;" title="开发中">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="stroke: #ccc;">
                                     <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
                                 </svg>
@@ -571,13 +600,107 @@
         </div>
 
         <!-- 图片放大模态框 -->
-        <div id="imgModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 2000; align-items: center; justify-content: center; cursor: zoom-out;" onclick="this.style.display='none'">
-            <img id="imgModalImg" style="max-width: 90%; max-height: 90%; border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.5);" src="" alt="放大查看">
+        <div id="imgModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 2000; align-items: center; justify-content: center; flex-direction: column; cursor: zoom-out;" onclick="this.style.display='none'">
+            <img id="imgModalImg" style="max-width: 90%; max-height: 85%; border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.5);" src="" alt="放大查看">
+            <div style="display: flex; gap: 12px; margin-top: 16px;">
+                <button style="padding: 8px 20px; background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.25)'" onmouseout="this.style.background='rgba(255,255,255,0.15)'" onclick="event.stopPropagation(); downloadModalImage()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    下载图片
+                </button>
+                <button style="padding: 8px 20px; background: rgba(0,168,230,0.6); color: white; border: 1px solid rgba(0,168,230,0.8); border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px; transition: background 0.2s;" onmouseover="this.style.background='rgba(0,168,230,0.8)'" onmouseout="this.style.background='rgba(0,168,230,0.6)'" onclick="event.stopPropagation(); imageToVideo()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    生成视频
+                </button>
+            </div>
+        </div>
+
+        <!-- 算力日志弹窗 -->
+        <div class="modal-overlay-container" v-if="showPowerLogsModal" @click.self="closeComputingPowerLogs">
+            <div class="modal-dialog large">
+                <div class="modal-header">
+                    <h3 class="modal-title">&#9889; 算力日志</h3>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="modal-action-btn primary" @click="handleRechargeClick">算力充值</button>
+                        <button class="modal-close-btn" @click="closeComputingPowerLogs">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 6L6 18M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-body" style="padding: 0; height: calc(100% - 60px); overflow: hidden;">
+                    <iframe :src="showPowerLogsModal ? '/computing_power_logs.html' : ''"
+                            style="width: 100%; height: 100%; border: none;"></iframe>
+                </div>
+            </div>
+        </div>
+
+        <!-- 算力充值弹窗 -->
+        <div class="modal-overlay-container" v-if="showRechargeModal" @click.self="closeRechargeModal">
+            <div class="modal-dialog" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3 class="modal-title">&#9889; 算力充值</h3>
+                    <button class="modal-close-btn" @click="closeRechargeModal">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 6L6 18M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+                    <!-- 加载中 -->
+                    <div v-if="rechargeState === 'loading'" style="text-align: center; padding: 40px;">
+                        <div class="loading-spinner"></div>
+                        <p style="margin-top: 16px; color: #6b7280;">加载套餐中...</p>
+                    </div>
+                    <!-- 套餐列表 -->
+                    <div v-else-if="rechargeState === 'packages'" style="display: flex; flex-direction: column; gap: 12px;">
+                        <div v-for="pkg in rechargePackages" :key="pkg.package_id"
+                             class="package-item" @click="selectRechargePackage(pkg)">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <div style="font-weight: 600; color: #0f172a;">{{ pkg.description }}</div>
+                                    <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">{{ pkg.computing_power }} 算力</div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div style="font-size: 20px; font-weight: 600; color: #ef4444;">&#165;{{ pkg.price }}</div>
+                                    <div style="font-size: 11px; color: #9ca3af;">{{ (pkg.price / pkg.computing_power * 100).toFixed(2) }}元/百算力</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div v-if="rechargePackages.length === 0" style="text-align: center; padding: 40px; color: #6b7280;">暂无可用套餐</div>
+                    </div>
+                    <!-- 二维码 -->
+                    <div v-else-if="rechargeState === 'qrcode'" style="text-align: center;">
+                        <div style="font-size: 16px; font-weight: 600; color: #0f172a;">{{ selectedPackage?.description }}</div>
+                        <div style="font-size: 14px; color: #6b7280; margin-top: 8px;">{{ selectedPackage?.computing_power }} 算力 - &#165;{{ selectedPackage?.price }}</div>
+                        <div style="margin-top: 20px;">
+                            <div v-if="qrCodeUrl" style="background: #fff; padding: 12px; border-radius: 12px; display: inline-block;">
+                                <img :src="qrCodeUrl" alt="微信支付二维码" style="width: 200px; height: 200px;" />
+                            </div>
+                            <div v-else>
+                                <div class="loading-spinner"></div>
+                                <p style="margin-top: 16px; color: #6b7280;">正在生成支付二维码...</p>
+                            </div>
+                        </div>
+                        <div style="font-size: 12px; color: #6b7280; margin-top: 16px; line-height: 1.6;">
+                            请打开微信"扫一扫"完成支付<br/>如果已支付，请稍等片刻系统会自动到账
+                        </div>
+                        <div style="margin-top: 16px;">
+                            <button class="modal-action-btn secondary" @click="backToPackageList">返回选择套餐</button>
+                        </div>
+                    </div>
+                    <!-- 错误 -->
+                    <div v-else-if="rechargeState === 'error'" style="text-align: center; padding: 20px;">
+                        <p style="color: #ef4444; margin-bottom: 16px;">{{ rechargeError }}</p>
+                        <button class="modal-action-btn secondary" @click="loadRechargePackages">返回选择套餐</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
-    const { createApp, ref, computed, onMounted, nextTick } = Vue;
+    const { createApp, ref, computed, onMounted, onUnmounted, nextTick } = Vue;
 
     createApp({
         setup() {
@@ -593,9 +716,14 @@
 
             const sessions = ref([]);
             const currentSessionId = ref(null);
+            const hoveredSessionId = ref(null);
+            const activeMenuId = ref(null);
+            const renamingSessionId = ref(null);
+            const renamingTitle = ref('');
             const showContinue = ref(false);
             const chatMessages = ref(null);
             const inputTextarea = ref(null);
+            const maxImageSizeMB = ref(10);  // 从服务器配置获取
 
             // 创作类型与模型选择
             const showDropdown = ref(false);
@@ -626,6 +754,10 @@
             const uploadedImageBase64 = ref('');  // 服务端压缩后的 base64
             const fileInputRef = ref(null);
             const isDragging = ref(false);
+
+            // Agent 模式多图上传状态（最多 9 张）
+            const agentImageFiles = ref([]);  // [{file, previewUrl, serverUrl, uploading}]
+            const AGENT_IMAGE_MAX_COUNT = 9;
 
             // 图片生成任务状态
             const imageProjectIds = ref([]);
@@ -796,6 +928,162 @@
                 return 0;
             });
 
+            // ========== 算力余额相关 ==========
+            const computingPowerBalance = ref('--');
+            const showPowerLogsModal = ref(false);
+            const showRechargeModal = ref(false);
+            const rechargeState = ref('loading');
+            const rechargePackages = ref([]);
+            const rechargeError = ref('');
+            const selectedPackage = ref(null);
+            const qrCodeUrl = ref('');
+            let powerRefreshTimer = null;
+
+            const powerLevelClass = computed(() => {
+                const val = parseFloat(String(computingPowerBalance.value).replace(/,/g, ''));
+                if (isNaN(val)) return '';
+                if (val < 100) return 'low-power';
+                if (val < 1000) return 'medium-power';
+                return 'high-power';
+            });
+
+            async function loadComputingPower() {
+                try {
+                    const response = await fetch('/api/user/computing_power', {
+                        headers: { 'Authorization': `Bearer ${authToken.value}` }
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        const power = data.data?.computing_power || 0;
+                        computingPowerBalance.value = power.toLocaleString();
+                    } else {
+                        computingPowerBalance.value = '--';
+                    }
+                } catch (error) {
+                    console.error('加载算力失败:', error);
+                    computingPowerBalance.value = '--';
+                }
+            }
+
+            function startComputingPowerRefresh() {
+                if (powerRefreshTimer) clearTimeout(powerRefreshTimer);
+                const randomInterval = 30000 + Math.random() * 15000;
+                powerRefreshTimer = setTimeout(async () => {
+                    try {
+                        await loadComputingPower();
+                    } catch (error) {
+                        console.error('[算力刷新] 出错:', error);
+                    } finally {
+                        startComputingPowerRefresh();
+                    }
+                }, randomInterval);
+            }
+
+            function stopComputingPowerRefresh() {
+                if (powerRefreshTimer) {
+                    clearTimeout(powerRefreshTimer);
+                    powerRefreshTimer = null;
+                }
+            }
+
+            // 页面卸载时清理定时器，防止内存泄漏
+            onUnmounted(() => {
+                stopComputingPowerRefresh();
+            });
+
+            function openComputingPowerLogs() {
+                if (!authToken.value) { showError('缺少认证信息'); return; }
+                showPowerLogsModal.value = true;
+            }
+
+            function closeComputingPowerLogs() {
+                showPowerLogsModal.value = false;
+            }
+
+            async function handleRechargeClick() {
+                try {
+                    const response = await fetch('/api/system/server-config');
+                    const data = await response.json();
+                    if (data.data && data.data.is_local) {
+                        showError('只有云端环境才能开启二维码支付。本地模式下，管理员用户请进入后台增加算力。');
+                        return;
+                    }
+                } catch (e) {
+                    console.error('获取配置失败:', e);
+                }
+                showRechargeModal.value = true;
+                await loadRechargePackages();
+            }
+
+            function closeRechargeModal() {
+                showRechargeModal.value = false;
+                rechargeState.value = 'loading';
+                rechargePackages.value = [];
+                selectedPackage.value = null;
+                qrCodeUrl.value = '';
+                rechargeError.value = '';
+            }
+
+            async function loadRechargePackages() {
+                rechargeState.value = 'loading';
+                try {
+                    const response = await fetch(`/api/recharge/packages?auth_token=${encodeURIComponent(authToken.value)}`);
+                    const data = await response.json();
+                    rechargePackages.value = data.packages || [];
+                    rechargeState.value = 'packages';
+                } catch (e) {
+                    console.error('加载充值套餐失败:', e);
+                    rechargeError.value = '加载失败，请重试';
+                    rechargeState.value = 'error';
+                }
+            }
+
+            function backToPackageList() {
+                rechargeState.value = 'packages';
+                selectedPackage.value = null;
+                qrCodeUrl.value = '';
+            }
+
+            async function selectRechargePackage(pkg) {
+                selectedPackage.value = pkg;
+                rechargeState.value = 'qrcode';
+                qrCodeUrl.value = '';
+
+                try {
+                    let paymentIp = '0.0.0.0';
+                    try {
+                        const ipResponse = await fetch('https://api.ipify.org?format=json');
+                        const ipData = await ipResponse.json();
+                        paymentIp = ipData.ip || '0.0.0.0';
+                    } catch (e) {
+                        console.error('获取用户IP失败:', e);
+                    }
+
+                    const response = await fetch('/api/recharge/wechat-pay', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            user_id: userId.value,
+                            package_id: pkg.package_id,
+                            auth_token: authToken.value,
+                            is_wechat_browser: false,
+                            payment_ip: paymentIp
+                        })
+                    });
+
+                    const data = await response.json();
+                    if (data.code_url) {
+                        qrCodeUrl.value = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(data.code_url)}`;
+                    } else {
+                        throw new Error(data.error || '创建支付订单失败');
+                    }
+                } catch (e) {
+                    console.error('创建支付订单失败:', e);
+                    rechargeError.value = e.message;
+                    rechargeState.value = 'error';
+                }
+            }
+
             // @ 引用可选项
             const mentionableItems = Vue.computed(() => {
                 return mediaItems.value.filter(m => m.fileUrl && !m.uploading).map(m => ({
@@ -839,6 +1127,12 @@
                 return userPhone.value ? userPhone.value.charAt(0).toUpperCase() : 'U';
             });
 
+            const maskedPhone = computed(() => {
+                const phone = userPhone.value;
+                if (!phone || phone.length < 7) return phone || '';
+                return phone.substring(0, 3) + '****' + phone.substring(7);
+            });
+
             const filteredSessions = computed(() => {
                 if (!searchQuery.value) return sessions.value;
                 const q = searchQuery.value.toLowerCase();
@@ -879,8 +1173,116 @@
             // 渲染 Markdown
             function renderMarkdown(text) {
                 if (!text) return '';
-                return marked.parse(text);
+
+                // 步骤1：保护已有的 markdown 图片语法 ![alt](url)，用占位符替换
+                const imgPlaceholders = [];
+                text = text.replace(/!\[[^\]]*\]\([^)]+\)/g, (match) => {
+                    imgPlaceholders.push(match);
+                    return `\n__IMG_PH_${imgPlaceholders.length - 1}__\n`;
+                });
+
+                // 步骤2：保护已有的 markdown 链接语法 [text](url)，用占位符替换
+                const linkPlaceholders = [];
+                text = text.replace(/\[[^\]]+\]\([^)]+\)/g, (match) => {
+                    linkPlaceholders.push(match);
+                    return `__LINK_PH_${linkPlaceholders.length - 1}__`;
+                });
+
+                // 步骤3：将裸图片 URL 转换为 Markdown 图片格式
+                // 图片扩展名结尾，后面不允许紧跟非空白字符（防止吞入中文）
+                const imageUrlPattern = /(https?:\/\/[^\s<>"'\]]+?\.(?:png|jpg|jpeg|gif|webp|svg|bmp|ico))(?=[\s\n\]|,)]|$)/gi;
+                text = text.replace(imageUrlPattern, (url) => {
+                    return `\n![图片](${url})\n`;
+                });
+
+                // 步骤4：处理普通 URL 边界 —— URL 后紧跟中文等非空白字符时插入空格
+                // 防止 marked.js 将中文字符错误包含进 URL
+                text = text.replace(/(https?:\/\/[^\s<>"'\]]+)([^\x00-\x7F\s])/g, '$1 $2');
+
+                // 步骤5：恢复链接占位符
+                text = text.replace(/__LINK_PH_(\d+)__/g, (match, idx) => {
+                    return linkPlaceholders[parseInt(idx)];
+                });
+
+                // 步骤6：恢复图片占位符
+                text = text.replace(/__IMG_PH_(\d+)__/g, (match, idx) => {
+                    return imgPlaceholders[parseInt(idx)];
+                });
+
+                // 解析 Markdown
+                let html = marked.parse(text);
+
+                // 为图片添加样式和点击事件
+                html = html.replace(/<img([^>]*)>/g, (match, attrs) => {
+                    // 提取 src 属性
+                    const srcMatch = attrs.match(/src="([^"]*)"/);
+                    const src = srcMatch ? srcMatch[1] : '';
+
+                    // 添加样式和点击事件
+                    return `<img${attrs} style="max-width:300px;max-height:200px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${src}'" alt="图片">`;
+                });
+
+                return html;
             }
+
+            // 图片放大弹窗
+            function showImageModal(src) {
+                const modal = document.getElementById('imgModal');
+                const img = document.getElementById('imgModalImg');
+                if (modal && img) {
+                    img.src = src;
+                    modal.style.display = 'flex';
+                }
+            }
+
+            function downloadModalImage() {
+                const img = document.getElementById('imgModalImg');
+                if (!img || !img.src) return;
+                const link = document.createElement('a');
+                link.href = img.src;
+                // 从 URL 中提取文件名，默认 fallback
+                try {
+                    const urlPath = img.src.split('?')[0];
+                    link.download = urlPath.split('/').pop() || 'image.png';
+                } catch (e) {
+                    link.download = 'image.png';
+                }
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+            // 挂载到全局，供原生 HTML onclick 调用
+            window.downloadModalImage = downloadModalImage;
+
+            function imageToVideo() {
+                const img = document.getElementById('imgModalImg');
+                if (!img || !img.src || img.src === window.location.href) return;
+                const url = img.src;
+                // 关闭弹框
+                document.getElementById('imgModal').style.display = 'none';
+                // 设置图片到输入区
+                uploadedImageUrl.value = url;
+                hasUploadedImage.value = true;
+                uploadedImageFile.value = null;
+                // 添加到媒体列表（供缩略图条和 @ 引用使用）
+                const id = `i_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+                const existingCount = mediaItems.value.filter(m => m.type === 'image').length;
+                mediaItems.value.push({
+                    id,
+                    displayName: `图片${existingCount + 1}`,
+                    type: 'image',
+                    fileUrl: url,
+                    thumbnailUrl: url,
+                    originalFile: null,
+                    uploading: false
+                });
+                mediaItems.value = [...mediaItems.value];
+                // 切换到视频生成模式（selectType 会自动选择图生视频模型）
+                const videoType = creationTypes.find(t => t.name === '视频生成');
+                if (videoType) selectType(videoType);
+                scrollToBottom();
+            }
+            window.imageToVideo = imageToVideo;
 
             // 自动调整 textarea 高度
             function autoResize() {
@@ -1077,7 +1479,13 @@
 
                 // 添加用户消息（含图片缩略图）
                 let userContent = text;
-                if (hasUploadedImage.value && uploadedImageUrl.value) {
+                const isAgentChatPreview = selectedType.value === 'Agent 模式' && mediaType.value !== 'video';
+                if (isAgentChatPreview && agentImageFiles.value.length > 0) {
+                    // Agent 模式多图预览
+                    agentImageFiles.value.forEach((img, i) => {
+                        userContent += `\n\n[图片${i + 1}] <img src="${img.previewUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${img.previewUrl}'" alt="图片${i + 1}">`;
+                    });
+                } else if (hasUploadedImage.value && uploadedImageUrl.value) {
                     userContent += `\n\n<img src="${uploadedImageUrl.value}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${uploadedImageUrl.value}'" alt="参考图">`;
                 }
                 messages.value.push({
@@ -1474,17 +1882,31 @@
             async function sendMessageToApi(text) {
                 isLoading.value = true;
                 const sessionId = currentSessionId.value;
+                const isAgentChat = selectedType.value === 'Agent 模式' && mediaType.value !== 'video';
 
                 try {
-                    // 收集图片 base64
+                    // 收集图片 URL（Agent 模式使用 HTTP URL，其他模式使用 base64）
                     const imageUrls = [];
-                    if (hasUploadedImage.value) {
+                    if (isAgentChat && agentImageFiles.value.length > 0) {
+                        // Agent 对话模式：收集 HTTP URL
+                        // 检查所有图片是否已上传完成
+                        const allUploaded = agentImageFiles.value.every(img => !img.uploading && img.serverUrl);
+                        if (!allUploaded) {
+                            showError('图片正在上传中，请稍候');
+                            isLoading.value = false;
+                            return;
+                        }
+                        agentImageFiles.value.forEach(img => {
+                            if (img.serverUrl) {
+                                imageUrls.push(img.serverUrl);
+                            }
+                        });
+                        console.log('[Agent] 发送图片 URL:', imageUrls.length, '张');
+                    } else if (hasUploadedImage.value) {
                         if (uploadedImageBase64.value) {
-                            // 已提前压缩好的缓存
                             imageUrls.push(uploadedImageBase64.value);
                             console.log('[VL] 使用已缓存图片，大小:', Math.round(uploadedImageBase64.value.length * 3 / 4 / 1024), 'KB');
                         } else if (uploadedImageFile.value) {
-                            // 图片还在压缩中，等待完成
                             try {
                                 const base64 = await compressImageToBase64(uploadedImageFile.value, 2);
                                 imageUrls.push(base64);
@@ -1511,7 +1933,12 @@
                             image_urls: imageUrls.length > 0 ? imageUrls : undefined,
                             model: selectedLLMModel.value ? selectedLLMModel.value.name : '',
                             model_id: selectedLLMModel.value ? selectedLLMModel.value.id : undefined,
-                            vendor_id: 1
+                            vendor_id: 1,
+                            image_preferences: {
+                                ratio: selectedRatio.value,
+                                resolution: selectedResolution.value,
+                                model_name: selectedModel.value
+                            }
                         }),
                         signal: controller.signal
                     });
@@ -1548,7 +1975,20 @@
                     });
                 } finally {
                     isLoading.value = false;
-                    // 清理已使用的图片 base64（下次发消息需重新上传）
+                    // 清理已使用的图片（Agent 模式清理多图，其他模式清理 base64）
+                    if (isAgentChat) {
+                        agentImageFiles.value.forEach(img => {
+                            if (img.previewUrl) {
+                                if (img.previewUrl.startsWith('blob:')) URL.revokeObjectURL(img.previewUrl);
+                                const item = mediaItems.value.find(m => m.fileUrl === img.previewUrl);
+                                if (item) removeMediaItem(item.id);
+                            }
+                        });
+                        agentImageFiles.value = [];
+                        hasUploadedImage.value = false;
+                        uploadedImageUrl.value = '';
+                        uploadedImageFile.value = null;
+                    }
                     uploadedImageBase64.value = '';
                     scrollToBottom();
                 }
@@ -1623,6 +2063,8 @@
                                     messages.value[msgIndex].content = fullContent;
                                 }
                                 showContinue.value = true;
+                                // 刷新算力显示
+                                loadComputingPower();
                                 resolve();
                             }
                         } catch (e) {
@@ -1762,6 +2204,76 @@
                 autoResize();
             }
 
+            // 过滤和解析历史消息的共享逻辑
+            function filterHistoryMessage(h) {
+                if (h.role === 'system' || h.role === 'tool') return false;
+                if (h.role === 'assistant' && h.content) {
+                    let content = h.content;
+                    if (typeof content === 'string') {
+                        try { content = JSON.parse(content); } catch (e) { /* 普通文本，忽略 */ }
+                    }
+                    if (typeof content === 'object' && content.tool_calls && Array.isArray(content.tool_calls)) return false;
+                }
+                return true;
+            }
+
+            function parseHistoryMessage(h) {
+                // 处理 verification 消息：还原为前端渲染格式
+                if (h.role === 'verification') {
+                    let vData = h.content;
+                    if (typeof vData === 'string') {
+                        try { vData = JSON.parse(vData); } catch (e) { /* 不是 JSON，当作普通文本 */ }
+                    }
+                    if (typeof vData === 'object' && vData !== null) {
+                        return {
+                            role: 'ai',
+                            content: `**${vData.title || 'AI 向您提问'}**\n\n${vData.description || ''}`,
+                            timestamp: h.timestamp,
+                            isVerification: true,
+                            verificationOptions: vData.options || [],
+                            verificationId: null
+                        };
+                    }
+                    return { role: 'ai', content: typeof h.content === 'string' ? h.content : JSON.stringify(h.content), timestamp: h.timestamp };
+                }
+                // 处理多模态内容（图片 + 文本）
+                let parsedContent = h.content;
+                if (typeof parsedContent === 'string') {
+                    try { parsedContent = JSON.parse(parsedContent); } catch (e) { /* 普通文本 */ }
+                }
+                if (Array.isArray(parsedContent)) {
+                    const images = [];
+                    let textParts = [];
+                    for (const part of parsedContent) {
+                        if (part.type === 'image_url' && part.image_url?.url) {
+                            images.push(part.image_url.url);
+                        } else if (part.type === 'text' && part.text) {
+                            textParts.push(part.text);
+                        }
+                    }
+                    let finalContent = textParts.join('\n') || '';
+                    // 清除给 LLM 用的图片引用元数据标签（图片已通过 base64 <img> 标签展示，避免重复）
+                    finalContent = finalContent.replace(/\[图片\d+]（URL:[\s\S]*?）\n?/g, '');
+                    // 清除文本中残留的 HTML img 标签（双保险）
+                    finalContent = finalContent.replace(/<img\s[^>]*>/gi, '');
+                    // 清除多余空行
+                    finalContent = finalContent.replace(/\n{3,}/g, '\n\n').trim();
+                    for (const imgUrl of images) {
+                        finalContent += `\n\n<img src="${imgUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${imgUrl}'" alt="参考图">`;
+                    }
+                    return {
+                        role: h.role === 'assistant' ? 'ai' : h.role,
+                        content: finalContent,
+                        timestamp: h.timestamp
+                    };
+                }
+                return {
+                    role: h.role === 'assistant' ? 'ai' : h.role,
+                    content: typeof h.content === 'string' ? h.content : (h.content?.text || JSON.stringify(h.content)),
+                    timestamp: h.timestamp
+                };
+            }
+
             // 选择会话
             async function selectSession(sessionId) {
                 currentSessionId.value = sessionId;
@@ -1775,44 +2287,7 @@
                 if (fileInputRef.value) fileInputRef.value.value = '';
                 if (referenceInputRef.value) referenceInputRef.value.value = '';
                 const history = await loadSessionHistory(sessionId);
-                messages.value = history.filter(h => {
-                    // 过滤系统提示和工具内部消息
-                    if (h.role === 'system' || h.role === 'tool') return false;
-                    // 过滤包含 tool_calls 的 assistant 消息（内部调用）
-                    if (h.role === 'assistant' && h.content) {
-                        let content = h.content;
-                        if (typeof content === 'string') {
-                            try { content = JSON.parse(content); } catch (e) { /* 普通文本，忽略 */ }
-                        }
-                        if (typeof content === 'object' && content.tool_calls && Array.isArray(content.tool_calls)) return false;
-                    }
-                    return true;
-                }).map(h => {
-                    // 处理 verification 消息：还原为前端渲染格式
-                    if (h.role === 'verification') {
-                        let vData = h.content;
-                        if (typeof vData === 'string') {
-                            try { vData = JSON.parse(vData); } catch (e) { /* 不是 JSON，当作普通文本 */ }
-                        }
-                        if (typeof vData === 'object' && vData !== null) {
-                            return {
-                                role: 'ai',
-                                content: `**${vData.title || 'AI 向您提问'}**\n\n${vData.description || ''}`,
-                                timestamp: h.timestamp,
-                                isVerification: true,
-                                verificationOptions: vData.options || [],
-                                verificationId: null
-                            };
-                        }
-                        // 降级为普通消息
-                        return { role: 'ai', content: typeof h.content === 'string' ? h.content : JSON.stringify(h.content), timestamp: h.timestamp };
-                    }
-                    return {
-                        role: h.role === 'assistant' ? 'ai' : h.role,
-                        content: typeof h.content === 'string' ? h.content : (h.content?.text || JSON.stringify(h.content)),
-                        timestamp: h.timestamp
-                    };
-                });
+                messages.value = history.filter(filterHistoryMessage).map(parseHistoryMessage);
                 scrollToBottom();
             }
 
@@ -1877,8 +2352,106 @@
                 }
             }
 
+            // ========== 历史记录菜单操作 ==========
+
+            function toggleMenu(sessionId) {
+                activeMenuId.value = activeMenuId.value === sessionId ? null : sessionId;
+            }
+
+            async function deleteSession(sessionId) {
+                activeMenuId.value = null;
+                if (!confirm('确定要删除这个对话吗？')) return;
+                try {
+                    const response = await fetch(`/api/session/${sessionId}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Authorization': authToken.value,
+                            'X-User-Id': userId.value
+                        }
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        sessions.value = sessions.value.filter(s => s.id !== sessionId);
+                        saveLocalSessions();
+                        if (currentSessionId.value === sessionId) {
+                            if (sessions.value.length > 0) {
+                                selectSession(sessions.value[0].id);
+                            } else {
+                                currentSessionId.value = null;
+                                messages.value = [];
+                            }
+                        }
+                    } else {
+                        showError(data.error || '删除失败');
+                    }
+                } catch (e) {
+                    showError('删除失败: ' + e.message);
+                }
+            }
+
+            function startRename(session) {
+                activeMenuId.value = null;
+                renamingSessionId.value = session.id;
+                renamingTitle.value = session.title === '新对话' ? '' : session.title.replace(/\.\.\.$/, '');
+                // 等待 DOM 更新后聚焦
+                nextTick(() => {
+                    const inputs = document.querySelectorAll('.history-rename-input');
+                    if (inputs.length > 0) inputs[inputs.length - 1].focus();
+                });
+            }
+
+            async function confirmRename(session) {
+                if (!renamingSessionId.value) return;
+                const newTitle = renamingTitle.value.trim();
+                if (!newTitle) {
+                    cancelRename();
+                    return;
+                }
+                try {
+                    const response = await fetch(`/api/session/${session.id}/title`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': authToken.value,
+                            'X-User-Id': userId.value,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ title: newTitle })
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        session.title = newTitle.length > 20 ? newTitle.slice(0, 20) + '...' : newTitle;
+                        saveLocalSessions();
+                    } else {
+                        showError(data.error || '重命名失败');
+                    }
+                } catch (e) {
+                    showError('重命名失败: ' + e.message);
+                }
+                renamingSessionId.value = null;
+                renamingTitle.value = '';
+            }
+
+            function cancelRename() {
+                renamingSessionId.value = null;
+                renamingTitle.value = '';
+            }
+
             // ========== 初始化 ==========
             onMounted(async () => {
+                // 点击空白处关闭菜单
+                document.addEventListener('click', () => {
+                    activeMenuId.value = null;
+                });
+
+                // 获取服务器配置（图片大小限制等）
+                try {
+                    const resp = await fetch('/api/system/server-config');
+                    const cfg = await resp.json();
+                    if (cfg.data?.max_image_size_mb) {
+                        maxImageSizeMB.value = cfg.data.max_image_size_mb;
+                    }
+                } catch (e) { /* 使用默认值 */ }
+
                 // 获取用户信息
                 userId.value = getUrlParam('user_id') || localStorage.getItem('user_id') || '';
                 authToken.value = localStorage.getItem('auth_token') || '';
@@ -1911,6 +2484,10 @@
                 // 加载 TaskConfig 模型数据
                 await initTaskConfig();
 
+                // 加载算力余额并启动定时刷新
+                await loadComputingPower();
+                startComputingPowerRefresh();
+
                 // 从后端加载会话列表
                 const backendSessions = await loadSessionsFromBackend();
 
@@ -1920,21 +2497,7 @@
                     currentSessionId.value = latestSession.id;
                     const history = await loadSessionHistory(latestSession.id);
                     if (history.length > 0) {
-                        messages.value = history.filter(h => {
-                            if (h.role === 'system' || h.role === 'tool') return false;
-                            if (h.role === 'assistant' && h.content) {
-                                let content = h.content;
-                                if (typeof content === 'string') {
-                                    try { content = JSON.parse(content); } catch (e) { /* 普通文本，忽略 */ }
-                                }
-                                if (typeof content === 'object' && content.tool_calls && Array.isArray(content.tool_calls)) return false;
-                            }
-                            return true;
-                        }).map(h => ({
-                            role: h.role === 'assistant' ? 'ai' : h.role,
-                            content: typeof h.content === 'string' ? h.content : (h.content?.text || JSON.stringify(h.content)),
-                            timestamp: h.timestamp
-                        }));
+                        messages.value = history.filter(filterHistoryMessage).map(parseHistoryMessage);
                     }
                 }
 
@@ -1979,7 +2542,6 @@
                         icon: '🚀',
                         name: opt.label.split(' (')[0],
                         desc: opt.label,
-                        tag: idx === 0 ? 'New' : '',
                         key: opt.key,
                         value: opt.value
                     }));
@@ -1990,7 +2552,6 @@
                         icon: '🎬',
                         name: opt.label.split(' (')[0],
                         desc: opt.label,
-                        tag: idx === 0 ? 'New' : '',
                         key: opt.key,
                         value: opt.value
                     }));
@@ -2001,7 +2562,6 @@
                         icon: '🎬',
                         name: opt.label.split(' (')[0],
                         desc: opt.label,
-                        tag: idx === 0 ? 'New' : '',
                         key: opt.key,
                         value: opt.value,
                         supportedImageModes: opt.supportedImageModes || ['first_last_frame']
@@ -2010,11 +2570,32 @@
                     // 加载视频模型配置
                     videoModelConfigs.value = window.TaskConfig.getModelConfigs ? window.TaskConfig.getModelConfigs() : {};
 
-                    // 默认选中第一个模型
+                    // 恢复用户偏好或默认选中第一个模型
                     if (allImageModels.value.length > 0 && !selectedModel.value) {
-                        const m = allImageModels.value[0];
-                        selectedModel.value = m.name;
-                        selectedModelKey.value = m.key || '';
+                        const savedImageModel = localStorage.getItem('marketing_selected_image_model');
+                        const savedImageModelKey = localStorage.getItem('marketing_selected_image_model_key');
+
+                        if (savedImageModel && allImageModels.value.find(m => m.name === savedImageModel)) {
+                            // 恢复用户保存的模型
+                            const m = allImageModels.value.find(m => m.name === savedImageModel);
+                            selectedModel.value = m.name;
+                            selectedModelKey.value = m.key || '';
+                            console.log('[初始化] 恢复用户偏好图片模型:', m.name);
+                        } else {
+                            // 默认选中第一个
+                            const m = allImageModels.value[0];
+                            selectedModel.value = m.name;
+                            selectedModelKey.value = m.key || '';
+                        }
+                        // 同步默认图片模型到后端
+                        syncImageModelToBackend(allImageModels.value.find(m => m.name === selectedModel.value));
+                    }
+
+                    // 恢复用户保存的比例偏好
+                    const savedRatio = localStorage.getItem('marketing_selected_ratio');
+                    if (savedRatio) {
+                        selectedRatio.value = savedRatio;
+                        console.log('[初始化] 恢复用户偏好比例:', savedRatio);
                     }
 
                     // 刷新比例和分辨率
@@ -2042,7 +2623,16 @@
                             supportsVl: m.supports_vl || false,
                             supportsThinking: m.supports_thinking || false
                         }));
-                        // 默认选中 doubao-seed-2-0-lite，如果没有则选第一个
+                        // 恢复用户保存的 LLM 模型偏好
+                        const savedLLMModelId = localStorage.getItem('marketing_selected_llm_model_id');
+                        if (savedLLMModelId && !selectedLLMModel.value && allLLMModels.value.length > 0) {
+                            const savedModel = allLLMModels.value.find(m => m.id === parseInt(savedLLMModelId));
+                            if (savedModel) {
+                                selectedLLMModel.value = savedModel;
+                                console.log('[初始化] 恢复用户偏好 LLM 模型:', savedModel.name);
+                            }
+                        }
+                        // 如果没有恢复成功，默认选中 doubao-seed-2-0-lite，如果没有则选第一个
                         if (!selectedLLMModel.value && allLLMModels.value.length > 0) {
                             const defaultModel = allLLMModels.value.find(m => m.name === 'doubao-seed-2-0-lite');
                             selectedLLMModel.value = defaultModel || allLLMModels.value[0];
@@ -2092,7 +2682,7 @@
 
                 // 获取比例选项
                 const ratios = window.TaskConfig.getRatioOptions(modelKey);
-                availableRatios.value = ratios.length > 0 ? ratios : ['1:1'];
+                availableRatios.value = ratios.length > 0 ? ratios : ['auto', '1:1', '16:9', '9:16', '4:3', '3:4'];
                 if (!availableRatios.value.includes(selectedRatio.value)) {
                     selectedRatio.value = availableRatios.value[0];
                 }
@@ -2132,6 +2722,13 @@
                 // 简单校验：只接受图片
                 if (!file.type.startsWith('image/')) {
                     showError('请上传图片文件');
+                    if (fileInputRef.value) fileInputRef.value.value = '';
+                    return;
+                }
+                // 前端预检查文件大小
+                if (file.size > maxImageSizeMB.value * 1024 * 1024) {
+                    showError(`图片大小不能超过 ${maxImageSizeMB.value}MB`);
+                    if (fileInputRef.value) fileInputRef.value.value = '';
                     return;
                 }
                 const isVideoModeVal = selectedType.value === '视频生成' ||
@@ -2176,6 +2773,29 @@
                     addMediaItem(file, 'image', refUrl);
                     return;
                 }
+                // Agent 对话模式：支持多图上传（最多 9 张），上传到服务器获取 HTTP URL
+                const isAgentChatMode = selectedType.value === 'Agent 模式' && mediaType.value !== 'video';
+                if (isAgentChatMode) {
+                    if (agentImageFiles.value.length >= AGENT_IMAGE_MAX_COUNT) {
+                        showError(`最多上传 ${AGENT_IMAGE_MAX_COUNT} 张图片`);
+                        if (fileInputRef.value) fileInputRef.value.value = '';
+                        return;
+                    }
+                    const previewUrl = URL.createObjectURL(file);
+                    const imgItem = { file, previewUrl, serverUrl: null, uploading: true };
+                    agentImageFiles.value.push(imgItem);
+                    // 同步到 mediaItems
+                    addMediaItem(file, 'image', previewUrl);
+                    // 同步设置主图状态（兼容其他模式检查）
+                    uploadedImageFile.value = file;
+                    uploadedImageUrl.value = previewUrl;
+                    hasUploadedImage.value = true;
+                    refreshModelSettings();
+                    // 异步上传到服务器获取 HTTP URL
+                    uploadAgentImage(file, imgItem);
+                    if (fileInputRef.value) fileInputRef.value.value = '';
+                    return;
+                }
                 // 保存原始 File 对象并生成本地预览 URL
                 uploadedImageFile.value = file;
                 const previewUrl = URL.createObjectURL(file);
@@ -2196,6 +2816,61 @@
                 });
             }
 
+            // Agent 模式：上传图片到服务器获取 HTTP URL
+            async function uploadAgentImage(file, imgItem) {
+                try {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('session_id', currentSessionId.value || 'temp');
+                    if (authToken.value) formData.append('auth_token', authToken.value);
+                    const resp = await fetch('/api/upload-agent-image', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await resp.json();
+                    if (data.success && data.url) {
+                        imgItem.serverUrl = data.url;
+                        imgItem.uploading = false;
+                        console.log('[Agent] 图片上传成功:', data.url);
+                    } else {
+                        imgItem.uploading = false;
+                        console.error('[Agent] 图片上传失败:', data.error);
+                        showError('图片上传失败: ' + (data.error || '未知错误'));
+                    }
+                } catch (err) {
+                    imgItem.uploading = false;
+                    console.error('[Agent] 图片上传异常:', err);
+                    showError('图片上传异常');
+                }
+            }
+
+            // Agent 模式：删除单张图片
+            function removeAgentImage(index) {
+                const removed = agentImageFiles.value[index];
+                if (!removed) return;
+                // 释放 Blob URL
+                if (removed.previewUrl && removed.previewUrl.startsWith('blob:')) {
+                    URL.revokeObjectURL(removed.previewUrl);
+                }
+                // 从 mediaItems 中移除
+                if (removed.previewUrl) {
+                    const item = mediaItems.value.find(m => m.fileUrl === removed.previewUrl);
+                    if (item) removeMediaItem(item.id);
+                }
+                agentImageFiles.value.splice(index, 1);
+                // 如果还有图片，更新主图状态为最后一张
+                if (agentImageFiles.value.length > 0) {
+                    const last = agentImageFiles.value[agentImageFiles.value.length - 1];
+                    uploadedImageUrl.value = last.previewUrl;
+                    uploadedImageFile.value = last.file;
+                    hasUploadedImage.value = true;
+                } else {
+                    hasUploadedImage.value = false;
+                    uploadedImageUrl.value = '';
+                    uploadedImageFile.value = null;
+                }
+            }
+
             function clearUploadedImage() {
                 // 从 mediaItems 中移除与当前主图 URL 匹配的记录
                 if (uploadedImageUrl.value) {
@@ -2208,6 +2883,15 @@
                     if (refItem) removeMediaItem(refItem.id);
                 });
                 referenceImageFiles.value = [];
+                // 清理 Agent 模式多图
+                agentImageFiles.value.forEach(img => {
+                    if (img.previewUrl) {
+                        if (img.previewUrl.startsWith('blob:')) URL.revokeObjectURL(img.previewUrl);
+                        const item = mediaItems.value.find(m => m.fileUrl === img.previewUrl);
+                        if (item) removeMediaItem(item.id);
+                    }
+                });
+                agentImageFiles.value = [];
                 hasUploadedImage.value = false;
                 uploadedImageUrl.value = '';
                 uploadedImageFile.value = null;
@@ -2267,9 +2951,19 @@
             }
 
             // 统一媒体管理
+            function renameMediaItems() {
+                // 按类型重新编号所有 mediaItems，确保序号连续
+                const typeCounters = {};
+                mediaItems.value.forEach(m => {
+                    const typeLabel = m.type === 'image' ? '图片' : m.type === 'video' ? '视频' : '音频';
+                    typeCounters[m.type] = (typeCounters[m.type] || 0) + 1;
+                    m.displayName = `${typeLabel}${typeCounters[m.type]}`;
+                });
+                mediaItems.value = [...mediaItems.value];
+            }
+
             function addMediaItem(file, type, previewUrl) {
                 const typeLabel = type === 'image' ? '图片' : type === 'video' ? '视频' : '音频';
-                // 根据当前 mediaItems 中同类型的数量动态计数，避免计数器不同步
                 const existingCount = mediaItems.value.filter(m => m.type === type).length;
                 const displayName = `${typeLabel}${existingCount + 1}`;
                 const id = `${type[0]}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
@@ -2286,8 +2980,33 @@
             }
 
             function removeMediaItem(id) {
+                const removed = mediaItems.value.find(m => m.id === id);
+                if (!removed) return;
+                // 同步清理 agentImageFiles 中匹配的项
+                if (removed.type === 'image' && removed.fileUrl) {
+                    const idx = agentImageFiles.value.findIndex(img => img.previewUrl === removed.fileUrl);
+                    if (idx >= 0) {
+                        const agentImg = agentImageFiles.value[idx];
+                        if (agentImg.previewUrl && agentImg.previewUrl.startsWith('blob:')) {
+                            URL.revokeObjectURL(agentImg.previewUrl);
+                        }
+                        agentImageFiles.value.splice(idx, 1);
+                        // 更新主图状态
+                        if (agentImageFiles.value.length > 0) {
+                            const last = agentImageFiles.value[agentImageFiles.value.length - 1];
+                            uploadedImageUrl.value = last.previewUrl;
+                            uploadedImageFile.value = last.file;
+                            hasUploadedImage.value = true;
+                        } else {
+                            hasUploadedImage.value = false;
+                            uploadedImageUrl.value = '';
+                            uploadedImageFile.value = null;
+                        }
+                    }
+                }
+                // 从 mediaItems 删除并重新编号
                 mediaItems.value = mediaItems.value.filter(m => m.id !== id);
-                mediaItems.value = [...mediaItems.value];
+                renameMediaItems();
             }
 
             // @ 引用相关方法
@@ -2457,6 +3176,24 @@
                     addMediaItem(file, 'image', refUrl);
                     return;
                 }
+                // Agent 对话模式：支持多图上传
+                const isAgentChat = selectedType.value === 'Agent 模式' && mediaType.value !== 'video';
+                if (isAgentChat) {
+                    if (agentImageFiles.value.length >= AGENT_IMAGE_MAX_COUNT) {
+                        showError(`最多上传 ${AGENT_IMAGE_MAX_COUNT} 张图片`);
+                        return;
+                    }
+                    const previewUrl = URL.createObjectURL(file);
+                    const imgItem = { file, previewUrl, serverUrl: null, uploading: true };
+                    agentImageFiles.value.push(imgItem);
+                    addMediaItem(file, 'image', previewUrl);
+                    uploadedImageFile.value = file;
+                    uploadedImageUrl.value = previewUrl;
+                    hasUploadedImage.value = true;
+                    refreshModelSettings();
+                    uploadAgentImage(file, imgItem);
+                    return;
+                }
                 const previewUrl = URL.createObjectURL(file);
                 uploadedImageFile.value = file;
                 uploadedImageUrl.value = previewUrl;
@@ -2474,8 +3211,18 @@
                 });
             }
             function selectType(type) {
+                const prevType = selectedType.value;
                 selectedType.value = type.name;
                 showDropdown.value = false;
+                // 从 Agent 对话模式切换到其他模式时，清理 agentImageFiles
+                if (prevType === 'Agent 模式' && type.name !== 'Agent 模式') {
+                    agentImageFiles.value.forEach(img => {
+                        if (img.previewUrl && img.previewUrl.startsWith('blob:')) {
+                            URL.revokeObjectURL(img.previewUrl);
+                        }
+                    });
+                    agentImageFiles.value = [];
+                }
                 // 根据类型自动切换媒体类型并设置默认模型
                 if (type.name === '图片生成') {
                     mediaType.value = 'image';
@@ -2503,6 +3250,42 @@
                 showModelPanel.value = false;
                 showModelSelect.value = false;
                 refreshModelSettings();
+                // 同步图片模型到后端
+                syncImageModelToBackend(model);
+                // 保存用户偏好到 localStorage
+                localStorage.setItem('marketing_selected_image_model', model.name);
+                localStorage.setItem('marketing_selected_image_model_key', model.key || '');
+            }
+
+            // 同步图片模型配置到后端
+            async function syncImageModelToBackend(model) {
+                try {
+                    const taskId = window.TaskConfig?.getTaskIdByKey
+                        ? window.TaskConfig.getTaskIdByKey(model.key, 'text_to_image') || window.TaskConfig.getTaskIdByKey(model.key, 'image_edit')
+                        : null;
+                    if (!taskId || !userId.value || !worldId.value) return;
+                    // 解析分辨率为后端格式
+                    const sizeMap = { '高清 2K': '2K', '超清 4K': '4K' };
+                    await fetch('/api/text-to-image-model', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': authToken.value,
+                            'X-User-Id': userId.value
+                        },
+                        body: JSON.stringify({
+                            user_id: userId.value,
+                            world_id: worldId.value,
+                            session_id: currentSessionId.value,
+                            task_id: taskId,
+                            ratio: selectedRatio.value,
+                            resolution: sizeMap[selectedResolution.value] || selectedResolution.value
+                        })
+                    });
+                    console.log('[图片偏好] 已同步到后端:', model.name, 'task_id:', taskId, 'ratio:', selectedRatio.value);
+                } catch (e) {
+                    console.warn('[图片模型] 同步失败:', e);
+                }
             }
 
             // 选择 LLM 模型
@@ -2510,6 +3293,8 @@
                 selectedLLMModel.value = model;
                 showLLMModelSelect.value = false;
                 console.log('[LLM] 选择模型:', model.name, 'supports_vl:', model.supportsVl);
+                // 保存用户偏好到 localStorage
+                localStorage.setItem('marketing_selected_llm_model_id', String(model.id));
             }
 
             // 互斥切换下拉
@@ -2562,7 +3347,16 @@
             }
 
             // 监听 mediaType 变化，重置选中模型
-            Vue.watch(mediaType, (newType) => {
+            Vue.watch(mediaType, (newType, oldType) => {
+                // Agent 模式下从 image 切换到 video 时，清理 agentImageFiles
+                if (selectedType.value === 'Agent 模式' && oldType === 'image' && newType === 'video') {
+                    agentImageFiles.value.forEach(img => {
+                        if (img.previewUrl && img.previewUrl.startsWith('blob:')) {
+                            URL.revokeObjectURL(img.previewUrl);
+                        }
+                    });
+                    agentImageFiles.value = [];
+                }
                 const list = newType === 'image' ? allImageModels.value : allTextToVideoModels.value;
                 if (list.length > 0) {
                     selectedModel.value = list[0]?.name || '';
@@ -2610,6 +3404,22 @@
                 }
             });
 
+            // 监听比例和分辨率变化，同步到后端
+            Vue.watch(selectedRatio, (newVal) => {
+                // 保存用户偏好到 localStorage
+                localStorage.setItem('marketing_selected_ratio', newVal);
+                if (selectedModelKey.value && userId.value && worldId.value) {
+                    const model = currentModels.value.find(m => m.key === selectedModelKey.value);
+                    if (model) syncImageModelToBackend(model);
+                }
+            });
+            Vue.watch(selectedResolution, () => {
+                if (selectedModelKey.value && userId.value && worldId.value) {
+                    const model = currentModels.value.find(m => m.key === selectedModelKey.value);
+                    if (model) syncImageModelToBackend(model);
+                }
+            });
+
             return {
                 messages,
                 inputText,
@@ -2628,16 +3438,27 @@
                 currentDate,
                 userInitial,
                 userPhone,
+                maskedPhone,
                 filteredSessions,
                 formatTime,
                 formatShortDate,
                 renderMarkdown,
+                showImageModal,
                 autoResize,
                 handleSend,
                 sendContinue,
                 newChat,
                 loadDefaultChat,
                 selectSession,
+                deleteSession,
+                hoveredSessionId,
+                activeMenuId,
+                renamingSessionId,
+                renamingTitle,
+                toggleMenu,
+                startRename,
+                confirmRename,
+                cancelRename,
                 goToHome,
                 showDropdown,
                 selectedType,
@@ -2662,12 +3483,31 @@
                 showModelSelect,
                 isVideoMode,
                 computingPower,
+                computingPowerBalance,
+                powerLevelClass,
+                showPowerLogsModal,
+                openComputingPowerLogs,
+                closeComputingPowerLogs,
+                showRechargeModal,
+                rechargeState,
+                rechargePackages,
+                rechargeError,
+                selectedPackage,
+                qrCodeUrl,
+                handleRechargeClick,
+                closeRechargeModal,
+                loadRechargePackages,
+                selectRechargePackage,
+                backToPackageList,
                 hasUploadedImage,
                 uploadedImageUrl,
                 fileInputRef,
                 triggerUpload,
                 handleFileChange,
                 clearUploadedImage,
+                agentImageFiles,
+                removeAgentImage,
+                AGENT_IMAGE_MAX_COUNT,
                 isDragging,
                 handleDragOver,
                 handleDragLeave,

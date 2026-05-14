@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 from pathlib import Path
 
-from script_writer_core.agents import TaskManager, PMAgent, ToolExecutor
+from script_writer_core.agents import TaskManager, PMAgent, MarketingPMAgent, ToolExecutor
 from script_writer_core.file_manager import FileManager
 from script_writer_core.file_operation_handler import FileOperationHandler
 from script_writer_core.skill_loader import SkillLoader
@@ -94,25 +94,45 @@ class ChatSession:
             except Exception as e:
                 logger.warning(f"[ChatSession] Failed to load context_window for model_id={model_id}: {e}")
 
-        self.pm_agent = PMAgent(
-            model=pm_model,
-            allowed_tools=pm_allowed_tools,
-            task_manager=task_manager,
-            file_manager=file_manager,
-            tool_executor=tool_executor,
-            agents_config=agents_config,
-            user_id=user_id,
-            world_id=world_id,
-            auth_token=auth_token,
-            max_consecutive_failures=pm_config.get("max_consecutive_failures", 3),
-            max_total_failures=pm_config.get("max_total_failures", 7),
-            context_window=context_window,
-            base_prompt=pm_base_prompt,
-            skill_loader=marketing_skill_loader,
-            sop_loader=sop_loader,
-            skill_names=pm_skill_names,
-            skip_env_context=skip_env_context
-        )
+        # 根据 session_type 创建不同的 PM Agent
+        if session_type == 2:  # 营销智能体
+            self.pm_agent = MarketingPMAgent(
+                model=pm_model,
+                allowed_tools=pm_allowed_tools,
+                task_manager=task_manager,
+                file_manager=file_manager,
+                tool_executor=tool_executor,
+                agents_config=agents_config,
+                user_id=user_id,
+                world_id=world_id,
+                auth_token=auth_token,
+                base_prompt=pm_base_prompt,
+                sop_loader=sop_loader,
+                skill_loader=marketing_skill_loader,
+                max_consecutive_failures=pm_config.get("max_consecutive_failures", 3),
+                max_total_failures=pm_config.get("max_total_failures", 7),
+                context_window=context_window,
+            )
+        else:  # 剧本智能体（默认）
+            self.pm_agent = PMAgent(
+                model=pm_model,
+                allowed_tools=pm_allowed_tools,
+                task_manager=task_manager,
+                file_manager=file_manager,
+                tool_executor=tool_executor,
+                agents_config=agents_config,
+                user_id=user_id,
+                world_id=world_id,
+                auth_token=auth_token,
+                max_consecutive_failures=pm_config.get("max_consecutive_failures", 3),
+                max_total_failures=pm_config.get("max_total_failures", 7),
+                context_window=context_window,
+                base_prompt=pm_base_prompt,
+                skill_loader=marketing_skill_loader,
+                sop_loader=sop_loader,
+                skill_names=pm_skill_names,
+                skip_env_context=skip_env_context
+            )
         logger.info(f"[ChatSession] PM Agent 初始化完成: {self.pm_agent.agent_id}")
         
         # 配置 LiteLLM

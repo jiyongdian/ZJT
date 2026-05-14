@@ -74,6 +74,16 @@ async def serve_marketing_agent():
 
 **图片 VL 流程**：用户上传图片后，前端在客户端压缩到 ~2MB 并转为 base64。发送消息时通过 `image_urls` 字段将 base64 传给后端，后端直接透传给 LLM，使大模型能够"看到"图片。
 
+**专家图片注入流程**：PM Agent 委托 `marketing-image` 专家生图后，系统自动检测返回结果中的图片 URL（优先从专家对话历史的 tool result 中提取），下载压缩为 base64 并注入 PM 的对话历史（多模态消息），使 PM 的 LLM 能"看到"生成的图片并向用户描述。实现位于 `pm_agent.py` 的 `_extract_image_url_from_result` 和 `_inject_image_to_history` 方法。
+
+**图片模型与偏好同步**：用户在前端选择图片模型/比例/分辨率后：
+- 模型通过 `POST /api/text-to-image-model` 同步到后端内存字典
+- 比例和分辨率通过同一个 API 同步，存入 `image_preferences_config`
+- 比例/分辨率非 `auto` 时，系统会在 `generate_text_to_image` / `edit_image` 中强制校验，LLM 传入的参数若与用户设置冲突会直接返回错误
+- 发送消息时通过 `image_preferences` 字段同时注入用户消息，供 PM LLM 参考
+
+**历史消息图片渲染**：刷新页面加载历史时，多模态消息（包含 `image_url` 的 JSON 数组）会被解析为文本+图片分别渲染，不会显示原始 base64 文本。
+
 页面初始化流程：
 1. 从 URL 参数获取 `user_id`，从 `localStorage` 获取 `auth_token`
 2. 调用 `GET /api/worlds` 获取用户的世界列表

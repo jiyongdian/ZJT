@@ -5,7 +5,7 @@ import logging
 from typing import Dict, Any, List, Optional, Union
 from model.database import execute_query, execute_insert, execute_update
 from sqlalchemy.sql import text
-from config.unified_config import ALL_IMPLEMENTATIONS
+from config.unified_config import ALL_IMPLEMENTATIONS, UnifiedConfigRegistry
 from config.config_util import get_config_value
 import json
 
@@ -246,12 +246,18 @@ class ImplementationPowerModel:
 
             # 如果没有记录，需要先插入
             if not result:
+                # 从配置中获取 site_number
+                site_number = None
+                impl_config = UnifiedConfigRegistry.get_implementation(implementation_name)
+                if impl_config:
+                    site_number = impl_config.site_number
+
                 insert_sql = """
                     INSERT INTO implementation_power_config
-                    (implementation_name, driver_key, power_config, updated_by)
-                    VALUES (%s, %s, %s, %s)
+                    (implementation_name, driver_key, site_number, power_config, updated_by)
+                    VALUES (%s, %s, %s, %s, %s)
                 """
-                execute_insert(insert_sql, (implementation_name, driver_key, power_config_json, updated_by))
+                execute_insert(insert_sql, (implementation_name, driver_key, site_number, power_config_json, updated_by))
                 logger.info(f"Inserted new implementation power config: {implementation_name}/{driver_key}, duration={duration}, power={computing_power}")
                 return 1
 
@@ -578,14 +584,21 @@ class ImplementationPowerModel:
 
             # 如果没有更新任何记录，说明记录不存在，需要插入
             if affected == 0:
+                # 从配置中获取 site_number
+                site_number = None
+                impl_config = UnifiedConfigRegistry.get_implementation(implementation_name)
+                if impl_config:
+                    site_number = impl_config.site_number
+
                 insert_sql = """
                     INSERT INTO implementation_power_config
-                    (implementation_name, driver_key, enabled, sort_order, display_name, updated_by, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                    (implementation_name, driver_key, site_number, enabled, sort_order, display_name, updated_by, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
                 """
                 insert_params = [
                     implementation_name,
                     driver_key,
+                    site_number,
                     enabled if enabled is not None else 1,
                     sort_order if sort_order is not None else 999999.0,
                     display_name,

@@ -13,6 +13,7 @@ from script_writer_core.skill_loader import SkillLoader
 from agents.skill_loader import SopLoader
 from model.model import ModelModel
 import json
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -179,11 +180,20 @@ class PMAgent(BaseAgent, AskUserMixin):
         try:
             # 添加用户消息到历史（支持多模态消息）
             if task.image_urls:
-                # 构建多模态 content（OpenAI 格式）
+                from utils.image_compressor import url_to_base64
+                # 构建带标签的多模态 content（OpenAI 格式）
                 content_parts = []
-                for url in task.image_urls:
-                    # url 已经是 base64 格式: data:image/png;base64,...
-                    content_parts.append({"type": "image_url", "image_url": {"url": url}})
+                for i, image_url in enumerate(task.image_urls):
+                    index = i + 1
+                    # HTTP URL → base64（供 LLM 视觉理解）
+                    base64_data = url_to_base64(image_url, max_size_mb=0.2, max_pixels=500_000)
+                    if base64_data:
+                        # 插入带标签的多模态内容，标签中包含 HTTP URL 供 edit_image 工具引用
+                        content_parts.append({"type": "text", "text": f"[图片{index}]（URL: {image_url}）"})
+                        content_parts.append({"type": "image_url", "image_url": {"url": base64_data}})
+                    else:
+                        # URL 无效时仅插入文本提示
+                        content_parts.append({"type": "text", "text": f"[图片{index}]（URL: {image_url}，注意：该图片加载失败）"})
                 content_parts.append({"type": "text", "text": task.user_message})
                 self.add_to_history("user", content_parts)
             else:
@@ -340,7 +350,7 @@ class PMAgent(BaseAgent, AskUserMixin):
     def _handle_tool_calls(self, message, task: AgentTask, session_data: Dict[str, Any]):
         """处理工具调用"""
         tool_calls = message.tool_calls
-        
+
         # 构建历史记录条目，包含 tool_calls
         history_entry = {
             "tool_calls": [
@@ -368,7 +378,10 @@ class PMAgent(BaseAgent, AskUserMixin):
             history_entry["reasoning_content"] = message.reasoning_content
 
         self.add_to_history("assistant", history_entry)
-        
+
+        # 收集需要注入的图片 URL（循环结束后统一注入，避免在并行 tool_calls 中间插入 user 消息）
+        pending_image_urls = []
+
         for tool_call in tool_calls:
             tool_name = tool_call.function.name
             try:
@@ -381,11 +394,16 @@ class PMAgent(BaseAgent, AskUserMixin):
             # ask_user 工具：在 tool 回答之前，将问题写入历史（保证顺序正确）
             if tool_name == "ask_user" and isinstance(result, dict) and "_verification_meta" in result:
                 meta = result.pop("_verification_meta")
+                agent_name = self._get_agent_display_name()
                 self.add_to_history("verification", {
-                    "title": "需要用户输入",
+                    "title": f"{agent_name} 向您提问",
                     "description": meta["question"],
                     "options": meta["options"]
                 })
+                # 将用户的回答作为 user 消息写入历史，刷新后可正确显示
+                user_input = result.get("user_input", "")
+                if user_input:
+                    self.add_to_history("user", user_input)
 
             tool_history_entry = {
                 "tool_call_id": tool_call.id,
@@ -395,9 +413,115 @@ class PMAgent(BaseAgent, AskUserMixin):
 
             self.add_to_history("tool", tool_history_entry)
 
+            # 收集 call_agent 返回的图片 URL
+            if tool_name == "call_agent" and isinstance(result, dict):
+                image_url = self._extract_image_url_from_result(result)
+                if image_url:
+                    pending_image_urls.append(image_url)
+
+        # 所有 tool calls 处理完毕后，统一注入图片
+        for image_url in pending_image_urls:
+            self._inject_image_to_history(image_url)
+
+    def _extract_image_url_from_result(self, result: Dict[str, Any]) -> Optional[str]:
+        """从专家返回结果中提取图片 URL"""
+        if not result.get("success"):
+            return None
+
+        # 1. 直接包含 image_url 字段
+        image_url = result.get("image_url")
+
+        # 2. 从 result 字符串中提取 URL
+        if not image_url and isinstance(result.get("result"), str):
+            # 匹配常见图片URL格式（含扩展名或动态路径如 /view?filename=）
+            url_match = re.search(
+                r'(https?://[^\s<>"\')\]]+(?:\.(?:jpg|jpeg|png|webp|gif)|[?&]filename=[^\s<>"\')\]]+))',
+                result["result"], re.IGNORECASE
+            )
+            if url_match:
+                image_url = url_match.group(1)
+
+        # 3. 尝试从嵌套数据中查找
+        if not image_url:
+            image_url = self._extract_image_url_recursive(result)
+
+        return image_url
+
+    def _inject_image_to_history(self, image_url: str):
+        """下载图片、压缩并注入到对话历史"""
+        logger.info(f"{self.agent_id}: [VL] 检测到专家返回图片，准备注入: {image_url[:100]}...")
+
+        try:
+            from utils.image_compressor import download_and_compress_to_base64
+            success, data_url, error = download_and_compress_to_base64(image_url, max_size_mb=2.0)
+
+            if success and data_url:
+                self.add_to_history("user", [
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": data_url}
+                    },
+                    {
+                        "type": "text",
+                        "text": "[系统自动注入] 专家智能体返回的图片结果，请查看并向用户描述图片内容。"
+                    }
+                ])
+                logger.info(f"{self.agent_id}: [VL] 图片已注入对话历史")
+            else:
+                logger.warning(f"{self.agent_id}: [VL] 图片压缩失败: {error}")
+        except Exception as e:
+            logger.error(f"{self.agent_id}: [VL] 注入图片异常: {e}", exc_info=True)
+
+    def _extract_image_url_recursive(self, data: Any, depth: int = 0) -> Optional[str]:
+        """递归搜索字典中第一个有效的图片 URL"""
+        if depth > 5:
+            return None
+        if isinstance(data, str):
+            if re.match(r'https?://.+\.(?:jpg|jpeg|png|webp|gif)', data, re.IGNORECASE):
+                return data
+            return None
+        if isinstance(data, dict):
+            for key in ("image_url", "result_url", "url"):
+                val = data.get(key)
+                if isinstance(val, str) and val.startswith("http"):
+                    return val
+            for val in data.values():
+                found = self._extract_image_url_recursive(val, depth + 1)
+                if found:
+                    return found
+        if isinstance(data, list):
+            for item in data:
+                found = self._extract_image_url_recursive(item, depth + 1)
+                if found:
+                    return found
+        return None
+
+    def _extract_image_from_expert_history(self, expert: ExpertAgent) -> Optional[str]:
+        """从专家对话历史中提取 check_image_status 返回的 image_url"""
+        try:
+            for msg in reversed(expert.conversation_history):
+                if msg.get("role") != "tool":
+                    continue
+                content = msg.get("content")
+                if not isinstance(content, dict):
+                    continue
+                # 解析 tool result 的 content 字段（JSON 字符串）
+                inner = content.get("content", "")
+                if isinstance(inner, str) and '"image_url"' in inner:
+                    try:
+                        parsed = json.loads(inner)
+                        url = parsed.get("image_url")
+                        if url and isinstance(url, str) and url.startswith("http"):
+                            return url
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+        except Exception as e:
+            logger.warning(f"{self.agent_id}: [VL] 从专家历史提取图片URL失败: {e}")
+        return None
+
     def _execute_tool(
-        self, 
-        tool_name: str, 
+        self,
+        tool_name: str,
         tool_args: Dict[str, Any],
         task: AgentTask,
         session_data: Dict[str, Any]
@@ -505,16 +629,24 @@ class PMAgent(BaseAgent, AskUserMixin):
         pm_ask_user_history = self._extract_ask_user_qa()
         merged_history = llm_history + pm_ask_user_history
 
+        # 自动提取当前任务中的图片 URL，注入到专家上下文
+        image_urls_for_expert = task.image_urls or []
+
         expert_task = {
             "session_id": task.task_id,
             "description": tool_args.get("task_description", "执行任务"),
             "pm_context": context,
-            "conversation_history": merged_history
+            "conversation_history": merged_history,
+            "image_urls": image_urls_for_expert
         }
 
         result = expert.execute_task(expert_task)
 
         if result.get("success"):
+            # 从专家对话历史中提取图片 URL（比正则匹配文本更可靠）
+            expert_image_url = self._extract_image_from_expert_history(expert)
+            if expert_image_url:
+                result["image_url"] = expert_image_url
             logger.info(f"{self.agent_id}: Expert {skill_name} succeeded")
             self.consecutive_failures = 0
             

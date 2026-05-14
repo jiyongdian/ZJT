@@ -163,12 +163,20 @@ class OpenAIBaseClient(BaseLLMClient):
             if tools:
                 llm_logger.info(f"  Tools count: {len(tools)}")
 
-            # 脱敏后打印完整请求 payload
+            # 脱敏后打印完整请求 payload（截断 base64 图片数据避免日志膨胀）
             safe_kwargs = json.loads(json.dumps(kwargs, ensure_ascii=False, default=str))
-            # if "messages" in safe_kwargs:
-            #     for msg in safe_kwargs["messages"]:
-            #         if "content" in msg and isinstance(msg["content"], str) and len(msg["content"]) > 200:
-            #             msg["content"] = msg["content"][:200] + "... [truncated]"
+            if "messages" in safe_kwargs:
+                for msg in safe_kwargs["messages"]:
+                    content = msg.get("content")
+                    if isinstance(content, list):
+                        for part in content:
+                            # 截断多模态消息中的 base64 图片
+                            if isinstance(part, dict):
+                                url = part.get("image_url", {}).get("url", "")
+                                if isinstance(url, str) and url.startswith("data:image/") and len(url) > 200:
+                                    part["image_url"]["url"] = url[:100] + f"... [base64 truncated, total {len(url)} chars]"
+                    elif isinstance(content, str) and len(content) > 2000:
+                        msg["content"] = content[:2000] + f"... [truncated, total {len(content)} chars]"
             payload_str = json.dumps(safe_kwargs, ensure_ascii=False, indent=2)
             llm_logger.info(f"{self.vendor_name.upper()} API request payload:\n{payload_str}")
 

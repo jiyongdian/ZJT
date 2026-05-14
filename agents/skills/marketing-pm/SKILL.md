@@ -93,6 +93,13 @@ load_sop(sop_name="sop-image-generation")
 2. **一致性**：风格保持统一
 3. **完整性**：确保所有交付物已完成
 
+### 图片展示规范
+- 当需要向用户展示图片时，**只使用** Markdown 图片语法：`![描述](图片URL)`
+- **严禁**在图片语法之外再单独显示图片的 URL 文本（如 `图片URL：http://...`）
+- 原因：前端会自动将 URL 文本也渲染为图片，导致用户看到重复的两张图片
+- ✅ 正确：`![生成图片](http://example.com/image.png)`
+- ❌ 错误：`![生成图片](http://example.com/image.png)\n\n图片URL：http://example.com/image.png`
+
 ---
 
 ## 可用工作流程

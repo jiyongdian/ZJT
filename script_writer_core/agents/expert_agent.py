@@ -115,9 +115,10 @@ class ExpertAgent(BaseAgent, AskUserMixin):
         session_id = task.get("session_id", "unknown")
         task_description = task.get("description", "")
         conversation_history = task.get("conversation_history", [])
-        
+        image_urls = task.get("image_urls", [])
+
         logger.info(f"{self.agent_id}: Starting task execution - {task_description}")
-        
+
         try:
             # 如果提供了对话历史，先添加到历史记录中
             if conversation_history:
@@ -126,8 +127,22 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                     content = msg.get("content")
                     if role and content:
                         self.add_to_history(role, content)
-            
-            self.add_to_history("user", task_description)
+
+            # 如果有图片 URL，以多模态形式添加到对话历史（让专家 LLM 能"看到"图片）
+            if image_urls:
+                from utils.image_compressor import url_to_base64
+                content_parts = []
+                for i, img_url in enumerate(image_urls, 1):
+                    base64_data = url_to_base64(img_url, max_size_mb=0.2, max_pixels=500_000)
+                    if base64_data:
+                        content_parts.append({"type": "text", "text": f"[图片{i}]（URL: {img_url}）"})
+                        content_parts.append({"type": "image_url", "image_url": {"url": base64_data}})
+                    else:
+                        content_parts.append({"type": "text", "text": f"[图片{i}]（URL: {img_url}，注意：该图片加载失败）"})
+                content_parts.append({"type": "text", "text": task_description})
+                self.add_to_history("user", content_parts)
+            else:
+                self.add_to_history("user", task_description)
 
             result = self._run_task_loop(task_description)
             
@@ -274,11 +289,16 @@ class ExpertAgent(BaseAgent, AskUserMixin):
             # 同时移除 _verification_meta，避免 LLM 看到后重复提问
             if tool_name == "ask_user" and isinstance(result, dict) and "_verification_meta" in result:
                 meta = result.pop("_verification_meta")
+                agent_name = self._get_agent_display_name()
                 self.add_to_history("verification", {
-                    "title": "需要用户输入",
+                    "title": f"{agent_name} 向您提问",
                     "description": meta["question"],
                     "options": meta["options"]
                 })
+                # 将用户的回答作为 user 消息写入历史，刷新后可正确显示
+                user_input = result.get("user_input", "")
+                if user_input:
+                    self.add_to_history("user", user_input)
 
             self.outputs.append(result)
 

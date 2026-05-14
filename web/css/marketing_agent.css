@@ -262,6 +262,78 @@ body {
   color: var(--text-muted);
   flex-shrink: 0;
 }
+.sidebar-history-item:hover .history-date,
+.sidebar-history-item .history-date.hide {
+  display: none;
+}
+
+/* 历史记录更多按钮 */
+.history-more-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  color: var(--text-muted);
+  padding: 0 4px;
+  border-radius: 4px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.history-more-btn:hover {
+  color: var(--text-primary);
+  background: var(--border-light);
+}
+
+/* 历史记录悬浮菜单 */
+.sidebar-history-item {
+  position: relative;
+}
+.history-menu {
+  position: absolute;
+  right: 8px;
+  top: 100%;
+  z-index: 100;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  min-width: 120px;
+  overflow: hidden;
+}
+.history-menu-item {
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  transition: background 0.15s;
+}
+.history-menu-item:hover {
+  background: var(--border-light);
+}
+.history-menu-item.danger {
+  color: #e74c3c;
+}
+.history-menu-item.danger:hover {
+  background: #fef2f2;
+}
+
+/* 重命名输入框 */
+.history-rename-input {
+  flex: 1;
+  border: 1px solid var(--accent-color);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 13px;
+  outline: none;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-width: 0;
+}
 
 .sidebar-footer {
   padding: 12px 16px;
@@ -968,12 +1040,16 @@ body {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
 }
 
 .marketing-input-bar-right {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .marketing-bar-btn {
@@ -1090,4 +1166,201 @@ body {
 
 .generated-image-wrapper:hover .generated-image {
   transform: scale(1.02);
+}
+
+/* ========== 算力显示 ========== */
+.computing-power-display {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.computing-power-display:hover {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px var(--accent-light);
+}
+
+.computing-power-display .power-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.computing-power-display .power-value {
+  color: var(--text-primary);
+  font-weight: 600;
+  min-width: 30px;
+  text-align: right;
+}
+
+.computing-power-display.low-power {
+  border-color: #ef4444;
+  background: #fef2f2;
+}
+.computing-power-display.low-power .power-icon,
+.computing-power-display.low-power .power-value {
+  color: #ef4444;
+}
+
+.computing-power-display.medium-power {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+.computing-power-display.medium-power .power-icon,
+.computing-power-display.medium-power .power-value {
+  color: #f59e0b;
+}
+
+.computing-power-display.high-power {
+  border-color: #22c55e;
+  background: #f0fdf4;
+}
+.computing-power-display.high-power .power-icon,
+.computing-power-display.high-power .power-value {
+  color: #22c55e;
+}
+
+/* ========== 通用弹窗 ========== */
+.modal-overlay-container {
+  display: flex;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-overlay-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+.modal-dialog {
+  position: relative;
+  width: 90%;
+  max-width: 700px;
+  max-height: 85vh;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-hover);
+  display: flex;
+  flex-direction: column;
+  animation: modalSlideIn 0.3s ease-out;
+  overflow: hidden;
+}
+
+.modal-dialog.large {
+  max-width: 1200px;
+  height: 85vh;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.modal-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+}
+
+.modal-close-btn:hover {
+  background: var(--border-light);
+  color: var(--text-primary);
+}
+
+.modal-body {
+  padding: 20px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.modal-action-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.modal-action-btn.primary {
+  background: var(--accent-color);
+  color: white;
+  border-color: var(--accent-color);
+}
+
+.modal-action-btn.primary:hover {
+  background: var(--accent-hover);
+}
+
+.modal-action-btn.secondary {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.modal-action-btn.secondary:hover {
+  background: var(--border-light);
+}
+
+/* 充值套餐项 */
+.package-item {
+  padding: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.package-item:hover {
+  border-color: var(--accent-color);
+  background: var(--accent-light);
 }

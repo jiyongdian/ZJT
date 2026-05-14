@@ -302,7 +302,7 @@ CREATE TABLE IF NOT EXISTS `agent_tasks` (
   `model_id` int DEFAULT NULL COMMENT 'Model ID',
   `enable_thinking` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'false' COMMENT 'Thinking mode: true/false/auto',
   `thinking_effort` varchar(16) COLLATE utf8mb4_unicode_ci DEFAULT 'medium' COMMENT 'Thinking effort level (low/medium/high)',
-  `image_urls` longtext COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '图片URL列表（JSON数组，支持base64）',
+  `image_urls` longtext COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '图片URL列表（JSON数组，HTTP URL格式）',
   `status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending' COMMENT 'Task status: pending/running/waiting_human/completed/failed/cancelled',
   `progress` float NOT NULL DEFAULT '0' COMMENT 'Task progress 0-1',
   `current_step` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT 'Current step description',

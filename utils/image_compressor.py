@@ -285,3 +285,335 @@ def get_image_size_mb(image_path: str) -> Optional[float]:
         return os.path.getsize(image_path) / (1024 * 1024)
     except Exception:
         return None
+
+
+def download_and_compress_to_base64(
+    image_url: str,
+    max_size_mb: float = 2.0,
+    max_pixels: int = 0
+) -> Tuple[bool, Optional[str], Optional[str]]:
+    """
+    从 URL 下载图片，压缩并返回 base64 data URL。
+
+    供 PM Agent 在专家返回图片 URL 后，将图片注入到 LLM 对话历史。
+
+    Args:
+        image_url: 图片 URL
+        max_size_mb: 最大文件大小（MB），默认 2MB
+        max_pixels: 最大总像素数（width * height），0 表示不限制
+
+    Returns:
+        Tuple[bool, Optional[str], Optional[str]]:
+            - 是否成功
+            - base64 data URL（如 "data:image/jpeg;base64,..."）
+            - 错误信息（失败时）
+    """
+    import base64
+    import tempfile
+    import httpx
+
+    # 验证 URL 格式：仅允许 http/https 协议
+    from urllib.parse import urlparse
+    parsed_url = urlparse(image_url)
+    if parsed_url.scheme not in ('http', 'https'):
+        return False, None, f"不支持的 URL 协议: {parsed_url.scheme}"
+
+    temp_path = None
+    _temp_files = []  # 跟踪所有临时文件，确保最终清理
+    try:
+        # 下载图片（使用 httpx 同步客户端，避免阻塞事件循环）
+        logger.info(f"[VL] 下载图片: {image_url[:100]}...")
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        with httpx.Client(timeout=30, verify=False) as client:
+            resp = client.get(image_url, headers=headers)
+            resp.raise_for_status()
+            img_data = resp.content
+
+        if not img_data:
+            return False, None, "下载图片为空"
+
+        # 保存到临时文件
+        from utils.media_cache import get_temp_date_dir
+        from datetime import datetime
+        temp_dir = get_temp_date_dir(datetime.now())
+        # 从 URL 推断扩展名
+        url_path = image_url.split('?')[0]
+        ext = os.path.splitext(url_path)[1].lower() or '.jpg'
+        if ext not in ('.jpg', '.jpeg', '.png', '.webp', '.gif'):
+            ext = '.jpg'
+        temp_path = str(temp_dir / f"vl_gen_{uuid.uuid4().hex[:8]}{ext}")
+        _temp_files.append(temp_path)
+
+        with open(temp_path, 'wb') as f:
+            f.write(img_data)
+
+        logger.info(f"[VL] 图片已下载: {len(img_data) // 1024} KB")
+
+        # 像素限制 + 强制 PNG→JPEG 转换（LLM 按像素消耗 token，必须处理）
+        file_to_compress = temp_path
+        if max_pixels > 0:
+            try:
+                img = Image.open(temp_path)
+                total_pixels = img.width * img.height
+                needs_resize = total_pixels > max_pixels
+                needs_convert = (img.format or '').upper() == 'PNG' or img.mode in ('RGBA', 'LA', 'P')
+
+                if needs_resize or needs_convert:
+                    # 转 RGB（去掉透明通道，为 JPEG 做准备）
+                    if img.mode != 'RGB':
+                        background = Image.new('RGB', img.size, (255, 255, 255))
+                        if img.mode == 'P':
+                            img = img.convert('RGBA')
+                        if img.mode in ('RGBA', 'LA'):
+                            background.paste(img, mask=img.split()[-1])
+                        img = background
+                        needs_convert = True
+
+                    # 缩放
+                    if needs_resize:
+                        scale = math.sqrt(max_pixels / total_pixels)
+                        new_w = int(img.width * scale)
+                        new_h = int(img.height * scale)
+                        img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+                        logger.info(f"[VL] 像素缩放: {total_pixels:,} -> {new_w * new_h:,} px")
+
+                    # 强制保存为 JPEG
+                    jpeg_path = temp_path.rsplit('.', 1)[0] + '_llm.jpg'
+                    img.save(jpeg_path, 'JPEG', quality=85, optimize=True)
+                    img.close()
+                    _temp_files.append(jpeg_path)
+                    file_to_compress = jpeg_path
+                    jpeg_size_kb = os.path.getsize(jpeg_path) // 1024
+                    logger.info(f"[VL] 强制转 JPEG 完成: {jpeg_size_kb} KB")
+                else:
+                    img.close()
+            except Exception as e:
+                logger.warning(f"[VL] 像素/格式处理失败，回退到普通压缩: {e}")
+
+        # 文件大小压缩
+        success, compressed_path, error = compress_image_to_limit(file_to_compress, max_size_mb=max_size_mb)
+        if compressed_path and compressed_path != file_to_compress:
+            _temp_files.append(compressed_path)
+        if not success:
+            return False, None, error or '压缩失败'
+
+        # 读取并转 base64
+        with open(compressed_path, 'rb') as f:
+            data = f.read()
+
+        cext = os.path.splitext(compressed_path)[1].lower()
+        mime_map = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp'}
+        mime_type = mime_map.get(cext, 'image/jpeg')
+
+        b64 = base64.b64encode(data).decode('utf-8')
+        data_url = f"data:{mime_type};base64,{b64}"
+
+        size_kb = len(data) // 1024
+        logger.info(f"[VL] 图片压缩转 base64 完成: {size_kb} KB")
+
+        return True, data_url, None
+
+    except httpx.HTTPStatusError as e:
+        logger.error(f"[VL] 下载图片网络错误: {e}")
+        return False, None, f"下载图片失败: {e}"
+    except Exception as e:
+        logger.error(f"[VL] 下载压缩图片异常: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False, None, f"处理图片异常: {e}"
+    finally:
+        # 清理所有临时文件
+        for f in _temp_files:
+            try:
+                os.remove(f)
+            except Exception:
+                pass
+
+
+def url_to_base64(image_url: str, max_size_mb: float = 2.0, max_pixels: int = 0) -> Optional[str]:
+    """
+    URL 转 base64 data URL，供 LLM 视觉理解使用。
+
+    封装 download_and_compress_to_base64()，失败时返回 None。
+
+    Args:
+        image_url: 图片 HTTP URL
+        max_size_mb: 最大文件大小（MB），默认 2MB
+        max_pixels: 最大总像素数（width * height），0 表示不限制
+
+    Returns:
+        base64 data URL（如 "data:image/jpeg;base64,..."），失败返回 None
+    """
+    success, data_url, error = download_and_compress_to_base64(image_url, max_size_mb, max_pixels)
+    if success and data_url:
+        return data_url
+    logger.warning(f"url_to_base64 失败 ({image_url[:80]}): {error}")
+    return None
+
+
+async def async_download_and_compress_to_base64(
+    image_url: str,
+    max_size_mb: float = 2.0,
+    max_pixels: int = 0
+) -> Tuple[bool, Optional[str], Optional[str]]:
+    """
+    异步版本：从 URL 下载图片，压缩并返回 base64 data URL。
+
+    使用 httpx.AsyncClient 进行网络请求，PIL 图片处理通过 asyncio.to_thread 卸载到线程池。
+
+    Args:
+        image_url: 图片 URL
+        max_size_mb: 最大文件大小（MB），默认 2MB
+        max_pixels: 最大总像素数（width * height），0 表示不限制
+
+    Returns:
+        Tuple[bool, Optional[str], Optional[str]]:
+            - 是否成功
+            - base64 data URL
+            - 错误信息（失败时）
+    """
+    import base64
+    import asyncio
+    import httpx
+
+    # 验证 URL 格式：仅允许 http/https 协议
+    from urllib.parse import urlparse
+    parsed_url = urlparse(image_url)
+    if parsed_url.scheme not in ('http', 'https'):
+        return False, None, f"不支持的 URL 协议: {parsed_url.scheme}"
+
+    temp_path = None
+    _temp_files = []  # 跟踪所有临时文件，确保最终清理
+    try:
+        # 异步下载图片
+        logger.info(f"[VL] 异步下载图片: {image_url[:100]}...")
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        async with httpx.AsyncClient(timeout=30, verify=False) as client:
+            resp = await client.get(image_url, headers=headers)
+            resp.raise_for_status()
+            img_data = resp.content
+
+        if not img_data:
+            return False, None, "下载图片为空"
+
+        # 保存到临时文件
+        from utils.media_cache import get_temp_date_dir
+        from datetime import datetime
+        temp_dir = get_temp_date_dir(datetime.now())
+        url_path = image_url.split('?')[0]
+        ext = os.path.splitext(url_path)[1].lower() or '.jpg'
+        if ext not in ('.jpg', '.jpeg', '.png', '.webp', '.gif'):
+            ext = '.jpg'
+        temp_path = str(temp_dir / f"vl_gen_{uuid.uuid4().hex[:8]}{ext}")
+        _temp_files.append(temp_path)
+
+        with open(temp_path, 'wb') as f:
+            f.write(img_data)
+
+        logger.info(f"[VL] 图片已下载: {len(img_data) // 1024} KB")
+
+        # PIL 图片处理卸载到线程池，避免阻塞事件循环
+        file_to_compress = temp_path
+        if max_pixels > 0:
+            def _process_pixels():
+                img = Image.open(temp_path)
+                total_pixels = img.width * img.height
+                needs_resize = total_pixels > max_pixels
+                needs_convert = (img.format or '').upper() == 'PNG' or img.mode in ('RGBA', 'LA', 'P')
+
+                if needs_resize or needs_convert:
+                    if img.mode != 'RGB':
+                        background = Image.new('RGB', img.size, (255, 255, 255))
+                        if img.mode == 'P':
+                            img = img.convert('RGBA')
+                        if img.mode in ('RGBA', 'LA'):
+                            background.paste(img, mask=img.split()[-1])
+                        img = background
+                        needs_convert = True
+
+                    if needs_resize:
+                        scale = math.sqrt(max_pixels / total_pixels)
+                        new_w = int(img.width * scale)
+                        new_h = int(img.height * scale)
+                        img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+                        logger.info(f"[VL] 像素缩放: {total_pixels:,} -> {new_w * new_h:,} px")
+
+                    jpeg_path = temp_path.rsplit('.', 1)[0] + '_llm.jpg'
+                    img.save(jpeg_path, 'JPEG', quality=85, optimize=True)
+                    img.close()
+                    return jpeg_path, True
+                else:
+                    img.close()
+                    return temp_path, False
+
+            try:
+                result_path, converted = await asyncio.to_thread(_process_pixels)
+                file_to_compress = result_path
+                if converted:
+                    _temp_files.append(result_path)
+                    jpeg_size_kb = os.path.getsize(result_path) // 1024
+                    logger.info(f"[VL] 强制转 JPEG 完成: {jpeg_size_kb} KB")
+            except Exception as e:
+                logger.warning(f"[VL] 像素/格式处理失败，回退到普通压缩: {e}")
+
+        # 文件大小压缩（CPU 密集，卸载到线程池）
+        success, compressed_path, error = await asyncio.to_thread(
+            compress_image_to_limit, file_to_compress, max_size_mb
+        )
+        if compressed_path and compressed_path not in _temp_files:
+            _temp_files.append(compressed_path)
+        if not success:
+            return False, None, error or '压缩失败'
+
+        # 读取并转 base64
+        with open(compressed_path, 'rb') as f:
+            data = f.read()
+
+        cext = os.path.splitext(compressed_path)[1].lower()
+        mime_map = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp'}
+        mime_type = mime_map.get(cext, 'image/jpeg')
+
+        b64 = base64.b64encode(data).decode('utf-8')
+        data_url = f"data:{mime_type};base64,{b64}"
+
+        size_kb = len(data) // 1024
+        logger.info(f"[VL] 图片压缩转 base64 完成: {size_kb} KB")
+
+        return True, data_url, None
+
+    except httpx.HTTPStatusError as e:
+        logger.error(f"[VL] 下载图片网络错误: {e}")
+        return False, None, f"下载图片失败: {e}"
+    except Exception as e:
+        logger.error(f"[VL] 下载压缩图片异常: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False, None, f"处理图片异常: {e}"
+    finally:
+        # 清理所有临时文件
+        for f in _temp_files:
+            try:
+                os.remove(f)
+            except Exception:
+                pass
+
+
+async def async_url_to_base64(image_url: str, max_size_mb: float = 2.0, max_pixels: int = 0) -> Optional[str]:
+    """
+    异步版本：URL 转 base64 data URL，供 LLM 视觉理解使用。
+
+    使用 asyncio.to_thread 包装 PIL 处理和 httpx.AsyncClient 进行网络请求。
+
+    Args:
+        image_url: 图片 HTTP URL
+        max_size_mb: 最大文件大小（MB），默认 2MB
+        max_pixels: 最大总像素数（width * height），0 表示不限制
+
+    Returns:
+        base64 data URL（如 "data:image/jpeg;base64,..."），失败返回 None
+    """
+    success, data_url, error = await async_download_and_compress_to_base64(image_url, max_size_mb, max_pixels)
+    if success and data_url:
+        return data_url
+    logger.warning(f"async_url_to_base64 失败 ({image_url[:80]}): {error}")
+    return None
