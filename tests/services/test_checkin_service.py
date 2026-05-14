@@ -28,7 +28,8 @@ class TestCheckinService(DatabaseTestCase):
             phone='13800138000',
             password_hash='test_password',
             role='user',
-            terms_agreed=1
+            terms_agreed=1,
+            invite_code=''
         )
 
     def _mock_config(self, enabled=True, base_reward=10, streak_bonus_enabled=True, streak_config=None):
