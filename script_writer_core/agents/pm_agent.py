@@ -338,7 +338,7 @@ class PMAgent(BaseAgent, AskUserMixin):
                 logger.error(f"{self.agent_id}: Error in PM loop - {e}", exc_info=True)
                 self.total_failures += 1
                 self.consecutive_failures += 1
-                
+
                 self.task_manager.push_message(task.task_id, 'error', {
                     'error': str(e)
                 })
@@ -378,6 +378,8 @@ class PMAgent(BaseAgent, AskUserMixin):
 
         self.add_to_history("assistant", history_entry)
 
+        deferred_user_inputs = []
+
         for tool_call in tool_calls:
             tool_name = tool_call.function.name
             try:
@@ -396,10 +398,9 @@ class PMAgent(BaseAgent, AskUserMixin):
                     "description": meta["question"],
                     "options": meta["options"]
                 })
-                # 将用户的回答作为 user 消息写入历史，刷新后可正确显示
                 user_input = result.get("user_input", "")
                 if user_input:
-                    self.add_to_history("user", user_input)
+                    deferred_user_inputs.append(user_input)
 
             tool_history_entry = {
                 "tool_call_id": tool_call.id,
@@ -408,6 +409,11 @@ class PMAgent(BaseAgent, AskUserMixin):
             }
 
             self.add_to_history("tool", tool_history_entry)
+
+        # 将用户的回答作为 user 消息写入历史，放在所有 tool 消息之后
+        # 避免在 assistant(tool_calls) 和 tool 之间插入 user 消息导致 API 报错
+        for user_input in deferred_user_inputs:
+            self.add_to_history("user", user_input)
 
     def _execute_tool(
         self,
@@ -918,7 +924,7 @@ class PMAgent(BaseAgent, AskUserMixin):
                 })
 
         return messages
-    
+
     def _get_tool_definitions(self) -> List[Dict[str, Any]]:
         """获取工具定义"""
         # 1. 核心 PM 工具定义

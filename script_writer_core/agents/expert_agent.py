@@ -275,17 +275,19 @@ class ExpertAgent(BaseAgent, AskUserMixin):
             history_entry["reasoning_content"] = message.reasoning_content
         
         self.add_to_history("assistant", history_entry)
-        
+
+        deferred_user_inputs = []
+
         for tool_call in tool_calls:
             tool_name = tool_call.function.name
             tool_args = json.loads(tool_call.function.arguments) if isinstance(tool_call.function.arguments, str) else tool_call.function.arguments
-            
+
             self.tool_calls_made.append({
                 "tool": tool_name,
                 "args": tool_args,
                 "timestamp": datetime.now().isoformat()
             })
-            
+
             result = self._execute_tool(tool_name, tool_args)
 
             # 收集图片生成任务的 project_ids
@@ -303,10 +305,9 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                     "description": meta["question"],
                     "options": meta["options"]
                 })
-                # 将用户的回答作为 user 消息写入历史，刷新后可正确显示
                 user_input = result.get("user_input", "")
                 if user_input:
-                    self.add_to_history("user", user_input)
+                    deferred_user_inputs.append(user_input)
 
             self.outputs.append(result)
 
@@ -316,6 +317,11 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                 "name": tool_name,
                 "content": json.dumps(result, ensure_ascii=False)
             })
+
+        # 将用户的回答作为 user 消息写入历史，放在所有 tool 消息之后
+        # 避免在 assistant(tool_calls) 和 tool 之间插入 user 消息导致 API 报错
+        for user_input in deferred_user_inputs:
+            self.add_to_history("user", user_input)
     
     def _execute_tool(self, tool_name: str, tool_args: Dict[str, Any]) -> Dict[str, Any]:
         """执行工具调用"""
@@ -414,7 +420,7 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                 })
 
         return messages
-    
+
     def _get_tool_definitions(self) -> List[Dict[str, Any]]:
         """获取工具定义"""
         tool_defs = self.tool_executor.get_tool_definitions(self.allowed_tools)
