@@ -3796,25 +3796,28 @@
 
         async function exportWorld() {
             try {
-                updateStatus('正在打包导出世界数据...');
+                updateStatus('正在打包并上传世界数据...');
                 const response = await fetch(`/api/export-world?user_id=${USER_ID}&world_id=${WORLD_ID}&auth_token=${AUTH_TOKEN}`);
+                const result = await response.json().catch(() => ({}));
                 if (!response.ok) {
-                    const errData = await response.json().catch(() => ({}));
-                    showError('导出失败: ' + (errData.error || response.statusText));
+                    showError('导出失败: ' + (result.error || response.statusText));
                     updateStatus('导出失败');
                     return;
                 }
-                const blob = await response.blob();
-                const url = URL.createObjectURL(blob);
+                if (!result.success || !result.download_url) {
+                    showError('导出失败: ' + (result.error || '未获取到下载链接'));
+                    updateStatus('导出失败');
+                    return;
+                }
                 const a = document.createElement('a');
-                a.href = url;
-                a.download = `world_${WORLD_ID}_export.zip`;
+                a.href = result.download_url;
+                a.download = result.filename || `world_${WORLD_ID}_export.zip`;
+                a.target = '_blank';
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                showSuccess('✓ 世界数据导出成功');
-                updateStatus('导出完成');
+                showSuccess('✓ 世界数据导出成功，已生成下载链接');
+                updateStatus('导出完成，可通过图床链接下载');
             } catch (error) {
                 showError('导出失败: ' + error.message);
                 updateStatus('导出失败');
