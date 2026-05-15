@@ -464,6 +464,10 @@ class SystemConfigConstants:
 CONFIG_KEY_MAX_LENGTH = SystemConfigConstants.CONFIG_KEY_MAX_LENGTH
 
 
+# 营销智能体固定 world_id（营销场景不需要多世界概念）
+MARKETING_WORLD_ID = "1"
+
+
 # 会话历史配置相关常量
 class SessionHistoryConstants:
     """会话历史配置相关常量"""

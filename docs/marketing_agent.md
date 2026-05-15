@@ -77,8 +77,8 @@ async def serve_marketing_agent():
 **专家图片注入流程**：PM Agent 委托 `marketing-image` 专家生图后，系统自动检测返回结果中的图片 URL（优先从专家对话历史的 tool result 中提取），下载压缩为 base64 并注入 PM 的对话历史（多模态消息），使 PM 的 LLM 能"看到"生成的图片并向用户描述。实现位于 `pm_agent.py` 的 `_extract_image_url_from_result` 和 `_inject_image_to_history` 方法。
 
 **图片模型与偏好同步**：用户在前端选择图片模型/比例/分辨率后：
-- 模型通过 `POST /api/text-to-image-model` 同步到后端内存字典
-- 比例和分辨率通过同一个 API 同步，存入 `image_preferences_config`
+- 模型通过 `POST /api/text-to-image-model` 同步到后端，持久化存储到 `user_preferences` 数据库表
+- 比例和分辨率通过同一个 API 同步，持久化存储到 `user_preferences` 数据库表（pref_type=image_preferences）
 - 比例/分辨率非 `auto` 时，系统会在 `generate_text_to_image` / `edit_image` 中强制校验，LLM 传入的参数若与用户设置冲突会直接返回错误
 - 发送消息时通过 `image_preferences` 字段同时注入用户消息，供 PM LLM 参考
 

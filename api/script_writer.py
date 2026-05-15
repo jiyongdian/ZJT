@@ -63,13 +63,16 @@ router = APIRouter(prefix="/api", tags=["script_writer"])
 from script_writer_core.session_storage import SessionStorage
 session_storage = SessionStorage(use_cache=True, cache_ttl=300)
 
-# 生图模型配置存储（按 user_id + world_id 存储 task_id）
-# key: f"{user_id}_{world_id}", value: task_id (int)
-text_to_image_model_config: Dict[str, int] = {}
-# 用户图片偏好存储（按 user_id + world_id 存储比例和分辨率）
-# key: f"{user_id}_{world_id}", value: {"ratio": "1:1", "resolution": "2K", ...}
-image_preferences_config: Dict[str, Dict[str, str]] = {}
-TEXT_TO_IMAGE_MODEL_LOCK = threading.RLock()
+# 用户偏好存储（数据库持久化 + 本地缓存）
+# 本地缓存仅用于减少数据库查询，数据源为数据库
+from model.user_preferences import UserPreferencesModel, PREF_TYPE_TEXT_TO_IMAGE_MODEL, PREF_TYPE_IMAGE_PREFERENCES, PREF_TYPE_VIDEO_PREFERENCES, PREF_TYPE_TEXT_TO_VIDEO_MODEL, PREF_TYPE_IMAGE_TO_VIDEO_MODEL
+# 本地缓存字典
+_text_to_image_model_cache: Dict[str, int] = {}
+_image_preferences_cache: Dict[str, Dict[str, str]] = {}
+_video_preferences_cache: Dict[str, Dict[str, str]] = {}
+_text_to_video_model_cache: Dict[str, int] = {}
+_image_to_video_model_cache: Dict[str, int] = {}
+PREFERENCES_LOCK = threading.RLock()
 
 # 默认生图模型 task_id (nano-banana-Pro)
 DEFAULT_TEXT_TO_IMAGE_TASK_ID = 7
@@ -84,35 +87,130 @@ def _get_text_to_image_models_from_config():
 
 
 def get_text_to_image_model_id(user_id: str, world_id: str) -> int:
-    """获取用户在指定世界的生图模型 task_id"""
+    """获取用户在指定世界的生图模型 task_id（优先读缓存，回源数据库）"""
     key = f"{user_id}_{world_id}"
-    with TEXT_TO_IMAGE_MODEL_LOCK:
-        result = text_to_image_model_config.get(key, DEFAULT_TEXT_TO_IMAGE_TASK_ID)
-        logger.info(f"[生图模型配置] 读取: key={key}, task_id={result}, 配置存在={key in text_to_image_model_config}")
-        return result
+    with PREFERENCES_LOCK:
+        if key in _text_to_image_model_cache:
+            result = _text_to_image_model_cache[key]
+            logger.info(f"[生图模型配置] 缓存命中: key={key}, task_id={result}")
+            return result
+        # 回源数据库
+        pref = UserPreferencesModel.get(user_id, world_id, PREF_TYPE_TEXT_TO_IMAGE_MODEL)
+        if pref and pref.config_value is not None:
+            result = pref.get_value()
+            if isinstance(result, int):
+                _text_to_image_model_cache[key] = result
+                logger.info(f"[生图模型配置] 数据库加载: key={key}, task_id={result}")
+                return result
+        logger.info(f"[生图模型配置] 使用默认值: key={key}, task_id={DEFAULT_TEXT_TO_IMAGE_TASK_ID}")
+        return DEFAULT_TEXT_TO_IMAGE_TASK_ID
 
 
 def set_text_to_image_model_id(user_id: str, world_id: str, task_id: int):
-    """设置用户在指定世界的生图模型 task_id"""
+    """设置用户在指定世界的生图模型 task_id（写入数据库 + 更新缓存）"""
     key = f"{user_id}_{world_id}"
-    with TEXT_TO_IMAGE_MODEL_LOCK:
-        text_to_image_model_config[key] = task_id
+    with PREFERENCES_LOCK:
+        UserPreferencesModel.upsert(user_id, world_id, PREF_TYPE_TEXT_TO_IMAGE_MODEL, task_id)
+        _text_to_image_model_cache[key] = task_id
         logger.info(f"[生图模型配置] 已保存: key={key}, task_id={task_id}")
 
 
 def get_image_preferences(user_id: str, world_id: str) -> Dict[str, str]:
     """获取用户在指定世界的图片偏好（比例、分辨率）"""
     key = f"{user_id}_{world_id}"
-    with TEXT_TO_IMAGE_MODEL_LOCK:
-        return image_preferences_config.get(key, {})
+    with PREFERENCES_LOCK:
+        if key in _image_preferences_cache:
+            return _image_preferences_cache[key]
+        pref = UserPreferencesModel.get(user_id, world_id, PREF_TYPE_IMAGE_PREFERENCES)
+        if pref and pref.config_value is not None:
+            result = pref.get_value()
+            if isinstance(result, dict):
+                _image_preferences_cache[key] = result
+                return result
+        return {}
 
 
 def set_image_preferences(user_id: str, world_id: str, prefs: Dict[str, str]):
     """设置用户在指定世界的图片偏好"""
     key = f"{user_id}_{world_id}"
-    with TEXT_TO_IMAGE_MODEL_LOCK:
-        image_preferences_config[key] = prefs
+    with PREFERENCES_LOCK:
+        UserPreferencesModel.upsert(user_id, world_id, PREF_TYPE_IMAGE_PREFERENCES, prefs)
+        _image_preferences_cache[key] = prefs
         logger.info(f"[图片偏好配置] 已保存: key={key}, prefs={prefs}")
+
+
+def get_video_preferences(user_id: str, world_id: str) -> Dict[str, str]:
+    """获取用户在指定世界的视频偏好（比例、时长）"""
+    key = f"{user_id}_{world_id}"
+    with PREFERENCES_LOCK:
+        if key in _video_preferences_cache:
+            return _video_preferences_cache[key]
+        pref = UserPreferencesModel.get(user_id, world_id, PREF_TYPE_VIDEO_PREFERENCES)
+        if pref and pref.config_value is not None:
+            result = pref.get_value()
+            if isinstance(result, dict):
+                _video_preferences_cache[key] = result
+                return result
+        return {}
+
+
+def set_video_preferences(user_id: str, world_id: str, prefs: Dict[str, str]):
+    """设置用户在指定世界的视频偏好"""
+    key = f"{user_id}_{world_id}"
+    with PREFERENCES_LOCK:
+        UserPreferencesModel.upsert(user_id, world_id, PREF_TYPE_VIDEO_PREFERENCES, prefs)
+        _video_preferences_cache[key] = prefs
+        logger.info(f"[视频偏好配置] 已保存: key={key}, prefs={prefs}")
+
+
+def get_text_to_video_model_id(user_id: str, world_id: str) -> Optional[int]:
+    """获取用户在指定世界的文生视频模型 task_id"""
+    key = f"{user_id}_{world_id}"
+    with PREFERENCES_LOCK:
+        if key in _text_to_video_model_cache:
+            return _text_to_video_model_cache[key]
+        pref = UserPreferencesModel.get(user_id, world_id, PREF_TYPE_TEXT_TO_VIDEO_MODEL)
+        if pref and pref.config_value is not None:
+            result = pref.get_value()
+            if isinstance(result, int):
+                _text_to_video_model_cache[key] = result
+                logger.info(f"[文生视频模型配置] 数据库加载: key={key}, task_id={result}")
+                return result
+        return None
+
+
+def set_text_to_video_model_id(user_id: str, world_id: str, task_id: int):
+    """设置用户在指定世界的文生视频模型 task_id"""
+    key = f"{user_id}_{world_id}"
+    with PREFERENCES_LOCK:
+        UserPreferencesModel.upsert(user_id, world_id, PREF_TYPE_TEXT_TO_VIDEO_MODEL, task_id)
+        _text_to_video_model_cache[key] = task_id
+        logger.info(f"[文生视频模型配置] 已保存: key={key}, task_id={task_id}")
+
+
+def get_image_to_video_model_id(user_id: str, world_id: str) -> Optional[int]:
+    """获取用户在指定世界的图生视频模型 task_id"""
+    key = f"{user_id}_{world_id}"
+    with PREFERENCES_LOCK:
+        if key in _image_to_video_model_cache:
+            return _image_to_video_model_cache[key]
+        pref = UserPreferencesModel.get(user_id, world_id, PREF_TYPE_IMAGE_TO_VIDEO_MODEL)
+        if pref and pref.config_value is not None:
+            result = pref.get_value()
+            if isinstance(result, int):
+                _image_to_video_model_cache[key] = result
+                logger.info(f"[图生视频模型配置] 数据库加载: key={key}, task_id={result}")
+                return result
+        return None
+
+
+def set_image_to_video_model_id(user_id: str, world_id: str, task_id: int):
+    """设置用户在指定世界的图生视频模型 task_id"""
+    key = f"{user_id}_{world_id}"
+    with PREFERENCES_LOCK:
+        UserPreferencesModel.upsert(user_id, world_id, PREF_TYPE_IMAGE_TO_VIDEO_MODEL, task_id)
+        _image_to_video_model_cache[key] = task_id
+        logger.info(f"[图生视频模型配置] 已保存: key={key}, task_id={task_id}")
 
 
 # 全局组件
@@ -129,9 +227,12 @@ from script_writer_core.mcp_tool import _sanitize_filename
 set_file_manager(file_manager)
 
 # 设置 mcp_tool 的生图模型获取函数
-from script_writer_core.mcp_tool import set_text_to_image_model_getter, set_image_preferences_getter
+from script_writer_core.mcp_tool import set_text_to_image_model_getter, set_image_preferences_getter, set_video_preferences_getter, set_text_to_video_model_getter, set_image_to_video_model_getter
 set_text_to_image_model_getter(get_text_to_image_model_id)
 set_image_preferences_getter(get_image_preferences)
+set_video_preferences_getter(get_video_preferences)
+set_text_to_video_model_getter(get_text_to_video_model_id)
+set_image_to_video_model_getter(get_image_to_video_model_id)
 
 # 加载智能体配置
 import json
@@ -697,6 +798,7 @@ class TaskCreateRequest(BaseModel):
     thinking_effort: str = "medium"
     image_urls: Optional[List[str]] = None
     image_preferences: Optional[Dict[str, Any]] = None
+    video_preferences: Optional[Dict[str, Any]] = None
 
 class ModelChangeRequest(BaseModel):
     model: str
@@ -1242,6 +1344,137 @@ async def get_current_text_to_image_model(
         })
     except Exception as e:
         logger.error(f'获取生图模型配置失败: {str(e)}')
+        return JSONResponse({
+            'success': False,
+            'error': str(e)
+        }, status_code=500)
+
+
+@router.get('/video-model')
+async def get_video_models(
+    category: str = QueryParam("text_to_video"),
+    user_id: Optional[str] = QueryParam(None),
+    world_id: Optional[str] = QueryParam(None)
+):
+    """获取可用的视频模型列表"""
+    try:
+        from config.unified_config import UnifiedConfigRegistry, TaskCategory
+
+        valid_categories = [TaskCategory.TEXT_TO_VIDEO, TaskCategory.IMAGE_TO_VIDEO]
+        if category not in valid_categories:
+            return JSONResponse({
+                'success': False,
+                'error': f'无效的 category: {category}，有效值为: {valid_categories}'
+            }, status_code=400)
+
+        configs = UnifiedConfigRegistry.get_by_category(category)
+        models = []
+        for c in configs:
+            if c.enabled and not c.hidden:
+                models.append({
+                    'task_id': c.id,
+                    'key': c.key,
+                    'name': c.name,
+                    'supported_durations': c.supported_durations or [],
+                    'default_duration': c.default_duration,
+                    'supported_ratios': c.supported_ratios or [],
+                    'computing_power': c.get_computing_power() if c.computing_power else 0
+                })
+
+        # 获取当前用户的偏好
+        current_task_id = None
+        if user_id and world_id:
+            if category == TaskCategory.TEXT_TO_VIDEO:
+                current_task_id = get_text_to_video_model_id(user_id, world_id)
+            else:
+                current_task_id = get_image_to_video_model_id(user_id, world_id)
+
+        return JSONResponse({
+            'success': True,
+            'category': category,
+            'models': models,
+            'current_task_id': current_task_id
+        })
+    except Exception as e:
+        logger.error(f'获取视频模型列表失败: {str(e)}')
+        return JSONResponse({
+            'success': False,
+            'error': str(e)
+        }, status_code=500)
+
+
+@router.post('/video-model')
+async def set_video_model(request: Request):
+    """设置视频模型偏好"""
+    try:
+        data = await request.json()
+        user_id = str(data.get('user_id', ''))
+        world_id = str(data.get('world_id', ''))
+        task_id = data.get('task_id')
+        category = data.get('category', TaskCategory.TEXT_TO_VIDEO)
+
+        if not user_id or not world_id:
+            return JSONResponse({
+                'success': False,
+                'error': 'user_id 和 world_id 不能为空'
+            }, status_code=400)
+
+        if task_id is None:
+            return JSONResponse({
+                'success': False,
+                'error': 'task_id 不能为空'
+            }, status_code=400)
+
+        try:
+            task_id = int(task_id)
+        except (TypeError, ValueError):
+            return JSONResponse({
+                'success': False,
+                'error': 'task_id 必须为数字'
+            }, status_code=400)
+
+        # 验证 task_id 是否属于指定类别
+        from config.unified_config import UnifiedConfigRegistry, TaskCategory
+
+        config = UnifiedConfigRegistry.get_by_id(task_id)
+        if not config:
+            return JSONResponse({
+                'success': False,
+                'error': f'无效的 task_id: {task_id}'
+            }, status_code=400)
+
+        # 验证类别匹配
+        valid_categories = [TaskCategory.TEXT_TO_VIDEO, TaskCategory.IMAGE_TO_VIDEO]
+        if category not in valid_categories:
+            return JSONResponse({
+                'success': False,
+                'error': f'无效的 category: {category}'
+            }, status_code=400)
+
+        # 检查模型的类别是否包含请求的类别
+        model_categories = [config.category]
+        if config.categories:
+            model_categories.extend(config.categories)
+        if category not in model_categories:
+            return JSONResponse({
+                'success': False,
+                'error': f'模型 {config.name} 不属于类别 {category}'
+            }, status_code=400)
+
+        # 保存偏好
+        if category == TaskCategory.TEXT_TO_VIDEO:
+            set_text_to_video_model_id(user_id, world_id, task_id)
+        else:
+            set_image_to_video_model_id(user_id, world_id, task_id)
+
+        return JSONResponse({
+            'success': True,
+            'task_id': task_id,
+            'model_name': config.name,
+            'category': category
+        })
+    except Exception as e:
+        logger.error(f'设置视频模型偏好失败: {str(e)}')
         return JSONResponse({
             'success': False,
             'error': str(e)
@@ -1975,6 +2208,40 @@ async def create_agent_task(request: Request, session_id: str, task_request: Tas
                 pref_parts.append(f"生图模型: {model_name}")
             if pref_parts:
                 user_message += f"\n\n[用户图片偏好] {', '.join(pref_parts)}"
+
+        # 如果有视频偏好，保存到内存并追加到用户消息中
+        if task_request.video_preferences:
+            v_prefs = task_request.video_preferences
+
+            # 如果前端传递了 task_id（视频模型选择），同步到模型偏好
+            v_task_id = v_prefs.get('task_id')
+            if v_task_id:
+                try:
+                    v_task_id = int(v_task_id)
+                    from config.unified_config import UnifiedConfigRegistry, TaskCategory
+                    v_config = UnifiedConfigRegistry.get_by_id(v_task_id)
+                    if v_config and v_config.enabled:
+                        v_model_categories = [v_config.category]
+                        if v_config.categories:
+                            v_model_categories.extend(v_config.categories)
+                        if TaskCategory.IMAGE_TO_VIDEO in v_model_categories:
+                            set_image_to_video_model_id(user_id, world_id, v_task_id)
+                        elif TaskCategory.TEXT_TO_VIDEO in v_model_categories:
+                            set_text_to_video_model_id(user_id, world_id, v_task_id)
+                except (TypeError, ValueError):
+                    pass
+
+            # 保存到内存供 MCP 视频工具函数读取
+            set_video_preferences(user_id, world_id, v_prefs)
+            v_pref_parts = []
+            if v_prefs.get('ratio'):
+                v_pref_parts.append(f"视频比例: {v_prefs['ratio']}")
+            if v_prefs.get('duration'):
+                v_pref_parts.append(f"视频时长: {v_prefs['duration']}秒")
+            if v_prefs.get('image_mode'):
+                v_pref_parts.append(f"图片模式: {v_prefs['image_mode']}")
+            if v_pref_parts:
+                user_message += f"\n\n[用户视频偏好] {', '.join(v_pref_parts)}"
 
         # 创建任务（返回 task_id 字符串）
         task_id = task_manager.create_task(

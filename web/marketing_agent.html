@@ -159,13 +159,37 @@
                             </template>
                             <div class="message-bubble" v-html="renderMarkdown(msg.content)"></div>
                             <!-- Verification 选项按钮 -->
-                            <div v-if="msg.isVerification && msg.verificationOptions && msg.verificationOptions.length > 0" style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px;">
-                                <button v-for="opt in msg.verificationOptions" :key="opt"
-                                    @click="selectVerificationOption(opt)"
-                                    :disabled="!pendingVerificationId"
-                                    style="padding: 6px 16px; border: 1px solid #d0d5dd; border-radius: 8px; background: #fff; cursor: pointer; font-size: 14px; color: #344054; transition: all 0.2s;">
-                                    {{ opt }}
-                                </button>
+                            <div v-if="msg.isVerification && msg.verificationOptions && msg.verificationOptions.length > 0" style="margin-top: 10px;">
+                                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                    <button v-for="opt in msg.verificationOptions" :key="opt"
+                                        @click="selectVerificationOption(opt)"
+                                        :disabled="!pendingVerificationId"
+                                        style="padding: 6px 16px; border: 1px solid #d0d5dd; border-radius: 8px; background: #fff; cursor: pointer; font-size: 14px; color: #344054; transition: all 0.2s;">
+                                        {{ opt }}
+                                    </button>
+                                    <!-- 前端硬性追加"其他"按钮，不依赖模型返回 -->
+                                    <button @click="showOtherInput = true; $nextTick(() => $refs.otherInputRef && $refs.otherInputRef.focus())"
+                                        v-if="!showOtherInput"
+                                        :disabled="!pendingVerificationId"
+                                        style="padding: 6px 16px; border: 1px dashed #d0d5dd; border-radius: 8px; background: #f9fafb; cursor: pointer; font-size: 14px; color: #667085; transition: all 0.2s;">
+                                        其他
+                                    </button>
+                                </div>
+                                <!-- 其他 - 内联输入框 -->
+                                <div v-if="showOtherInput" style="display: flex; gap: 8px; margin-top: 8px;">
+                                    <input ref="otherInputRef"
+                                        v-model="otherInputText"
+                                        @keyup.enter="submitOtherInput()"
+                                        placeholder="请输入您的选择..."
+                                        style="flex: 1; padding: 6px 12px; border: 1px solid #d0d5dd; border-radius: 8px; font-size: 14px; outline: none;"
+                                        @focus="$event.target.style.borderColor='#00a8e6'"
+                                        @blur="$event.target.style.borderColor='#d0d5dd'" />
+                                    <button @click="submitOtherInput()"
+                                        :disabled="!otherInputText.trim()"
+                                        style="padding: 6px 16px; border: none; border-radius: 8px; background: #00a8e6; color: #fff; cursor: pointer; font-size: 14px; white-space: nowrap;">
+                                        发送
+                                    </button>
+                                </div>
                             </div>
                             <div class="message-time">{{ formatTime(msg.timestamp) }}</div>
                         </div>
@@ -714,6 +738,7 @@
             const chatMessages = ref(null);
             const inputTextarea = ref(null);
             const maxImageSizeMB = ref(10);  // 从服务器配置获取
+            const isEnterprise = ref(false);  // 是否为商业版
 
             // 创作类型与模型选择
             const showDropdown = ref(false);
@@ -790,6 +815,8 @@
 
             // Verification（ask_user 交互）状态
             const pendingVerificationId = ref(null);
+            const showOtherInput = ref(false);
+            const otherInputText = ref('');
 
             const aspectRatioMap = {
                 'auto':  { label: '智能', value: 'auto', w: 20, h: 20 },
@@ -1469,13 +1496,16 @@
 
                 // 添加用户消息（含图片缩略图）
                 let userContent = text;
-                const isAgentChatPreview = selectedType.value === 'Agent 模式' && mediaType.value !== 'video';
-                if (isAgentChatPreview && agentImageFiles.value.length > 0) {
+                const isAgentChatPreview = selectedType.value === 'Agent 模式';
+                if (isAgentChatPreview && mediaType.value !== 'video' && agentImageFiles.value.length > 0) {
                     // Agent 模式多图预览，使用服务器 URL 避免 blob URL 被释放后失效
                     agentImageFiles.value.forEach((img, i) => {
                         const displayUrl = img.serverUrl || img.previewUrl;
                         userContent += `\n\n[图片${i + 1}] <img src="${displayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${displayUrl}'" alt="图片${i + 1}">`;
                     });
+                } else if (isAgentChatPreview && mediaType.value === 'video' && hasUploadedImage.value && uploadedImageUrl.value) {
+                    // Agent 视频模式参考图预览
+                    userContent += `\n\n<img src="${uploadedImageUrl.value}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${uploadedImageUrl.value}'" alt="参考图">`;
                 } else if (hasUploadedImage.value && uploadedImageUrl.value) {
                     userContent += `\n\n<img src="${uploadedImageUrl.value}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${uploadedImageUrl.value}'" alt="参考图">`;
                 }
@@ -1706,6 +1736,69 @@
                         console.error('Agent 图片状态轮询错误:', err);
                     }
                 }, 5000);
+            }
+
+            // Agent 视频生成任务提交回调（SSE video_task_submitted 事件）
+            function handleVideoTaskSubmitted(data) {
+                const { project_ids, message } = data;
+                if (!project_ids || project_ids.length === 0) return;
+
+                const idx = messages.value.length;
+                messages.value.push({
+                    role: 'ai',
+                    content: (message || '已提交视频生成任务') + '，视频生成中...',
+                    timestamp: new Date().toISOString()
+                });
+                scrollToBottom();
+                pollAgentVideoStatus(idx, project_ids);
+            }
+
+            // 轮询 Agent 视频生成状态
+            function pollAgentVideoStatus(msgIndex, projectIds) {
+                const interval = setInterval(async () => {
+                    try {
+                        const params = authToken.value ? { auth_token: authToken.value } : {};
+                        const projectIdsStr = projectIds.join(',');
+                        const res = await axios.get(`/api/get-status/${projectIdsStr}`, { params });
+
+                        if (res.data.tasks) {
+                            const tasks = res.data.tasks;
+                            const allDone = tasks.every(t => t.status === 'SUCCESS' || t.status === 'FAILED');
+
+                            const videoUrls = [];
+                            tasks.forEach(task => {
+                                if (task.results) {
+                                    task.results.forEach(r => {
+                                        const url = r.file_url || r.url || '';
+                                        if (url) videoUrls.push(url);
+                                    });
+                                }
+                            });
+
+                            if (allDone) {
+                                clearInterval(interval);
+                                let finalContent = '';
+                                if (videoUrls.length > 0) {
+                                    const videoHtml = videoUrls.map(url =>
+                                        `<video src="${url}" controls style="max-width:100%;max-height:400px;border-radius:8px;margin:8px 0;"></video>`
+                                    ).join('');
+                                    finalContent = '视频已生成：\n\n' + videoHtml;
+                                } else {
+                                    finalContent = '视频生成失败，请稍后重试。';
+                                }
+                                messages.value[msgIndex].content = finalContent;
+                                scrollToBottom();
+                                await appendMessageToBackend('assistant', finalContent);
+                            } else {
+                                const doneCount = tasks.filter(t => t.status === 'SUCCESS').length;
+                                messages.value[msgIndex].content = `视频生成中... (${doneCount}/${tasks.length})`;
+                                scrollToBottom();
+                            }
+                        }
+                    } catch (err) {
+                        console.error('Agent 视频状态轮询错误:', err);
+                    }
+                }, 10000);  // 视频轮询间隔 10 秒
             }
 
             // 发送视频生成请求
@@ -1950,6 +2043,7 @@
                 isLoading.value = true;
                 const sessionId = currentSessionId.value;
                 const isAgentChat = selectedType.value === 'Agent 模式' && mediaType.value !== 'video';
+                const isAgentVideo = selectedType.value === 'Agent 模式' && mediaType.value === 'video';
 
                 try {
                     // 收集图片 URL（Agent 模式使用 HTTP URL，其他模式使用 base64）
@@ -1969,6 +2063,13 @@
                             }
                         });
                         console.log('[Agent] 发送图片 URL:', imageUrls.length, '张');
+                    } else if (isAgentVideo && hasUploadedImage.value) {
+                        // Agent 视频模式：优先使用 HTTP URL（参考图用于图生视频）
+                        if (uploadedImageUrl.value && uploadedImageUrl.value.startsWith('http')) {
+                            imageUrls.push(uploadedImageUrl.value);
+                        } else if (uploadedImageBase64.value) {
+                            imageUrls.push(uploadedImageBase64.value);
+                        }
                     } else if (hasUploadedImage.value) {
                         if (uploadedImageBase64.value) {
                             imageUrls.push(uploadedImageBase64.value);
@@ -2011,7 +2112,16 @@
                             model: selectedLLMModel.value ? selectedLLMModel.value.name : '',
                             model_id: selectedLLMModel.value ? selectedLLMModel.value.id : undefined,
                             vendor_id: 1,
-                            image_preferences: imagePreferences
+                            image_preferences: imagePreferences,
+                            video_preferences: isAgentVideo ? {
+                                ratio: selectedRatio.value,
+                                duration: selectedDuration.value,
+                                image_mode: videoImageMode.value,
+                                task_id: window.TaskConfig?.getTaskIdByKey
+                                    ? (window.TaskConfig.getTaskIdByKey(selectedModelKey.value,
+                                        hasUploadedImage.value ? 'image_to_video' : 'text_to_video'))
+                                    : undefined
+                            } : undefined
                         }),
                         signal: controller.signal
                     });
@@ -2109,6 +2219,8 @@
                             } else if (data.type === 'verification_timeout') {
                                 // 验证超时
                                 pendingVerificationId.value = null;
+                showOtherInput.value = false;
+                otherInputText.value = '';
                                 messages.value.push({
                                     role: 'ai',
                                     content: '等待回答超时，请重新发送消息。',
@@ -2121,9 +2233,15 @@
                                 // Agent 提交了图片生成任务，前端开始轮询
                                 hasReceivedData = true;
                                 handleImageTaskSubmitted(data);
+                            } else if (data.type === 'video_task_submitted') {
+                                // Agent 提交了视频生成任务，前端开始轮询
+                                hasReceivedData = true;
+                                handleVideoTaskSubmitted(data);
                             } else if (data.type === 'error') {
                                 eventSource.close();
                                 pendingVerificationId.value = null;
+                showOtherInput.value = false;
+                otherInputText.value = '';
                                 if (msgIndex !== -1) {
                                     messages.value[msgIndex].content = fullContent || '处理出错，请重试';
                                 } else {
@@ -2157,6 +2275,8 @@
                     eventSource.onerror = (e) => {
                         eventSource.close();
                         pendingVerificationId.value = null;
+                showOtherInput.value = false;
+                otherInputText.value = '';
                         if (!hasReceivedData) {
                             messages.value.push({
                                 role: 'ai',
@@ -2174,6 +2294,8 @@
                     setTimeout(() => {
                         eventSource.close();
                         pendingVerificationId.value = null;
+                showOtherInput.value = false;
+                otherInputText.value = '';
                         if (!hasReceivedData) {
                             messages.value.push({
                                 role: 'ai',
@@ -2219,6 +2341,14 @@
                 await submitVerificationAnswer(pendingVerificationId.value, option);
             }
 
+            // 处理"其他"选项 - 提交内联输入框内容
+            async function submitOtherInput() {
+                if (!pendingVerificationId.value || !otherInputText.value.trim()) return;
+                await submitVerificationAnswer(pendingVerificationId.value, otherInputText.value.trim());
+                showOtherInput.value = false;
+                otherInputText.value = '';
+            }
+
             // 提交验证回答
             async function submitVerificationAnswer(verificationId, userInput) {
                 try {
@@ -2244,6 +2374,8 @@
                     const data = await response.json();
                     if (data.success) {
                         pendingVerificationId.value = null;
+                showOtherInput.value = false;
+                otherInputText.value = '';
                     } else {
                         showError(data.error || '提交回答失败');
                     }
@@ -2566,6 +2698,9 @@
                     if (cfg.data?.max_image_size_mb) {
                         maxImageSizeMB.value = cfg.data.max_image_size_mb;
                     }
+                    if (cfg.data?.is_enterprise !== undefined) {
+                        isEnterprise.value = cfg.data.is_enterprise;
+                    }
                 } catch (e) { /* 使用默认值 */ }
 
                 // 获取用户信息
@@ -2579,23 +2714,8 @@
                     return;
                 }
 
-                // 获取 world
-                const worlds = await getWorlds();
-                if (worlds.length === 0) {
-                    // 创建默认营销世界
-                    const newWorld = await createWorld('营销世界', '默认营销创作世界');
-                    if (newWorld) {
-                        worldId.value = String(newWorld.id || newWorld.world_id || '');
-                    }
-                } else {
-                    worldId.value = String(worlds[0].id || worlds[0].world_id || '');
-                }
-
-                if (!worldId.value) {
-                    isInitializing.value = false;
-                    showError('无法获取或创建世界，请稍后重试');
-                    return;
-                }
+                // 营销智能体使用固定 world_id，无需多世界概念
+                worldId.value = '1';
 
                 // 加载 TaskConfig 模型数据
                 await initTaskConfig();
@@ -2705,6 +2825,16 @@
                         }
                         // 同步默认图片模型到后端
                         syncImageModelToBackend(allImageModels.value.find(m => m.name === selectedModel.value));
+                    }
+
+                    // 恢复用户保存的视频模型偏好
+                    const savedVideoModel = localStorage.getItem('marketing_selected_video_model');
+                    if (savedVideoModel && allTextToVideoModels.value.length > 0) {
+                        const vm = allTextToVideoModels.value.find(m => m.name === savedVideoModel);
+                        if (vm) {
+                            syncVideoModelToBackend(vm);
+                            console.log('[初始化] 恢复用户偏好视频模型:', vm.name);
+                        }
                     }
 
                     // 恢复用户保存的比例偏好
@@ -3373,11 +3503,17 @@
                 showModelPanel.value = false;
                 showModelSelect.value = false;
                 refreshModelSettings();
-                // 同步图片模型到后端
-                syncImageModelToBackend(model);
-                // 保存用户偏好到 localStorage
-                localStorage.setItem('marketing_selected_image_model', model.name);
-                localStorage.setItem('marketing_selected_image_model_key', model.key || '');
+                if (isVideoMode.value) {
+                    // 视频模型同步到后端
+                    syncVideoModelToBackend(model);
+                    localStorage.setItem('marketing_selected_video_model', model.name);
+                    localStorage.setItem('marketing_selected_video_model_key', model.key || '');
+                } else {
+                    // 图片模型同步到后端
+                    syncImageModelToBackend(model);
+                    localStorage.setItem('marketing_selected_image_model', model.name);
+                    localStorage.setItem('marketing_selected_image_model_key', model.key || '');
+                }
             }
 
             // 同步图片模型配置到后端
@@ -3409,6 +3545,36 @@
                     console.log('[图片偏好] 已同步到后端:', model.name, 'task_id:', taskId, 'ratio:', selectedRatio.value);
                 } catch (e) {
                     console.warn('[图片模型] 同步失败:', e);
+                }
+            }
+
+            // 同步视频模型配置到后端
+            async function syncVideoModelToBackend(model) {
+                try {
+                    const isImg2Vid = hasUploadedImage.value;
+                    const category = isImg2Vid ? 'image_to_video' : 'text_to_video';
+                    const taskId = window.TaskConfig?.getTaskIdByKey
+                        ? window.TaskConfig.getTaskIdByKey(model.key, category)
+                        : null;
+                    if (!taskId || !userId.value || !worldId.value) return;
+                    await fetch('/api/video-model', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': authToken.value,
+                            'X-User-Id': userId.value
+                        },
+                        body: JSON.stringify({
+                            user_id: userId.value,
+                            world_id: worldId.value,
+                            session_id: currentSessionId.value,
+                            task_id: taskId,
+                            category: category
+                        })
+                    });
+                    console.log('[视频偏好] 已同步到后端:', model.name, 'task_id:', taskId, 'category:', category);
+                } catch (e) {
+                    console.warn('[视频模型] 同步失败:', e);
                 }
             }
 
@@ -3649,6 +3815,8 @@
                 clearImageStatusCheck,
                 handleImageTaskSubmitted,
                 pollAgentImageStatus,
+                handleVideoTaskSubmitted,
+                pollAgentVideoStatus,
                 videoProjectIds,
                 videoStatus,
                 videoResults,
@@ -3688,7 +3856,10 @@
                 loadLLMModels,
                 // Verification（ask_user 交互）
                 pendingVerificationId,
+                showOtherInput,
+                otherInputText,
                 selectVerificationOption,
+                submitOtherInput,
                 submitVerificationAnswer
             };
         }

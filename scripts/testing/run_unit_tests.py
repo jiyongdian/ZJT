@@ -57,6 +57,7 @@ class TestRunner:
             'agents': {'passed': 0, 'failed': 0, 'errors': 0},
             'services': {'passed': 0, 'failed': 0, 'errors': 0},
             'script_writer_core': {'passed': 0, 'failed': 0, 'errors': 0},
+            'enterprise': {'passed': 0, 'failed': 0, 'errors': 0},
             'total': {'passed': 0, 'failed': 0, 'errors': 0}
         }
         # 收集所有失败测试的详细信息
@@ -383,6 +384,20 @@ class TestRunner:
         print()
         return errors == 0 and failed == 0
 
+    def run_enterprise_tests(self):
+        """执行企业版相关测试"""
+        print("=" * 60)
+        print("Enterprise 测试")
+        print("=" * 60)
+
+        passed, failed, errors = self._discover_and_run('enterprise')
+        self.test_results['enterprise']['passed'] = passed
+        self.test_results['enterprise']['failed'] = failed
+        self.test_results['enterprise']['errors'] = errors
+
+        print()
+        return errors == 0 and failed == 0
+
     def generate_junit_xml(self):
         """生成 JUnit XML 格式的测试报告供 GitLab CI 解析"""
         import xml.etree.ElementTree as ET
@@ -391,7 +406,7 @@ class TestRunner:
 
         for category in ['db_connection', 'crud', 'driver', 'utils', 'config',
                          'drivers', 'driver_integration', 'llm',
-                         'agents', 'services', 'script_writer_core']:
+                         'agents', 'services', 'script_writer_core', 'enterprise']:
             results = self.test_results[category]
             total = results['passed'] + results['failed'] + results['errors']
 
@@ -438,7 +453,7 @@ class TestRunner:
         # 计算总数
         for category in ['db_connection', 'cdn', 'crud', 'driver', 'utils', 'config',
                          'auth', 'reference_images', 'stats', 'drivers', 'driver_integration',
-                         'llm', 'agents', 'services', 'script_writer_core']:
+                         'llm', 'agents', 'services', 'script_writer_core', 'enterprise']:
             for key in ['passed', 'failed', 'errors']:
                 self.test_results['total'][key] += self.test_results[category][key]
 
@@ -512,6 +527,11 @@ class TestRunner:
               f"失败 {self.test_results['script_writer_core']['failed']}, "
               f"错误 {self.test_results['script_writer_core']['errors']}")
 
+        print(f"Enterprise 测试:  "
+              f"通过 {self.test_results['enterprise']['passed']}, "
+              f"失败 {self.test_results['enterprise']['failed']}, "
+              f"错误 {self.test_results['enterprise']['errors']}")
+
         print("-" * 60)
         print(f"总计:            "
               f"通过 {self.test_results['total']['passed']}, "
@@ -572,6 +592,7 @@ class TestRunner:
             self.args.agents_only,
             self.args.services_only,
             self.args.script_writer_core_only,
+            self.args.enterprise_only,
         ])
 
         # 步骤 2: CDN 专项测试
@@ -634,7 +655,11 @@ class TestRunner:
         if self.args.script_writer_core_only or not has_only_flag:
             self.run_script_writer_core_tests()
 
-        # 步骤 16: 输出摘要
+        # 步骤 16: Enterprise 测试
+        if self.args.enterprise_only or not has_only_flag:
+            self.run_enterprise_tests()
+
+        # 步骤 17: 输出摘要
         return_code = self.print_summary()
 
         # 步骤 13: 输出失败测试详情
@@ -687,6 +712,7 @@ def main():
     parser.add_argument('--agents-only', action='store_true', help='只执行 Agents 测试')
     parser.add_argument('--services-only', action='store_true', help='只执行 Services 测试')
     parser.add_argument('--script-writer-core-only', action='store_true', help='只执行 Script Writer Core 测试')
+    parser.add_argument('--enterprise-only', action='store_true', help='只执行企业版测试')
     parser.add_argument('--verbose', '-v', action='store_true', help='显示详细输出')
     parser.add_argument('--failfast', '-x', action='store_true', help='遇到失败立即停止')
     parser.add_argument('--coverage', action='store_true', help='生成覆盖率报告')

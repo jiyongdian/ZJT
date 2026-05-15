@@ -542,12 +542,19 @@ class PMAgent(BaseAgent, AskUserMixin):
             logger.info(f"{self.agent_id}: Expert {skill_name} succeeded")
             self.consecutive_failures = 0
 
-            # 推送图片生成任务的 project_ids 到前端，前端自动轮询
+            # 推送生成任务的 project_ids 到前端，前端自动轮询
             project_ids = result.get("project_ids", [])
             if project_ids:
-                self.task_manager.push_message(task.task_id, 'image_task_submitted', {
+                # 根据技能类型区分事件
+                if skill_name == "marketing-video":
+                    event_type = 'video_task_submitted'
+                    event_message = f'已提交 {len(project_ids)} 个视频生成任务'
+                else:
+                    event_type = 'image_task_submitted'
+                    event_message = f'已提交 {len(project_ids)} 个图片生成任务'
+                self.task_manager.push_message(task.task_id, event_type, {
                     'project_ids': project_ids,
-                    'message': f'已提交 {len(project_ids)} 个图片生成任务'
+                    'message': event_message
                 })
 
             self.completed_tasks.append({
@@ -574,12 +581,18 @@ class PMAgent(BaseAgent, AskUserMixin):
             self.total_failures += 1
             self.consecutive_failures += 1
 
-            # 即使 Expert 失败，如果已提交图片任务，仍通知前端轮询
+            # 即使 Expert 失败，如果已提交生成任务，仍通知前端轮询
             project_ids = result.get("project_ids", [])
             if project_ids:
-                self.task_manager.push_message(task.task_id, 'image_task_submitted', {
+                if skill_name == "marketing-video":
+                    event_type = 'video_task_submitted'
+                    event_message = f'已提交 {len(project_ids)} 个视频生成任务'
+                else:
+                    event_type = 'image_task_submitted'
+                    event_message = f'已提交 {len(project_ids)} 个图片生成任务'
+                self.task_manager.push_message(task.task_id, event_type, {
                     'project_ids': project_ids,
-                    'message': f'已提交 {len(project_ids)} 个图片生成任务'
+                    'message': event_message
                 })
 
             self.task_manager.push_message(task.task_id, 'message', {

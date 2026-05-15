@@ -290,8 +290,8 @@ class ExpertAgent(BaseAgent, AskUserMixin):
 
             result = self._execute_tool(tool_name, tool_args)
 
-            # 收集图片生成任务的 project_ids
-            if tool_name in ("generate_text_to_image", "edit_image"):
+            # 收集图片/视频生成任务的 project_ids
+            if tool_name in ("generate_text_to_image", "edit_image", "generate_text_to_video", "image_to_video"):
                 if isinstance(result, dict) and result.get("project_ids"):
                     self.pending_project_ids.extend(result["project_ids"])
 
