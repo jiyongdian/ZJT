@@ -52,6 +52,7 @@ from script_writer_core.agents import TaskManager, TaskStatus, ToolExecutor
 from script_writer_core.chat_session import ChatSession
 from script_writer_core.file_manager import FileManager
 from script_writer_core.skill_loader import SkillLoader
+from utils.file_storage import get_file_storage
 logger = logging.getLogger(__name__)
 
 # 创建路由器
@@ -3445,21 +3446,33 @@ async def export_world(
     user_id: str = QueryParam(...),
     world_id: str = QueryParam(...)
 ):
-    """导出世界完整数据（含图片）为 zip 包下载"""
+    """导出世界完整数据（含图片）为 zip 包，上传到图床后返回下载链接"""
+    zip_path = None
     try:
-        from fastapi.responses import FileResponse
-        zip_path = file_manager.export_world(user_id, world_id)
+        zip_path = await asyncio.to_thread(file_manager.export_world, user_id, world_id)
         filename = os.path.basename(zip_path)
-        return FileResponse(
-            path=zip_path,
-            filename=filename,
-            media_type='application/zip'
-        )
+        storage = get_file_storage(get_config())
+        storage_key = storage.generate_key_with_datetime(filename)
+        upload_result = await storage.upload_file(storage_key, zip_path, content_type='application/zip')
+        if not upload_result.success:
+            return JSONResponse({'success': False, 'error': upload_result.error or '上传导出文件失败'}, status_code=500)
+        download_url = storage.get_download_url(upload_result.key)
+        return JSONResponse({
+            'success': True,
+            'download_url': download_url,
+            'filename': filename
+        })
     except FileNotFoundError as e:
         return JSONResponse({'success': False, 'error': str(e)}, status_code=404)
     except Exception as e:
-        logger.error(f'导出世界失败: {str(e)}')
+        logger.error(f'导出世界失败: {str(e)}', exc_info=True)
         return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
+    finally:
+        if zip_path and os.path.exists(zip_path):
+            try:
+                os.remove(zip_path)
+            except Exception:
+                logger.warning(f'清理导出临时文件失败: {zip_path}', exc_info=True)
 
 
 @router.post('/import-world')
