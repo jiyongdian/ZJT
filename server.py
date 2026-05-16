@@ -8013,9 +8013,42 @@ async def export_timeline_draft(
         
         logger.info(f"压缩包已创建: {zip_path}")
         
-        # 生成下载URL（包含日期路径）
-        download_url = f"{SERVER_HOST}/upload/draft/{date_folder}/{zip_filename}"
-        logger.info(f"下载地址: {download_url}")
+        # 根据 is_local 配置决定下载方式
+        is_local = get_dynamic_config_value("server", "is_local", default=True)
+
+        if is_local:
+            # 本地环境：直接返回本地下载链接
+            download_url = f"{SERVER_HOST}/upload/draft/{date_folder}/{zip_filename}"
+            logger.info(f"本地环境，下载地址: {download_url}")
+        else:
+            # 非本地环境：上传到七牛云后返回 CDN 链接
+            logger.info("非本地环境，准备上传到七牛云...")
+            from utils.file_storage import get_file_storage
+            from config.config_util import get_config
+            
+            storage = get_file_storage(get_config())
+            storage_key = storage.generate_key_with_datetime(zip_filename)
+            upload_result = await storage.upload_file(storage_key, zip_path, content_type='application/zip')
+            
+            if not upload_result.success:
+                logger.error(f"上传到七牛云失败: {upload_result.error}")
+                return JSONResponse(
+                    status_code=500,
+                    content={
+                        'success': False,
+                        'error': f'上传草稿到云存储失败: {upload_result.error}'
+                    }
+                )
+            
+            download_url = storage.get_download_url(upload_result.key)
+            logger.info(f"已上传到七牛云，CDN下载地址: {download_url}")
+            
+            # 非本地环境上传成功后，删除本地 zip 文件以节省空间
+            try:
+                os.remove(zip_path)
+                logger.info(f"已删除本地 zip 文件: {zip_path}")
+            except Exception as e:
+                logger.warning(f"删除本地 zip 文件失败: {e}")
         
         # 清理临时文件
         try:
