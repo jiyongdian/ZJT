@@ -731,6 +731,23 @@
                             <textarea id="char-other" class="form-textarea" rows="3" placeholder="其他相关信息"></textarea>
                         </div>
                         <div class="form-group full-width">
+                            <label class="form-label">参考音频</label>
+                            <div class="image-upload-container">
+                                <input type="text" id="char-default-voice" class="form-input" placeholder="参考音频URL" readonly>
+                                <div class="image-upload-actions">
+                                    <button type="button" class="btn btn-secondary btn-sm" onclick="clearCharacterDefaultVoice()">
+                                        清空
+                                    </button>
+                                    <button type="button" class="btn btn-primary btn-sm" id="generate-character-voice-btn" onclick="generateCharacterReferenceAudio()">
+                                        生成参考音频
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="char-default-voice-preview" style="display: none; margin-top: 8px;">
+                                <audio controls style="width: 100%; height: 36px;"></audio>
+                            </div>
+                        </div>
+                        <div class="form-group full-width">
                             <label class="form-label">参考图片</label>
                             <div class="image-upload-container">
                                 <input type="text" id="char-image" class="form-input" placeholder="图片URL或描述" readonly>
@@ -4231,7 +4248,10 @@
             document.getElementById('char-personality').value = data.personality || '';
             document.getElementById('char-behavior').value = data.behavior || '';
             document.getElementById('char-other').value = data.other_info || '';
+            document.getElementById('char-default-voice').value = data.default_voice || '';
             document.getElementById('char-image').value = data.reference_image || '';
+
+            showCharacterDefaultVoicePreview(data.default_voice || '');
 
             // 如果有图片，显示预览
             if (data.reference_image) {
@@ -4247,6 +4267,74 @@
                 data.reference_images.forEach(img => {
                     addCharMultiImageItem(multiImageList, img.label || '服装', img.url, img.id);
                 });
+            }
+        }
+
+        function showCharacterDefaultVoicePreview(audioUrl) {
+            const preview = document.getElementById('char-default-voice-preview');
+            const audio = preview.querySelector('audio');
+            if (!audioUrl) {
+                preview.style.display = 'none';
+                audio.removeAttribute('src');
+                return;
+            }
+            audio.src = audioUrl;
+            preview.style.display = 'block';
+        }
+
+        function clearCharacterDefaultVoice() {
+            document.getElementById('char-default-voice').value = '';
+            showCharacterDefaultVoicePreview('');
+        }
+
+        async function generateCharacterReferenceAudio() {
+            if (!currentEditFile || currentEditFile.fileType !== 'characters') {
+                showError('请先打开一个角色进行编辑');
+                return;
+            }
+            const characterName = document.getElementById('char-name').value.trim();
+            if (!characterName) {
+                showError('角色名称不能为空');
+                return;
+            }
+            const btn = document.getElementById('generate-character-voice-btn');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '生成中...';
+            try {
+                updateStatus('正在生成角色参考音频...');
+                const response = await fetch('/api/script-writer/characters/reference-audio', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': AUTH_TOKEN,
+                        'X-User-Id': USER_ID
+                    },
+                    body: JSON.stringify({
+                        user_id: USER_ID,
+                        world_id: parseInt(WORLD_ID),
+                        character_name: characterName,
+                        character_data: JSON.parse(collectCharacterData())
+                    })
+                });
+                const data = await response.json();
+                if (checkTokenExpired(data, response)) {
+                    return;
+                }
+                if (!data.success) {
+                    throw new Error(data.error || '生成失败');
+                }
+                document.getElementById('char-default-voice').value = data.default_voice || data.result_url || '';
+                showCharacterDefaultVoicePreview(data.default_voice || data.result_url || '');
+                await saveEditedFile();
+                showSuccess('角色参考音频生成成功');
+                updateStatus('角色参考音频已生成');
+            } catch (error) {
+                showError('生成参考音频失败: ' + error.message);
+                updateStatus('生成参考音频失败');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
             }
         }
 
@@ -5359,6 +5447,7 @@
                 personality: document.getElementById('char-personality').value.trim(),
                 behavior: document.getElementById('char-behavior').value.trim(),
                 other_info: document.getElementById('char-other').value.trim(),
+                default_voice: document.getElementById('char-default-voice').value.trim(),
                 reference_image: document.getElementById('char-image').value.trim()
             };
             // 收集多服装参考图

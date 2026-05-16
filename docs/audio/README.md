@@ -8,4 +8,5 @@
 |------|------|
 | [dialogue_group_node_implementation.md](./dialogue_group_node_implementation.md) | 对话组节点实现（批量生成对话音频） |
 | [reference_audio_guide.md](./reference_audio_guide.md) | 参考音频功能说明（音色克隆） |
+| [runninghub_audio_task.md](./runninghub_audio_task.md) | RunningHub 音频生成后台任务 |
 | [text_to_speech_node_implementation.md](./text_to_speech_node_implementation.md) | 文字转语音节点实现 |

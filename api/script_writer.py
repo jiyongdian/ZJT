@@ -17,7 +17,14 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from perseids_server.utils.permission import require_permission
 from config.config_util import get_dynamic_config_value, get_config
+from config.constant import (
+    RUNNINGHUB_AUDIO_APP_ID,
+    RUNNINGHUB_AUDIO_STYLE_NODE_ID,
+    RUNNINGHUB_AUDIO_TEXT_NODE_ID,
+    RUNNINGHUB_AUDIO_FINAL_STATUSES
+)
 from model.vendor_model import VendorModelModel
+from api.clients.runninghub_client import RunningHubClient
 
 # ==================== 加载 API 配置 ====================
 def _load_api_config():
@@ -815,6 +822,14 @@ class SubmitDatabaseRequest(BaseModel):
 
 class CharacterSaveRequest(BaseModel):
     content: Dict[str, Any]
+
+class CharacterReferenceAudioRequest(BaseModel):
+    world_id: int
+    character_id: Optional[int] = None
+    character_name: Optional[str] = None
+    character_data: Optional[Dict[str, Any]] = None
+    style_prompt: Optional[str] = None
+    text: Optional[str] = None
 
 class ScriptSaveRequest(BaseModel):
     content: Dict[str, Any]
@@ -2003,6 +2018,119 @@ async def submit_to_database(request: SubmitDatabaseRequest):
 # 注意: 场景管理接口 /locations 已在 server.py 中实现，此处不再重复
 # 注意: 道具管理接口 /props 已在 server.py 中实现，此处不再重复
 # 注意: 世界管理接口 /worlds 已在 server.py 中实现，此处不再重复
+
+def _build_character_audio_style_prompt(character_data: Dict[str, Any], custom_prompt: Optional[str]) -> str:
+    if custom_prompt and custom_prompt.strip():
+        return custom_prompt.strip()
+    prompt_parts = []
+    if character_data.get('name'):
+        prompt_parts.append(f"角色名：{character_data.get('name')}")
+    if character_data.get('age'):
+        prompt_parts.append(f"年龄：{character_data.get('age')}")
+    if character_data.get('identity'):
+        prompt_parts.append(f"身份：{character_data.get('identity')}")
+    if character_data.get('personality'):
+        prompt_parts.append(f"性格：{character_data.get('personality')}")
+    if character_data.get('behavior'):
+        prompt_parts.append(f"行为习惯：{character_data.get('behavior')}")
+    if character_data.get('other_info'):
+        prompt_parts.append(f"补充设定：{character_data.get('other_info')}")
+    if not prompt_parts:
+        return "根据角色设定生成自然、清晰、有辨识度的参考音频"
+    return "请根据以下角色设定生成适合作为角色参考音频的声音，语气自然，音色有辨识度。" + "；".join(prompt_parts)
+
+def _build_character_audio_text(character_data: Dict[str, Any], custom_text: Optional[str]) -> str:
+    if custom_text and custom_text.strip():
+        return custom_text.strip()
+    character_name = character_data.get('name') or '我'
+    identity = character_data.get('identity') or '故事中的角色'
+    return f"大家好，我是{character_name}，是{identity}。很高兴在这个故事里与你相遇。"
+
+def _extract_runninghub_v2_url(response_data: Dict[str, Any]) -> Optional[str]:
+    for item in response_data.get('results') or []:
+        result_url = item.get('url')
+        if result_url:
+            return result_url
+    return None
+
+@router.post('/script-writer/characters/reference-audio')
+@require_permission("character:edit")
+async def generate_character_reference_audio(
+    request: Request,
+    audio_request: CharacterReferenceAudioRequest,
+    auth_token: Optional[str] = Header(None, alias="Authorization"),
+    user_id: Optional[int] = Header(None, alias="X-User-Id")
+):
+    try:
+        if not user_id:
+            body = await request.json()
+            user_id = body.get('user_id')
+        if not user_id:
+            return JSONResponse({'success': False, 'error': '缺少用户ID'}, status_code=400)
+        character = None
+        if audio_request.character_id:
+            character = await asyncio.to_thread(CharacterModel.get_by_id, audio_request.character_id)
+        elif audio_request.character_name:
+            character = await asyncio.to_thread(CharacterModel.get_by_name, audio_request.world_id, audio_request.character_name)
+        if character and (character.world_id != audio_request.world_id or character.user_id != int(user_id)):
+            return JSONResponse({'success': False, 'error': '无权限访问该角色'}, status_code=403)
+        character_data = character.to_dict() if character else (audio_request.character_data or {})
+        if not character_data:
+            return JSONResponse({'success': False, 'error': '缺少角色数据'}, status_code=400)
+        if audio_request.character_name and not character_data.get('name'):
+            character_data['name'] = audio_request.character_name
+        node_info_list = [
+            {
+                'nodeId': RUNNINGHUB_AUDIO_STYLE_NODE_ID,
+                'fieldName': 'prompt',
+                'fieldValue': _build_character_audio_style_prompt(character_data, audio_request.style_prompt),
+                'description': 'prompt'
+            },
+            {
+                'nodeId': RUNNINGHUB_AUDIO_TEXT_NODE_ID,
+                'fieldName': 'prompt',
+                'fieldValue': _build_character_audio_text(character_data, audio_request.text),
+                'description': 'prompt'
+            }
+        ]
+        client = RunningHubClient()
+        submit_response = await client.run_ai_app_v2(
+            app_id=RUNNINGHUB_AUDIO_APP_ID,
+            node_info_list=node_info_list,
+            instance_type='default',
+            use_personal_queue='false'
+        )
+        runninghub_task_id = submit_response.get('taskId')
+        if not runninghub_task_id:
+            error_message = submit_response.get('errorMessage') or 'RunningHub 未返回任务 ID'
+            return JSONResponse({'success': False, 'error': error_message, 'response': submit_response}, status_code=502)
+        timeout_seconds = get_dynamic_config_value('runninghub', 'audio_reference_timeout', default=180)
+        interval_seconds = get_dynamic_config_value('runninghub', 'audio_reference_poll_interval', default=3)
+        started_at = datetime.now()
+        while (datetime.now() - started_at).total_seconds() < timeout_seconds:
+            query_response = await client.query_v2_task(runninghub_task_id)
+            remote_status = query_response.get('status')
+            if remote_status == 'SUCCESS':
+                result_url = _extract_runninghub_v2_url(query_response)
+                if not result_url:
+                    return JSONResponse({'success': False, 'error': 'RunningHub 任务成功但未返回结果 URL', 'task_id': runninghub_task_id}, status_code=502)
+                if character:
+                    await asyncio.to_thread(CharacterModel.update, character.id, default_voice=result_url)
+                return JSONResponse({
+                    'success': True,
+                    'character_id': character.id if character else None,
+                    'task_id': runninghub_task_id,
+                    'default_voice': result_url,
+                    'result_url': result_url
+                })
+            if remote_status in RUNNINGHUB_AUDIO_FINAL_STATUSES:
+                error_message = query_response.get('errorMessage') or str(query_response.get('failedReason') or 'RunningHub 音频生成失败')
+                return JSONResponse({'success': False, 'error': error_message, 'task_id': runninghub_task_id}, status_code=502)
+            await asyncio.sleep(interval_seconds)
+        return JSONResponse({'success': False, 'error': '生成参考音频超时', 'task_id': runninghub_task_id}, status_code=504)
+    except Exception as e:
+        logger.error(f'生成角色参考音频失败: {str(e)}', exc_info=True)
+        return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
 
 @router.get('/world-files')
 @require_permission("world:view_files")
