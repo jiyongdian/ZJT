@@ -29,15 +29,28 @@ def _compute_hash(local_path: str) -> str:
 
 
 def upgrade() -> None:
-    op.execute("""
-        ALTER TABLE media_file_mapping
-            ADD COLUMN `local_path_hash` varchar(64) DEFAULT NULL
-                COMMENT 'local_path 的 SHA256 哈希，用于快速 CDN 重定向查找',
-            ADD KEY `idx_local_path_hash` (`local_path_hash`)
-    """)
-
-    # 回填已有记录的 local_path_hash
     conn = op.get_bind()
+
+    # 检查 local_path_hash 字段是否已存在
+    check_column_sql = sa.text("""
+        SELECT COUNT(*) as cnt
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'media_file_mapping'
+        AND COLUMN_NAME = 'local_path_hash'
+    """)
+    column_exists = conn.execute(check_column_sql).scalar()
+
+    if not column_exists:
+        # 字段不存在，添加字段和索引
+        op.execute("""
+            ALTER TABLE media_file_mapping
+                ADD COLUMN `local_path_hash` varchar(64) DEFAULT NULL
+                    COMMENT 'local_path 的 SHA256 哈希，用于快速 CDN 重定向查找',
+                ADD KEY `idx_local_path_hash` (`local_path_hash`)
+        """)
+
+    # 回填已有记录的 local_path_hash（即使字段已存在，也可能有 NULL 值需要回填）
     updated = 0
     while True:
         rows = conn.execute(
