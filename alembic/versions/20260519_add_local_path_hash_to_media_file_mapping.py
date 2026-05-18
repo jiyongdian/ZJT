@@ -10,6 +10,7 @@ Create Date: 2026-05-19
 import hashlib
 
 from alembic import op
+import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '20260519_local_path_hash'
@@ -40,9 +41,11 @@ def upgrade() -> None:
     updated = 0
     while True:
         rows = conn.execute(
-            "SELECT id, local_path FROM media_file_mapping "
-            "WHERE local_path_hash IS NULL AND local_path IS NOT NULL "
-            f"LIMIT {_BATCH_SIZE}"
+            sa.text(
+                "SELECT id, local_path FROM media_file_mapping "
+                "WHERE local_path_hash IS NULL AND local_path IS NOT NULL "
+                f"LIMIT {_BATCH_SIZE}"
+            )
         ).fetchall()
         if not rows:
             break
@@ -50,8 +53,10 @@ def upgrade() -> None:
             record_id, local_path = row[0], row[1]
             url_hash = _compute_hash(local_path)
             conn.execute(
-                "UPDATE media_file_mapping SET local_path_hash = %s WHERE id = %s",
-                (url_hash, record_id)
+                sa.text(
+                    "UPDATE media_file_mapping SET local_path_hash = :hash WHERE id = :id"
+                ),
+                {"hash": url_hash, "id": record_id}
             )
         updated += len(rows)
     if updated:
