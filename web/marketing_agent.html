@@ -605,6 +605,34 @@
             </div>
         </main>
 
+        <!-- 浮动反馈按钮 -->
+        <div class="feedback-fab-container">
+            <button class="feedback-fab" @click="openFeedbackModal" title="联系我们">💡</button>
+        </div>
+
+        <!-- 联系我们弹窗 -->
+        <div class="modal-overlay-container" v-if="showFeedbackModal" @click.self="closeFeedbackModal">
+            <div class="modal-dialog" style="max-width: 420px;">
+                <div class="modal-header">
+                    <h3 class="modal-title">📣 联系我们</h3>
+                    <button class="modal-close-btn" @click="closeFeedbackModal">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 6L6 18M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body feedback-body">
+                    <p class="feedback-desc">扫码加入微信反馈群，第一时间获取支持与更新动态。</p>
+                    <div class="qr-wrapper">
+                        <img src="/files/二维码.jpg" alt="意见反馈二维码" class="qr-image">
+                    </div>
+                </div>
+                <div class="modal-footer" style="padding: 12px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
+                    <button class="modal-action-btn secondary" @click="closeFeedbackModal">关闭</button>
+                </div>
+            </div>
+        </div>
+
         <!-- 加载遮罩 -->
         <div v-if="isInitializing" class="loading-overlay">
             <div class="loading-spinner"></div>
@@ -767,6 +795,7 @@
             const uploadedImageUrl = ref('');
             const uploadedImageFile = ref(null);
             const uploadedImageBase64 = ref('');  // 服务端压缩后的 base64
+            const uploadedImageServerUrl = ref('');  // 视频模式下上传到服务器后的 HTTP URL
             const fileInputRef = ref(null);
             const isDragging = ref(false);
 
@@ -949,6 +978,7 @@
             const computingPowerBalance = ref('--');
             const showPowerLogsModal = ref(false);
             const showRechargeModal = ref(false);
+            const showFeedbackModal = ref(false);
             const rechargeState = ref('loading');
             const rechargePackages = ref([]);
             const rechargeError = ref('');
@@ -1039,6 +1069,14 @@
                 selectedPackage.value = null;
                 qrCodeUrl.value = '';
                 rechargeError.value = '';
+            }
+
+            function openFeedbackModal() {
+                showFeedbackModal.value = true;
+            }
+
+            function closeFeedbackModal() {
+                showFeedbackModal.value = false;
             }
 
             async function loadRechargePackages() {
@@ -1277,16 +1315,18 @@
                 const url = img.src;
                 // 关闭弹框
                 document.getElementById('imgModal').style.display = 'none';
+                // 清除已有图片：移除所有图片类型的 mediaItems 和 agentImageFiles
+                mediaItems.value = mediaItems.value.filter(m => m.type !== 'image');
+                agentImageFiles.value = [];
                 // 设置图片到输入区
                 uploadedImageUrl.value = url;
                 hasUploadedImage.value = true;
                 uploadedImageFile.value = null;
                 // 添加到媒体列表（供缩略图条和 @ 引用使用）
                 const id = `i_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-                const existingCount = mediaItems.value.filter(m => m.type === 'image').length;
                 mediaItems.value.push({
                     id,
-                    displayName: `图片${existingCount + 1}`,
+                    displayName: '图片1',
                     type: 'image',
                     fileUrl: url,
                     thumbnailUrl: url,
@@ -2048,6 +2088,7 @@
                 try {
                     // 收集图片 URL（Agent 模式使用 HTTP URL，其他模式使用 base64）
                     const imageUrls = [];
+                    const imageBase64List = [];
                     if (isAgentChat && agentImageFiles.value.length > 0) {
                         // Agent 对话模式：收集 HTTP URL
                         // 检查所有图片是否已上传完成
@@ -2064,11 +2105,32 @@
                         });
                         console.log('[Agent] 发送图片 URL:', imageUrls.length, '张');
                     } else if (isAgentVideo && hasUploadedImage.value) {
-                        // Agent 视频模式：优先使用 HTTP URL（参考图用于图生视频）
-                        if (uploadedImageUrl.value && uploadedImageUrl.value.startsWith('http')) {
+                        // Agent 视频模式：HTTP URL（图生视频工具用） + base64（LLM 视觉用）
+                        // 等待服务器上传完成（本地上传的图片需要获取 HTTP URL）
+                        if (uploadedImageFile.value && !uploadedImageServerUrl.value && !uploadedImageUrl.value?.startsWith('http')) {
+                            // 上传尚未完成，等待最多 10 秒
+                            const uploadOk = await new Promise(resolve => {
+                                let waited = 0;
+                                const check = setInterval(() => {
+                                    if (uploadedImageServerUrl.value) { clearInterval(check); resolve(true); }
+                                    waited += 200;
+                                    if (waited >= 10000) { clearInterval(check); resolve(false); }
+                                }, 200);
+                            });
+                            if (!uploadOk) {
+                                console.warn('[Agent Video] 图片上传超时，使用 base64 回退');
+                            }
+                        }
+                        if (uploadedImageServerUrl.value) {
+                            imageUrls.push(uploadedImageServerUrl.value);
+                        } else if (uploadedImageUrl.value && uploadedImageUrl.value.startsWith('http')) {
                             imageUrls.push(uploadedImageUrl.value);
                         } else if (uploadedImageBase64.value) {
                             imageUrls.push(uploadedImageBase64.value);
+                        }
+                        // base64 传给 LLM 视觉理解（避免后端重复下载压缩）
+                        if (uploadedImageBase64.value) {
+                            imageBase64List.push(uploadedImageBase64.value);
                         }
                     } else if (hasUploadedImage.value) {
                         if (uploadedImageBase64.value) {
@@ -2109,6 +2171,7 @@
                             message: text,
                             auth_token: authToken.value,
                             image_urls: imageUrls.length > 0 ? imageUrls : undefined,
+                            image_base64_list: imageBase64List.length > 0 ? imageBase64List : undefined,
                             model: selectedLLMModel.value ? selectedLLMModel.value.name : '',
                             model_id: selectedLLMModel.value ? selectedLLMModel.value.id : undefined,
                             vendor_id: 1,
@@ -2173,6 +2236,7 @@
                         uploadedImageFile.value = null;
                     }
                     uploadedImageBase64.value = '';
+                    uploadedImageServerUrl.value = '';
                     scrollToBottom();
                 }
             }
@@ -2307,7 +2371,7 @@
                             showContinue.value = true;
                             resolve();
                         }
-                    }, 300000);
+                    }, 900000);
                 });
             }
 
@@ -2399,6 +2463,7 @@
                 uploadedImageUrl.value = '';
                 uploadedImageFile.value = null;
                 uploadedImageBase64.value = '';
+                uploadedImageServerUrl.value = '';
                 if (fileInputRef.value) fileInputRef.value.value = '';
                 if (referenceInputRef.value) referenceInputRef.value.value = '';
                 // 创建后端新会话
@@ -3067,6 +3132,29 @@
                 }).catch(err => {
                     console.error('[VL] 图片压缩失败:', err);
                 });
+
+                // Agent 视频模式：额外上传到服务器获取 HTTP URL（图生视频工具需要 HTTP URL）
+                const isAgentVideoMode = selectedType.value === 'Agent 模式' && mediaType.value === 'video';
+                if (isAgentVideoMode) {
+                    uploadedImageServerUrl.value = '';
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('session_id', currentSessionId.value || 'temp');
+                    if (authToken.value) formData.append('auth_token', authToken.value);
+                    fetch('/api/upload-agent-image', {
+                        method: 'POST',
+                        body: formData
+                    }).then(resp => resp.json()).then(data => {
+                        if (data.success && data.url) {
+                            uploadedImageServerUrl.value = data.url;
+                            console.log('[Agent Video] 图片上传成功:', data.url);
+                        } else {
+                            console.error('[Agent Video] 图片上传失败:', data.error);
+                        }
+                    }).catch(err => {
+                        console.error('[Agent Video] 图片上传异常:', err);
+                    });
+                }
             }
 
             // Agent 模式：上传图片到服务器获取 HTTP URL
@@ -3149,6 +3237,7 @@
                 uploadedImageUrl.value = '';
                 uploadedImageFile.value = null;
                 uploadedImageBase64.value = '';
+                uploadedImageServerUrl.value = '';
                 if (fileInputRef.value) fileInputRef.value.value = '';
                 refreshModelSettings();
             }
@@ -3462,6 +3551,29 @@
                 }).catch(err => {
                     console.error('[VL] 图片压缩失败:', err);
                 });
+
+                // Agent 视频模式：额外上传到服务器获取 HTTP URL
+                const isAgentVideoMode = selectedType.value === 'Agent 模式' && mediaType.value === 'video';
+                if (isAgentVideoMode) {
+                    uploadedImageServerUrl.value = '';
+                    const fd = new FormData();
+                    fd.append('file', file);
+                    fd.append('session_id', currentSessionId.value || 'temp');
+                    if (authToken.value) fd.append('auth_token', authToken.value);
+                    fetch('/api/upload-agent-image', {
+                        method: 'POST',
+                        body: fd
+                    }).then(resp => resp.json()).then(data => {
+                        if (data.success && data.url) {
+                            uploadedImageServerUrl.value = data.url;
+                            console.log('[Agent Video] 图片上传成功:', data.url);
+                        } else {
+                            console.error('[Agent Video] 图片上传失败:', data.error);
+                        }
+                    }).catch(err => {
+                        console.error('[Agent Video] 图片上传异常:', err);
+                    });
+                }
             }
             function selectType(type) {
                 const prevType = selectedType.value;
@@ -3787,6 +3899,9 @@
                 loadRechargePackages,
                 selectRechargePackage,
                 backToPackageList,
+                showFeedbackModal,
+                openFeedbackModal,
+                closeFeedbackModal,
                 hasUploadedImage,
                 uploadedImageUrl,
                 fileInputRef,
