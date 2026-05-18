@@ -2889,6 +2889,14 @@ MCP_TOOLS = [
                 "image_mode": {
                     "type": "string",
                     "description": "图片模式（可选，默认 first_last_frame）：first_last_frame（首尾帧）或 multi_reference（全能参考）"
+                },
+                "video_urls": {
+                    "type": "string",
+                    "description": "参考视频URL（可选），多个用英文逗号分隔。仅部分模型支持（如 Seedance 2.0）。用于提供驱动视频，让生成的视频模仿参考视频的运动风格。"
+                },
+                "audio_urls": {
+                    "type": "string",
+                    "description": "参考音频URL（可选），多个用英文逗号分隔。仅部分模型支持。用于提供驱动音频，让生成的视频配合音频节奏。"
                 }
             },
             "required": ["prompt", "image_urls"]

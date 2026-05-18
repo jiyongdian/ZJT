@@ -415,6 +415,12 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                     "reasoning_content": ""
                 }
                 messages.append(assistant_msg)
+            elif role == "user" and isinstance(content, list):
+                # 多模态消息（包含图片）
+                messages.append({
+                    "role": "user",
+                    "content": content
+                })
             elif role == "verification":
                 # 跳过 verification 消息（仅供前端展示，不发给 LLM）
                 continue

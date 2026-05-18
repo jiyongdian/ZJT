@@ -382,6 +382,35 @@ app.add_middleware(
 )
 
 
+# CDN 重定向中间件：当 /upload/ 下的媒体文件有 CDN 映射时，自动 302 到新鲜 CDN 签名 URL
+_MEDIA_EXTENSIONS = frozenset({'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.mp4', '.webm', '.mov', '.avi', '.mkv'})
+
+@app.middleware("http")
+async def cdn_redirect_middleware(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/upload/"):
+        ext = os.path.splitext(path)[1].lower()
+        if ext in _MEDIA_EXTENSIONS:
+            try:
+                from config.config_util import get_config
+                if not get_config().get("server", {}).get("auto_upload_to_cdn", False):
+                    return await call_next(request)
+                # local_path 在数据库中不带前导 /，如 "upload/temp/xxx.mp4"
+                local_path = path.lstrip("/")
+                from model.media_file_mapping import MediaFileMappingModel
+                from utils.cdn_util import CDNUtil
+                mapping = MediaFileMappingModel.get_by_local_path_hash(
+                    MediaFileMappingModel._compute_local_path_hash(local_path)
+                )
+                if mapping:
+                    cdn_url = CDNUtil.get_cdn_url(mapping.id)
+                    if cdn_url:
+                        return RedirectResponse(url=cdn_url, status_code=302)
+            except Exception as e:
+                logger.warning(f"CDN 重定向查找失败: {e}")
+    return await call_next(request)
+
+
 @app.get("/api/config/upload")
 @require_permission("config:view_upload")
 async def get_upload_config(request: Request):
@@ -1474,6 +1503,7 @@ async def get_status(
                     if media_url:
                         results_payload = [{
                             "file_url": media_url,
+                            "result_url": task_record.result_url,
                             "task_cost_time": task_cost_time
                         }]
                 elif cdn_status == CDNStatus.PENDING:
@@ -1486,6 +1516,7 @@ async def get_status(
                     if media_url:
                         results_payload = [{
                             "file_url": media_url,
+                            "result_url": task_record.result_url,
                             "task_cost_time": task_cost_time
                         }]
 

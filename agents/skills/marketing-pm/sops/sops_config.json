@@ -6,5 +6,9 @@
   "sop-video-generation": {
     "allowed_tools": [
     ]
+  },
+  "sop-image-understanding": {
+    "allowed_tools": [
+    ]
   }
 }

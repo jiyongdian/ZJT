@@ -27,6 +27,7 @@ class AskUserMixin:
     # agent_id → 中文显示名映射
     _DISPLAY_NAME_MAP = {
         "pm_agent": "剧本编排",
+        "marketing_pm_agent": "营销智能体",
         "expert_story-writer": "故事写手",
         "expert_character-creator": "角色设计",
         "expert_location-creator": "场景设计",
@@ -35,6 +36,7 @@ class AskUserMixin:
         "expert_novel-episode-splitter": "剧集拆分",
         "expert_character-image-designer": "角色形象设计",
         "expert_location-prop-image-designer": "场景道具设计",
+        "expert_image-understanding": "图片理解",
     }
 
     def _get_agent_display_name(self) -> str:

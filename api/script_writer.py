@@ -1407,6 +1407,7 @@ async def get_video_models(
 @router.post('/video-model')
 async def set_video_model(request: Request):
     """设置视频模型偏好"""
+    from config.unified_config import UnifiedConfigRegistry, TaskCategory
     try:
         data = await request.json()
         user_id = str(data.get('user_id', ''))
@@ -1435,8 +1436,6 @@ async def set_video_model(request: Request):
             }, status_code=400)
 
         # 验证 task_id 是否属于指定类别
-        from config.unified_config import UnifiedConfigRegistry, TaskCategory
-
         config = UnifiedConfigRegistry.get_by_id(task_id)
         if not config:
             return JSONResponse({
@@ -2241,6 +2240,18 @@ async def create_agent_task(request: Request, session_id: str, task_request: Tas
                 v_pref_parts.append(f"视频时长: {v_prefs['duration']}秒")
             if v_prefs.get('image_mode'):
                 v_pref_parts.append(f"图片模式: {v_prefs['image_mode']}")
+            # 添加视频模型名称（优先从前端传入，其次从 task_id 解析）
+            v_model_display = v_prefs.get('model_name')
+            if not v_model_display and v_task_id:
+                try:
+                    from config.unified_config import UnifiedConfigRegistry as _UCR
+                    _vcfg = _UCR.get_by_id(int(v_task_id))
+                    if _vcfg:
+                        v_model_display = _vcfg.name
+                except (TypeError, ValueError):
+                    pass
+            if v_model_display:
+                v_pref_parts.append(f"视频模型: {v_model_display}")
             if v_pref_parts:
                 user_message += f"\n\n[用户视频偏好] {', '.join(v_pref_parts)}"
 
