@@ -594,7 +594,7 @@
                                 </svg>
                                 <span style="font-weight: 600; color: #00a8e6;">{{ computingPower }}</span>
                             </div>
-                            <button class="marketing-send-btn" @click="handleSend" :disabled="!inputText.trim() || isLoading">
+                            <button class="marketing-send-btn" @click="handleSend" :disabled="!inputText.trim() || isLoading || (selectedType === 'Agent 模式' && mediaType !== 'video' && agentImageFiles.some(img => img.uploading))">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
                                 </svg>
@@ -1473,6 +1473,15 @@
             async function handleSend() {
                 const text = inputText.value.trim();
                 if (!text || isLoading.value) return;
+
+                // 检查 Agent 对话模式的图片是否正在上传中
+                if (selectedType.value === 'Agent 模式' && mediaType.value !== 'video') {
+                    const hasUploading = agentImageFiles.value.some(img => img.uploading);
+                    if (hasUploading) {
+                        showError('图片正在上传中，请稍候');
+                        return;
+                    }
+                }
 
                 // 如果有待回答的 verification，提交自定义回答
                 if (pendingVerificationId.value) {
