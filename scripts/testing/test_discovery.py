@@ -29,6 +29,7 @@ CATEGORY_PATTERNS: Dict[str, List[str]] = {
     'agents': ['agents'],
     'services': ['services'],
     'script_writer_core': ['script_writer_core'],
+    'enterprise': ['enterprise'],
     # 特殊：db_connection 不使用目录遍历
     'db_connection': [],
 }

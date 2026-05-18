@@ -90,6 +90,7 @@ class MarketingPMAgent(PMAgent):
             skip_env_context=True  # 营销智能体不加载环境上下文
         )
 
+        self.agent_id = "marketing_pm_agent"
         logger.info(f"{self.agent_id}: MarketingPMAgent 初始化完成")
 
     def _build_system_prompt(self, skill_names: List[str]) -> str:

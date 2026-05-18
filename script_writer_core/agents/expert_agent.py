@@ -117,6 +117,7 @@ class ExpertAgent(BaseAgent, AskUserMixin):
         task_description = task.get("description", "")
         conversation_history = task.get("conversation_history", [])
         image_urls = task.get("image_urls", [])
+        image_base64_list = task.get("image_base64_list", [])
 
         logger.info(f"{self.agent_id}: Starting task execution - {task_description}")
 
@@ -134,7 +135,11 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                 from utils.image_compressor import url_to_base64
                 content_parts = []
                 for i, img_url in enumerate(image_urls, 1):
-                    base64_data = url_to_base64(img_url, max_size_mb=0.1, max_pixels=250_000)
+                    # 优先使用前端预压缩的 base64，避免重复下载压缩
+                    if i - 1 < len(image_base64_list) and image_base64_list[i - 1]:
+                        base64_data = image_base64_list[i - 1]
+                    else:
+                        base64_data = url_to_base64(img_url, max_size_mb=0.1, max_pixels=250_000)
                     if base64_data:
                         content_parts.append({"type": "text", "text": f"[图片{i}]（URL: {img_url}）"})
                         content_parts.append({"type": "image_url", "image_url": {"url": base64_data}})
@@ -290,8 +295,8 @@ class ExpertAgent(BaseAgent, AskUserMixin):
 
             result = self._execute_tool(tool_name, tool_args)
 
-            # 收集图片生成任务的 project_ids
-            if tool_name in ("generate_text_to_image", "edit_image"):
+            # 收集图片/视频生成任务的 project_ids
+            if tool_name in ("generate_text_to_image", "edit_image", "generate_text_to_video", "image_to_video"):
                 if isinstance(result, dict) and result.get("project_ids"):
                     self.pending_project_ids.extend(result["project_ids"])
 
@@ -410,6 +415,12 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                     "reasoning_content": ""
                 }
                 messages.append(assistant_msg)
+            elif role == "user" and isinstance(content, list):
+                # 多模态消息（包含图片）
+                messages.append({
+                    "role": "user",
+                    "content": content
+                })
             elif role == "verification":
                 # 跳过 verification 消息（仅供前端展示，不发给 LLM）
                 continue

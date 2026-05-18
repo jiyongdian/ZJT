@@ -20,6 +20,20 @@ logger = logging.getLogger(__name__)
 class SopLoader:
     """SOP 加载器类"""
 
+    # 类级别：额外 SOP 目录列表（企业版等）
+    _extra_sops_dirs: list = []
+
+    @classmethod
+    def add_sops_dir(cls, path: str):
+        """注册额外的 SOP 目录（如企业版 SOP 目录），同名 SOP 优先使用额外目录"""
+        dir_path = Path(path)
+        if dir_path.exists() and dir_path.is_dir():
+            if dir_path not in cls._extra_sops_dirs:
+                cls._extra_sops_dirs.append(dir_path)
+                logger.info(f"已注册额外 SOP 目录: {dir_path}")
+        else:
+            logger.warning(f"额外 SOP 目录不存在: {path}")
+
     def __init__(self, sops_dir: str):
         """
         Args:
@@ -43,23 +57,40 @@ class SopLoader:
             return {}
 
     def _load_all_sops_metadata(self) -> Dict[str, Dict[str, str]]:
-        """扫描 sops/ 目录，解析每个 .md 的 front matter（name + description）"""
+        """扫描 sops/ 目录和额外目录，解析每个 .md 的 front matter（name + description）
+        额外目录同名 SOP 覆盖主目录
+        """
         metadata = {}
-        if not self.sops_dir.exists():
-            logger.warning(f"SOP 目录不存在: {self.sops_dir}")
-            return metadata
+        # 先加载主目录
+        if self.sops_dir.exists():
+            for sop_file in self.sops_dir.glob('*.md'):
+                try:
+                    sop_data = self._parse_front_matter(sop_file)
+                    if sop_data and sop_data.get('name'):
+                        metadata[sop_data['name']] = {
+                            'name': sop_data['name'],
+                            'description': sop_data.get('description', ''),
+                            'file': str(sop_file)
+                        }
+                except Exception as e:
+                    logger.warning(f"解析 SOP 文件失败 {sop_file}: {e}")
 
-        for sop_file in self.sops_dir.glob('*.md'):
-            try:
-                sop_data = self._parse_front_matter(sop_file)
-                if sop_data and sop_data.get('name'):
-                    metadata[sop_data['name']] = {
-                        'name': sop_data['name'],
-                        'description': sop_data.get('description', ''),
-                        'file': str(sop_file)
-                    }
-            except Exception as e:
-                logger.warning(f"解析 SOP 文件失败 {sop_file}: {e}")
+        # 再加载额外目录（覆盖同名 SOP）
+        for extra_dir in self._extra_sops_dirs:
+            if extra_dir.exists():
+                for sop_file in extra_dir.glob('*.md'):
+                    try:
+                        sop_data = self._parse_front_matter(sop_file)
+                        if sop_data and sop_data.get('name'):
+                            if sop_data['name'] in metadata:
+                                logger.info(f"企业版 SOP 覆盖: {sop_data['name']}")
+                            metadata[sop_data['name']] = {
+                                'name': sop_data['name'],
+                                'description': sop_data.get('description', ''),
+                                'file': str(sop_file)
+                            }
+                    except Exception as e:
+                        logger.warning(f"解析额外 SOP 文件失败 {sop_file}: {e}")
 
         logger.info(f"已加载 {len(metadata)} 个 SOP 元数据: {', '.join(metadata.keys())}")
         return metadata

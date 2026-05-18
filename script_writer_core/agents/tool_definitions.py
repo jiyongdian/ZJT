@@ -8,7 +8,7 @@ ASK_USER_TOOL_DEFINITION = {
     "type": "function",
     "function": {
         "name": "ask_user",
-        "description": "向用户提问并等待回答。必须提供 options 选项列表供用户快速选择，用户也可以点击'其他'选项自由输入。",
+        "description": "向用户提问并等待回答。必须提供 options 选项列表供用户快速选择。注意：前端会自动在选项列表末尾追加'其他'按钮供用户自由输入，你无需在 options 中手动添加'其他'选项。",
         "parameters": {
             "type": "object",
             "properties": {
@@ -20,7 +20,7 @@ ASK_USER_TOOL_DEFINITION = {
                     "type": "array",
                     "items": {"type": "string"},
                     "minItems": 1,
-                    "description": "必填的选项列表，至少提供一个选项。例如：['科幻', '悬疑', '爱情', '冒险']。用户可以选择选项，也可以点击'其他'自由输入。"
+                    "description": "选项列表，至少提供一个选项。例如：['科幻', '悬疑', '爱情', '冒险']。无需手动添加'其他'选项，前端会自动追加。"
                 },
                 "context": {
                     "type": "object",

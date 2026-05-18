@@ -172,6 +172,25 @@
         "ask_user"
       ],
       "summary_only": true
+    },
+    "marketing-video": {
+      "skills": ["marketing-video"],
+      "model": "gemini/gemini-3-flash-preview",
+      "allowed_tools": [
+        "generate_text_to_video",
+        "image_to_video",
+        "get_user_computing_power",
+        "ask_user"
+      ],
+      "summary_only": true
+    },
+    "image-understanding": {
+      "skills": ["image-understanding"],
+      "model": "gemini/gemini-3-flash-preview",
+      "allowed_tools": [
+        "ask_user"
+      ],
+      "summary_only": true
     }
   }
 }

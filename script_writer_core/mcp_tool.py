@@ -48,6 +48,11 @@ _file_manager = None
 _get_text_to_image_model_id_func = None
 # 获取用户图片偏好的函数引用（由 script_writer_api.py 设置）
 _get_image_preferences_func = None
+# 获取用户视频偏好的函数引用（由 script_writer_api.py 设置）
+_get_video_preferences_func = None
+# 获取视频模型 task_id 的函数引用（由 script_writer_api.py 设置）
+_get_text_to_video_model_id_func = None
+_get_image_to_video_model_id_func = None
 
 # 默认生图模型 task_id (nano-banana-Pro)
 DEFAULT_TEXT_TO_IMAGE_TASK_ID = 7
@@ -65,11 +70,50 @@ def set_image_preferences_getter(func):
     _get_image_preferences_func = func
 
 
+def set_video_preferences_getter(func):
+    """设置获取用户视频偏好的函数"""
+    global _get_video_preferences_func
+    _get_video_preferences_func = func
+
+
+def set_text_to_video_model_getter(func):
+    """设置获取文生视频模型 task_id 的函数"""
+    global _get_text_to_video_model_id_func
+    _get_text_to_video_model_id_func = func
+
+
+def set_image_to_video_model_getter(func):
+    """设置获取图生视频模型 task_id 的函数"""
+    global _get_image_to_video_model_id_func
+    _get_image_to_video_model_id_func = func
+
+
+def _get_video_preferences(user_id: str, world_id: str) -> Dict[str, str]:
+    """获取用户的视频偏好（比例、时长），默认返回空字典"""
+    if _get_video_preferences_func:
+        return _get_video_preferences_func(user_id, world_id)
+    return {}
+
+
 def _get_text_to_image_task_id(user_id: str, world_id: str) -> int:
     """获取生图模型的 task_id，默认返回 7 (nano-banana-Pro)"""
     if _get_text_to_image_model_id_func:
         return _get_text_to_image_model_id_func(user_id, world_id)
     return DEFAULT_TEXT_TO_IMAGE_TASK_ID
+
+
+def _get_text_to_video_task_id(user_id: str, world_id: str) -> Optional[int]:
+    """获取文生视频模型的 task_id，默认返回 None（由调用方回退到 configs[0]）"""
+    if _get_text_to_video_model_id_func:
+        return _get_text_to_video_model_id_func(user_id, world_id)
+    return None
+
+
+def _get_image_to_video_task_id(user_id: str, world_id: str) -> Optional[int]:
+    """获取图生视频模型的 task_id，默认返回 None（由调用方回退到 configs[0]）"""
+    if _get_image_to_video_model_id_func:
+        return _get_image_to_video_model_id_func(user_id, world_id)
+    return None
 
 
 def _get_image_preferences(user_id: str, world_id: str) -> Dict[str, str]:
@@ -2788,6 +2832,74 @@ MCP_TOOLS = [
                 }
             },
             "required": ["prompt", "image_url"]
+        }
+    },
+    {
+        "name": "generate_text_to_video",
+        "description": "文本生成视频（非阻塞）。发起视频生成请求，立即返回 project_ids。非阻塞，后台自动跟踪进度。视频模型由系统自动选择，请先调用 get_user_computing_power 确认算力是否充足。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "视频描述提示词（必填），详细描述画面内容、运动方式、风格、镜头运动等。使用英文编写效果最佳。"
+                },
+                "ratio": {
+                    "type": "string",
+                    "description": "【已由系统注入，无需传入】视频宽高比。用户在界面上已选择，系统会自动应用。"
+                },
+                "duration_seconds": {
+                    "type": "integer",
+                    "description": "【已由系统注入，无需传入】视频时长（秒）。用户在界面上已选择，系统会自动应用。"
+                },
+                "count": {
+                    "type": "integer",
+                    "description": "生成视频数量（可选，默认：1）"
+                }
+            },
+            "required": ["prompt"]
+        }
+    },
+    {
+        "name": "image_to_video",
+        "description": "图片生成视频（图生视频，非阻塞）。基于参考图片生成视频，立即返回 project_ids。非阻塞，后台自动跟踪进度。⚠️ 严禁捏造图片URL，image_urls 必须是对话中真实存在的图片地址。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "视频描述/运动指令（必填），描述希望视频中出现的运动效果、镜头变化等。"
+                },
+                "image_urls": {
+                    "type": "string",
+                    "description": "参考图片URL（必填），多张用英文逗号分隔。对话中每张图片都有 [图片N]（URL: ...） 标签，请将所有图片 URL 用逗号拼接后传入。例如：'http://xxx/a.jpg,http://xxx/b.jpg'"
+                },
+                "ratio": {
+                    "type": "string",
+                    "description": "【已由系统注入，无需传入】视频宽高比。用户在界面上已选择，系统会自动应用。"
+                },
+                "duration_seconds": {
+                    "type": "integer",
+                    "description": "【已由系统注入，无需传入】视频时长（秒）。用户在界面上已选择，系统会自动应用。"
+                },
+                "count": {
+                    "type": "integer",
+                    "description": "生成视频数量（可选，默认：1）"
+                },
+                "image_mode": {
+                    "type": "string",
+                    "description": "图片模式（可选，默认 first_last_frame）：first_last_frame（首尾帧）或 multi_reference（全能参考）"
+                },
+                "video_urls": {
+                    "type": "string",
+                    "description": "参考视频URL（可选），多个用英文逗号分隔。仅部分模型支持（如 Seedance 2.0）。用于提供驱动视频，让生成的视频模仿参考视频的运动风格。"
+                },
+                "audio_urls": {
+                    "type": "string",
+                    "description": "参考音频URL（可选），多个用英文逗号分隔。仅部分模型支持。用于提供驱动音频，让生成的视频配合音频节奏。"
+                }
+            },
+            "required": ["prompt", "image_urls"]
         }
     }
 ]
