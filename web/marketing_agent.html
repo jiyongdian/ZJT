@@ -1555,9 +1555,10 @@
                         const displayUrl = img.serverUrl || img.previewUrl;
                         userContent += `\n\n[图片${i + 1}] <img src="${displayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${displayUrl}'" alt="图片${i + 1}">`;
                     });
-                } else if (isAgentChatPreview && mediaType.value === 'video' && hasUploadedImage.value && uploadedImageUrl.value) {
-                    // Agent 视频模式参考图预览
-                    userContent += `\n\n<img src="${uploadedImageUrl.value}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${uploadedImageUrl.value}'" alt="参考图">`;
+                } else if (isAgentChatPreview && mediaType.value === 'video' && hasUploadedImage.value && (uploadedImageServerUrl.value || (agentImageFiles.value.length > 0 && agentImageFiles.value[0].serverUrl) || uploadedImageUrl.value)) {
+                    // Agent 视频模式参考图预览，优先使用服务器 URL 避免 blob URL 失效
+                    const videoDisplayUrl = uploadedImageServerUrl.value || (agentImageFiles.value.length > 0 && agentImageFiles.value[0].serverUrl) || uploadedImageUrl.value;
+                    userContent += `\n\n<img src="${videoDisplayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${videoDisplayUrl}'" alt="参考图">`;
                 } else if (hasUploadedImage.value && uploadedImageUrl.value) {
                     userContent += `\n\n<img src="${uploadedImageUrl.value}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${uploadedImageUrl.value}'" alt="参考图">`;
                 }
@@ -2118,13 +2119,15 @@
                         console.log('[Agent] 发送图片 URL:', imageUrls.length, '张');
                     } else if (isAgentVideo && hasUploadedImage.value) {
                         // Agent 视频模式：HTTP URL（图生视频工具用） + base64（LLM 视觉用）
+                        // 兼容从 Agent 对话模式切换过来的场景：检查 agentImageFiles 中的 serverUrl
+                        const existingServerUrl = uploadedImageServerUrl.value || (agentImageFiles.value.length > 0 && agentImageFiles.value[0].serverUrl) || null;
                         // 等待服务器上传完成（本地上传的图片需要获取 HTTP URL）
-                        if (uploadedImageFile.value && !uploadedImageServerUrl.value && !uploadedImageUrl.value?.startsWith('http')) {
+                        if (uploadedImageFile.value && !existingServerUrl && !uploadedImageUrl.value?.startsWith('http')) {
                             // 上传尚未完成，等待最多 10 秒
                             const uploadOk = await new Promise(resolve => {
                                 let waited = 0;
                                 const check = setInterval(() => {
-                                    if (uploadedImageServerUrl.value) { clearInterval(check); resolve(true); }
+                                    if (uploadedImageServerUrl.value || (agentImageFiles.value.length > 0 && agentImageFiles.value[0].serverUrl)) { clearInterval(check); resolve(true); }
                                     waited += 200;
                                     if (waited >= 10000) { clearInterval(check); resolve(false); }
                                 }, 200);
@@ -2133,8 +2136,9 @@
                                 console.warn('[Agent Video] 图片上传超时，使用 base64 回退');
                             }
                         }
-                        if (uploadedImageServerUrl.value) {
-                            imageUrls.push(uploadedImageServerUrl.value);
+                        const finalServerUrl = uploadedImageServerUrl.value || (agentImageFiles.value.length > 0 && agentImageFiles.value[0].serverUrl) || null;
+                        if (finalServerUrl) {
+                            imageUrls.push(finalServerUrl);
                         } else if (uploadedImageUrl.value && uploadedImageUrl.value.startsWith('http')) {
                             imageUrls.push(uploadedImageUrl.value);
                         } else if (uploadedImageBase64.value) {
