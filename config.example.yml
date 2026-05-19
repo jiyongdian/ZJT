@@ -160,6 +160,10 @@ tts:
   upload_url: "http://ailive.perseids.cn:11442/upload/tts/result_audio/"
 
 
+# User registration configuration
+user_registration:
+  require_admin_approval: false  # 注册后是否需要管理员审核才能登录
+
 # Test mode configuration
 test_mode:
   enabled: false  # 是否启用测试模式
@@ -203,6 +207,7 @@ alembic:
 # Edition configuration
 edition:
   mode: "community"
+  shared_space: false  # 商业版是否使用共享空间模式（true=所有用户共享数据，false=按用户隔离，默认false）
 
 # Enterprise 模块版本兼容性配置
 # 当 enterprise/ 目录存在时，主仓库会校验 enterprise 模块版本是否在此范围内

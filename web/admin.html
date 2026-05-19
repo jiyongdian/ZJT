@@ -230,6 +230,7 @@
                         <select class="filter-select" v-model="users.statusFilter" @change="searchUsers">
                             <option value="">全部状态</option>
                             <option value="1">正常</option>
+                            <option value="2">待审核</option>
                             <option value="0">禁用</option>
                         </select>
                         <select class="filter-select" v-model="users.roleFilter" @change="searchUsers">
@@ -271,14 +272,21 @@
                                 </td>
                                 <td>{{ user.computing_power || 0 }}</td>
                                 <td>
-                                    <span class="status-badge" :class="{ active: user.status === 1, inactive: user.status === 0 }">
-                                        {{ user.status === 1 ? '正常' : '禁用' }}
+                                    <span class="status-badge" :class="{ active: user.status === 1, inactive: user.status === 0, pending: user.status === 2 }">
+                                        {{ user.status === 1 ? '正常' : user.status === 2 ? '待审核' : '禁用' }}
                                     </span>
                                 </td>
                                 <td>{{ formatDate(user.created_at) }}</td>
                                 <td>
                                     <button class="action-btn primary" @click="viewUserDetail(user.user_id)">详情</button>
                                     <button class="action-btn success" @click="openPowerModal(user)">调整算力</button>
+                                    <button
+                                        v-if="user.status === 2"
+                                        class="action-btn success"
+                                        @click="approveUser(user.user_id)"
+                                    >
+                                        允许登录
+                                    </button>
                                     <button
                                         v-if="!isCommunityEdition"
                                         class="action-btn"

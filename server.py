@@ -157,12 +157,12 @@ def _check_resource_permission(resource, user_id: int, action: str) -> bool:
     Returns:
         bool: 是否有权限
     """
-    if Edition.is_community():
+    if Edition.is_space_isolated():
+        return getattr(resource, 'user_id', None) == user_id
+    else:
         if action == Action.DELETE:
             return getattr(resource, 'user_id', None) == user_id
         return True
-    else:
-        return getattr(resource, 'user_id', None) == user_id
 
 
 def _ensure_resource_access(resource, user_id: int, action: str, resource_name: str = "资源"):
@@ -4440,8 +4440,8 @@ async def get_video_workflow(
                 content={"code": -1, "message": "工作流不存在"}
             )
 
-        # 商业版才检查权限，社区版所有人都可以访问
-        if Edition.is_enterprise() and getattr(workflow, 'user_id', None) != user_id:
+        # 独立空间模式才检查权限，共享空间所有人可访问
+        if Edition.is_space_isolated() and getattr(workflow, 'user_id', None) != user_id:
             return JSONResponse(
                 status_code=403,
                 content={"code": -1, "message": "无权限访问该工作流"}
@@ -4484,8 +4484,8 @@ async def poll_workflow_node_status(
                 content={"code": -1, "message": "工作流不存在"}
             )
         
-        # 商业版才检查权限，社区版所有人都可以访问
-        if Edition.is_enterprise() and getattr(workflow, 'user_id', None) != user_id:
+        # 独立空间模式才检查权限，共享空间所有人可访问
+        if Edition.is_space_isolated() and getattr(workflow, 'user_id', None) != user_id:
             return JSONResponse(
                 status_code=403,
                 content={"code": -1, "message": "无权限访问该工作流"}
@@ -5528,8 +5528,8 @@ async def update_video_workflow(
                 content={"code": -1, "message": "工作流不存在"}
             )
 
-        # 商业版才检查权限，社区版所有人都可以修改
-        if Edition.is_enterprise() and getattr(workflow, 'user_id', None) != user_id:
+        # 独立空间模式才检查权限，共享空间所有人可修改
+        if Edition.is_space_isolated() and getattr(workflow, 'user_id', None) != user_id:
             return JSONResponse(
                 status_code=403,
                 content={"code": -1, "message": "无权限修改该工作流"}
