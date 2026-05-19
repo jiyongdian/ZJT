@@ -413,6 +413,11 @@ body {
     color: #991b1b;
 }
 
+.status-badge.pending {
+    background: #fef3c7;
+    color: #d97706;
+}
+
 .status-badge.admin {
     background: #e0e7ff;
     color: #3730a3;

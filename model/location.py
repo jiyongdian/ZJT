@@ -297,8 +297,8 @@ class LocationModel:
         where_conditions = []
         params = []
         
-        # 商业版才按 user_id 过滤
-        if Edition.is_enterprise():
+        # 独立空间模式才按 user_id 过滤
+        if Edition.is_space_isolated():
             where_conditions.append("user_id = %s")
             params.append(user_id)
         

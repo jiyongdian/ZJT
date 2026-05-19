@@ -92,7 +92,10 @@ class AuthService:
             return {"success": False, "message": "密码错误"}
         
         # 检查用户状态
-        if user.status != 1:
+        if user.status == 2:
+            LoginLogModel.create(user.id, ip_address, user_agent, 0)
+            return {"success": False, "message": "账号正在审核中，请等待管理员审批"}
+        if user.status == 0:
             LoginLogModel.create(user.id, ip_address, user_agent, 0)
             return {"success": False, "message": "账户已被禁用"}
         
@@ -180,19 +183,24 @@ class AuthService:
         
         # 生成密钥
         secret_key = generate_secret_key()
-        
+
         # 判断是否是第一个用户，如果是则设为管理员
         total_count = UsersModel.get_total_count()
         is_first_user = total_count == 0
         user_role = "admin" if is_first_user else "user"
         logger.info(f"注册检查: 当前用户总数={total_count}, 是否首个用户={is_first_user}, 分配角色={user_role}")
-        
+
+        # 根据配置决定初始状态：需要管理员审核时为待审核(2)，否则为正常(1)
+        from config.config_util import get_dynamic_config_value
+        require_approval = get_dynamic_config_value('user_registration', 'require_admin_approval', default=False)
+        initial_status = 2 if require_approval else 1
+
         # 创建用户
         from model.database import execute_insert
         user_id = execute_insert(
-            """INSERT INTO users (phone, password_hash, status, role, secret_key, invite_code, inviter_id) 
-               VALUES (%s, %s, 1, %s, %s, %s, %s)""",
-            (phone, password_hash, user_role, secret_key, user_invite_code, inviter_id)
+            """INSERT INTO users (phone, password_hash, status, role, secret_key, invite_code, inviter_id)
+               VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+            (phone, password_hash, initial_status, user_role, secret_key, user_invite_code, inviter_id)
         )
         
         # 删除验证码
@@ -216,18 +224,21 @@ class AuthService:
         LoginLogModel.create(user_id, ip_address, user_agent, 1)
         
         logger.info(f"用户注册成功 - ID: {user_id}, 手机号: {phone}")
-        
-        return {
+
+        result = {
             "success": True,
-            "message": "注册成功",
+            "message": "注册成功，请等待管理员审核" if require_approval else "注册成功",
             "data": {
                 "user_id": user_id,
                 "phone": phone,
-                "status": 1,
+                "status": initial_status,
                 "role": user_role,
                 "is_first_admin": is_first_user,
             }
         }
+        if require_approval:
+            result["data"]["pending_approval"] = True
+        return result
     
     @staticmethod
     def _add_inviter_reward(inviter_id: int, new_user_id: int) -> None:

@@ -104,6 +104,21 @@ class Edition:
         mode = Edition.get_mode()
         return "社区版" if mode == Edition.COMMUNITY else "商业版"
 
+    @staticmethod
+    def is_space_isolated() -> bool:
+        """
+        判断是否为独立空间模式（用户数据隔离）
+
+        - 社区版：始终为共享空间（返回 False）
+        - 商业版：默认为独立空间（返回 True），
+          但可通过 edition.shared_space=true 配置为共享空间（返回 False）
+        """
+        if Edition.is_community():
+            return False
+        from config.config_util import get_dynamic_config_value
+        shared = get_dynamic_config_value('edition', 'shared_space', default=False)
+        return not shared
+
 
 class TaskType:
     """任务类型常量"""

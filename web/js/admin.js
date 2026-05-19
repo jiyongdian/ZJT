@@ -1110,6 +1110,29 @@ const AdminApp = {
         },
         
         // 更新用户状态
+        // 审批用户（允许待审核用户登录）
+        async approveUser(userId) {
+            if (!confirm('确定允许该用户登录吗？')) {
+                return;
+            }
+
+            try {
+                const response = await axios.put(`/api/admin/users/${userId}/status`,
+                    { status: 1 },
+                    { headers: { 'Authorization': `Bearer ${this.authToken}` } }
+                );
+
+                if (response.data.code === 0) {
+                    this.showToast('已允许登录', 'success');
+                    this.loadUsers();
+                }
+            } catch (error) {
+                console.error('Approve user failed:', error);
+                const detail = error?.response?.data?.detail || '操作失败';
+                this.showToast(detail, 'error');
+            }
+        },
+
         async updateUserStatus(userId, currentStatus) {
             const newStatus = currentStatus === 1 ? 0 : 1;
             const action = newStatus === 0 ? '禁用' : '启用';

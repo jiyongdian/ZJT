@@ -10,6 +10,7 @@ from config.unified_config import UnifiedConfigRegistry
 from config.config_util import get_config_value, get_dynamic_config_value
 from config.version import get_app_version
 from config.strategy.edition_strategy import IS_COMMUNITY_EDITION
+from config.constant import Edition
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +101,7 @@ async def get_server_config():
                 "version": version,
                 "max_image_size_mb": max_image_size_mb,
                 "is_enterprise": not IS_COMMUNITY_EDITION,
+                "shared_space": not Edition.is_space_isolated(),
                 "footer": {
                     "copyright": footer.get('copyright', ''),
                     "icp_number": footer.get('icp_number', ''),
