@@ -797,8 +797,7 @@
             const hasUploadedImage = ref(false);
             const uploadedImageUrl = ref('');
             const uploadedImageFile = ref(null);
-            const uploadedImageBase64 = ref('');  // 服务端压缩后的 base64
-            const uploadedImageServerUrl = ref('');  // 视频模式下上传到服务器后的 HTTP URL
+            const uploadedImageServerUrl = ref('');  // 上传到服务器后的 HTTP URL
             const fileInputRef = ref(null);
             const isDragging = ref(false);
 
@@ -817,6 +816,46 @@
             const videoStatus = ref('');
             const videoStatusInterval = ref(null);
             const videoResults = ref([]);
+
+            // 任务追踪与恢复机制
+            const sessionTaskRegistry = {};  // { [sessionId]: [{ type:'image'|'video', projectIds:[], msgUid:string }] }
+            let msgUidCounter = 0;
+            let currentEventSource = null;
+            const activeIntervals = new Set();  // 追踪所有活跃的 setInterval ID
+
+            function generateMsgUid() {
+                return `msg_${Date.now()}_${msgUidCounter++}`;
+            }
+
+            function trackedSetInterval(fn, delay) {
+                const id = setInterval(fn, delay);
+                activeIntervals.add(id);
+                return id;
+            }
+
+            function trackedClearInterval(id) {
+                clearInterval(id);
+                activeIntervals.delete(id);
+            }
+
+            function clearAllTaskIntervals() {
+                activeIntervals.forEach(id => clearInterval(id));
+                activeIntervals.clear();
+            }
+
+            function registerTask(type, projectIds, msgUid) {
+                const sid = currentSessionId.value;
+                if (!sid) return;
+                if (!sessionTaskRegistry[sid]) sessionTaskRegistry[sid] = [];
+                sessionTaskRegistry[sid].push({ type, projectIds, msgUid });
+            }
+
+            function unregisterTask(msgUid) {
+                const sid = currentSessionId.value;
+                if (!sid || !sessionTaskRegistry[sid]) return;
+                sessionTaskRegistry[sid] = sessionTaskRegistry[sid].filter(t => t.msgUid !== msgUid);
+            }
+
             const selectedDuration = ref(5);
             const videoImageMode = ref('first_last_frame'); // 'first_last_frame' | 'multi_reference'
 
@@ -1648,16 +1687,18 @@
                     updateSessionTitle(prompt);
 
                     // 添加 AI 占位消息
-                    const msgIndex = messages.value.length;
+                    const msgUid = generateMsgUid();
                     messages.value.push({
+                        _uid: msgUid,
                         role: 'ai',
                         content: '正在生成图片，请稍候...',
                         timestamp: new Date().toISOString()
                     });
                     scrollToBottom();
 
-                    // 开始轮询状态
-                    startImageStatusCheck(msgIndex);
+                    // 注册任务并开始轮询状态
+                    registerTask('image', imageProjectIds.value, msgUid);
+                    startImageStatusCheck(msgUid);
 
                 } catch (e) {
                     showError(e.message || '图片生成请求失败');
@@ -1673,8 +1714,15 @@
             }
 
             // 轮询图片生成状态
-            async function checkImageStatus(msgIndex) {
+            async function checkImageStatus(msgUid) {
                 if (!imageProjectIds.value || imageProjectIds.value.length === 0) return;
+
+                const msgIdx = messages.value.findIndex(m => m._uid === msgUid);
+                if (msgIdx === -1) {
+                    clearImageStatusCheck();
+                    unregisterTask(msgUid);
+                    return;
+                }
 
                 try {
                     const params = authToken.value ? { auth_token: authToken.value } : {};
@@ -1706,16 +1754,20 @@
                                 return `<div class="generated-image-wrapper" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${imgUrl}'"><img src="${imgUrl}" class="generated-image" alt="生成结果"></div>`;
                             }).join('');
                             const finalContent = '图片已生成：\n\n' + imageHtml;
-                            messages.value[msgIndex].content = finalContent;
+                            messages.value[msgIdx].content = finalContent;
                             scrollToBottom();
+                            unregisterTask(msgUid);
                             await appendMessageToBackend('assistant', finalContent);
+                            await cleanPendingTasksFromHistory();
                         } else if (anyFailed && !anyRunning) {
                             imageStatus.value = 'FAILED';
                             clearImageStatusCheck();
                             const finalContent = '图片生成失败，请稍后重试。';
-                            messages.value[msgIndex].content = finalContent;
+                            messages.value[msgIdx].content = finalContent;
                             scrollToBottom();
+                            unregisterTask(msgUid);
                             await appendMessageToBackend('assistant', finalContent);
+                            await cleanPendingTasksFromHistory();
                         }
                     }
                 } catch (err) {
@@ -1723,16 +1775,16 @@
                 }
             }
 
-            function startImageStatusCheck(msgIndex) {
+            function startImageStatusCheck(msgUid) {
                 clearImageStatusCheck();
-                imageStatusInterval.value = setInterval(() => {
-                    checkImageStatus(msgIndex);
+                imageStatusInterval.value = trackedSetInterval(() => {
+                    checkImageStatus(msgUid);
                 }, 5000);
             }
 
             function clearImageStatusCheck() {
                 if (imageStatusInterval.value) {
-                    clearInterval(imageStatusInterval.value);
+                    trackedClearInterval(imageStatusInterval.value);
                     imageStatusInterval.value = null;
                 }
             }
@@ -1742,18 +1794,27 @@
                 const { project_ids, message } = data;
                 if (!project_ids || project_ids.length === 0) return;
 
-                const idx = messages.value.length;
+                const msgUid = generateMsgUid();
                 messages.value.push({
+                    _uid: msgUid,
                     role: 'ai',
                     content: (message || '已提交图片生成任务') + '，图片生成中...',
                     timestamp: new Date().toISOString()
                 });
                 scrollToBottom();
-                pollAgentImageStatus(idx, project_ids);
+                registerTask('image', project_ids, msgUid);
+                pollAgentImageStatus(msgUid, project_ids);
             }
 
-            function pollAgentImageStatus(msgIndex, projectIds) {
-                const interval = setInterval(async () => {
+            function pollAgentImageStatus(msgUid, projectIds) {
+                const interval = trackedSetInterval(async () => {
+                    const msgIdx = messages.value.findIndex(m => m._uid === msgUid);
+                    if (msgIdx === -1) {
+                        trackedClearInterval(interval);
+                        unregisterTask(msgUid);
+                        return;
+                    }
+
                     try {
                         const params = authToken.value ? { auth_token: authToken.value } : {};
                         const projectIdsStr = projectIds.join(',');
@@ -1774,7 +1835,7 @@
                             });
 
                             if (allDone) {
-                                clearInterval(interval);
+                                trackedClearInterval(interval);
                                 let finalContent = '';
                                 if (imageUrls.length > 0) {
                                     const imageHtml = imageUrls.map(url =>
@@ -1784,12 +1845,14 @@
                                 } else {
                                     finalContent = '图片生成失败，请稍后重试。';
                                 }
-                                messages.value[msgIndex].content = finalContent;
+                                messages.value[msgIdx].content = finalContent;
                                 scrollToBottom();
+                                unregisterTask(msgUid);
                                 await appendMessageToBackend('assistant', finalContent);
+                                await cleanPendingTasksFromHistory();
                             } else {
                                 const doneCount = tasks.filter(t => t.status === 'SUCCESS').length;
-                                messages.value[msgIndex].content = `图片生成中... (${doneCount}/${tasks.length})`;
+                                messages.value[msgIdx].content = `图片生成中... (${doneCount}/${tasks.length})`;
                                 scrollToBottom();
                             }
                         }
@@ -1804,19 +1867,28 @@
                 const { project_ids, message } = data;
                 if (!project_ids || project_ids.length === 0) return;
 
-                const idx = messages.value.length;
+                const msgUid = generateMsgUid();
                 messages.value.push({
+                    _uid: msgUid,
                     role: 'ai',
                     content: (message || '已提交视频生成任务') + '，视频生成中...',
                     timestamp: new Date().toISOString()
                 });
                 scrollToBottom();
-                pollAgentVideoStatus(idx, project_ids);
+                registerTask('video', project_ids, msgUid);
+                pollAgentVideoStatus(msgUid, project_ids);
             }
 
             // 轮询 Agent 视频生成状态
-            function pollAgentVideoStatus(msgIndex, projectIds) {
-                const interval = setInterval(async () => {
+            function pollAgentVideoStatus(msgUid, projectIds) {
+                const interval = trackedSetInterval(async () => {
+                    const msgIdx = messages.value.findIndex(m => m._uid === msgUid);
+                    if (msgIdx === -1) {
+                        trackedClearInterval(interval);
+                        unregisterTask(msgUid);
+                        return;
+                    }
+
                     try {
                         const params = authToken.value ? { auth_token: authToken.value } : {};
                         const projectIdsStr = projectIds.join(',');
@@ -1837,7 +1909,7 @@
                             });
 
                             if (allDone) {
-                                clearInterval(interval);
+                                trackedClearInterval(interval);
                                 let finalContent = '';
                                 if (videoUrls.length > 0) {
                                     const videoHtml = videoUrls.map(url =>
@@ -1847,12 +1919,14 @@
                                 } else {
                                     finalContent = '视频生成失败，请稍后重试。';
                                 }
-                                messages.value[msgIndex].content = finalContent;
+                                messages.value[msgIdx].content = finalContent;
                                 scrollToBottom();
+                                unregisterTask(msgUid);
                                 await appendMessageToBackend('assistant', finalContent);
+                                await cleanPendingTasksFromHistory();
                             } else {
                                 const doneCount = tasks.filter(t => t.status === 'SUCCESS').length;
-                                messages.value[msgIndex].content = `视频生成中... (${doneCount}/${tasks.length})`;
+                                messages.value[msgIdx].content = `视频生成中... (${doneCount}/${tasks.length})`;
                                 scrollToBottom();
                             }
                         }
@@ -1948,16 +2022,18 @@
                     updateSessionTitle(prompt);
 
                     // 添加 AI 占位消息
-                    const msgIndex = messages.value.length;
+                    const msgUid = generateMsgUid();
                     messages.value.push({
+                        _uid: msgUid,
                         role: 'ai',
                         content: '正在生成视频，请稍候...',
                         timestamp: new Date().toISOString()
                     });
                     scrollToBottom();
 
-                    // 开始轮询状态
-                    startVideoStatusCheck(msgIndex);
+                    // 注册任务并开始轮询状态
+                    registerTask('video', videoProjectIds.value, msgUid);
+                    startVideoStatusCheck(msgUid);
 
                 } catch (e) {
                     showError(e.message || '视频生成请求失败');
@@ -1973,8 +2049,15 @@
             }
 
             // 轮询视频生成状态
-            async function checkVideoStatus(msgIndex) {
+            async function checkVideoStatus(msgUid) {
                 if (!videoProjectIds.value || videoProjectIds.value.length === 0) return;
+
+                const msgIdx = messages.value.findIndex(m => m._uid === msgUid);
+                if (msgIdx === -1) {
+                    clearVideoStatusCheck();
+                    unregisterTask(msgUid);
+                    return;
+                }
 
                 try {
                     const params = authToken.value ? { auth_token: authToken.value } : {};
@@ -2005,16 +2088,20 @@
                                 return `<video src="${vidUrl}" controls style="max-width:100%;max-height:400px;border-radius:8px;margin:8px 0;"></video>`;
                             }).join('');
                             const finalContent = '视频已生成：\n\n' + videoHtml;
-                            messages.value[msgIndex].content = finalContent;
+                            messages.value[msgIdx].content = finalContent;
                             scrollToBottom();
+                            unregisterTask(msgUid);
                             await appendMessageToBackend('assistant', finalContent);
+                            await cleanPendingTasksFromHistory();
                         } else if (anyFailed && !anyRunning) {
                             videoStatus.value = 'FAILED';
                             clearVideoStatusCheck();
                             const finalContent = '视频生成失败，请稍后重试。';
-                            messages.value[msgIndex].content = finalContent;
+                            messages.value[msgIdx].content = finalContent;
                             scrollToBottom();
+                            unregisterTask(msgUid);
                             await appendMessageToBackend('assistant', finalContent);
+                            await cleanPendingTasksFromHistory();
                         }
                     }
                 } catch (err) {
@@ -2022,16 +2109,16 @@
                 }
             }
 
-            function startVideoStatusCheck(msgIndex) {
+            function startVideoStatusCheck(msgUid) {
                 clearVideoStatusCheck();
-                videoStatusInterval.value = setInterval(() => {
-                    checkVideoStatus(msgIndex);
+                videoStatusInterval.value = trackedSetInterval(() => {
+                    checkVideoStatus(msgUid);
                 }, 10000);
             }
 
             function clearVideoStatusCheck() {
                 if (videoStatusInterval.value) {
-                    clearInterval(videoStatusInterval.value);
+                    trackedClearInterval(videoStatusInterval.value);
                     videoStatusInterval.value = null;
                 }
             }
@@ -2042,63 +2129,6 @@
                 await sendMessageToApi('继续');
             }
 
-            // 图片压缩函数：压缩到指定大小以下并转为 base64
-            async function compressImageToBase64(file, maxSizeMB = 2) {
-                return new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        const img = new Image();
-                        img.onload = () => {
-                            const canvas = document.createElement('canvas');
-                            const ctx = canvas.getContext('2d');
-
-                            // 智能选择起始质量
-                            const sizeRatio = file.size / (maxSizeMB * 1024 * 1024);
-                            let quality = sizeRatio <= 1.2 ? 0.95 : sizeRatio <= 1.5 ? 0.85 : sizeRatio <= 2 ? 0.75 : 0.70;
-
-                            let width = img.width;
-                            let height = img.height;
-
-                            // 尝试压缩
-                            const tryCompress = () => {
-                                canvas.width = width;
-                                canvas.height = height;
-                                ctx.drawImage(img, 0, 0, width, height);
-
-                                canvas.toBlob((blob) => {
-                                    if (!blob) {
-                                        reject(new Error('图片压缩失败'));
-                                        return;
-                                    }
-                                    if (blob.size <= maxSizeMB * 1024 * 1024 || quality <= 0.6) {
-                                        // 转为 base64
-                                        const reader2 = new FileReader();
-                                        reader2.onload = () => resolve(reader2.result);
-                                        reader2.onerror = () => reject(new Error('base64 转换失败'));
-                                        reader2.readAsDataURL(blob);
-                                    } else {
-                                        // 降低质量或缩小尺寸
-                                        if (quality > 0.6) {
-                                            quality -= 0.05;
-                                        } else {
-                                            width = Math.floor(width * 0.9);
-                                            height = Math.floor(height * 0.9);
-                                        }
-                                        tryCompress();
-                                    }
-                                }, 'image/jpeg', quality);
-                            };
-
-                            tryCompress();
-                        };
-                        img.onerror = () => reject(new Error('图片加载失败'));
-                        img.src = e.target.result;
-                    };
-                    reader.onerror = () => reject(new Error('文件读取失败'));
-                    reader.readAsDataURL(file);
-                });
-            }
-
             // 调用 API 发送消息
             async function sendMessageToApi(text) {
                 isLoading.value = true;
@@ -2107,12 +2137,10 @@
                 const isAgentVideo = selectedType.value === 'Agent 模式' && mediaType.value === 'video';
 
                 try {
-                    // 收集图片 URL（Agent 模式使用 HTTP URL，其他模式使用 base64）
+                    // 收集图片 URL（统一使用 HTTP URL）
                     const imageUrls = [];
-                    const imageBase64List = [];
                     if (isAgentChat && agentImageFiles.value.length > 0) {
                         // Agent 对话模式：收集 HTTP URL
-                        // 检查所有图片是否已上传完成
                         const allUploaded = agentImageFiles.value.every(img => !img.uploading && img.serverUrl);
                         if (!allUploaded) {
                             showError('图片正在上传中，请稍候');
@@ -2126,12 +2154,9 @@
                         });
                         console.log('[Agent] 发送图片 URL:', imageUrls.length, '张');
                     } else if (isAgentVideo && hasUploadedImage.value) {
-                        // Agent 视频模式：HTTP URL（图生视频工具用） + base64（LLM 视觉用）
-                        // 兼容从 Agent 对话模式切换过来的场景：检查 agentImageFiles 中的 serverUrl
+                        // Agent 视频模式：等待服务器上传完成获取 HTTP URL
                         const existingServerUrl = uploadedImageServerUrl.value || (agentImageFiles.value.length > 0 && agentImageFiles.value[0].serverUrl) || null;
-                        // 等待服务器上传完成（本地上传的图片需要获取 HTTP URL）
                         if (uploadedImageFile.value && !existingServerUrl && !uploadedImageUrl.value?.startsWith('http')) {
-                            // 上传尚未完成，等待最多 10 秒
                             const uploadOk = await new Promise(resolve => {
                                 let waited = 0;
                                 const check = setInterval(() => {
@@ -2141,7 +2166,9 @@
                                 }, 200);
                             });
                             if (!uploadOk) {
-                                console.warn('[Agent Video] 图片上传超时，使用 base64 回退');
+                                showError('图片上传超时，请重试');
+                                isLoading.value = false;
+                                return;
                             }
                         }
                         const finalServerUrl = uploadedImageServerUrl.value || (agentImageFiles.value.length > 0 && agentImageFiles.value[0].serverUrl) || null;
@@ -2149,25 +2176,28 @@
                             imageUrls.push(finalServerUrl);
                         } else if (uploadedImageUrl.value && uploadedImageUrl.value.startsWith('http')) {
                             imageUrls.push(uploadedImageUrl.value);
-                        } else if (uploadedImageBase64.value) {
-                            imageUrls.push(uploadedImageBase64.value);
-                        }
-                        // base64 传给 LLM 视觉理解（避免后端重复下载压缩）
-                        if (uploadedImageBase64.value) {
-                            imageBase64List.push(uploadedImageBase64.value);
                         }
                     } else if (hasUploadedImage.value) {
-                        if (uploadedImageBase64.value) {
-                            imageUrls.push(uploadedImageBase64.value);
-                            console.log('[VL] 使用已缓存图片，大小:', Math.round(uploadedImageBase64.value.length * 3 / 4 / 1024), 'KB');
-                        } else if (uploadedImageFile.value) {
-                            try {
-                                const base64 = await compressImageToBase64(uploadedImageFile.value, 2);
-                                imageUrls.push(base64);
-                                console.log('[VL] 实时压缩图片，大小:', Math.round(base64.length * 3 / 4 / 1024), 'KB');
-                            } catch (compressErr) {
-                                console.error('[VL] 图片压缩失败:', compressErr);
-                                showError('图片压缩失败，请重试');
+                        // VL 模式：等待服务器上传完成获取 HTTP URL
+                        const serverUrl = uploadedImageServerUrl.value;
+                        if (serverUrl) {
+                            imageUrls.push(serverUrl);
+                        } else if (uploadedImageUrl.value && uploadedImageUrl.value.startsWith('http')) {
+                            imageUrls.push(uploadedImageUrl.value);
+                        } else {
+                            // 等待上传完成（最多 10 秒）
+                            const uploadOk = await new Promise(resolve => {
+                                let waited = 0;
+                                const check = setInterval(() => {
+                                    if (uploadedImageServerUrl.value) { clearInterval(check); resolve(true); }
+                                    waited += 200;
+                                    if (waited >= 10000) { clearInterval(check); resolve(false); }
+                                }, 200);
+                            });
+                            if (uploadOk && uploadedImageServerUrl.value) {
+                                imageUrls.push(uploadedImageServerUrl.value);
+                            } else {
+                                showError('图片上传超时，请重试');
                                 isLoading.value = false;
                                 return;
                             }
@@ -2195,7 +2225,6 @@
                             message: text,
                             auth_token: authToken.value,
                             image_urls: imageUrls.length > 0 ? imageUrls : undefined,
-                            image_base64_list: imageBase64List.length > 0 ? imageBase64List : undefined,
                             model: selectedLLMModel.value ? selectedLLMModel.value.name : '',
                             model_id: selectedLLMModel.value ? selectedLLMModel.value.id : undefined,
                             vendor_id: 1,
@@ -2261,7 +2290,6 @@
                         uploadedImageUrl.value = '';
                         uploadedImageFile.value = null;
                     }
-                    uploadedImageBase64.value = '';
                     uploadedImageServerUrl.value = '';
                     scrollToBottom();
                 }
@@ -2271,21 +2299,28 @@
             async function handleStream(taskId) {
                 return new Promise((resolve, reject) => {
                     const eventSource = new EventSource(`/api/task/${taskId}/stream`);
+                    currentEventSource = eventSource;
                     let fullContent = '';
                     let hasReceivedData = false;
-                    let msgIndex = -1; // 懒创建：收到首个 message 时才 push 占位消息
+                    let msgUid = '';  // 使用 _uid 替代 msgIndex
 
-                    // 确保 msgIndex 对应的占位消息存在
+                    // 确保 msgUid 对应的占位消息存在
                     function ensurePlaceholder() {
-                        if (msgIndex === -1) {
-                            msgIndex = messages.value.length;
+                        if (!msgUid) {
+                            msgUid = generateMsgUid();
                             messages.value.push({
+                                _uid: msgUid,
                                 role: 'ai',
                                 content: '',
                                 timestamp: new Date().toISOString()
                             });
                         }
-                        return msgIndex;
+                        return msgUid;
+                    }
+
+                    // 通过 _uid 查找消息索引
+                    function findMsgByIdx(uid) {
+                        return messages.value.findIndex(m => m._uid === uid);
                     }
 
                     eventSource.onmessage = (event) => {
@@ -2295,8 +2330,9 @@
                             if (data.type === 'message') {
                                 hasReceivedData = true;
                                 fullContent += data.content || '';
-                                const idx = ensurePlaceholder();
-                                messages.value[idx].content = fullContent;
+                                const uid = ensurePlaceholder();
+                                const idx = findMsgByIdx(uid);
+                                if (idx !== -1) messages.value[idx].content = fullContent;
                                 scrollToBottom();
                             } else if (data.type === 'status') {
                                 // 状态更新，可忽略
@@ -2312,6 +2348,7 @@
                 showOtherInput.value = false;
                 otherInputText.value = '';
                                 messages.value.push({
+                                    _uid: generateMsgUid(),
                                     role: 'ai',
                                     content: '等待回答超时，请重新发送消息。',
                                     timestamp: new Date().toISOString()
@@ -2329,13 +2366,16 @@
                                 handleVideoTaskSubmitted(data);
                             } else if (data.type === 'error') {
                                 eventSource.close();
+                                if (currentEventSource === eventSource) currentEventSource = null;
                                 pendingVerificationId.value = null;
                 showOtherInput.value = false;
                 otherInputText.value = '';
-                                if (msgIndex !== -1) {
-                                    messages.value[msgIndex].content = fullContent || '处理出错，请重试';
+                                if (msgUid) {
+                                    const idx = findMsgByIdx(msgUid);
+                                    if (idx !== -1) messages.value[idx].content = fullContent || '处理出错，请重试';
                                 } else {
                                     messages.value.push({
+                                        _uid: generateMsgUid(),
                                         role: 'ai',
                                         content: '处理出错，请重试',
                                         timestamp: new Date().toISOString()
@@ -2344,8 +2384,10 @@
                                 reject(new Error(data.error || data.message || 'Stream error'));
                             } else if (data.type === 'done') {
                                 eventSource.close();
-                                if (msgIndex !== -1) {
-                                    messages.value[msgIndex].content = fullContent;
+                                if (currentEventSource === eventSource) currentEventSource = null;
+                                if (msgUid) {
+                                    const idx = findMsgByIdx(msgUid);
+                                    if (idx !== -1) messages.value[idx].content = fullContent;
                                 }
                                 showContinue.value = true;
                                 // 刷新算力显示
@@ -2356,19 +2398,22 @@
                             // 非 JSON 数据，直接追加
                             hasReceivedData = true;
                             fullContent += event.data;
-                            const idx = ensurePlaceholder();
-                            messages.value[idx].content = fullContent;
+                            const uid = ensurePlaceholder();
+                            const idx = findMsgByIdx(uid);
+                            if (idx !== -1) messages.value[idx].content = fullContent;
                             scrollToBottom();
                         }
                     };
 
                     eventSource.onerror = (e) => {
                         eventSource.close();
+                        if (currentEventSource === eventSource) currentEventSource = null;
                         pendingVerificationId.value = null;
                 showOtherInput.value = false;
                 otherInputText.value = '';
                         if (!hasReceivedData) {
                             messages.value.push({
+                                _uid: generateMsgUid(),
                                 role: 'ai',
                                 content: '连接出错，请重试',
                                 timestamp: new Date().toISOString()
@@ -2383,11 +2428,13 @@
                     // 超时处理
                     setTimeout(() => {
                         eventSource.close();
+                        if (currentEventSource === eventSource) currentEventSource = null;
                         pendingVerificationId.value = null;
                 showOtherInput.value = false;
                 otherInputText.value = '';
                         if (!hasReceivedData) {
                             messages.value.push({
+                                _uid: generateMsgUid(),
                                 role: 'ai',
                                 content: '请求超时，请重试',
                                 timestamp: new Date().toISOString()
@@ -2476,6 +2523,10 @@
 
             // 新建对话
             async function newChat() {
+                // 清理所有定时器和 SSE 连接
+                clearAllTaskIntervals();
+                if (currentEventSource) { currentEventSource.close(); currentEventSource = null; }
+
                 messages.value = [];
                 showContinue.value = false;
                 inputText.value = '';
@@ -2488,7 +2539,6 @@
                 hasUploadedImage.value = false;
                 uploadedImageUrl.value = '';
                 uploadedImageFile.value = null;
-                uploadedImageBase64.value = '';
                 uploadedImageServerUrl.value = '';
                 if (fileInputRef.value) fileInputRef.value.value = '';
                 if (referenceInputRef.value) referenceInputRef.value.value = '';
@@ -2518,6 +2568,20 @@
             }
 
             function parseHistoryMessage(h) {
+                // 检测 __PENDING_TASK__ 标记（后端保存的待处理任务）
+                const rawContent = typeof h.content === 'string' ? h.content : '';
+                const pendingMatch = rawContent.match(/^__PENDING_TASK__:(image_task_submitted|video_task_submitted):(.+)$/);
+                if (pendingMatch) {
+                    return {
+                        _uid: generateMsgUid(),
+                        role: 'system',  // 不直接显示
+                        content: rawContent,
+                        timestamp: h.timestamp,
+                        _isPendingTask: true,
+                        _taskType: pendingMatch[1] === 'image_task_submitted' ? 'image' : 'video',
+                        _projectIds: JSON.parse(pendingMatch[2])
+                    };
+                }
                 // 处理 verification 消息：还原为前端渲染格式
                 if (h.role === 'verification') {
                     let vData = h.content;
@@ -2579,9 +2643,24 @@
                         timestamp: h.timestamp
                     };
                 }
+                // 处理纯文本消息中的图片标签（[图片N]（URL: http://...）格式）
+                const textContent = typeof h.content === 'string' ? h.content : (h.content?.text || JSON.stringify(h.content));
+                const imageUrlRegex = /\[图片\d+]（URL:\s*([^\s）]+)\s*）/g;
+                let renderedContent = textContent;
+                const imageUrlMatches = [...textContent.matchAll(imageUrlRegex)];
+                if (imageUrlMatches.length > 0) {
+                    // 移除图片标签文本，替换为 <img> 标签
+                    renderedContent = renderedContent.replace(/\[图片\d+]（URL:[\s\S]*?）\n?/g, '');
+                    for (const m of imageUrlMatches) {
+                        const displayUrl = m[1];
+                        renderedContent += `\n\n<img src="${displayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${displayUrl}'" alt="参考图">`;
+                    }
+                    renderedContent = renderedContent.replace(/\n{3,}/g, '\n\n').trim();
+                }
                 return {
+                    _uid: generateMsgUid(),
                     role: h.role === 'assistant' ? 'ai' : h.role,
-                    content: typeof h.content === 'string' ? h.content : (h.content?.text || JSON.stringify(h.content)),
+                    content: renderedContent,
                     timestamp: h.timestamp
                 };
             }
@@ -2613,8 +2692,137 @@
                 }
             }
 
+            // 清理对话历史中的 __PENDING_TASK__ 标记
+            async function cleanPendingTasksFromHistory() {
+                if (!currentSessionId.value) return;
+                try {
+                    await fetch(`/api/session/${currentSessionId.value}/clean-pending-tasks`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': authToken.value,
+                            'X-User-Id': userId.value
+                        }
+                    });
+                } catch (e) {
+                    console.error('清理 pending task 标记失败:', e);
+                }
+            }
+
+            // 构建图片/视频结果内容
+            function buildResultContent(type, tasks) {
+                const urls = [];
+                tasks.forEach(task => {
+                    if (task.results) {
+                        task.results.forEach(r => {
+                            const url = r.result_url || r.file_url || r.url || r.image_url || '';
+                            if (url) urls.push(url);
+                        });
+                    }
+                });
+                if (urls.length > 0) {
+                    if (type === 'image') {
+                        const html = urls.map(url =>
+                            `<div class="generated-image-wrapper" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${url}'"><img src="${url}" class="generated-image" alt="生成结果"></div>`
+                        ).join('');
+                        return '图片已生成：\n\n' + html;
+                    } else {
+                        const html = urls.map(url =>
+                            `<video src="${url}" controls style="max-width:100%;max-height:400px;border-radius:8px;margin:8px 0;"></video>`
+                        ).join('');
+                        return '视频已生成：\n\n' + html;
+                    }
+                }
+                return (type === 'image' ? '图片' : '视频') + '生成失败，请稍后重试。';
+            }
+
+            // 恢复会话内的活跃任务（会话内切换恢复）
+            async function resumeSessionTasks(sessionId) {
+                const tasks = sessionTaskRegistry[sessionId];
+                if (!tasks || tasks.length === 0) return;
+
+                const remaining = [];
+                for (const task of tasks) {
+                    try {
+                        const params = authToken.value ? { auth_token: authToken.value } : {};
+                        const res = await axios.get(`/api/get-status/${task.projectIds.join(',')}`, { params });
+
+                        if (res.data.tasks) {
+                            const allDone = res.data.tasks.every(t => t.status === 'SUCCESS' || t.status === 'FAILED');
+                            if (allDone) {
+                                const content = buildResultContent(task.type, res.data.tasks);
+                                messages.value.push({
+                                    _uid: task.msgUid,
+                                    role: 'ai',
+                                    content: content,
+                                    timestamp: new Date().toISOString()
+                                });
+                                await appendMessageToBackend('assistant', content);
+                                await cleanPendingTasksFromHistory();
+                            } else {
+                                messages.value.push({
+                                    _uid: task.msgUid,
+                                    role: 'ai',
+                                    content: '生成中...',
+                                    timestamp: new Date().toISOString()
+                                });
+                                if (task.type === 'image') pollAgentImageStatus(task.msgUid, task.projectIds);
+                                else pollAgentVideoStatus(task.msgUid, task.projectIds);
+                                remaining.push(task);
+                            }
+                        } else {
+                            remaining.push(task);
+                        }
+                    } catch (e) {
+                        console.error('恢复任务状态失败:', e);
+                        remaining.push(task);
+                    }
+                }
+                sessionTaskRegistry[sessionId] = remaining;
+            }
+
+            // 恢复页面刷新后的待处理任务（从历史中的 __PENDING_TASK__ 标记恢复）
+            async function recoverPendingTasks() {
+                const pendingMsgs = messages.value.filter(m => m._isPendingTask);
+                if (pendingMsgs.length === 0) return;
+
+                for (const msg of pendingMsgs) {
+                    try {
+                        const params = authToken.value ? { auth_token: authToken.value } : {};
+                        const res = await axios.get(`/api/get-status/${msg._projectIds.join(',')}`, { params });
+
+                        if (res.data.tasks && res.data.tasks.every(t => t.status === 'SUCCESS' || t.status === 'FAILED')) {
+                            // 任务已完成：替换为结果
+                            const content = buildResultContent(msg._taskType, res.data.tasks);
+                            msg.role = 'ai';
+                            msg.content = content;
+                            msg._isPendingTask = false;
+                            await appendMessageToBackend('assistant', content);
+                            await cleanPendingTasksFromHistory();
+                        } else {
+                            // 任务仍在运行：恢复轮询
+                            msg.role = 'ai';
+                            msg.content = '生成中...';
+                            msg._isPendingTask = false;
+                            registerTask(msg._taskType, msg._projectIds, msg._uid);
+                            if (msg._taskType === 'image') pollAgentImageStatus(msg._uid, msg._projectIds);
+                            else pollAgentVideoStatus(msg._uid, msg._projectIds);
+                        }
+                    } catch (e) {
+                        console.error('恢复 pending task 失败:', e);
+                        msg.role = 'ai';
+                        msg.content = '任务状态恢复失败，请重新生成。';
+                        msg._isPendingTask = false;
+                    }
+                }
+            }
+
             // 选择会话
             async function selectSession(sessionId) {
+                // 清理所有定时器和 SSE 连接
+                clearAllTaskIntervals();
+                if (currentEventSource) { currentEventSource.close(); currentEventSource = null; }
+
                 currentSessionId.value = sessionId;
                 // 完全重置所有媒体状态
                 mediaItems.value = [];
@@ -2623,10 +2831,36 @@
                 hasUploadedImage.value = false;
                 uploadedImageUrl.value = '';
                 uploadedImageFile.value = null;
+                // 重置任务状态
+                imageProjectIds.value = [];
+                imageStatus.value = '';
+                imageResults.value = [];
+                videoProjectIds.value = [];
+                videoStatus.value = '';
+                videoResults.value = [];
+
                 if (fileInputRef.value) fileInputRef.value.value = '';
                 if (referenceInputRef.value) referenceInputRef.value.value = '';
                 const history = await loadSessionHistory(sessionId);
                 messages.value = history.filter(filterHistoryMessage).map(parseHistoryMessage);
+
+                // 恢复活跃任务（先从历史标记恢复，再从内存注册表恢复，避免重复）
+                await recoverPendingTasks();
+
+                // 从 registry 中移除已被 recoverPendingTasks 处理的任务
+                const recoveredIds = new Set(
+                    messages.value
+                        .filter(m => m._projectIds && !m._isPendingTask)
+                        .flatMap(m => m._projectIds)
+                );
+                if (sessionTaskRegistry[sessionId]) {
+                    sessionTaskRegistry[sessionId] = sessionTaskRegistry[sessionId].filter(t =>
+                        !t.projectIds.some(id => recoveredIds.has(id))
+                    );
+                }
+
+                await resumeSessionTasks(sessionId);
+
                 scrollToBottom();
             }
 
@@ -2825,6 +3059,7 @@
                     const history = await loadSessionHistory(latestSession.id);
                     if (history.length > 0) {
                         messages.value = history.filter(filterHistoryMessage).map(parseHistoryMessage);
+                        await recoverPendingTasks();
                     }
                 }
 
@@ -3154,62 +3389,50 @@
                 const previewUrl = URL.createObjectURL(file);
                 uploadedImageUrl.value = previewUrl;
                 hasUploadedImage.value = true;
-                const isAgentVideoMode = selectedType.value === 'Agent 模式' && mediaType.value === 'video';
                 // 同步到 mediaItems
-                addMediaItem(file, 'image', previewUrl, { uploading: isAgentVideoMode });
+                addMediaItem(file, 'image', previewUrl, { uploading: true });
                 // 切换模型后刷新设置
                 refreshModelSettings();
 
-                // 立即在客户端压缩为 base64（供发送给 LLM 使用）
-                uploadedImageBase64.value = '';
-                compressImageToBase64(file, 2).then(b64 => {
-                    uploadedImageBase64.value = b64;
-                    console.log('[VL] 图片已压缩，大小:', Math.round(b64.length * 3 / 4 / 1024), 'KB');
-                }).catch(err => {
-                    console.error('[VL] 图片压缩失败:', err);
-                });
-
-                // Agent 视频模式：额外上传到服务器获取 HTTP URL（图生视频工具需要 HTTP URL）
-                if (isAgentVideoMode) {
-                    uploadedImageServerUrl.value = '';
-                    const formData = new FormData();
-                    formData.append('file', file);
-                    formData.append('session_id', currentSessionId.value || 'temp');
-                    if (authToken.value) formData.append('auth_token', authToken.value);
-                    fetch('/api/upload-agent-image', {
-                        method: 'POST',
-                        body: formData
-                    }).then(resp => resp.json()).then(data => {
-                        if (data.success && data.url) {
-                            uploadedImageServerUrl.value = data.url;
-                            const item = mediaItems.value.find(m => m.fileUrl === previewUrl);
-                            if (item) {
-                                item.fileUrl = data.url;
-                                item.thumbnailUrl = data.url;
-                                item.uploading = false;
-                                item.uploadFailed = false;
-                                mediaItems.value = [...mediaItems.value];
-                            }
-                            console.log('[Agent Video] 图片上传成功:', data.url);
-                        } else {
-                            const item = mediaItems.value.find(m => m.fileUrl === previewUrl);
-                            if (item) {
-                                item.uploading = false;
-                                item.uploadFailed = true;
-                                mediaItems.value = [...mediaItems.value];
-                            }
-                            console.error('[Agent Video] 图片上传失败:', data.error);
+                // 上传到服务器获取 HTTP URL（所有模式统一）
+                uploadedImageServerUrl.value = '';
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('session_id', currentSessionId.value || 'temp');
+                if (authToken.value) formData.append('auth_token', authToken.value);
+                fetch('/api/upload-agent-image', {
+                    method: 'POST',
+                    body: formData
+                }).then(resp => resp.json()).then(data => {
+                    if (data.success && data.url) {
+                        uploadedImageServerUrl.value = data.url;
+                        const item = mediaItems.value.find(m => m.fileUrl === previewUrl);
+                        if (item) {
+                            item.fileUrl = data.url;
+                            item.thumbnailUrl = data.url;
+                            item.uploading = false;
+                            item.uploadFailed = false;
+                            mediaItems.value = [...mediaItems.value];
                         }
-                    }).catch(err => {
+                        console.log('图片上传成功:', data.url);
+                    } else {
                         const item = mediaItems.value.find(m => m.fileUrl === previewUrl);
                         if (item) {
                             item.uploading = false;
                             item.uploadFailed = true;
                             mediaItems.value = [...mediaItems.value];
                         }
-                        console.error('[Agent Video] 图片上传异常:', err);
-                    });
-                }
+                        console.error('图片上传失败:', data.error);
+                    }
+                }).catch(err => {
+                    const item = mediaItems.value.find(m => m.fileUrl === previewUrl);
+                    if (item) {
+                        item.uploading = false;
+                        item.uploadFailed = true;
+                        mediaItems.value = [...mediaItems.value];
+                    }
+                    console.error('图片上传异常:', err);
+                });
             }
 
             // Agent 模式：上传图片到服务器获取 HTTP URL
@@ -3309,7 +3532,6 @@
                 hasUploadedImage.value = false;
                 uploadedImageUrl.value = '';
                 uploadedImageFile.value = null;
-                uploadedImageBase64.value = '';
                 uploadedImageServerUrl.value = '';
                 if (fileInputRef.value) fileInputRef.value.value = '';
                 refreshModelSettings();
@@ -3615,60 +3837,48 @@
                 uploadedImageFile.value = file;
                 uploadedImageUrl.value = previewUrl;
                 hasUploadedImage.value = true;
-                const isAgentVideoMode = selectedType.value === 'Agent 模式' && mediaType.value === 'video';
-                addMediaItem(file, 'image', previewUrl, { uploading: isAgentVideoMode });
+                addMediaItem(file, 'image', previewUrl, { uploading: true });
                 refreshModelSettings();
 
-                // 立即在客户端压缩为 base64（供发送给 LLM 使用）
-                uploadedImageBase64.value = '';
-                compressImageToBase64(file, 2).then(b64 => {
-                    uploadedImageBase64.value = b64;
-                    console.log('[VL] 图片已压缩，大小:', Math.round(b64.length * 3 / 4 / 1024), 'KB');
-                }).catch(err => {
-                    console.error('[VL] 图片压缩失败:', err);
-                });
-
-                // Agent 视频模式：额外上传到服务器获取 HTTP URL
-                if (isAgentVideoMode) {
-                    uploadedImageServerUrl.value = '';
-                    const fd = new FormData();
-                    fd.append('file', file);
-                    fd.append('session_id', currentSessionId.value || 'temp');
-                    if (authToken.value) fd.append('auth_token', authToken.value);
-                    fetch('/api/upload-agent-image', {
-                        method: 'POST',
-                        body: fd
-                    }).then(resp => resp.json()).then(data => {
-                        if (data.success && data.url) {
-                            uploadedImageServerUrl.value = data.url;
-                            const item = mediaItems.value.find(m => m.fileUrl === previewUrl);
-                            if (item) {
-                                item.fileUrl = data.url;
-                                item.thumbnailUrl = data.url;
-                                item.uploading = false;
-                                item.uploadFailed = false;
-                                mediaItems.value = [...mediaItems.value];
-                            }
-                            console.log('[Agent Video] 图片上传成功:', data.url);
-                        } else {
-                            const item = mediaItems.value.find(m => m.fileUrl === previewUrl);
-                            if (item) {
-                                item.uploading = false;
-                                item.uploadFailed = true;
-                                mediaItems.value = [...mediaItems.value];
-                            }
-                            console.error('[Agent Video] 图片上传失败:', data.error);
+                // 上传到服务器获取 HTTP URL（所有模式统一）
+                uploadedImageServerUrl.value = '';
+                const fd = new FormData();
+                fd.append('file', file);
+                fd.append('session_id', currentSessionId.value || 'temp');
+                if (authToken.value) fd.append('auth_token', authToken.value);
+                fetch('/api/upload-agent-image', {
+                    method: 'POST',
+                    body: fd
+                }).then(resp => resp.json()).then(data => {
+                    if (data.success && data.url) {
+                        uploadedImageServerUrl.value = data.url;
+                        const item = mediaItems.value.find(m => m.fileUrl === previewUrl);
+                        if (item) {
+                            item.fileUrl = data.url;
+                            item.thumbnailUrl = data.url;
+                            item.uploading = false;
+                            item.uploadFailed = false;
+                            mediaItems.value = [...mediaItems.value];
                         }
-                    }).catch(err => {
+                        console.log('图片上传成功:', data.url);
+                    } else {
                         const item = mediaItems.value.find(m => m.fileUrl === previewUrl);
                         if (item) {
                             item.uploading = false;
                             item.uploadFailed = true;
                             mediaItems.value = [...mediaItems.value];
                         }
-                        console.error('[Agent Video] 图片上传异常:', err);
-                    });
-                }
+                        console.error('图片上传失败:', data.error);
+                    }
+                }).catch(err => {
+                    const item = mediaItems.value.find(m => m.fileUrl === previewUrl);
+                    if (item) {
+                        item.uploading = false;
+                        item.uploadFailed = true;
+                        mediaItems.value = [...mediaItems.value];
+                    }
+                    console.error('图片上传异常:', err);
+                });
             }
             function selectType(type) {
                 const prevType = selectedType.value;
@@ -3843,6 +4053,8 @@
             function cleanup() {
                 clearImageStatusCheck();
                 clearVideoStatusCheck();
+                clearAllTaskIntervals();
+                if (currentEventSource) { currentEventSource.close(); currentEventSource = null; }
             }
 
             // 监听 mediaType 变化，重置选中模型

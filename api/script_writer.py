@@ -797,7 +797,6 @@ class TaskCreateRequest(BaseModel):
     enable_thinking: bool = False
     thinking_effort: str = "medium"
     image_urls: Optional[List[str]] = None
-    image_base64_list: Optional[List[str]] = None
     image_preferences: Optional[Dict[str, Any]] = None
     video_preferences: Optional[Dict[str, Any]] = None
 
@@ -1125,6 +1124,44 @@ async def append_session_message(request: Request, session_id: str, message_requ
         })
     except Exception as e:
         logger.error(f'追加消息失败: {str(e)}')
+        return JSONResponse({
+            'success': False,
+            'error': str(e)
+        }, status_code=500)
+
+@router.post('/session/{session_id}/clean-pending-tasks')
+@require_permission("script_session:update")
+async def clean_pending_tasks(request: Request, session_id: str):
+    """清理对话历史中的 __PENDING_TASK__ 标记"""
+    try:
+        from model.chat_sessions import ChatSessionsModel
+
+        session_entity = ChatSessionsModel.get_by_session_id(session_id)
+        if not session_entity:
+            return JSONResponse({
+                'success': False,
+                'error': '会话不存在'
+            }, status_code=404)
+
+        history = session_entity.conversation_history or []
+        cleaned = [msg for msg in history
+                   if not (msg.get('content', '').startswith('__PENDING_TASK__'))]
+        removed_count = len(history) - len(cleaned)
+
+        if removed_count > 0:
+            ChatSessionsModel.update_conversation_history(
+                session_id=session_id,
+                conversation_history=cleaned,
+                update_tokens=False
+            )
+            session_storage.invalidate_cache(session_id)
+
+        return JSONResponse({
+            'success': True,
+            'removed': removed_count
+        })
+    except Exception as e:
+        logger.error(f'清理 pending task 标记失败: {str(e)}')
         return JSONResponse({
             'success': False,
             'error': str(e)
@@ -2266,8 +2303,7 @@ async def create_agent_task(request: Request, session_id: str, task_request: Tas
             model_id=model_id,
             enable_thinking=task_request.enable_thinking,
             thinking_effort=task_request.thinking_effort,
-            image_urls=task_request.image_urls,
-            image_base64_list=task_request.image_base64_list
+            image_urls=task_request.image_urls
         )
         
         # 获取任务对象
