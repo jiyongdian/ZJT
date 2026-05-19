@@ -188,6 +188,7 @@
       "skills": ["image-understanding"],
       "model": "gemini/gemini-3-flash-preview",
       "allowed_tools": [
+        "fetch_image_as_base64",
         "ask_user"
       ],
       "summary_only": true

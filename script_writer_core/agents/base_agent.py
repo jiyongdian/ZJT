@@ -131,4 +131,4 @@ class BaseAgent:
     
     def get_history_summary(self) -> str:
         """获取对话历史摘要"""
-        return f"对话轮次: {len(self.conversation_history)}, 创建时间: {self.created_at}"
+        return f"智能体: {self.agent_id}, 对话轮次: {len(self.conversation_history)}, 创建时间: {self.created_at}"
