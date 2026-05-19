@@ -74,6 +74,8 @@ async def serve_marketing_agent():
 
 **图片 VL 流程**：用户上传图片后，前端在客户端压缩到 ~2MB 并转为 base64。发送消息时通过 `image_urls` 字段将 base64 传给后端，后端直接透传给 LLM，使大模型能够"看到"图片。
 
+**Agent 图片上传流程**：Agent 对话模式下，用户上传图片后会先调用 `POST /api/upload-agent-image` 保存到服务端并获取稳定 HTTP URL。图片上传中或上传失败时禁止发送消息，避免对话消息引用本地 `blob:` 预览地址；发送成功后的对话框图片统一使用服务端 URL 渲染，确保本地预览地址释放后历史消息仍可显示。
+
 **专家图片注入流程**：PM Agent 委托 `marketing-image` 专家生图后，系统自动检测返回结果中的图片 URL（优先从专家对话历史的 tool result 中提取），下载压缩为 base64 并注入 PM 的对话历史（多模态消息），使 PM 的 LLM 能"看到"生成的图片并向用户描述。实现位于 `pm_agent.py` 的 `_extract_image_url_from_result` 和 `_inject_image_to_history` 方法。
 
 **图片模型与偏好同步**：用户在前端选择图片模型/比例/分辨率后：
