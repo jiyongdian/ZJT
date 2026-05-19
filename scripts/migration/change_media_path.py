@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-迁移脚本：替换数据库中媒体路径的 Host
+迁移脚本：替换数据库及磁盘文件中媒体路径的 Host
 
 用法：
     python scripts/migration/change_media_path.py --new-host ssh.perseids.cn:13000
@@ -158,6 +158,95 @@ def replace_host_in_json(old_host, new_host, dry_run=False):
     return stats
 
 
+def _replace_ref_in_obj(obj, old_prefix, new_prefix):
+    """递归遍历 JSON 对象，替换所有 reference_image 字段中的 host。返回是否修改。"""
+    changed = False
+    if isinstance(obj, dict):
+        for key, val in obj.items():
+            if key == "reference_image" and isinstance(val, str) and old_prefix in val:
+                obj[key] = val.replace(old_prefix, new_prefix)
+                changed = True
+            elif isinstance(val, (dict, list)):
+                if _replace_ref_in_obj(val, old_prefix, new_prefix):
+                    changed = True
+            elif isinstance(val, str) and old_prefix in val:
+                # 尝试解析字符串中的 JSON 并递归替换
+                try:
+                    nested = json.loads(val)
+                    if isinstance(nested, (dict, list)):
+                        if _replace_ref_in_obj(nested, old_prefix, new_prefix):
+                            obj[key] = json.dumps(nested, ensure_ascii=False)
+                            changed = True
+                except (json.JSONDecodeError, TypeError):
+                    pass
+    elif isinstance(obj, list):
+        for i, item in enumerate(obj):
+            if isinstance(item, (dict, list)):
+                if _replace_ref_in_obj(item, old_prefix, new_prefix):
+                    changed = True
+            elif isinstance(item, str) and old_prefix in item:
+                try:
+                    nested = json.loads(item)
+                    if isinstance(nested, (dict, list)):
+                        if _replace_ref_in_obj(nested, old_prefix, new_prefix):
+                            obj[i] = json.dumps(nested, ensure_ascii=False)
+                            changed = True
+                except (json.JSONDecodeError, TypeError):
+                    pass
+    return changed
+
+
+def replace_host_in_files(old_host, new_host, dry_run=False):
+    """遍历 files/script_writer 目录，替换 JSON 文件中 reference_image 的 host"""
+    old_prefix = f"http://{old_host}"
+    new_prefix = f"http://{new_host}"
+    stats = {}
+
+    base_dir = os.path.join(project_root, "files", "script_writer")
+    if not os.path.isdir(base_dir):
+        print("  [files] 目录不存在，跳过文件扫描")
+        return stats
+
+    total_matched = 0
+    total_updated = 0
+
+    for dirpath, dirnames, filenames in os.walk(base_dir):
+        for filename in filenames:
+            if not filename.endswith(".json"):
+                continue
+
+            filepath = os.path.join(dirpath, filename)
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+
+                if _replace_ref_in_obj(data, old_prefix, new_prefix):
+                    total_matched += 1
+
+                    if dry_run:
+                        if total_matched == 1:
+                            print(f"    预览 {filepath}:")
+                        continue
+
+                    with open(filepath, "w", encoding="utf-8") as f:
+                        json.dump(data, f, ensure_ascii=False, indent=2)
+                    total_updated += 1
+
+            except (json.JSONDecodeError, TypeError) as e:
+                print(f"    警告: {filepath} JSON 解析失败: {e}")
+            except OSError as e:
+                print(f"    警告: {filepath} 文件操作失败: {e}")
+
+    if dry_run:
+        print(f"  [files] 匹配 {total_matched} 个文件")
+        stats["files"] = total_matched
+    else:
+        print(f"  [files] 已更新 {total_updated} 个文件")
+        stats["files"] = total_updated
+
+    return stats
+
+
 def main():
     parser = argparse.ArgumentParser(description="替换数据库中媒体路径的 Host")
     parser.add_argument(
@@ -187,16 +276,19 @@ def main():
     print(f"  预览模式: {'是' if args.dry_run else '否'}")
     print(f"=" * 60)
 
-    print("\n[1/2] 处理简单文本字段...")
+    print("\n[1/3] 处理简单文本字段...")
     text_stats = replace_host_in_text(old_host, new_host) if not args.dry_run else _dry_run_text(old_host, new_host)
 
-    print("\n[2/2] 处理 JSON 字段...")
+    print("\n[2/3] 处理 JSON 字段...")
     json_stats = replace_host_in_json(old_host, new_host, dry_run=args.dry_run)
+
+    print("\n[3/3] 处理磁盘 JSON 文件...")
+    file_stats = replace_host_in_files(old_host, new_host, dry_run=args.dry_run)
 
     # 汇总
     print(f"\n{'=' * 60}")
     print("处理结果汇总：")
-    all_stats = {**text_stats, **json_stats}
+    all_stats = {**(text_stats or {}), **(json_stats or {}), **(file_stats or {})}
     total = 0
     for key, val in all_stats.items():
         status = f"{val} 条" if val >= 0 else "失败"
