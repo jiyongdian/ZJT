@@ -819,6 +819,7 @@
 
             // 任务追踪与恢复机制
             const sessionTaskRegistry = {};  // { [sessionId]: [{ type:'image'|'video', projectIds:[], msgUid:string }] }
+            const sessionActiveTaskId = {};  // { [sessionId]: taskId } — 追踪每个 session 的活跃 Agent 任务
             let msgUidCounter = 0;
             let currentEventSource = null;
             const activeIntervals = new Set();  // 追踪所有活跃的 setInterval ID
@@ -2255,6 +2256,7 @@
                     }
 
                     const taskId = taskData.task_id;
+                    sessionActiveTaskId[sessionId] = taskId;  // 记录活跃任务，支持切换回来后恢复
 
                     // 更新会话 title（首条消息摘要）
                     updateSessionTitle(text);
@@ -2367,6 +2369,7 @@
                             } else if (data.type === 'error') {
                                 eventSource.close();
                                 if (currentEventSource === eventSource) currentEventSource = null;
+                                delete sessionActiveTaskId[currentSessionId.value];
                                 pendingVerificationId.value = null;
                 showOtherInput.value = false;
                 otherInputText.value = '';
@@ -2385,6 +2388,7 @@
                             } else if (data.type === 'done') {
                                 eventSource.close();
                                 if (currentEventSource === eventSource) currentEventSource = null;
+                                delete sessionActiveTaskId[currentSessionId.value];
                                 if (msgUid) {
                                     const idx = findMsgByIdx(msgUid);
                                     if (idx !== -1) messages.value[idx].content = fullContent;
@@ -2528,6 +2532,7 @@
                 if (currentEventSource) { currentEventSource.close(); currentEventSource = null; }
 
                 messages.value = [];
+                isLoading.value = false;
                 showContinue.value = false;
                 inputText.value = '';
                 autoResize();
@@ -2831,6 +2836,9 @@
                 hasUploadedImage.value = false;
                 uploadedImageUrl.value = '';
                 uploadedImageFile.value = null;
+                // 重置 UI 状态
+                isLoading.value = false;
+                showContinue.value = false;
                 // 重置任务状态
                 imageProjectIds.value = [];
                 imageStatus.value = '';
@@ -2860,6 +2868,26 @@
                 }
 
                 await resumeSessionTasks(sessionId);
+
+                // 恢复活跃 Agent 任务流（AI 正在回复时切换对话的场景）
+                const activeTaskId = sessionActiveTaskId[sessionId];
+                if (activeTaskId) {
+                    try {
+                        const statusRes = await fetch(`/api/task/${activeTaskId}/status`);
+                        const statusData = await statusRes.json();
+                        const taskStatus = statusData.success && statusData.task ? statusData.task.status : null;
+                        if (taskStatus === 'running' || taskStatus === 'pending' || taskStatus === 'waiting_human') {
+                            // 任务仍在运行，重连 SSE 流
+                            await handleStream(activeTaskId);
+                        } else {
+                            // 任务已完成或不存在，清理
+                            delete sessionActiveTaskId[sessionId];
+                        }
+                    } catch (e) {
+                        console.error('恢复活跃任务流失败:', e);
+                        delete sessionActiveTaskId[sessionId];
+                    }
+                }
 
                 scrollToBottom();
             }
@@ -2919,7 +2947,9 @@
                 if (!currentSessionId.value || !text) return;
                 const session = sessions.value.find(s => s.id === currentSessionId.value);
                 if (session && (!session.title || session.title === '新对话')) {
-                    session.title = text.slice(0, 20) + (text.length > 20 ? '...' : '');
+                    // 去除图片标签，只保留用户文字内容作为标题
+                    const cleanText = text.replace(/\[图片\d+]（URL:[\s\S]*?）\n?/g, '').trim();
+                    session.title = cleanText.slice(0, 20) + (cleanText.length > 20 ? '...' : '');
                     session.updatedAt = new Date().toISOString();
                     saveLocalSessions();
                 }
@@ -3060,6 +3090,21 @@
                     if (history.length > 0) {
                         messages.value = history.filter(filterHistoryMessage).map(parseHistoryMessage);
                         await recoverPendingTasks();
+                    }
+
+                    // 检查是否有活跃的 Agent 任务（页面刷新恢复）
+                    try {
+                        const taskRes = await fetch(`/api/session/${latestSession.id}/latest-task`);
+                        const taskData = await taskRes.json();
+                        if (taskData.success && taskData.task) {
+                            const taskStatus = taskData.task.status;
+                            if (taskStatus === 'running' || taskStatus === 'pending' || taskStatus === 'waiting_human') {
+                                sessionActiveTaskId[latestSession.id] = taskData.task.task_id;
+                                await handleStream(taskData.task.task_id);
+                            }
+                        }
+                    } catch (e) {
+                        console.error('恢复活跃任务失败:', e);
                     }
                 }
 

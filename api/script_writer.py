@@ -1167,6 +1167,31 @@ async def clean_pending_tasks(request: Request, session_id: str):
             'error': str(e)
         }, status_code=500)
 
+@router.get('/session/{session_id}/latest-task')
+@require_permission("agent_task:view")
+async def get_latest_task_for_session(request: Request, session_id: str):
+    """获取会话的最新任务信息（用于前端恢复活跃任务流）"""
+    try:
+        from model.agent_tasks import AgentTasksModel
+
+        task = AgentTasksModel.get_latest_by_session(session_id)
+        if not task:
+            return JSONResponse({
+                'success': False,
+                'error': '没有任务'
+            }, status_code=404)
+
+        return JSONResponse({
+            'success': True,
+            'task': task.to_dict()
+        })
+    except Exception as e:
+        logger.error(f'获取最新任务失败: {str(e)}')
+        return JSONResponse({
+            'success': False,
+            'error': str(e)
+        }, status_code=500)
+
 @router.post('/session/{session_id}/model')
 @require_permission("script_session:change_model")
 async def set_session_model(request: Request, session_id: str, model_request: ModelChangeRequest):
@@ -1580,6 +1605,8 @@ async def list_sessions(
                             content = msg.get('content', '')
                             if isinstance(content, str) and content.strip():
                                 clean = re.sub(r'<[^>]+>', '', content).strip()
+                                # 去除图片标签，只保留用户文字
+                                clean = re.sub(r'\[图片\d+]（URL:[\s\S]*?）\n?', '', clean).strip()
                                 clean = re.sub(r'\s+', ' ', clean).strip()
                                 if clean:
                                     title = clean[:20] + ('...' if len(clean) > 20 else '')
