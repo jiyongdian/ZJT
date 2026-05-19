@@ -33,6 +33,7 @@ from script_writer_core.mcp_tool import (
     edit_image,
     get_text_to_image_model_info,
     get_user_computing_power,
+    fetch_image_as_base64,
 )
 
 logger = logging.getLogger(__name__)
@@ -85,6 +86,7 @@ class ToolExecutor:
             "edit_image": edit_image,
             "get_text_to_image_model_info": get_text_to_image_model_info,
             "get_user_computing_power": get_user_computing_power,
+            "fetch_image_as_base64": fetch_image_as_base64,
         }
 
         # 注入企业版工具函数
@@ -120,7 +122,8 @@ class ToolExecutor:
                 "generate_4grid_character_images", "generate_4grid_location_images",
                 "generate_4grid_prop_images", "get_task_status", "check_image_status",
                 "edit_image", "get_text_to_image_model_info", "get_user_computing_power",
-                "generate_text_to_video", "image_to_video"
+                "generate_text_to_video", "image_to_video",
+                "fetch_image_as_base64"
             ]
             
             if tool_name in mcp_tool_names:

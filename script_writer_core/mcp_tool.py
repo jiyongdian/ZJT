@@ -210,6 +210,54 @@ def get_user_computing_power(user_id: str, world_id: str, auth_token: str) -> Di
         return {'success': False, 'error': f'查询算力失败: {str(e)}'}
 
 
+def fetch_image_as_base64(user_id: str, world_id: str, auth_token: str,
+                          image_url: str, max_size_mb: float = 2.0) -> Dict[str, Any]:
+    """
+    下载图片并转为 base64 data URL - MCP工具函数
+
+    供图片理解专家调用，当预加载的图片失败时，通过此工具重新获取图片 base64 数据。
+    调用成功后，图片会自动注入到对话中，LLM 即可看到并分析图片内容。
+
+    Args:
+        user_id: 用户ID（必填）
+        world_id: 世界ID（必填）
+        auth_token: 认证令牌（必填）
+        image_url: 图片 HTTP/HTTPS URL（必填），对话中 [图片N]（URL: ...）标签里的 URL
+        max_size_mb: 最大文件大小 MB（可选，默认 2.0）
+
+    Returns:
+        dict: success=True 时包含 base64_data_url 和 size_kb；success=False 时包含 error
+    """
+    try:
+        if not image_url or not isinstance(image_url, str):
+            return {'success': False, 'error': 'image_url 参数不能为空且必须是字符串'}
+
+        from urllib.parse import urlparse
+        parsed = urlparse(image_url)
+        if parsed.scheme not in ('http', 'https'):
+            return {'success': False, 'error': f'不支持的 URL 协议: {parsed.scheme}，仅支持 http/https'}
+
+        from utils.image_compressor import download_and_compress_to_base64
+        # max_pixels=250_000 控制像素数以限制 token 消耗（与 expert_agent.py 一致）
+        success, data_url, error = download_and_compress_to_base64(
+            image_url, max_size_mb=max_size_mb, max_pixels=250_000
+        )
+
+        if success and data_url:
+            size_kb = len(data_url) * 3 // 4 // 1024  # 近似原始大小
+            return {
+                'success': True,
+                'base64_data_url': data_url,
+                'size_kb': size_kb,
+                'message': f'图片已成功加载（约 {size_kb} KB），图片将自动注入到你的对话中。'
+            }
+        else:
+            return {'success': False, 'error': error or '图片下载或压缩失败'}
+    except Exception as e:
+        logger.error(f"fetch_image_as_base64 失败: {e}", exc_info=True)
+        return {'success': False, 'error': f'获取图片失败: {str(e)}'}
+
+
 def get_skill_loader():
     """获取技能加载器实例（单例模式）"""
     global _skill_loader
@@ -2900,6 +2948,24 @@ MCP_TOOLS = [
                 }
             },
             "required": ["prompt", "image_urls"]
+        }
+    },
+    {
+        "name": "fetch_image_as_base64",
+        "description": "下载图片并获取其 base64 数据。当你看到对话中 [图片N] 标签显示「该图片加载失败」时，立即调用此工具传入对应的图片 URL 来重新获取图片数据。调用成功后图片将自动注入到你的对话中，你就能看到并分析图片了。也可用于获取对话中任何图片 URL 对应的图片数据。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "image_url": {
+                    "type": "string",
+                    "description": "图片 URL（必填），对话中 [图片N]（URL: ...）标签里的 URL 地址"
+                },
+                "max_size_mb": {
+                    "type": "number",
+                    "description": "最大文件大小（MB），可选，默认 2.0。如果图片较大可适当调高。"
+                }
+            },
+            "required": ["image_url"]
         }
     }
 ]

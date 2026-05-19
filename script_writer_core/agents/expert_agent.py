@@ -282,6 +282,7 @@ class ExpertAgent(BaseAgent, AskUserMixin):
         self.add_to_history("assistant", history_entry)
 
         deferred_user_inputs = []
+        deferred_multimodal_content = []  # fetch_image_as_base64 成功时注入的多模态图片
 
         for tool_call in tool_calls:
             tool_name = tool_call.function.name
@@ -323,10 +324,28 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                 "content": json.dumps(result, ensure_ascii=False)
             })
 
+            # fetch_image_as_base64 成功时，将 base64 数据存入延迟多模态列表
+            if tool_name == "fetch_image_as_base64" and isinstance(result, dict) and result.get("success"):
+                base64_data_url = result.get("base64_data_url")
+                if base64_data_url:
+                    deferred_multimodal_content.append({
+                        "type": "text",
+                        "text": f"[系统注入] 以下是工具成功获取的图片（URL: {tool_args.get('image_url', '')}）："
+                    })
+                    deferred_multimodal_content.append({
+                        "type": "image_url",
+                        "image_url": {"url": base64_data_url}
+                    })
+
         # 将用户的回答作为 user 消息写入历史，放在所有 tool 消息之后
         # 避免在 assistant(tool_calls) 和 tool 之间插入 user 消息导致 API 报错
         for user_input in deferred_user_inputs:
             self.add_to_history("user", user_input)
+
+        # 将 fetch_image_as_base64 获取的图片作为多模态 user 消息注入
+        # API 工具结果消息只支持文本内容，多模态图片必须通过 user 消息注入
+        if deferred_multimodal_content:
+            self.add_to_history("user", deferred_multimodal_content)
     
     def _execute_tool(self, tool_name: str, tool_args: Dict[str, Any]) -> Dict[str, Any]:
         """执行工具调用"""
