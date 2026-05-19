@@ -335,6 +335,11 @@ class RunningHubAudioConfig:
     TEXT_NODE_ID = "24"
     FINAL_STATUSES = ("SUCCESS", "FAILED", "ERROR", "CANCELED", "CANCELLED")
 
+    # 音色提示词 LLM 生成配置
+    AUDIO_STYLE_LLM_MAX_TOKENS = 256
+    AUDIO_STYLE_LLM_TEMPERATURE = 0.7
+    AUDIO_STYLE_DEFAULT_PROMPT = '声音自然清晰，语气平稳，适合角色旁白'
+
 
 # 向后兼容别名 - AI Tools 状态
 AI_TOOL_STATUS_PENDING = AIToolStatus.PENDING

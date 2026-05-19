@@ -4303,6 +4303,9 @@
             btn.textContent = '生成中...';
             try {
                 updateStatus('正在生成角色参考音频...');
+                // 获取当前选择的 LLM 模型信息
+                const modelSelector = document.getElementById('model-selector');
+                const selectedModelOption = modelSelector?.options[modelSelector.selectedIndex];
                 const response = await fetch('/api/script-writer/characters/reference-audio', {
                     method: 'POST',
                     headers: {
@@ -4314,7 +4317,10 @@
                         user_id: USER_ID,
                         world_id: parseInt(WORLD_ID),
                         character_name: characterName,
-                        character_data: JSON.parse(collectCharacterData())
+                        character_data: JSON.parse(collectCharacterData()),
+                        model: modelSelector?.value || '',
+                        model_id: selectedModelOption?.dataset?.modelId ? parseInt(selectedModelOption.dataset.modelId) : null,
+                        vendor_id: selectedModelOption?.dataset?.vendorId ? parseInt(selectedModelOption.dataset.vendorId) : null
                     })
                 });
                 const data = await response.json();

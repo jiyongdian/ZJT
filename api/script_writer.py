@@ -21,10 +21,12 @@ from config.constant import (
     RUNNINGHUB_AUDIO_APP_ID,
     RUNNINGHUB_AUDIO_STYLE_NODE_ID,
     RUNNINGHUB_AUDIO_TEXT_NODE_ID,
-    RUNNINGHUB_AUDIO_FINAL_STATUSES
+    RUNNINGHUB_AUDIO_FINAL_STATUSES,
+    RunningHubAudioConfig
 )
 from model.vendor_model import VendorModelModel
 from api.clients.runninghub_client import RunningHubClient
+from llm.llm_client_factory import get_llm_client
 
 # ==================== 加载 API 配置 ====================
 def _load_api_config():
@@ -830,6 +832,10 @@ class CharacterReferenceAudioRequest(BaseModel):
     character_data: Optional[Dict[str, Any]] = None
     style_prompt: Optional[str] = None
     text: Optional[str] = None
+    # LLM 模型信息（从前端 model-selector 获取）
+    model: Optional[str] = None
+    model_id: Optional[int] = None
+    vendor_id: Optional[int] = None
 
 class ScriptSaveRequest(BaseModel):
     content: Dict[str, Any]
@@ -2019,25 +2025,94 @@ async def submit_to_database(request: SubmitDatabaseRequest):
 # 注意: 道具管理接口 /props 已在 server.py 中实现，此处不再重复
 # 注意: 世界管理接口 /worlds 已在 server.py 中实现，此处不再重复
 
-def _build_character_audio_style_prompt(character_data: Dict[str, Any], custom_prompt: Optional[str]) -> str:
+async def _build_character_audio_style_prompt(
+    character_data: Dict[str, Any],
+    custom_prompt: Optional[str],
+    model: Optional[str] = None,
+    vendor_id: Optional[int] = None
+) -> str:
+    """
+    构建角色音色风格提示词。
+    如果用户提供了自定义提示词，直接返回；
+    否则调用 LLM 根据角色信息自动生成专业的音色描述。
+    """
+    # 1. 用户自定义提示词优先
     if custom_prompt and custom_prompt.strip():
         return custom_prompt.strip()
-    prompt_parts = []
-    if character_data.get('name'):
-        prompt_parts.append(f"角色名：{character_data.get('name')}")
-    if character_data.get('age'):
-        prompt_parts.append(f"年龄：{character_data.get('age')}")
-    if character_data.get('identity'):
-        prompt_parts.append(f"身份：{character_data.get('identity')}")
-    if character_data.get('personality'):
-        prompt_parts.append(f"性格：{character_data.get('personality')}")
-    if character_data.get('behavior'):
-        prompt_parts.append(f"行为习惯：{character_data.get('behavior')}")
-    if character_data.get('other_info'):
-        prompt_parts.append(f"补充设定：{character_data.get('other_info')}")
-    if not prompt_parts:
-        return "根据角色设定生成自然、清晰、有辨识度的参考音频"
-    return "请根据以下角色设定生成适合作为角色参考音频的声音，语气自然，音色有辨识度。" + "；".join(prompt_parts)
+
+    # 2. 角色数据为空时返回默认提示词
+    if not character_data:
+        return RunningHubAudioConfig.AUDIO_STYLE_DEFAULT_PROMPT
+
+    # 3. 构建角色信息文本
+    field_mapping = {
+        'name': '角色名',
+        'age': '年龄',
+        'identity': '身份',
+        'personality': '性格',
+        'behavior': '行为习惯',
+        'other_info': '补充设定',
+    }
+    character_lines = []
+    for key, label in field_mapping.items():
+        value = character_data.get(key)
+        if value and str(value).strip():
+            character_lines.append(f"{label}：{str(value).strip()}")
+
+    if not character_lines:
+        return RunningHubAudioConfig.AUDIO_STYLE_DEFAULT_PROMPT
+
+    # 4. 前端未传模型信息时 fallback
+    if not model:
+        return RunningHubAudioConfig.AUDIO_STYLE_DEFAULT_PROMPT
+
+    # 5. 构造 LLM 提示词
+    system_prompt = (
+        "你是一位专业的声音设计师，擅长根据角色设定生成精准的音色描述。\n\n"
+        "你的任务是根据用户提供的角色信息，生成一段简洁的音色描述提示词，用于 AI 音频生成系统。\n\n"
+        "要求：\n"
+        '1. 描述必须聚焦于"声音特征"：音色、音调、语速、语气、年龄感、性别特征\n'
+        "2. 长度控制在一两句话以内（20-50字）\n"
+        "3. 只输出音色描述本身，不要输出任何解释、前缀或多余内容\n"
+        "4. 如果角色信息包含明确的声音相关描述（如性格急躁、温柔等），据此推断声音特征\n"
+        "5. 如果角色信息不足以推断声音特征，根据角色的年龄、身份、性别做合理推断\n\n"
+        "参考示例：\n"
+        '- "一位30岁左右的成熟男性，声音沉稳有力"\n'
+        '- "年轻女性，声音清脆悦耳，约25岁"\n'
+        '- "专业新闻主播，声音清晰标准，语速适中"\n'
+        '- "童话故事讲述者，声音温柔梦幻，略带神秘感"\n'
+        '- "性格急躁的少年，声音清亮，语速偏快，充满活力"'
+    )
+    user_prompt = "请根据以下角色信息，生成音色描述提示词：\n\n" + "\n".join(character_lines) + "\n\n请直接输出音色描述："
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    # 6. 调用 LLM（使用 asyncio.to_thread 包装同步调用）
+    try:
+        llm_client = get_llm_client(model, vendor_id=vendor_id)
+        response = await asyncio.to_thread(
+            llm_client.call_api,
+            model=model,
+            messages=messages,
+            temperature=RunningHubAudioConfig.AUDIO_STYLE_LLM_TEMPERATURE,
+            max_tokens=RunningHubAudioConfig.AUDIO_STYLE_LLM_MAX_TOKENS,
+        )
+
+        result = response.choices[0].message.content.strip() if response and response.choices else ""
+
+        if result:
+            logger.info(f"LLM 生成音色描述成功: {result}")
+            return result
+        else:
+            logger.warning("LLM 返回空内容，使用默认音色提示词")
+            return RunningHubAudioConfig.AUDIO_STYLE_DEFAULT_PROMPT
+
+    except Exception as e:
+        logger.warning(f"LLM 生成音色描述失败，使用默认提示词: {e}")
+        return RunningHubAudioConfig.AUDIO_STYLE_DEFAULT_PROMPT
 
 def _build_character_audio_text(character_data: Dict[str, Any], custom_text: Optional[str]) -> str:
     if custom_text and custom_text.strip():
@@ -2083,7 +2158,10 @@ async def generate_character_reference_audio(
             {
                 'nodeId': RUNNINGHUB_AUDIO_STYLE_NODE_ID,
                 'fieldName': 'prompt',
-                'fieldValue': _build_character_audio_style_prompt(character_data, audio_request.style_prompt),
+                'fieldValue': await _build_character_audio_style_prompt(
+                    character_data, audio_request.style_prompt,
+                    model=audio_request.model, vendor_id=audio_request.vendor_id
+                ),
                 'description': 'prompt'
             },
             {
