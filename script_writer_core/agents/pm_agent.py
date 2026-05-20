@@ -177,29 +177,13 @@ class PMAgent(BaseAgent, AskUserMixin):
         self.total_failures = 0
 
         try:
-            # 添加用户消息到历史（支持多模态消息）
+            # 添加用户消息到历史（图片以文字标签形式注入，不需要 base64）
             if task.image_urls:
-                from utils.image_compressor import url_to_base64
-                # 优先使用前端预压缩的 base64，避免重复下载压缩
-                pre_base64_list = task.image_base64_list or []
-                # 构建带标签的多模态 content（OpenAI 格式）
-                content_parts = []
+                image_labels = []
                 for i, image_url in enumerate(task.image_urls):
-                    index = i + 1
-                    # 优先使用前端预压缩的 base64
-                    if i < len(pre_base64_list) and pre_base64_list[i]:
-                        base64_data = pre_base64_list[i]
-                    else:
-                        base64_data = url_to_base64(image_url, max_size_mb=0.1, max_pixels=250_000)
-                    if base64_data:
-                        # 插入带标签的多模态内容，标签中包含 HTTP URL 供 edit_image 工具引用
-                        content_parts.append({"type": "text", "text": f"[图片{index}]（URL: {image_url}）"})
-                        content_parts.append({"type": "image_url", "image_url": {"url": base64_data}})
-                    else:
-                        # URL 无效时仅插入文本提示
-                        content_parts.append({"type": "text", "text": f"[图片{index}]（URL: {image_url}，注意：该图片加载失败）"})
-                content_parts.append({"type": "text", "text": task.user_message})
-                self.add_to_history("user", content_parts)
+                    image_labels.append(f"[图片{i + 1}]（URL: {image_url}）")
+                combined = "\n".join(image_labels) + "\n\n" + task.user_message
+                self.add_to_history("user", combined)
             else:
                 self.add_to_history("user", task.user_message)
 
@@ -384,6 +368,7 @@ class PMAgent(BaseAgent, AskUserMixin):
         self.add_to_history("assistant", history_entry)
 
         deferred_user_inputs = []
+        deferred_expert_outputs = []  # 专家输出延迟添加，确保在所有 tool 消息之后
 
         for tool_call in tool_calls:
             tool_name = tool_call.function.name
@@ -393,6 +378,12 @@ class PMAgent(BaseAgent, AskUserMixin):
                 tool_args = {}
 
             result = self._execute_tool(tool_name, tool_args, task, session_data)
+
+            # call_agent 工具：收集专家输出，延迟添加到历史（确保在 tool 消息之后）
+            if tool_name == "call_agent" and isinstance(result, dict) and result.get("success"):
+                expert_output = result.get("result", "")
+                if expert_output:
+                    deferred_expert_outputs.append(expert_output)
 
             # ask_user 工具：在 tool 回答之前，将问题写入历史（保证顺序正确）
             if tool_name == "ask_user" and isinstance(result, dict) and "_verification_meta" in result:
@@ -419,6 +410,11 @@ class PMAgent(BaseAgent, AskUserMixin):
         # 避免在 assistant(tool_calls) 和 tool 之间插入 user 消息导致 API 报错
         for user_input in deferred_user_inputs:
             self.add_to_history("user", user_input)
+
+        # 将专家输出作为 assistant 消息写入历史，确保刷新后能恢复显示
+        # 顺序：assistant(tool_calls) -> tool -> user(如有) -> assistant(专家输出)
+        for expert_output in deferred_expert_outputs:
+            self.add_to_history("assistant", expert_output)
 
     def _execute_tool(
         self,
@@ -532,15 +528,13 @@ class PMAgent(BaseAgent, AskUserMixin):
 
         # 自动提取当前任务中的图片 URL，注入到专家上下文
         image_urls_for_expert = task.image_urls or []
-        image_base64_for_expert = task.image_base64_list or []
 
         expert_task = {
             "session_id": task.task_id,
             "description": tool_args.get("task_description", "执行任务"),
             "pm_context": context,
             "conversation_history": merged_history,
-            "image_urls": image_urls_for_expert,
-            "image_base64_list": image_base64_for_expert
+            "image_urls": image_urls_for_expert
         }
 
         result = expert.execute_task(expert_task)
@@ -563,6 +557,8 @@ class PMAgent(BaseAgent, AskUserMixin):
                     'project_ids': project_ids,
                     'message': event_message
                 })
+                # 同时保存 project_ids 到对话历史，支持页面刷新后恢复
+                self._save_pending_task_to_history(task.session_id, event_type, project_ids)
 
             self.completed_tasks.append({
                 "skill": skill_name,
@@ -601,6 +597,8 @@ class PMAgent(BaseAgent, AskUserMixin):
                     'project_ids': project_ids,
                     'message': event_message
                 })
+                # 同时保存 project_ids 到对话历史，支持页面刷新后恢复
+                self._save_pending_task_to_history(task.session_id, event_type, project_ids)
 
             self.task_manager.push_message(task.task_id, 'message', {
                 'role': 'assistant',
@@ -610,7 +608,27 @@ class PMAgent(BaseAgent, AskUserMixin):
             logger.warning(f"{self.agent_id}: Expert {skill_name} failed")
 
         return result
-    
+
+    def _save_pending_task_to_history(self, session_id: str, event_type: str, project_ids: list):
+        """将待处理的图片/视频任务标记保存到对话历史，支持页面刷新后恢复"""
+        try:
+            from model.chat_sessions import ChatSessionsModel
+            session_entity = ChatSessionsModel.get_by_session_id(session_id)
+            if session_entity:
+                history = session_entity.conversation_history or []
+                history.append({
+                    'role': 'assistant',
+                    'content': f'__PENDING_TASK__:{event_type}:{json.dumps(project_ids)}',
+                    'timestamp': datetime.now().isoformat()
+                })
+                ChatSessionsModel.update_conversation_history(
+                    session_id=session_id,
+                    conversation_history=history,
+                    update_tokens=False
+                )
+        except Exception as e:
+            logger.warning(f"{self.agent_id}: 保存 pending task 标记到对话历史失败: {e}")
+
     def _build_context_for_expert(self, skill_name: str, user_id: str = "0", world_id: str = "0") -> str:
         """为专家构建上下文，包含所有环境内容"""
         context_parts = [

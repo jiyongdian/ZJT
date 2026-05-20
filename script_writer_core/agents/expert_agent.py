@@ -117,7 +117,6 @@ class ExpertAgent(BaseAgent, AskUserMixin):
         task_description = task.get("description", "")
         conversation_history = task.get("conversation_history", [])
         image_urls = task.get("image_urls", [])
-        image_base64_list = task.get("image_base64_list", [])
 
         logger.info(f"{self.agent_id}: Starting task execution - {task_description}")
 
@@ -130,23 +129,14 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                     if role and content:
                         self.add_to_history(role, content)
 
-            # 如果有图片 URL，以多模态形式添加到对话历史（让专家 LLM 能"看到"图片）
+            # 图片以文字标签形式注入，不需要 base64
+            # 需要看图的专家（如 image-understanding）通过 fetch_image_as_base64 工具按需获取
             if image_urls:
-                from utils.image_compressor import url_to_base64
-                content_parts = []
+                image_labels = []
                 for i, img_url in enumerate(image_urls, 1):
-                    # 优先使用前端预压缩的 base64，避免重复下载压缩
-                    if i - 1 < len(image_base64_list) and image_base64_list[i - 1]:
-                        base64_data = image_base64_list[i - 1]
-                    else:
-                        base64_data = url_to_base64(img_url, max_size_mb=0.1, max_pixels=250_000)
-                    if base64_data:
-                        content_parts.append({"type": "text", "text": f"[图片{i}]（URL: {img_url}）"})
-                        content_parts.append({"type": "image_url", "image_url": {"url": base64_data}})
-                    else:
-                        content_parts.append({"type": "text", "text": f"[图片{i}]（URL: {img_url}，注意：该图片加载失败）"})
-                content_parts.append({"type": "text", "text": task_description})
-                self.add_to_history("user", content_parts)
+                    image_labels.append(f"[图片{i}]（URL: {img_url}）")
+                combined = "\n".join(image_labels) + "\n\n" + task_description
+                self.add_to_history("user", combined)
             else:
                 self.add_to_history("user", task_description)
 

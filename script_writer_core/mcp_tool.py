@@ -213,16 +213,20 @@ def get_user_computing_power(user_id: str, world_id: str, auth_token: str) -> Di
 def fetch_image_as_base64(user_id: str, world_id: str, auth_token: str,
                           image_url: str, max_size_mb: float = 2.0) -> Dict[str, Any]:
     """
-    下载图片并转为 base64 data URL - MCP工具函数
+    读取本地图片并转为 base64 data URL - MCP工具函数
 
     供图片理解专家调用，当预加载的图片失败时，通过此工具重新获取图片 base64 数据。
-    调用成功后，图片会自动注入到对话中，LLM 即可看到并分析图片内容。
+    仅支持读取本地文件，不支持下载外部图片。
+
+    支持的 image_url 格式：
+    - 相对路径：以 / 开头，如 /upload/marketing/pic/xxx.png
+    - 完整 URL：http/https，域名需匹配 server.host 配置，映射为本地文件
 
     Args:
         user_id: 用户ID（必填）
         world_id: 世界ID（必填）
         auth_token: 认证令牌（必填）
-        image_url: 图片 HTTP/HTTPS URL（必填），对话中 [图片N]（URL: ...）标签里的 URL
+        image_url: 图片路径（必填），支持相对路径和匹配 server.host 的 URL
         max_size_mb: 最大文件大小 MB（可选，默认 2.0）
 
     Returns:
@@ -232,15 +236,40 @@ def fetch_image_as_base64(user_id: str, world_id: str, auth_token: str,
         if not image_url or not isinstance(image_url, str):
             return {'success': False, 'error': 'image_url 参数不能为空且必须是字符串'}
 
+        import os
         from urllib.parse import urlparse
-        parsed = urlparse(image_url)
-        if parsed.scheme not in ('http', 'https'):
-            return {'success': False, 'error': f'不支持的 URL 协议: {parsed.scheme}，仅支持 http/https'}
 
-        from utils.image_compressor import download_and_compress_to_base64
+        local_path = None
+
+        if image_url.startswith('/'):
+            # 相对路径：直接拼接项目根目录
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            local_path = os.path.join(project_root, image_url.lstrip('/'))
+            if not os.path.exists(local_path):
+                return {'success': False, 'error': f'本地文件不存在: {local_path}'}
+            logger.info(f"[fetch_image_as_base64] 相对路径映射到本地文件: {local_path}")
+
+        elif image_url.startswith(('http://', 'https://')):
+            # 完整 URL：尝试映射到本地文件
+            from utils.image_upload_utils import try_map_url_to_local_file
+            config = get_config()
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            local_path = try_map_url_to_local_file(image_url, config, project_root)
+            if not local_path:
+                return {
+                    'success': False,
+                    'error': '不允许下载外部图片，仅支持本地图片。请使用相对路径（如 /upload/xxx.png）或匹配服务域名的 URL'
+                }
+            logger.info(f"[fetch_image_as_base64] URL 映射到本地文件: {local_path}")
+
+        else:
+            return {'success': False, 'error': f'不支持的图片路径格式: {image_url}，请使用相对路径（/开头）或 http/https URL'}
+
+        # 从本地文件压缩并转 base64
+        from utils.image_compressor import compress_local_image_to_base64
         # max_pixels=250_000 控制像素数以限制 token 消耗（与 expert_agent.py 一致）
-        success, data_url, error = download_and_compress_to_base64(
-            image_url, max_size_mb=max_size_mb, max_pixels=250_000
+        success, data_url, error = compress_local_image_to_base64(
+            local_path, max_size_mb=max_size_mb, max_pixels=250_000
         )
 
         if success and data_url:
@@ -252,7 +281,7 @@ def fetch_image_as_base64(user_id: str, world_id: str, auth_token: str,
                 'message': f'图片已成功加载（约 {size_kb} KB），图片将自动注入到你的对话中。'
             }
         else:
-            return {'success': False, 'error': error or '图片下载或压缩失败'}
+            return {'success': False, 'error': error or '图片压缩失败'}
     except Exception as e:
         logger.error(f"fetch_image_as_base64 失败: {e}", exc_info=True)
         return {'success': False, 'error': f'获取图片失败: {str(e)}'}

@@ -250,11 +250,28 @@ body {
   color: var(--accent-color);
 }
 
-.sidebar-history-item .history-title {
+.sidebar-history-item .history-title-wrap {
   flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sidebar-history-item .history-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sidebar-history-item .history-id {
+  font-size: 10px;
+  color: var(--text-muted);
+  opacity: 0.6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: monospace;
 }
 
 .sidebar-history-item .history-date {

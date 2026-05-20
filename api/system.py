@@ -93,6 +93,7 @@ async def get_server_config():
         footer = get_config_value('server', 'footer', default={})
         version = get_app_version()
         max_image_size_mb = get_dynamic_config_value('upload', 'max_image_size_mb', default=10)
+        enable_vue_error_output = get_config_value('frontend', 'enable_vue_error_output', default=False)
 
         return {
             "code": 0,
@@ -102,6 +103,7 @@ async def get_server_config():
                 "max_image_size_mb": max_image_size_mb,
                 "is_enterprise": not IS_COMMUNITY_EDITION,
                 "shared_space": not Edition.is_space_isolated(),
+                "enable_vue_error_output": enable_vue_error_output,
                 "footer": {
                     "copyright": footer.get('copyright', ''),
                     "icp_number": footer.get('icp_number', ''),
