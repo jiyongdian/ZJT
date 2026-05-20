@@ -1,6 +1,6 @@
 """
 ZJT API OpenAI 兼容格式 LLM 客户端
-支持 qwen3.5-plus 和 qwen3.6-plus 模型
+支持 qwen3.5-plus、qwen3.6-plus 和 doubao 系列模型
 """
 import logging
 from .openai_base_client import OpenAIBaseClient
@@ -11,6 +11,12 @@ logger = logging.getLogger(__name__)
 
 class ZJTOpenAIClient(OpenAIBaseClient):
     """ZJT API OpenAI 兼容格式 LLM 客户端"""
+
+    # model 表友好名称 -> 实际 API endpoint model ID 映射
+    _MODEL_NAME_MAP = {
+        'doubao-seed-2-0-pro': 'doubao-seed-2-0-pro-260215',
+        'doubao-seed-2-0-lite': 'doubao-seed-2-0-lite-260215',
+    }
 
     def _refresh_config(self):
         """刷新 ZJT API 配置"""
@@ -33,6 +39,13 @@ class ZJTOpenAIClient(OpenAIBaseClient):
             logger.info(f"ZJTOpenAIClient config loaded: base_url={self.base_url}")
         else:
             logger.warning("ZJTOpenAIClient: API Key 未配置 (api_aggregator.site_0.api_key)")
+
+    def _resolve_model_name(self, model: str) -> str:
+        """将 model 表中的友好名称映射为 ZJT API 实际 API model ID"""
+        actual = self._MODEL_NAME_MAP.get(model, model)
+        if actual != model:
+            logger.debug(f"ZJTOpenAIClient model mapping: {model} -> {actual}")
+        return actual
 
 
 _zjt_client = None

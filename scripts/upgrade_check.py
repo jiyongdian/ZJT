@@ -209,10 +209,13 @@ def compare_version(v1, v2):
         0  if v1 == v2
     """
     p1, p2 = parse_version(v1), parse_version(v2)
-    for a, b in zip(p1, p2):
+    max_len = max(len(p1), len(p2))
+    for i in range(max_len):
+        a = p1[i] if i < len(p1) else 0
+        b = p2[i] if i < len(p2) else 0
         if a != b:
             return 1 if a > b else -1
-    return len(p1) - len(p2)
+    return 0
 
 
 def get_local_version(project_dir, git_cmd=None):

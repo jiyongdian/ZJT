@@ -157,12 +157,12 @@ def _check_resource_permission(resource, user_id: int, action: str) -> bool:
     Returns:
         bool: 是否有权限
     """
-    if Edition.is_community():
+    if Edition.is_space_isolated():
+        return getattr(resource, 'user_id', None) == user_id
+    else:
         if action == Action.DELETE:
             return getattr(resource, 'user_id', None) == user_id
         return True
-    else:
-        return getattr(resource, 'user_id', None) == user_id
 
 
 def _ensure_resource_access(resource, user_id: int, action: str, resource_name: str = "资源"):
@@ -380,6 +380,35 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# CDN 重定向中间件：当 /upload/ 下的媒体文件有 CDN 映射时，自动 302 到新鲜 CDN 签名 URL
+_MEDIA_EXTENSIONS = frozenset({'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.mp4', '.webm', '.mov', '.avi', '.mkv'})
+
+@app.middleware("http")
+async def cdn_redirect_middleware(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/upload/"):
+        ext = os.path.splitext(path)[1].lower()
+        if ext in _MEDIA_EXTENSIONS:
+            try:
+                from config.config_util import get_config
+                if not get_config().get("server", {}).get("auto_upload_to_cdn", False):
+                    return await call_next(request)
+                # local_path 在数据库中不带前导 /，如 "upload/temp/xxx.mp4"
+                local_path = path.lstrip("/")
+                from model.media_file_mapping import MediaFileMappingModel
+                from utils.cdn_util import CDNUtil
+                mapping = MediaFileMappingModel.get_by_local_path_hash(
+                    MediaFileMappingModel._compute_local_path_hash(local_path)
+                )
+                if mapping:
+                    cdn_url = CDNUtil.get_cdn_url(mapping.id)
+                    if cdn_url:
+                        return RedirectResponse(url=cdn_url, status_code=302)
+            except Exception as e:
+                logger.warning(f"CDN 重定向查找失败: {e}")
+    return await call_next(request)
 
 
 @app.get("/api/config/upload")
@@ -1474,6 +1503,7 @@ async def get_status(
                     if media_url:
                         results_payload = [{
                             "file_url": media_url,
+                            "result_url": task_record.result_url,
                             "task_cost_time": task_cost_time
                         }]
                 elif cdn_status == CDNStatus.PENDING:
@@ -1486,6 +1516,7 @@ async def get_status(
                     if media_url:
                         results_payload = [{
                             "file_url": media_url,
+                            "result_url": task_record.result_url,
                             "task_cost_time": task_cost_time
                         }]
 
@@ -4409,8 +4440,8 @@ async def get_video_workflow(
                 content={"code": -1, "message": "工作流不存在"}
             )
 
-        # 商业版才检查权限，社区版所有人都可以访问
-        if Edition.is_enterprise() and getattr(workflow, 'user_id', None) != user_id:
+        # 独立空间模式才检查权限，共享空间所有人可访问
+        if Edition.is_space_isolated() and getattr(workflow, 'user_id', None) != user_id:
             return JSONResponse(
                 status_code=403,
                 content={"code": -1, "message": "无权限访问该工作流"}
@@ -4453,8 +4484,8 @@ async def poll_workflow_node_status(
                 content={"code": -1, "message": "工作流不存在"}
             )
         
-        # 商业版才检查权限，社区版所有人都可以访问
-        if Edition.is_enterprise() and getattr(workflow, 'user_id', None) != user_id:
+        # 独立空间模式才检查权限，共享空间所有人可访问
+        if Edition.is_space_isolated() and getattr(workflow, 'user_id', None) != user_id:
             return JSONResponse(
                 status_code=403,
                 content={"code": -1, "message": "无权限访问该工作流"}
@@ -5497,8 +5528,8 @@ async def update_video_workflow(
                 content={"code": -1, "message": "工作流不存在"}
             )
 
-        # 商业版才检查权限，社区版所有人都可以修改
-        if Edition.is_enterprise() and getattr(workflow, 'user_id', None) != user_id:
+        # 独立空间模式才检查权限，共享空间所有人可修改
+        if Edition.is_space_isolated() and getattr(workflow, 'user_id', None) != user_id:
             return JSONResponse(
                 status_code=403,
                 content={"code": -1, "message": "无权限修改该工作流"}
@@ -8013,9 +8044,42 @@ async def export_timeline_draft(
         
         logger.info(f"压缩包已创建: {zip_path}")
         
-        # 生成下载URL（包含日期路径）
-        download_url = f"{SERVER_HOST}/upload/draft/{date_folder}/{zip_filename}"
-        logger.info(f"下载地址: {download_url}")
+        # 根据 is_local 配置决定下载方式
+        is_local = get_dynamic_config_value("server", "is_local", default=True)
+
+        if is_local:
+            # 本地环境：直接返回本地下载链接
+            download_url = f"{SERVER_HOST}/upload/draft/{date_folder}/{zip_filename}"
+            logger.info(f"本地环境，下载地址: {download_url}")
+        else:
+            # 非本地环境：上传到七牛云后返回 CDN 链接
+            logger.info("非本地环境，准备上传到七牛云...")
+            from utils.file_storage import get_file_storage
+            from config.config_util import get_config
+            
+            storage = get_file_storage(get_config())
+            storage_key = storage.generate_key_with_datetime(zip_filename)
+            upload_result = await storage.upload_file(storage_key, zip_path, content_type='application/zip')
+            
+            if not upload_result.success:
+                logger.error(f"上传到七牛云失败: {upload_result.error}")
+                return JSONResponse(
+                    status_code=500,
+                    content={
+                        'success': False,
+                        'error': f'上传草稿到云存储失败: {upload_result.error}'
+                    }
+                )
+            
+            download_url = storage.get_download_url(upload_result.key)
+            logger.info(f"已上传到七牛云，CDN下载地址: {download_url}")
+            
+            # 非本地环境上传成功后，删除本地 zip 文件以节省空间
+            try:
+                os.remove(zip_path)
+                logger.info(f"已删除本地 zip 文件: {zip_path}")
+            except Exception as e:
+                logger.warning(f"删除本地 zip 文件失败: {e}")
         
         # 清理临时文件
         try:
@@ -8087,6 +8151,15 @@ async def serve_script_writer():
         content = _get_processed_html(file_path)
         return Response(content=content, media_type="text/html")
     raise HTTPException(status_code=404, detail="Script writer page not found")
+
+@app.get("/marketing-agent")
+async def serve_marketing_agent():
+    file_path = os.path.join(static_dir, "marketing_agent.html")
+    if os.path.isfile(file_path):
+        content = _get_processed_html(file_path)
+        return Response(content=content, media_type="text/html")
+    raise HTTPException(status_code=404, detail="Marketing agent page not found")
+
 
 @app.get(f"{MP_VERIFY_ROUTE}")
 async def get_mp_verify_file():

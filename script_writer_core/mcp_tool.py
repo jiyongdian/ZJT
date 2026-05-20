@@ -7,7 +7,7 @@ import json
 import os
 import re
 import logging
-import requests
+import httpx
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 from script_writer_core.file_manager import FileManager
@@ -16,6 +16,9 @@ from script_writer_core.cron_task_manager import get_task_manager
 from script_writer_core.constant import ItemType
 from config.config_util import get_config
 from config.constant import FilePathConstants
+
+# 模块级日志
+logger = logging.getLogger(__name__)
 
 # 设置技能调用日志
 def setup_skill_logger():
@@ -43,6 +46,13 @@ _skill_loader = None
 _file_manager = None
 # 获取生图模型 task_id 的函数引用（由 script_writer_api.py 设置）
 _get_text_to_image_model_id_func = None
+# 获取用户图片偏好的函数引用（由 script_writer_api.py 设置）
+_get_image_preferences_func = None
+# 获取用户视频偏好的函数引用（由 script_writer_api.py 设置）
+_get_video_preferences_func = None
+# 获取视频模型 task_id 的函数引用（由 script_writer_api.py 设置）
+_get_text_to_video_model_id_func = None
+_get_image_to_video_model_id_func = None
 
 # 默认生图模型 task_id (nano-banana-Pro)
 DEFAULT_TEXT_TO_IMAGE_TASK_ID = 7
@@ -54,6 +64,37 @@ def set_text_to_image_model_getter(func):
     _get_text_to_image_model_id_func = func
 
 
+def set_image_preferences_getter(func):
+    """设置获取用户图片偏好的函数"""
+    global _get_image_preferences_func
+    _get_image_preferences_func = func
+
+
+def set_video_preferences_getter(func):
+    """设置获取用户视频偏好的函数"""
+    global _get_video_preferences_func
+    _get_video_preferences_func = func
+
+
+def set_text_to_video_model_getter(func):
+    """设置获取文生视频模型 task_id 的函数"""
+    global _get_text_to_video_model_id_func
+    _get_text_to_video_model_id_func = func
+
+
+def set_image_to_video_model_getter(func):
+    """设置获取图生视频模型 task_id 的函数"""
+    global _get_image_to_video_model_id_func
+    _get_image_to_video_model_id_func = func
+
+
+def _get_video_preferences(user_id: str, world_id: str) -> Dict[str, str]:
+    """获取用户的视频偏好（比例、时长），默认返回空字典"""
+    if _get_video_preferences_func:
+        return _get_video_preferences_func(user_id, world_id)
+    return {}
+
+
 def _get_text_to_image_task_id(user_id: str, world_id: str) -> int:
     """获取生图模型的 task_id，默认返回 7 (nano-banana-Pro)"""
     if _get_text_to_image_model_id_func:
@@ -61,11 +102,190 @@ def _get_text_to_image_task_id(user_id: str, world_id: str) -> int:
     return DEFAULT_TEXT_TO_IMAGE_TASK_ID
 
 
+def _get_text_to_video_task_id(user_id: str, world_id: str) -> Optional[int]:
+    """获取文生视频模型的 task_id，默认返回 None（由调用方回退到 configs[0]）"""
+    if _get_text_to_video_model_id_func:
+        return _get_text_to_video_model_id_func(user_id, world_id)
+    return None
+
+
+def _get_image_to_video_task_id(user_id: str, world_id: str) -> Optional[int]:
+    """获取图生视频模型的 task_id，默认返回 None（由调用方回退到 configs[0]）"""
+    if _get_image_to_video_model_id_func:
+        return _get_image_to_video_model_id_func(user_id, world_id)
+    return None
+
+
+def _get_image_preferences(user_id: str, world_id: str) -> Dict[str, str]:
+    """获取用户的图片偏好（比例、分辨率），默认返回空字典"""
+    if _get_image_preferences_func:
+        return _get_image_preferences_func(user_id, world_id)
+    return {}
+
+
 def _get_model_name_by_task_id(task_id: int) -> str:
     """从统一配置获取模型名称"""
     from config.unified_config import UnifiedConfigRegistry
     config = UnifiedConfigRegistry.get_by_id(task_id)
     return config.name if config else "unknown"
+
+
+def get_text_to_image_model_info(user_id: str, world_id: str, auth_token: str) -> Dict[str, Any]:
+    """
+    获取当前用户/世界选中的生图模型信息 - MCP工具函数
+
+    返回模型名称、算力、支持尺寸、是否支持宫格等信息，供 Agent 在生成前了解成本和能力。
+
+    Args:
+        user_id: 用户ID（必填）
+        world_id: 世界ID（必填）
+        auth_token: 认证令牌（必填）
+
+    Returns:
+        dict: 模型信息，包含 task_id、name、computing_power、supported_sizes、supports_grid_image 等
+    """
+    try:
+        task_id = _get_text_to_image_task_id(user_id, world_id)
+        from config.unified_config import UnifiedConfigRegistry
+        config = UnifiedConfigRegistry.get_by_id(task_id)
+        if not config:
+            return {'success': False, 'error': f'未找到模型配置: task_id={task_id}'}
+
+        max_size = config.supported_sizes[-1] if config.supported_sizes else None
+        default_size = config.default_size or max_size
+
+        # 计算不同尺寸的单张算力
+        from utils.computing_power import get_computing_power_for_task
+        power_default = get_computing_power_for_task(task_id, context={'resolution': default_size} if default_size else None)
+        power_max = get_computing_power_for_task(task_id, context={'resolution': max_size} if max_size else None)
+
+        return {
+            'success': True,
+            'task_id': task_id,
+            'name': config.name,
+            'computing_power': config.computing_power,
+            'supported_sizes': config.supported_sizes,
+            'supported_ratios': config.supported_ratios,
+            'supports_grid_image': config.supports_grid_image,
+            'default_size': default_size,
+            'max_size': max_size,
+            'cost_per_image_default_size': power_default,
+            'cost_per_image_max_size': power_max,
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'获取模型信息失败: {str(e)}'}
+
+
+def get_user_computing_power(user_id: str, world_id: str, auth_token: str) -> Dict[str, Any]:
+    """
+    查询用户剩余算力余额 - MCP工具函数
+
+    Args:
+        user_id: 用户ID（必填，用于格式兼容，实际鉴权使用 auth_token）
+        world_id: 世界ID（必填，当前未使用，为兼容ToolExecutor调用签名）
+        auth_token: 认证令牌（必填）
+
+    Returns:
+        dict: 包含 computing_power（剩余算力）的结果
+    """
+    try:
+        if not auth_token:
+            return {'success': False, 'error': '认证令牌不能为空'}
+
+        from perseids_server.client import make_perseids_request
+        success, message, data = make_perseids_request(
+            endpoint='user/check_computing_power',
+            method='GET',
+            headers={'Authorization': f'Bearer {auth_token}'}
+        )
+        if not success:
+            return {'success': False, 'error': message}
+
+        return {
+            'success': True,
+            'computing_power': data.get('computing_power', 0),
+            'message': f'当前剩余算力: {data.get("computing_power", 0)}'
+        }
+    except Exception as e:
+        return {'success': False, 'error': f'查询算力失败: {str(e)}'}
+
+
+def fetch_image_as_base64(user_id: str, world_id: str, auth_token: str,
+                          image_url: str, max_size_mb: float = 2.0) -> Dict[str, Any]:
+    """
+    读取本地图片并转为 base64 data URL - MCP工具函数
+
+    供图片理解专家调用，当预加载的图片失败时，通过此工具重新获取图片 base64 数据。
+    仅支持读取本地文件，不支持下载外部图片。
+
+    支持的 image_url 格式：
+    - 相对路径：以 / 开头，如 /upload/marketing/pic/xxx.png
+    - 完整 URL：http/https，域名需匹配 server.host 配置，映射为本地文件
+
+    Args:
+        user_id: 用户ID（必填）
+        world_id: 世界ID（必填）
+        auth_token: 认证令牌（必填）
+        image_url: 图片路径（必填），支持相对路径和匹配 server.host 的 URL
+        max_size_mb: 最大文件大小 MB（可选，默认 2.0）
+
+    Returns:
+        dict: success=True 时包含 base64_data_url 和 size_kb；success=False 时包含 error
+    """
+    try:
+        if not image_url or not isinstance(image_url, str):
+            return {'success': False, 'error': 'image_url 参数不能为空且必须是字符串'}
+
+        import os
+        from urllib.parse import urlparse
+
+        local_path = None
+
+        if image_url.startswith('/'):
+            # 相对路径：直接拼接项目根目录
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            local_path = os.path.join(project_root, image_url.lstrip('/'))
+            if not os.path.exists(local_path):
+                return {'success': False, 'error': f'本地文件不存在: {local_path}'}
+            logger.info(f"[fetch_image_as_base64] 相对路径映射到本地文件: {local_path}")
+
+        elif image_url.startswith(('http://', 'https://')):
+            # 完整 URL：尝试映射到本地文件
+            from utils.image_upload_utils import try_map_url_to_local_file
+            config = get_config()
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            local_path = try_map_url_to_local_file(image_url, config, project_root)
+            if not local_path:
+                return {
+                    'success': False,
+                    'error': '不允许下载外部图片，仅支持本地图片。请使用相对路径（如 /upload/xxx.png）或匹配服务域名的 URL'
+                }
+            logger.info(f"[fetch_image_as_base64] URL 映射到本地文件: {local_path}")
+
+        else:
+            return {'success': False, 'error': f'不支持的图片路径格式: {image_url}，请使用相对路径（/开头）或 http/https URL'}
+
+        # 从本地文件压缩并转 base64
+        from utils.image_compressor import compress_local_image_to_base64
+        # max_pixels=250_000 控制像素数以限制 token 消耗（与 expert_agent.py 一致）
+        success, data_url, error = compress_local_image_to_base64(
+            local_path, max_size_mb=max_size_mb, max_pixels=250_000
+        )
+
+        if success and data_url:
+            size_kb = len(data_url) * 3 // 4 // 1024  # 近似原始大小
+            return {
+                'success': True,
+                'base64_data_url': data_url,
+                'size_kb': size_kb,
+                'message': f'图片已成功加载（约 {size_kb} KB），图片将自动注入到你的对话中。'
+            }
+        else:
+            return {'success': False, 'error': error or '图片压缩失败'}
+    except Exception as e:
+        logger.error(f"fetch_image_as_base64 失败: {e}", exc_info=True)
+        return {'success': False, 'error': f'获取图片失败: {str(e)}'}
+
 
 def get_skill_loader():
     """获取技能加载器实例（单例模式）"""
@@ -155,6 +375,286 @@ def get_task_status(user_id: str, world_id: str, auth_token: str, item_type: int
             'item_type': item_type,
             'item_name': item_name
         }
+
+
+def check_image_status(user_id: str, world_id: str, auth_token: str, project_id: str) -> Dict[str, Any]:
+    """
+    通过 project_id 查询图片生成结果（一次性查询，非轮询）
+
+    后台 scheduler 会自动轮询 ComfyUI 状态并更新数据库，本函数直接读取数据库最终状态。
+    适用于通用生图任务（营销等场景，不绑定 item_type/item_name）。
+
+    建议在调用 generate_text_to_image 后等待一段时间再查询，确保后台有足够时间处理。
+
+    Args:
+        user_id: 用户ID（必填）
+        world_id: 世界ID（必填）
+        auth_token: 认证令牌（必填）
+        project_id: 图片生成任务返回的 project_id（必填）
+
+    Returns:
+        Dict[str, Any]: 包含任务状态和图片URL的结果
+    """
+    try:
+        from model import GridImageTasksModel, GridImageTaskStatus
+
+        # 构造通用任务的 task_key（格式与 generate_text_to_image 中一致）
+        task_key = f"{user_id}_0_{project_id}"
+
+        task = GridImageTasksModel.get_by_task_key(task_key)
+        if not task:
+            return {
+                'success': True,
+                'status': 'not_found',
+                'message': f'未找到 project_id={project_id} 对应的任务记录',
+                'project_id': project_id
+            }
+
+        # 将数据库状态码转换为可读状态
+        status_map = {
+            GridImageTaskStatus.QUEUED: 'queued',
+            GridImageTaskStatus.PROCESSING: 'processing',
+            GridImageTaskStatus.COMPLETED: 'completed',
+            GridImageTaskStatus.FAILED: 'failed',
+            GridImageTaskStatus.TIMEOUT: 'timeout',
+            GridImageTaskStatus.CANCELLED: 'cancelled',
+            GridImageTaskStatus.DOWNLOAD_FAILED: 'download_failed',
+        }
+        readable_status = status_map.get(task.status, 'unknown')
+
+        result = {
+            'success': True,
+            'status': readable_status,
+            'project_id': project_id,
+            'message': f'任务状态: {readable_status}'
+        }
+
+        # 如果完成，返回图片URL
+        if task.status == GridImageTaskStatus.COMPLETED and task.result_url:
+            result['image_url'] = task.result_url
+            result['message'] = f'图片生成完成，图片URL: {task.result_url}'
+
+        # 如果失败，返回错误信息
+        if task.status in [GridImageTaskStatus.FAILED, GridImageTaskStatus.TIMEOUT,
+                           GridImageTaskStatus.DOWNLOAD_FAILED]:
+            result['error_message'] = task.error_message
+            result['message'] = f'图片生成失败: {task.error_message or "未知错误"}'
+
+        return result
+
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e),
+            'message': f"查询图片状态失败: {str(e)}",
+            'project_id': project_id
+        }
+
+
+def edit_image(user_id: str, world_id: str, auth_token: str, prompt: str,
+               image_url: str, aspect_ratio: str = "16:9", count: int = 1,
+               image_size: Optional[str] = None) -> Dict[str, Any]:
+    """
+    图片编辑（图生图）- MCP工具函数（非阻塞版本，支持后台任务处理）
+
+    根据用户提供的图片 URL 和编辑指令，调用图片编辑 API 生成新图片。
+    后台 scheduler 会自动跟踪进度，可通过 check_image_status 查询结果。
+
+    注意：图片编辑模型由用户在前端界面选择，不同模型算力价格不同，请先调用 get_text_to_image_model_info 了解当前模型。
+
+    Args:
+        user_id: 用户ID（必填）
+        world_id: 世界ID（必填）
+        auth_token: 认证令牌（必填）
+        prompt: 图片编辑指令（必填），例如："将背景替换为海滩"、"转为水彩画风格"
+        image_url: 原始图片URL（必填），支持多张图片，用英文逗号分隔。需要编辑的源图片地址。
+        aspect_ratio: 图片宽高比（默认：16:9）
+        count: 生成图片数量（默认：1）
+        image_size: 图片分辨率（可选），如 1K/2K/3K/4K
+
+    Returns:
+        dict: 操作结果，包含 success 状态、project_ids、task_id 等
+    """
+    # 获取用户配置的生图模型 task_id（图片编辑复用同一模型配置）
+    text_to_image_task_id = _get_text_to_image_task_id(user_id, world_id)
+
+    # 验证模型是否支持图片编辑
+    from config.unified_config import UnifiedConfigRegistry, TaskCategory
+    config = UnifiedConfigRegistry.get_by_id(text_to_image_task_id)
+    if config and config.category != TaskCategory.IMAGE_EDIT and TaskCategory.IMAGE_EDIT not in getattr(config, 'categories', []):
+        # 当前选中的模型不支持图片编辑，尝试查找默认的图片编辑模型
+        image_edit_models = UnifiedConfigRegistry.get_by_category(TaskCategory.IMAGE_EDIT)
+        if image_edit_models:
+            # 优先使用默认模型（id=7），否则使用第一个可用的图片编辑模型
+            fallback = next((m for m in image_edit_models if m.id == DEFAULT_TEXT_TO_IMAGE_TASK_ID), image_edit_models[0])
+            text_to_image_task_id = fallback.id
+            logger.warning(f"当前选中的模型不支持图片编辑，自动切换到: {fallback.name} (id={fallback.id})")
+        else:
+            return {
+                'success': False,
+                'error': f'当前选中的模型（id={text_to_image_task_id}）不支持图片编辑，且系统中没有可用的图片编辑模型'
+            }
+
+    model_name = _get_model_name_by_task_id(text_to_image_task_id)
+
+    try:
+        # 验证参数
+        if not auth_token:
+            return {'success': False, 'error': '认证令牌不能为空'}
+
+        if not prompt or not isinstance(prompt, str):
+            return {'success': False, 'error': '编辑指令不能为空且必须是字符串'}
+
+        if not image_url or not isinstance(image_url, str):
+            return {'success': False, 'error': '图片URL不能为空且必须是字符串'}
+
+        # 解析图片 URL（支持逗号分隔的多图）
+        parsed_urls = [u.strip() for u in image_url.split(',') if u.strip()]
+        if not parsed_urls:
+            return {'success': False, 'error': '解析后没有有效的图片URL'}
+        # 验证 URL 格式：仅允许 http/https 协议，防止 SSRF
+        from urllib.parse import urlparse
+        for u in parsed_urls:
+            parsed = urlparse(u)
+            if parsed.scheme not in ('http', 'https'):
+                return {'success': False, 'error': f'图片URL仅支持 http/https 协议: {u[:100]}'}
+        logger.info(f"[edit_image] 解析到 {len(parsed_urls)} 张图片: {parsed_urls}")
+
+        server_config = get_config().get("server", {})
+        comfyui_base_url = server_config.get("comfyui_base_url_inner") or server_config.get("host", "")
+
+        if not comfyui_base_url:
+            return {'success': False, 'error': '配置文件中未找到comfyui_base_url_inner或host配置'}
+
+        # 强制应用用户偏好（比例和分辨率由前端界面控制，LLM 不需要传入）
+        user_prefs = _get_image_preferences(user_id, world_id)
+        if user_prefs:
+            pref_ratio = user_prefs.get('ratio')
+            if pref_ratio and pref_ratio != 'auto':
+                aspect_ratio = pref_ratio
+            pref_resolution = user_prefs.get('resolution')
+            if pref_resolution and pref_resolution != 'auto':
+                image_size = pref_resolution
+
+        # 确定 image_size
+        config = UnifiedConfigRegistry.get_by_id(text_to_image_task_id)
+        if image_size:
+            if config and config.supported_sizes:
+                supported_lower = [s.lower() for s in config.supported_sizes]
+                if image_size.lower() not in supported_lower:
+                    return {
+                        'success': False,
+                        'error': f'不支持的图片尺寸: {image_size}，当前模型支持: {config.supported_sizes}'
+                    }
+        elif config and config.default_size:
+            image_size = config.default_size
+
+        # 计算预估算力
+        from utils.computing_power import get_computing_power_for_task
+        context_for_power = {}
+        if image_size:
+            context_for_power['resolution'] = image_size
+        elif config and config.default_size:
+            context_for_power['resolution'] = config.default_size
+        computing_power_per_image = get_computing_power_for_task(
+            text_to_image_task_id, context=context_for_power or None
+        )
+        computing_power_total = computing_power_per_image * count
+
+        # 调用图片编辑 API
+        api_url = f"{comfyui_base_url.rstrip('/')}/api/image-edit"
+
+        request_data = {
+            'prompt': prompt,
+            'task_id': text_to_image_task_id,
+            'ratio': aspect_ratio,
+            'count': count,
+            'user_id': user_id,
+            'auth_token': auth_token,
+            'ref_image_urls': ','.join(parsed_urls),
+        }
+        if image_size:
+            request_data['image_size'] = image_size
+
+        try:
+            # 使用 httpx 替代 requests，避免同步阻塞事件循环
+            response = httpx.post(api_url, data=request_data, timeout=30, verify=False)
+            response.raise_for_status()
+
+            result_data = response.json()
+            project_ids = result_data.get('project_ids', [])
+
+            if not project_ids:
+                return {
+                    'success': False,
+                    'error': '图片编辑请求成功但未返回project_ids'
+                }
+
+            # 创建通用后台任务记录（复用 item_type=0 机制）
+            task_id = None
+            try:
+                from model import GridImageTasksModel, GridImageTaskStatus
+                general_task_key = f"{user_id}_0_{project_ids[0]}"
+                existing = GridImageTasksModel.get_by_task_key(general_task_key)
+                if existing and existing.status not in [GridImageTaskStatus.QUEUED, GridImageTaskStatus.PROCESSING]:
+                    GridImageTasksModel.delete_by_task_key(general_task_key)
+                GridImageTasksModel.create(
+                    task_key=general_task_key,
+                    project_id=project_ids[0],
+                    item_type=0,
+                    item_name=project_ids[0],
+                    user_id=user_id,
+                    world_id=world_id,
+                    comfyui_base_url=comfyui_base_url,
+                    auth_token=auth_token,
+                    max_attempts=60
+                )
+                task_id = general_task_key
+                logger.info(f"创建图片编辑后台任务: {general_task_key}, project_id: {project_ids[0]}")
+            except Exception as e:
+                logger.warning(f"图片编辑后台任务创建失败（不影响编辑请求）: {e}")
+
+            result = {
+                'success': True,
+                'project_ids': project_ids,
+                'status': 'submitted',
+                'comfyui_base_url': comfyui_base_url,
+                'model_used': model_name,
+                'image_size_used': image_size,
+                'computing_power_required': computing_power_per_image,
+                'computing_power_total': computing_power_total,
+                'item_type': 0,
+                'item_name': project_ids[0],
+            }
+
+            if task_id:
+                result.update({
+                    'task_id': task_id,
+                    'message': f'图片编辑请求已提交（使用模型: {model_name}），后台任务已创建。project_ids: {project_ids}, task_id: {task_id}'
+                })
+            else:
+                result['message'] = f'图片编辑请求已提交（使用模型: {model_name}），project_ids: {project_ids}'
+
+            return result
+
+        except httpx.HTTPStatusError as e:
+            error_detail = f'图片编辑请求失败: {str(e)}'
+            try:
+                resp_data = e.response.json()
+                detail = resp_data.get('detail', '')
+                if detail:
+                    error_detail = detail
+            except Exception:
+                pass
+            return {
+                'success': False,
+                'error': error_detail,
+                'model_used': model_name
+            }
+
+    except Exception as e:
+        logger.error(f"edit_image error: {e}", exc_info=True)
+        return {'success': False, 'error': f'图片编辑失败: {str(e)}'}
 
 
 def validate_name_for_filename(name: str, field_name: str = "名称") -> Dict[str, Any]:
@@ -2226,8 +2726,26 @@ MCP_TOOLS = [
         }
     },
     {
+        "name": "get_text_to_image_model_info",
+        "description": "获取当前用户选中的生图模型信息，包括模型名称、算力价格、支持的尺寸和比例、是否支持4宫格等。在生成图片前调用此工具可以了解模型能力和成本。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
+        "name": "get_user_computing_power",
+        "description": "查询当前用户的剩余算力余额。在批量生成图片前调用此工具，可以预估是否有足够算力完成任务，避免提交后因算力不足而失败。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
         "name": "generate_text_to_image",
-        "description": "文本生成图片功能（非阻塞版本，支持后台任务）。根据提示词发起图片生成请求，立即返回project_ids。如果指定item_type和item_name，会创建后台任务自动处理图片下载和更新。注意：生图模型由用户在前端界面选择，大模型无需关心具体使用哪个模型，返回结果中会包含使用的模型信息。",
+        "description": "文本生图（非阻塞）。发起图片生成请求，立即返回project_ids。返回结果包含 model_used、image_size_used、computing_power_required 等算力信息。注意：生图模型由用户在前端界面选择，不同模型算力价格不同，请先调用 get_text_to_image_model_info 了解当前模型。",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -2237,11 +2755,15 @@ MCP_TOOLS = [
                 },
                 "aspect_ratio": {
                     "type": "string",
-                    "description": "图片宽高比（可选，默认：16:9），支持格式如：16:9, 4:3, 1:1等"
+                    "description": "【已由系统注入，无需传入】图片宽高比。用户在界面上已选择，系统会自动应用。"
                 },
                 "count": {
                     "type": "integer",
                     "description": "生成图片数量（可选，默认：1）"
+                },
+                "image_size": {
+                    "type": "string",
+                    "description": "【已由系统注入，无需传入】图片分辨率。用户在界面上已选择，系统会自动应用。"
                 },
                 "item_type": {
                     "type": "integer",
@@ -2257,7 +2779,7 @@ MCP_TOOLS = [
     },
     {
         "name": "generate_4grid_character_images",
-        "description": "生成4宫格角色图像并自动切分更新到各个角色（一站式解决方案）。自动构建4宫格JSON格式，添加image_size=4k参数生成高分辨率图像，轮询等待生成完成，自动下载并切分4宫格图像为4个独立图像，自动更新每个角色的reference_image字段。注意：生图模型由用户在前端界面选择，大模型无需关心具体使用哪个模型。",
+        "description": "生成4宫格角色图像并自动切分更新到各个角色（一站式解决方案）。自动构建4宫格JSON格式，使用模型支持的最大分辨率生成图像（如4K/3K/2K，取决于所选模型），轮询等待生成完成，自动下载并切分4宫格图像为4个独立图像，自动更新每个角色的reference_image字段。注意：不同生图模型算力价格不同，请先调用 get_text_to_image_model_info 了解当前模型。",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -2281,7 +2803,7 @@ MCP_TOOLS = [
     },
     {
         "name": "generate_4grid_location_images",
-        "description": "生成4宫格场景图像并自动切分更新到各个场景（一站式解决方案）。自动构建4宫格JSON格式，添加image_size=4k参数生成高分辨率图像，轮询等待生成完成，自动下载并切分4宫格图像为4个独立图像，自动更新每个场景的reference_image字段。注意：生图模型由用户在前端界面选择，大模型无需关心具体使用哪个模型。",
+        "description": "生成4宫格场景图像并自动切分更新到各个场景（一站式解决方案）。自动构建4宫格JSON格式，使用模型支持的最大分辨率生成图像（如4K/3K/2K，取决于所选模型），轮询等待生成完成，自动下载并切分4宫格图像为4个独立图像，自动更新每个场景的reference_image字段。注意：不同生图模型算力价格不同，请先调用 get_text_to_image_model_info 了解当前模型。",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -2305,7 +2827,7 @@ MCP_TOOLS = [
     },
     {
         "name": "generate_4grid_prop_images",
-        "description": "生成4宫格道具图像并自动切分更新到各个道具（一站式解决方案）。自动构建4宫格JSON格式，添加image_size=4k参数生成高分辨率图像，轮询等待生成完成，自动下载并切分4宫格图像为4个独立图像，自动更新每个道具的reference_image字段。注意：生图模型由用户在前端界面选择，大模型无需关心具体使用哪个模型。",
+        "description": "生成4宫格道具图像并自动切分更新到各个道具（一站式解决方案）。自动构建4宫格JSON格式，使用模型支持的最大分辨率生成图像（如4K/3K/2K，取决于所选模型），轮询等待生成完成，自动下载并切分4宫格图像为4个独立图像，自动更新每个道具的reference_image字段。注意：不同生图模型算力价格不同，请先调用 get_text_to_image_model_info 了解当前模型。",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -2343,6 +2865,136 @@ MCP_TOOLS = [
                 }
             },
             "required": ["item_type", "item_name"]
+        }
+    },
+    {
+        "name": "check_image_status",
+        "description": "通过 project_id 查询图片生成结果（一次性查询）。后台会自动跟踪生图进度，调用此函数直接从数据库读取最终状态和图片URL。适用于不绑定item的通用生图场景（如营销图片）。建议在 generate_text_to_image 或 edit_image 返回后等待一段时间再调用，给后台留出处理时间。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "generate_text_to_image 或 edit_image 返回的 project_ids 数组中的第一个元素"
+                }
+            },
+            "required": ["project_id"]
+        }
+    },
+    {
+        "name": "edit_image",
+        "description": "图片编辑（图生图）。根据用户提供的原始图片URL和编辑指令，调用图片编辑API生成新图片。非阻塞，立即返回project_ids。后台会自动跟踪进度，通过 check_image_status 查询结果。注意：图片编辑模型由用户在前端界面选择，不同模型算力价格不同，请先调用 get_text_to_image_model_info 了解当前模型。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "图片编辑指令（必填），例如：'将背景替换为海滩'、'转为水彩画风格'、'添加圣诞装饰'"
+                },
+                "image_url": {
+                    "type": "string",
+                    "description": "原始图片URL（必填），支持多张图片用英文逗号分隔。对话中每张图片都有 [图片N]（URL: ...） 标签，请将所有需要编辑的图片 URL 用逗号拼接后传入。例如：'http://xxx/a.jpg,http://xxx/b.jpg'"
+                },
+                "aspect_ratio": {
+                    "type": "string",
+                    "description": "【已由系统注入，无需传入】图片宽高比。用户在界面上已选择，系统会自动应用。"
+                },
+                "count": {
+                    "type": "integer",
+                    "description": "生成图片数量（可选，默认：1）"
+                },
+                "image_size": {
+                    "type": "string",
+                    "description": "【已由系统注入，无需传入】图片分辨率。用户在界面上已选择，系统会自动应用。"
+                }
+            },
+            "required": ["prompt", "image_url"]
+        }
+    },
+    {
+        "name": "generate_text_to_video",
+        "description": "文本生成视频（非阻塞）。发起视频生成请求，立即返回 project_ids。非阻塞，后台自动跟踪进度。视频模型由系统自动选择，请先调用 get_user_computing_power 确认算力是否充足。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "视频描述提示词（必填），详细描述画面内容、运动方式、风格、镜头运动等。使用英文编写效果最佳。"
+                },
+                "ratio": {
+                    "type": "string",
+                    "description": "【已由系统注入，无需传入】视频宽高比。用户在界面上已选择，系统会自动应用。"
+                },
+                "duration_seconds": {
+                    "type": "integer",
+                    "description": "【已由系统注入，无需传入】视频时长（秒）。用户在界面上已选择，系统会自动应用。"
+                },
+                "count": {
+                    "type": "integer",
+                    "description": "生成视频数量（可选，默认：1）"
+                }
+            },
+            "required": ["prompt"]
+        }
+    },
+    {
+        "name": "image_to_video",
+        "description": "图片生成视频（图生视频，非阻塞）。基于参考图片生成视频，立即返回 project_ids。非阻塞，后台自动跟踪进度。⚠️ 严禁捏造图片URL，image_urls 必须是对话中真实存在的图片地址。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "视频描述/运动指令（必填），描述希望视频中出现的运动效果、镜头变化等。"
+                },
+                "image_urls": {
+                    "type": "string",
+                    "description": "参考图片URL（必填），多张用英文逗号分隔。对话中每张图片都有 [图片N]（URL: ...） 标签，请将所有图片 URL 用逗号拼接后传入。例如：'http://xxx/a.jpg,http://xxx/b.jpg'"
+                },
+                "ratio": {
+                    "type": "string",
+                    "description": "【已由系统注入，无需传入】视频宽高比。用户在界面上已选择，系统会自动应用。"
+                },
+                "duration_seconds": {
+                    "type": "integer",
+                    "description": "【已由系统注入，无需传入】视频时长（秒）。用户在界面上已选择，系统会自动应用。"
+                },
+                "count": {
+                    "type": "integer",
+                    "description": "生成视频数量（可选，默认：1）"
+                },
+                "image_mode": {
+                    "type": "string",
+                    "description": "图片模式（可选，默认 first_last_frame）：first_last_frame（首尾帧）或 multi_reference（全能参考）"
+                },
+                "video_urls": {
+                    "type": "string",
+                    "description": "参考视频URL（可选），多个用英文逗号分隔。仅部分模型支持（如 Seedance 2.0）。用于提供驱动视频，让生成的视频模仿参考视频的运动风格。"
+                },
+                "audio_urls": {
+                    "type": "string",
+                    "description": "参考音频URL（可选），多个用英文逗号分隔。仅部分模型支持。用于提供驱动音频，让生成的视频配合音频节奏。"
+                }
+            },
+            "required": ["prompt", "image_urls"]
+        }
+    },
+    {
+        "name": "fetch_image_as_base64",
+        "description": "下载图片并获取其 base64 数据。当你看到对话中 [图片N] 标签显示「该图片加载失败」时，立即调用此工具传入对应的图片 URL 来重新获取图片数据。调用成功后图片将自动注入到你的对话中，你就能看到并分析图片了。也可用于获取对话中任何图片 URL 对应的图片数据。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "image_url": {
+                    "type": "string",
+                    "description": "图片 URL（必填），对话中 [图片N]（URL: ...）标签里的 URL 地址"
+                },
+                "max_size_mb": {
+                    "type": "number",
+                    "description": "最大文件大小（MB），可选，默认 2.0。如果图片较大可适当调高。"
+                }
+            },
+            "required": ["image_url"]
         }
     }
 ]
@@ -2490,13 +3142,14 @@ def skill(SkillName: str) -> Dict[str, Any]:
 
 def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt: str,
                           aspect_ratio: str = "16:9", count: int = 1,
+                          image_size: Optional[str] = None,
                           item_type: int = None, item_name: str = None,
                           force_update_exist_image: bool = False,
                           is_grid: bool = False) -> Dict[str, Any]:
     """
     文本生成图片 - MCP工具函数（非阻塞版本，支持后台任务处理）
 
-    注意：生图模型由用户在前端界面选择，存储在会话配置中，大模型无需关心具体使用哪个模型。
+    注意：生图模型由用户在前端界面选择，不同模型算力价格不同，请先调用 get_text_to_image_model_info 了解当前模型。
 
     Args:
         user_id: 用户ID（必填）
@@ -2505,16 +3158,18 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
         prompt: 图片描述提示词（必填）
         aspect_ratio: 图片宽高比（默认：16:9）
         count: 生成图片数量（默认：1）
+        image_size: 图片分辨率（可选），如 1K/2K/3K/4K，不填则使用模型默认值。
+                    4宫格生成时自动使用模型支持的最大尺寸，无需手动指定。
         item_type: 物品类型（可选）：1=角色(character), 2=地点(location), 3=道具(props)
         item_name: 物品名称（可选），当指定item_type时必填，会自动更新对应物品的reference_image字段
         force_update_exist_image: 是否强制更新已存在的图像（默认：False）
                                  - False: 如果角色/场景/道具已有参考图像，则跳过生成
                                  - True: 强制生成并更新，覆盖现有图像
         is_grid: 是否为4宫格批量生成（默认：False）
-                - True: 添加 image_size="4k" 参数，用于4宫格高分辨率生成
+                - True: 自动使用模型支持的最大尺寸，用于4宫格高分辨率生成
 
     Returns:
-        dict: 操作结果，包含success状态、project_ids、使用的模型信息等
+        dict: 操作结果，包含success状态、project_ids、使用的模型信息、算力消耗等
     """
     # 获取用户配置的生图模型 task_id
     text_to_image_task_id = _get_text_to_image_task_id(user_id, world_id)
@@ -2546,8 +3201,6 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
 
             # 如果是单个角色/场景/道具类型(1/2/3)，但没有设置is_grid=True，给出提示
             if item_type in ItemType.SINGLE_TYPES and not is_grid:
-                import logging
-                logger = logging.getLogger(__name__)
                 logger.warning(f"[提示] 正在为单个项目生成图像 (item_type={item_type}, item_name={item_name})。如果需要批量生成4个或更多项目，建议使用 generate_4grid_character_images() / generate_4grid_images() 函数以提高效率。")
             
             # 如果提供了item_type，必须同时提供item_name
@@ -2598,6 +3251,17 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
                 'error': '配置文件中未找到comfyui_base_url_inner或host配置'
             }
         
+        # 强制应用用户偏好（比例和分辨率由前端界面控制，LLM 不需要传入）
+        # 4宫格模式(is_grid=True)跳过用户偏好覆盖，因为4宫格布局必须使用16:9横屏比例和最大分辨率
+        user_prefs = _get_image_preferences(user_id, world_id)
+        if user_prefs and not is_grid:
+            pref_ratio = user_prefs.get('ratio')
+            if pref_ratio and pref_ratio != 'auto':
+                aspect_ratio = pref_ratio
+            pref_resolution = user_prefs.get('resolution')
+            if pref_resolution and pref_resolution != 'auto':
+                image_size = pref_resolution
+
         # 准备请求数据
         request_data = {
             'prompt': prompt,
@@ -2607,25 +3271,48 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
             'user_id': user_id,
             'auth_token': auth_token
         }
-        
-        # 如果是4宫格生成，添加 image_size 参数
+
+        # 确定 image_size
+        from config.unified_config import UnifiedConfigRegistry
+        config = UnifiedConfigRegistry.get_by_id(text_to_image_task_id)
         if is_grid:
-            from config.unified_config import UnifiedConfigRegistry
-            config = UnifiedConfigRegistry.get_by_id(text_to_image_task_id)
+            # 4宫格生成：自动使用模型支持的最大尺寸
             if config and config.supported_sizes:
-                # 获取最大尺寸（supported_sizes 列表通常是排序的，取最后一个即可）
                 max_size = config.supported_sizes[-1]
                 request_data['image_size'] = max_size
             else:
-                # 如果配置中没有 supported_sizes，使用默认 4k
                 request_data['image_size'] = '4k'
-        
+        elif image_size:
+            # Agent 指定了 image_size，校验是否在支持列表中
+            if config and config.supported_sizes:
+                supported_lower = [s.lower() for s in config.supported_sizes]
+                if image_size.lower() not in supported_lower:
+                    return {
+                        'success': False,
+                        'error': f'不支持的图片尺寸: {image_size}，当前模型支持: {config.supported_sizes}'
+                    }
+            request_data['image_size'] = image_size
+        # 否则不设置 image_size，让后端使用模型默认尺寸
+
+        # 计算预估算力
+        from utils.computing_power import get_computing_power_for_task
+        context_for_power = {}
+        if 'image_size' in request_data:
+            context_for_power['resolution'] = request_data['image_size']
+        elif config and config.default_size:
+            context_for_power['resolution'] = config.default_size
+        computing_power_per_image = get_computing_power_for_task(
+            text_to_image_task_id, context=context_for_power or None
+        )
+        computing_power_total = computing_power_per_image * count
+
         # 发起文本生成图片请求
         api_url = f"{comfyui_base_url.rstrip('/')}/api/text-to-image"
         
         try:
             # 接口使用 Form 参数，需要使用 data 而不是 json 来发送表单数据
-            response = requests.post(api_url, data=request_data, timeout=30)
+            # 使用 httpx 替代 requests，避免同步阻塞事件循环
+            response = httpx.post(api_url, data=request_data, timeout=30, verify=False)
             response.raise_for_status()
             
             result_data = response.json()
@@ -2637,9 +3324,10 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
                     'error': '图片生成请求成功但未返回project_ids'
                 }
             
-            # 如果指定了item_type和item_name，创建后台任务
+            # 创建后台任务跟踪记录
             task_id = None
             if item_type is not None and item_name:
+                # 绑定到具体角色/场景/道具的任务
                 try:
                     task_manager = get_task_manager()
                     task_id = task_manager.create_image_task(
@@ -2667,6 +3355,31 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
                         'warning': f'后台任务创建失败: {str(e)}',
                         'comfyui_base_url': comfyui_base_url
                     }
+            else:
+                # 通用生图任务（营销等场景，不绑定item），直接创建数据库记录
+                # 后台 scheduler 会自动轮询 ComfyUI 状态并更新 result_url
+                try:
+                    from model import GridImageTasksModel, GridImageTaskStatus
+                    general_task_key = f"{user_id}_0_{project_ids[0]}"
+                    # 清理同 key 的终态旧记录
+                    existing = GridImageTasksModel.get_by_task_key(general_task_key)
+                    if existing and existing.status not in [GridImageTaskStatus.QUEUED, GridImageTaskStatus.PROCESSING]:
+                        GridImageTasksModel.delete_by_task_key(general_task_key)
+                    GridImageTasksModel.create(
+                        task_key=general_task_key,
+                        project_id=project_ids[0],
+                        item_type=0,
+                        item_name=project_ids[0],
+                        user_id=user_id,
+                        world_id=world_id,
+                        comfyui_base_url=comfyui_base_url,
+                        auth_token=auth_token,
+                        max_attempts=60
+                    )
+                    task_id = general_task_key
+                    logger.info(f"创建通用生图后台任务: {general_task_key}, project_id: {project_ids[0]}")
+                except Exception as e:
+                    logger.warning(f"通用生图后台任务创建失败（不影响生图请求）: {e}")
             
             result = {
                 'success': True,
@@ -2674,14 +3387,17 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
                 'status': 'submitted',
                 'comfyui_base_url': comfyui_base_url,
                 'model_used': model_name,
-                'text_to_image_task_id': text_to_image_task_id
+                'text_to_image_task_id': text_to_image_task_id,
+                'image_size_used': request_data.get('image_size'),
+                'computing_power_required': computing_power_per_image,
+                'computing_power_total': computing_power_total,
             }
 
             if task_id:
                 result.update({
                     'task_id': task_id,
-                    'item_type': item_type,
-                    'item_name': item_name,
+                    'item_type': item_type if item_type is not None else 0,
+                    'item_name': item_name if item_name else project_ids[0],
                     'message': f'图片生成请求已提交（使用模型: {model_name}），后台任务已创建。project_ids: {project_ids}, task_id: {task_id}'
                 })
             else:
@@ -2689,10 +3405,34 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
 
             return result
             
-        except requests.exceptions.RequestException as e:
+        except httpx.HTTPStatusError as e:
+            # 尝试解析结构化错误（如算力不足）
+            error_detail = f'图片生成请求失败: {str(e)}'
+            try:
+                resp_data = e.response.json()
+                detail = resp_data.get('detail', '')
+                if detail:
+                    error_detail = detail
+                    # 解析算力不足信息：格式如 "需要 X 算力，当前仅有 Y 算力"
+                    import re
+                    match = re.search(r'需要\s*(\d+)\s*算力.*当前仅有\s*(\d+)\s*算力', detail)
+                    if match:
+                        return {
+                            'success': False,
+                            'error': '算力不足',
+                            'detail': detail,
+                            'computing_power_required': int(match.group(1)),
+                            'computing_power_available': int(match.group(2)),
+                            'shortage': int(match.group(1)) - int(match.group(2)),
+                            'model_used': model_name,
+                        }
+            except (ValueError, KeyError):
+                pass
             return {
                 'success': False,
-                'error': f'图片生成请求失败: {str(e)}'
+                'error': error_detail,
+                'model_used': model_name,
+                'computing_power_required': computing_power_total,
             }
         
     except Exception as e:
@@ -2708,7 +3448,7 @@ def generate_4grid_images(user_id: str, world_id: str, auth_token: str,
     """
     生成4宫格图像并自动切分更新到各个项目（角色/场景/道具）
 
-    注意：生图模型由用户在前端界面选择，存储在会话配置中，大模型无需关心具体使用哪个模型。
+    注意：不同生图模型算力价格不同，请先调用 get_text_to_image_model_info 了解当前模型。
 
     Args:
         user_id: 用户ID（必填）
@@ -2719,7 +3459,7 @@ def generate_4grid_images(user_id: str, world_id: str, auth_token: str,
         item_type: 项目类型（4=角色四宫格, 5=场景四宫格, 6=道具四宫格）
 
     Returns:
-        dict: 操作结果，包含每个项目的更新状态
+        dict: 操作结果，包含每个项目的更新状态、算力消耗等
     """
     import logging
     logger = logging.getLogger(__name__)
@@ -2831,7 +3571,7 @@ def generate_4grid_character_images(user_id: str, world_id: str, auth_token: str
     """
     生成4宫格角色图像并自动切分更新到各个角色（向后兼容的包装函数）
 
-    注意：生图模型由用户在前端界面选择，存储在会话配置中，大模型无需关心具体使用哪个模型。
+    注意：不同生图模型算力价格不同，请先调用 get_text_to_image_model_info 了解当前模型。
 
     Args:
         user_id: 用户ID（必填）
@@ -2841,7 +3581,7 @@ def generate_4grid_character_images(user_id: str, world_id: str, auth_token: str
         prompts: 4个角色的提示词列表（必须是4个）
 
     Returns:
-        dict: 操作结果，包含每个角色的更新状态
+        dict: 操作结果，包含每个角色的更新状态、算力消耗等
     """
     result = generate_4grid_images(
         user_id=user_id,
@@ -2864,7 +3604,7 @@ def generate_4grid_location_images(user_id: str, world_id: str, auth_token: str,
     """
     生成4宫格场景图像并自动切分更新到各个场景（向后兼容的包装函数）
 
-    注意：生图模型由用户在前端界面选择，存储在会话配置中，大模型无需关心具体使用哪个模型。
+    注意：不同生图模型算力价格不同，请先调用 get_text_to_image_model_info 了解当前模型。
 
     Args:
         user_id: 用户ID（必填）
@@ -2874,7 +3614,7 @@ def generate_4grid_location_images(user_id: str, world_id: str, auth_token: str,
         prompts: 4个场景的提示词列表（必须是4个）
 
     Returns:
-        dict: 操作结果，包含每个场景的更新状态
+        dict: 操作结果，包含每个场景的更新状态、算力消耗等
     """
     result = generate_4grid_images(
         user_id=user_id,
@@ -2897,7 +3637,7 @@ def generate_4grid_prop_images(user_id: str, world_id: str, auth_token: str,
     """
     生成4宫格道具图像并自动切分更新到各个道具（向后兼容的包装函数）
 
-    注意：生图模型由用户在前端界面选择，存储在会话配置中，大模型无需关心具体使用哪个模型。
+    注意：不同生图模型算力价格不同，请先调用 get_text_to_image_model_info 了解当前模型。
 
     Args:
         user_id: 用户ID（必填）
@@ -2907,7 +3647,7 @@ def generate_4grid_prop_images(user_id: str, world_id: str, auth_token: str,
         prompts: 4个道具的提示词列表（必须是4个）
 
     Returns:
-        dict: 操作结果，包含每个道具的更新状态
+        dict: 操作结果，包含每个道具的更新状态、算力消耗等
     """
     result = generate_4grid_images(
         user_id=user_id,

@@ -4,6 +4,7 @@ Sentry 错误监控工具类
 """
 import os
 import logging
+import threading
 from typing import Dict, Any, Optional
 from enum import Enum
 from config.config_util import get_dynamic_config_value
@@ -219,27 +220,41 @@ class SentryUtil:
             if context:
                 logger.error(f"[ALERT_CONTEXT] {context}")
             return
-        
+
+        # 使用后台线程发送，防止 sentry_sdk.capture_message() 阻塞调用线程
+        # 场景：当 Sentry 服务器连接异常时，capture_message 可能无限阻塞，
+        # 导致调用方（如视频生成调度器）整个卡死
+        thread = threading.Thread(
+            target=cls._send_alert_sync,
+            args=(alert_type, message, level, context),
+            daemon=True
+        )
+        thread.start()
+
+    @classmethod
+    def _send_alert_sync(cls, alert_type: str, message: str,
+                         level: AlertLevel, context: Optional[Dict[str, Any]]):
+        """后台线程中实际发送报警到 Sentry"""
         try:
             import sentry_sdk
-            
+
             with sentry_sdk.push_scope() as scope:
                 # 设置标签
                 scope.set_tag("alert_type", alert_type)
                 scope.set_tag("alert", "true")
-                
+
                 # 设置上下文
                 if context:
                     scope.set_context("alert_context", context)
-                
+
                 # 发送消息
                 sentry_sdk.capture_message(
                     f"[{alert_type}] {message}",
                     level=level.value
                 )
-                
+
             logger.info(f"Alert sent to Sentry: {alert_type}")
-            
+
         except Exception as e:
             logger.error(f"Failed to send alert to Sentry: {str(e)}")
             # 降级到日志记录

@@ -323,8 +323,9 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
         if extra_config.get('watermark') is not None:
             payload["watermark"] = extra_config['watermark']
 
-        if extra_config.get('ratio'):
-            payload["ratio"] = extra_config['ratio']
+        ratio = extra_config.get('ratio') or ai_tool.ratio
+        if ratio:
+            payload["ratio"] = ratio
 
         if ai_tool.duration:
             payload["duration"] = ai_tool.duration

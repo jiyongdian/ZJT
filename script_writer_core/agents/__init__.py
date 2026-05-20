@@ -1,5 +1,6 @@
 from .base_agent import BaseAgent
 from .pm_agent import PMAgent
+from .marketing_pm_agent import MarketingPMAgent
 from .expert_agent import ExpertAgent
 from .task_manager import TaskManager, AgentTask, TaskStatus, VerificationRequest
 from .summarizer import ConversationSummarizer
@@ -11,6 +12,7 @@ from llm.llm_client_factory import LLMClientFactory, get_llm_client
 __all__ = [
     'BaseAgent',
     'PMAgent',
+    'MarketingPMAgent',
     'ExpertAgent',
     'TaskManager',
     'AgentTask',

@@ -4,6 +4,7 @@ Script Writer API 集成模块
 """
 
 import os
+import re
 import json
 import logging
 import uuid
@@ -51,6 +52,7 @@ from script_writer_core.agents import TaskManager, TaskStatus, ToolExecutor
 from script_writer_core.chat_session import ChatSession
 from script_writer_core.file_manager import FileManager
 from script_writer_core.skill_loader import SkillLoader
+from utils.file_storage import get_file_storage
 logger = logging.getLogger(__name__)
 
 # 创建路由器
@@ -61,10 +63,16 @@ router = APIRouter(prefix="/api", tags=["script_writer"])
 from script_writer_core.session_storage import SessionStorage
 session_storage = SessionStorage(use_cache=True, cache_ttl=300)
 
-# 生图模型配置存储（按 user_id + world_id 存储 task_id）
-# key: f"{user_id}_{world_id}", value: task_id (int)
-text_to_image_model_config: Dict[str, int] = {}
-TEXT_TO_IMAGE_MODEL_LOCK = threading.RLock()
+# 用户偏好存储（数据库持久化 + 本地缓存）
+# 本地缓存仅用于减少数据库查询，数据源为数据库
+from model.user_preferences import UserPreferencesModel, PREF_TYPE_TEXT_TO_IMAGE_MODEL, PREF_TYPE_IMAGE_PREFERENCES, PREF_TYPE_VIDEO_PREFERENCES, PREF_TYPE_TEXT_TO_VIDEO_MODEL, PREF_TYPE_IMAGE_TO_VIDEO_MODEL
+# 本地缓存字典
+_text_to_image_model_cache: Dict[str, int] = {}
+_image_preferences_cache: Dict[str, Dict[str, str]] = {}
+_video_preferences_cache: Dict[str, Dict[str, str]] = {}
+_text_to_video_model_cache: Dict[str, int] = {}
+_image_to_video_model_cache: Dict[str, int] = {}
+PREFERENCES_LOCK = threading.RLock()
 
 # 默认生图模型 task_id (nano-banana-Pro)
 DEFAULT_TEXT_TO_IMAGE_TASK_ID = 7
@@ -79,20 +87,130 @@ def _get_text_to_image_models_from_config():
 
 
 def get_text_to_image_model_id(user_id: str, world_id: str) -> int:
-    """获取用户在指定世界的生图模型 task_id"""
+    """获取用户在指定世界的生图模型 task_id（优先读缓存，回源数据库）"""
     key = f"{user_id}_{world_id}"
-    with TEXT_TO_IMAGE_MODEL_LOCK:
-        result = text_to_image_model_config.get(key, DEFAULT_TEXT_TO_IMAGE_TASK_ID)
-        logger.info(f"[生图模型配置] 读取: key={key}, task_id={result}, 配置存在={key in text_to_image_model_config}")
-        return result
+    with PREFERENCES_LOCK:
+        if key in _text_to_image_model_cache:
+            result = _text_to_image_model_cache[key]
+            logger.info(f"[生图模型配置] 缓存命中: key={key}, task_id={result}")
+            return result
+        # 回源数据库
+        pref = UserPreferencesModel.get(user_id, world_id, PREF_TYPE_TEXT_TO_IMAGE_MODEL)
+        if pref and pref.config_value is not None:
+            result = pref.get_value()
+            if isinstance(result, int):
+                _text_to_image_model_cache[key] = result
+                logger.info(f"[生图模型配置] 数据库加载: key={key}, task_id={result}")
+                return result
+        logger.info(f"[生图模型配置] 使用默认值: key={key}, task_id={DEFAULT_TEXT_TO_IMAGE_TASK_ID}")
+        return DEFAULT_TEXT_TO_IMAGE_TASK_ID
 
 
 def set_text_to_image_model_id(user_id: str, world_id: str, task_id: int):
-    """设置用户在指定世界的生图模型 task_id"""
+    """设置用户在指定世界的生图模型 task_id（写入数据库 + 更新缓存）"""
     key = f"{user_id}_{world_id}"
-    with TEXT_TO_IMAGE_MODEL_LOCK:
-        text_to_image_model_config[key] = task_id
+    with PREFERENCES_LOCK:
+        UserPreferencesModel.upsert(user_id, world_id, PREF_TYPE_TEXT_TO_IMAGE_MODEL, task_id)
+        _text_to_image_model_cache[key] = task_id
         logger.info(f"[生图模型配置] 已保存: key={key}, task_id={task_id}")
+
+
+def get_image_preferences(user_id: str, world_id: str) -> Dict[str, str]:
+    """获取用户在指定世界的图片偏好（比例、分辨率）"""
+    key = f"{user_id}_{world_id}"
+    with PREFERENCES_LOCK:
+        if key in _image_preferences_cache:
+            return _image_preferences_cache[key]
+        pref = UserPreferencesModel.get(user_id, world_id, PREF_TYPE_IMAGE_PREFERENCES)
+        if pref and pref.config_value is not None:
+            result = pref.get_value()
+            if isinstance(result, dict):
+                _image_preferences_cache[key] = result
+                return result
+        return {}
+
+
+def set_image_preferences(user_id: str, world_id: str, prefs: Dict[str, str]):
+    """设置用户在指定世界的图片偏好"""
+    key = f"{user_id}_{world_id}"
+    with PREFERENCES_LOCK:
+        UserPreferencesModel.upsert(user_id, world_id, PREF_TYPE_IMAGE_PREFERENCES, prefs)
+        _image_preferences_cache[key] = prefs
+        logger.info(f"[图片偏好配置] 已保存: key={key}, prefs={prefs}")
+
+
+def get_video_preferences(user_id: str, world_id: str) -> Dict[str, str]:
+    """获取用户在指定世界的视频偏好（比例、时长）"""
+    key = f"{user_id}_{world_id}"
+    with PREFERENCES_LOCK:
+        if key in _video_preferences_cache:
+            return _video_preferences_cache[key]
+        pref = UserPreferencesModel.get(user_id, world_id, PREF_TYPE_VIDEO_PREFERENCES)
+        if pref and pref.config_value is not None:
+            result = pref.get_value()
+            if isinstance(result, dict):
+                _video_preferences_cache[key] = result
+                return result
+        return {}
+
+
+def set_video_preferences(user_id: str, world_id: str, prefs: Dict[str, str]):
+    """设置用户在指定世界的视频偏好"""
+    key = f"{user_id}_{world_id}"
+    with PREFERENCES_LOCK:
+        UserPreferencesModel.upsert(user_id, world_id, PREF_TYPE_VIDEO_PREFERENCES, prefs)
+        _video_preferences_cache[key] = prefs
+        logger.info(f"[视频偏好配置] 已保存: key={key}, prefs={prefs}")
+
+
+def get_text_to_video_model_id(user_id: str, world_id: str) -> Optional[int]:
+    """获取用户在指定世界的文生视频模型 task_id"""
+    key = f"{user_id}_{world_id}"
+    with PREFERENCES_LOCK:
+        if key in _text_to_video_model_cache:
+            return _text_to_video_model_cache[key]
+        pref = UserPreferencesModel.get(user_id, world_id, PREF_TYPE_TEXT_TO_VIDEO_MODEL)
+        if pref and pref.config_value is not None:
+            result = pref.get_value()
+            if isinstance(result, int):
+                _text_to_video_model_cache[key] = result
+                logger.info(f"[文生视频模型配置] 数据库加载: key={key}, task_id={result}")
+                return result
+        return None
+
+
+def set_text_to_video_model_id(user_id: str, world_id: str, task_id: int):
+    """设置用户在指定世界的文生视频模型 task_id"""
+    key = f"{user_id}_{world_id}"
+    with PREFERENCES_LOCK:
+        UserPreferencesModel.upsert(user_id, world_id, PREF_TYPE_TEXT_TO_VIDEO_MODEL, task_id)
+        _text_to_video_model_cache[key] = task_id
+        logger.info(f"[文生视频模型配置] 已保存: key={key}, task_id={task_id}")
+
+
+def get_image_to_video_model_id(user_id: str, world_id: str) -> Optional[int]:
+    """获取用户在指定世界的图生视频模型 task_id"""
+    key = f"{user_id}_{world_id}"
+    with PREFERENCES_LOCK:
+        if key in _image_to_video_model_cache:
+            return _image_to_video_model_cache[key]
+        pref = UserPreferencesModel.get(user_id, world_id, PREF_TYPE_IMAGE_TO_VIDEO_MODEL)
+        if pref and pref.config_value is not None:
+            result = pref.get_value()
+            if isinstance(result, int):
+                _image_to_video_model_cache[key] = result
+                logger.info(f"[图生视频模型配置] 数据库加载: key={key}, task_id={result}")
+                return result
+        return None
+
+
+def set_image_to_video_model_id(user_id: str, world_id: str, task_id: int):
+    """设置用户在指定世界的图生视频模型 task_id"""
+    key = f"{user_id}_{world_id}"
+    with PREFERENCES_LOCK:
+        UserPreferencesModel.upsert(user_id, world_id, PREF_TYPE_IMAGE_TO_VIDEO_MODEL, task_id)
+        _image_to_video_model_cache[key] = task_id
+        logger.info(f"[图生视频模型配置] 已保存: key={key}, task_id={task_id}")
 
 
 # 全局组件
@@ -109,8 +227,12 @@ from script_writer_core.mcp_tool import _sanitize_filename
 set_file_manager(file_manager)
 
 # 设置 mcp_tool 的生图模型获取函数
-from script_writer_core.mcp_tool import set_text_to_image_model_getter
+from script_writer_core.mcp_tool import set_text_to_image_model_getter, set_image_preferences_getter, set_video_preferences_getter, set_text_to_video_model_getter, set_image_to_video_model_getter
 set_text_to_image_model_getter(get_text_to_image_model_id)
+set_image_preferences_getter(get_image_preferences)
+set_video_preferences_getter(get_video_preferences)
+set_text_to_video_model_getter(get_text_to_video_model_id)
+set_image_to_video_model_getter(get_image_to_video_model_id)
 
 # 加载智能体配置
 import json
@@ -664,6 +786,7 @@ class SessionCreateRequest(BaseModel):
     auth_token: str = ""
     model: Optional[str] = None
     model_id: Optional[int] = None
+    session_type: int = 1
 
 class TaskCreateRequest(BaseModel):
     message: str
@@ -673,6 +796,9 @@ class TaskCreateRequest(BaseModel):
     vendor_id: int = 1
     enable_thinking: bool = False
     thinking_effort: str = "medium"
+    image_urls: Optional[List[str]] = None
+    image_preferences: Optional[Dict[str, Any]] = None
+    video_preferences: Optional[Dict[str, Any]] = None
 
 class ModelChangeRequest(BaseModel):
     model: str
@@ -703,6 +829,9 @@ class WorldCreateRequest(BaseModel):
     name: str
     description: Optional[str] = ""
 
+class SessionTitleUpdateRequest(BaseModel):
+    title: str
+
 class WorldUpdateRequest(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
@@ -710,6 +839,13 @@ class WorldUpdateRequest(BaseModel):
 class VerificationSubmitRequest(BaseModel):
     approved: bool
     user_input: Optional[str] = None
+
+class SessionHistoryUpdateRequest(BaseModel):
+    messages: List[Dict[str, Any]]
+
+class SessionMessageAppendRequest(BaseModel):
+    role: str
+    content: str
 
 # ==================== 会话管理 API ====================
 
@@ -743,11 +879,14 @@ async def create_session(request: Request, session_request: SessionCreateRequest
             world_id=session_request.world_id,
             auth_token=session_request.auth_token,
             model=session_request.model,
-            model_id=session_request.model_id
+            model_id=session_request.model_id,
+            session_type=session_request.session_type
         )
 
         # 存储会话到数据库
-        if not session_storage.save_session(session, expires_hours=24):
+        from config.constant import SessionHistoryConstants
+        expire_hours = SessionHistoryConstants.SESSION_EXPIRE_HOURS_MARKETING if session_request.session_type == 2 else SessionHistoryConstants.SESSION_EXPIRE_HOURS_SCRIPT
+        if not session_storage.save_session(session, expires_hours=expire_hours):
             logger.error(f'会话保存到数据库失败 - session_id: {session_id}')
             return JSONResponse({
                 'success': False,
@@ -911,6 +1050,148 @@ async def clear_user_directory(request: SyncFilesRequest):
         'message': '目录已清空'
     })
 
+@router.put('/session/{session_id}/history')
+@require_permission("script_session:update")
+async def update_session_history(request: Request, session_id: str, history_request: SessionHistoryUpdateRequest):
+    """更新会话历史消息"""
+    try:
+        from model.chat_sessions import ChatSessionsModel
+        
+        session_entity = ChatSessionsModel.get_by_session_id(session_id)
+        if not session_entity:
+            return JSONResponse({
+                'success': False,
+                'error': '会话不存在'
+            }, status_code=404)
+        
+        filtered_messages = [msg for msg in history_request.messages if msg.get('role') != 'system']
+        
+        ChatSessionsModel.update_conversation_history(
+            session_id=session_id,
+            conversation_history=filtered_messages,
+            update_tokens=False
+        )
+        
+        session_storage.invalidate_cache(session_id)
+        
+        return JSONResponse({
+            'success': True,
+            'message': '会话历史已更新'
+        })
+    except Exception as e:
+        logger.error(f'更新会话历史失败: {str(e)}')
+        return JSONResponse({
+            'success': False,
+            'error': str(e)
+        }, status_code=500)
+
+@router.post('/session/{session_id}/message')
+@require_permission("script_session:update")
+async def append_session_message(request: Request, session_id: str, message_request: SessionMessageAppendRequest):
+    """追加消息到会话历史"""
+    try:
+        from model.chat_sessions import ChatSessionsModel
+        
+        session_entity = ChatSessionsModel.get_by_session_id(session_id)
+        if not session_entity:
+            return JSONResponse({
+                'success': False,
+                'error': '会话不存在'
+            }, status_code=404)
+        
+        current_history = session_entity.conversation_history or []
+        
+        new_message = {
+            'role': message_request.role,
+            'content': message_request.content,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        current_history.append(new_message)
+        
+        ChatSessionsModel.update_conversation_history(
+            session_id=session_id,
+            conversation_history=current_history,
+            update_tokens=False
+        )
+        
+        # 清除缓存，确保下次加载时从数据库读取最新数据
+        session_storage.invalidate_cache(session_id)
+        
+        return JSONResponse({
+            'success': True,
+            'message': '消息已追加'
+        })
+    except Exception as e:
+        logger.error(f'追加消息失败: {str(e)}')
+        return JSONResponse({
+            'success': False,
+            'error': str(e)
+        }, status_code=500)
+
+@router.post('/session/{session_id}/clean-pending-tasks')
+@require_permission("script_session:update")
+async def clean_pending_tasks(request: Request, session_id: str):
+    """清理对话历史中的 __PENDING_TASK__ 标记"""
+    try:
+        from model.chat_sessions import ChatSessionsModel
+
+        session_entity = ChatSessionsModel.get_by_session_id(session_id)
+        if not session_entity:
+            return JSONResponse({
+                'success': False,
+                'error': '会话不存在'
+            }, status_code=404)
+
+        history = session_entity.conversation_history or []
+        cleaned = [msg for msg in history
+                   if not (msg.get('content', '').startswith('__PENDING_TASK__'))]
+        removed_count = len(history) - len(cleaned)
+
+        if removed_count > 0:
+            ChatSessionsModel.update_conversation_history(
+                session_id=session_id,
+                conversation_history=cleaned,
+                update_tokens=False
+            )
+            session_storage.invalidate_cache(session_id)
+
+        return JSONResponse({
+            'success': True,
+            'removed': removed_count
+        })
+    except Exception as e:
+        logger.error(f'清理 pending task 标记失败: {str(e)}')
+        return JSONResponse({
+            'success': False,
+            'error': str(e)
+        }, status_code=500)
+
+@router.get('/session/{session_id}/latest-task')
+@require_permission("agent_task:view")
+async def get_latest_task_for_session(request: Request, session_id: str):
+    """获取会话的最新任务信息（用于前端恢复活跃任务流）"""
+    try:
+        from model.agent_tasks import AgentTasksModel
+
+        task = AgentTasksModel.get_latest_by_session(session_id)
+        if not task:
+            return JSONResponse({
+                'success': False,
+                'error': '没有任务'
+            }, status_code=404)
+
+        return JSONResponse({
+            'success': True,
+            'task': task.to_dict()
+        })
+    except Exception as e:
+        logger.error(f'获取最新任务失败: {str(e)}')
+        return JSONResponse({
+            'success': False,
+            'error': str(e)
+        }, status_code=500)
+
 @router.post('/session/{session_id}/model')
 @require_permission("script_session:change_model")
 async def set_session_model(request: Request, session_id: str, model_request: ModelChangeRequest):
@@ -1064,6 +1345,17 @@ async def set_text_to_image_model(request: Request):
 
         set_text_to_image_model_id(user_id, world_id, task_id)
 
+        # 同步保存比例和分辨率偏好
+        ratio = data.get('ratio')
+        resolution = data.get('resolution')
+        if ratio or resolution:
+            prefs = get_image_preferences(user_id, world_id)
+            if ratio:
+                prefs['ratio'] = ratio
+            if resolution:
+                prefs['resolution'] = resolution
+            set_image_preferences(user_id, world_id, prefs)
+
         # 如果提供了 session_id，同时更新数据库中的 chat_sessions 表
         if session_id:
             try:
@@ -1121,10 +1413,141 @@ async def get_current_text_to_image_model(
         }, status_code=500)
 
 
+@router.get('/video-model')
+async def get_video_models(
+    category: str = QueryParam("text_to_video"),
+    user_id: Optional[str] = QueryParam(None),
+    world_id: Optional[str] = QueryParam(None)
+):
+    """获取可用的视频模型列表"""
+    try:
+        from config.unified_config import UnifiedConfigRegistry, TaskCategory
+
+        valid_categories = [TaskCategory.TEXT_TO_VIDEO, TaskCategory.IMAGE_TO_VIDEO]
+        if category not in valid_categories:
+            return JSONResponse({
+                'success': False,
+                'error': f'无效的 category: {category}，有效值为: {valid_categories}'
+            }, status_code=400)
+
+        configs = UnifiedConfigRegistry.get_by_category(category)
+        models = []
+        for c in configs:
+            if c.enabled and not c.hidden:
+                models.append({
+                    'task_id': c.id,
+                    'key': c.key,
+                    'name': c.name,
+                    'supported_durations': c.supported_durations or [],
+                    'default_duration': c.default_duration,
+                    'supported_ratios': c.supported_ratios or [],
+                    'computing_power': c.get_computing_power() if c.computing_power else 0
+                })
+
+        # 获取当前用户的偏好
+        current_task_id = None
+        if user_id and world_id:
+            if category == TaskCategory.TEXT_TO_VIDEO:
+                current_task_id = get_text_to_video_model_id(user_id, world_id)
+            else:
+                current_task_id = get_image_to_video_model_id(user_id, world_id)
+
+        return JSONResponse({
+            'success': True,
+            'category': category,
+            'models': models,
+            'current_task_id': current_task_id
+        })
+    except Exception as e:
+        logger.error(f'获取视频模型列表失败: {str(e)}')
+        return JSONResponse({
+            'success': False,
+            'error': str(e)
+        }, status_code=500)
+
+
+@router.post('/video-model')
+async def set_video_model(request: Request):
+    """设置视频模型偏好"""
+    from config.unified_config import UnifiedConfigRegistry, TaskCategory
+    try:
+        data = await request.json()
+        user_id = str(data.get('user_id', ''))
+        world_id = str(data.get('world_id', ''))
+        task_id = data.get('task_id')
+        category = data.get('category', TaskCategory.TEXT_TO_VIDEO)
+
+        if not user_id or not world_id:
+            return JSONResponse({
+                'success': False,
+                'error': 'user_id 和 world_id 不能为空'
+            }, status_code=400)
+
+        if task_id is None:
+            return JSONResponse({
+                'success': False,
+                'error': 'task_id 不能为空'
+            }, status_code=400)
+
+        try:
+            task_id = int(task_id)
+        except (TypeError, ValueError):
+            return JSONResponse({
+                'success': False,
+                'error': 'task_id 必须为数字'
+            }, status_code=400)
+
+        # 验证 task_id 是否属于指定类别
+        config = UnifiedConfigRegistry.get_by_id(task_id)
+        if not config:
+            return JSONResponse({
+                'success': False,
+                'error': f'无效的 task_id: {task_id}'
+            }, status_code=400)
+
+        # 验证类别匹配
+        valid_categories = [TaskCategory.TEXT_TO_VIDEO, TaskCategory.IMAGE_TO_VIDEO]
+        if category not in valid_categories:
+            return JSONResponse({
+                'success': False,
+                'error': f'无效的 category: {category}'
+            }, status_code=400)
+
+        # 检查模型的类别是否包含请求的类别
+        model_categories = [config.category]
+        if config.categories:
+            model_categories.extend(config.categories)
+        if category not in model_categories:
+            return JSONResponse({
+                'success': False,
+                'error': f'模型 {config.name} 不属于类别 {category}'
+            }, status_code=400)
+
+        # 保存偏好
+        if category == TaskCategory.TEXT_TO_VIDEO:
+            set_text_to_video_model_id(user_id, world_id, task_id)
+        else:
+            set_image_to_video_model_id(user_id, world_id, task_id)
+
+        return JSONResponse({
+            'success': True,
+            'task_id': task_id,
+            'model_name': config.name,
+            'category': category
+        })
+    except Exception as e:
+        logger.error(f'设置视频模型偏好失败: {str(e)}')
+        return JSONResponse({
+            'success': False,
+            'error': str(e)
+        }, status_code=500)
+
+
 @router.get('/sessions')
 async def list_sessions(
     user_id: Optional[str] = QueryParam(None),
-    world_id: Optional[str] = QueryParam(None)
+    world_id: Optional[str] = QueryParam(None),
+    session_type: Optional[int] = QueryParam(None)
 ):
     """列出所有会话"""
     try:
@@ -1132,12 +1555,29 @@ async def list_sessions(
 
         if user_id:
             # 从数据库查询用户的会话
-            entities = ChatSessionsModel.list_by_user(user_id, world_id, active_only=True, limit=100)
+            entities = ChatSessionsModel.list_by_user(user_id, world_id, active_only=True, limit=100, session_type=session_type)
+            def _extract_title(entity):
+                """获取会话标题：优先用数据库 title，否则从对话历史提取"""
+                if entity.title:
+                    return entity.title
+                for msg in entity.conversation_history:
+                    if isinstance(msg, dict) and msg.get('role') == 'user':
+                        content = msg.get('content', '')
+                        if isinstance(content, str) and content.strip():
+                            # 去除 HTML 标签和图片引用，取纯文本
+                            clean = re.sub(r'<[^>]+>', '', content).strip()
+                            clean = re.sub(r'\[图片\d+\]', '', clean).strip()
+                            clean = re.sub(r'\s+', ' ', clean).strip()
+                            if clean:
+                                return clean[:20] + ('...' if len(clean) > 20 else '')
+                return '新对话'
+
             session_list = [
                 {
                     'session_id': e.session_id,
                     'user_id': e.user_id,
                     'world_id': e.world_id,
+                    'title': _extract_title(e),
                     'created_at': e.created_at.isoformat() if e.created_at else None,
                     'updated_at': e.updated_at.isoformat() if e.updated_at else None,
                     'model': e.model,
@@ -1158,10 +1598,25 @@ async def list_sessions(
                     agents_config=agents_config
                 )
                 if session:
+                    # 从对话历史提取标题
+                    title = '新对话'
+                    for msg in session.get_history():
+                        if isinstance(msg, dict) and msg.get('role') == 'user':
+                            content = msg.get('content', '')
+                            if isinstance(content, str) and content.strip():
+                                clean = re.sub(r'<[^>]+>', '', content).strip()
+                                # 去除 URL 和图片标签，只保留用户文字
+                                clean = re.sub(r'https?://\S+', '', clean).strip()
+                                clean = re.sub(r'\[图片\d+][（(]URL:[\s\S]*?[）)]\n?', '', clean).strip()
+                                clean = re.sub(r'\s+', ' ', clean).strip()
+                                if clean:
+                                    title = clean[:20] + ('...' if len(clean) > 20 else '')
+                                    break
                     session_list.append({
                         'session_id': sid,
                         'user_id': session.user_id,
                         'world_id': session.world_id,
+                        'title': title,
                         'created_at': session.created_at.isoformat() if session.created_at else None,
                         'updated_at': session.updated_at.isoformat() if session.updated_at else None,
                         'message_count': len(session.get_history())
@@ -1179,6 +1634,38 @@ async def list_sessions(
         }, status_code=500)
 
 # ==================== 模型和算力 API ====================
+
+
+@router.delete('/session/{session_id}')
+@require_permission("script_session:delete")
+async def delete_session(request: Request, session_id: str):
+    """删除会话（软删除）"""
+    try:
+        from model.chat_sessions import ChatSessionsModel
+        affected = ChatSessionsModel.soft_delete(session_id)
+        if affected > 0:
+            return JSONResponse({'success': True})
+        return JSONResponse({'success': False, 'error': '会话不存在'}, status_code=404)
+    except Exception as e:
+        logger.error(f'删除会话失败: {str(e)}')
+        return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
+
+
+@router.put('/session/{session_id}/title')
+@require_permission("script_session:update")
+async def update_session_title(request: Request, session_id: str, body: SessionTitleUpdateRequest):
+    """更新会话标题"""
+    try:
+        if not body.title.strip():
+            return JSONResponse({'success': False, 'error': '标题不能为空'}, status_code=400)
+        from model.chat_sessions import ChatSessionsModel
+        affected = ChatSessionsModel.update_title(session_id, body.title.strip())
+        if affected > 0:
+            return JSONResponse({'success': True})
+        return JSONResponse({'success': False, 'error': '会话不存在'}, status_code=404)
+    except Exception as e:
+        logger.error(f'更新会话标题失败: {str(e)}')
+        return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
 
 @router.get('/vendors')
 async def get_vendors():
@@ -1762,17 +2249,89 @@ async def create_agent_task(request: Request, session_id: str, task_request: Tas
                 'error': '消息不能为空'
             }, status_code=400)
         
+        # 如果有图片偏好，追加到用户消息中供 PM 和专家参考
+        user_message = task_request.message
+        if task_request.image_preferences:
+            prefs = task_request.image_preferences
+            pref_parts = []
+
+            # 同步生图模型配置到内存（确保 Agent 实际使用的模型与前端选择一致）
+            model_name = prefs.get('model_name')
+            if model_name:
+                models_config = _get_text_to_image_models_from_config()
+                for tid, info in models_config.items():
+                    if info.get('name') == model_name:
+                        set_text_to_image_model_id(user_id, world_id, tid)
+                        logger.info(f'[Agent任务] 已同步生图模型: user_id={user_id}, world_id={world_id}, model={model_name}, task_id={tid}')
+                        break
+
+            if prefs.get('ratio'):
+                pref_parts.append(f"图片比例: {prefs['ratio']}")
+            if prefs.get('resolution'):
+                pref_parts.append(f"分辨率: {prefs['resolution']}")
+            if model_name:
+                pref_parts.append(f"生图模型: {model_name}")
+            if pref_parts:
+                user_message += f"\n\n[用户图片偏好] {', '.join(pref_parts)}"
+
+        # 如果有视频偏好，保存到内存并追加到用户消息中
+        if task_request.video_preferences:
+            v_prefs = task_request.video_preferences
+
+            # 如果前端传递了 task_id（视频模型选择），同步到模型偏好
+            v_task_id = v_prefs.get('task_id')
+            if v_task_id:
+                try:
+                    v_task_id = int(v_task_id)
+                    from config.unified_config import UnifiedConfigRegistry, TaskCategory
+                    v_config = UnifiedConfigRegistry.get_by_id(v_task_id)
+                    if v_config and v_config.enabled:
+                        v_model_categories = [v_config.category]
+                        if v_config.categories:
+                            v_model_categories.extend(v_config.categories)
+                        if TaskCategory.IMAGE_TO_VIDEO in v_model_categories:
+                            set_image_to_video_model_id(user_id, world_id, v_task_id)
+                        elif TaskCategory.TEXT_TO_VIDEO in v_model_categories:
+                            set_text_to_video_model_id(user_id, world_id, v_task_id)
+                except (TypeError, ValueError):
+                    pass
+
+            # 保存到内存供 MCP 视频工具函数读取
+            set_video_preferences(user_id, world_id, v_prefs)
+            v_pref_parts = []
+            if v_prefs.get('ratio'):
+                v_pref_parts.append(f"视频比例: {v_prefs['ratio']}")
+            if v_prefs.get('duration'):
+                v_pref_parts.append(f"视频时长: {v_prefs['duration']}秒")
+            if v_prefs.get('image_mode'):
+                v_pref_parts.append(f"图片模式: {v_prefs['image_mode']}")
+            # 添加视频模型名称（优先从前端传入，其次从 task_id 解析）
+            v_model_display = v_prefs.get('model_name')
+            if not v_model_display and v_task_id:
+                try:
+                    from config.unified_config import UnifiedConfigRegistry as _UCR
+                    _vcfg = _UCR.get_by_id(int(v_task_id))
+                    if _vcfg:
+                        v_model_display = _vcfg.name
+                except (TypeError, ValueError):
+                    pass
+            if v_model_display:
+                v_pref_parts.append(f"视频模型: {v_model_display}")
+            if v_pref_parts:
+                user_message += f"\n\n[用户视频偏好] {', '.join(v_pref_parts)}"
+
         # 创建任务（返回 task_id 字符串）
         task_id = task_manager.create_task(
             session_id=session_id,
-            user_message=task_request.message,
+            user_message=user_message,
             user_id=user_id,
             world_id=world_id,
             auth_token=auth_token,
             vendor_id=vendor_id,
             model_id=model_id,
             enable_thinking=task_request.enable_thinking,
-            thinking_effort=task_request.thinking_effort
+            thinking_effort=task_request.thinking_effort,
+            image_urls=task_request.image_urls
         )
         
         # 获取任务对象
@@ -1793,7 +2352,9 @@ async def create_agent_task(request: Request, session_id: str, task_request: Tas
             try:
                 logger.info(f"[Task] Task completed callback triggered for session {session_id}")
                 # 任务完成后保存会话状态到数据库
-                session_storage.save_session(session, expires_hours=24)
+                from config.constant import SessionHistoryConstants
+                expire_hours = SessionHistoryConstants.SESSION_EXPIRE_HOURS_MARKETING if getattr(session, 'session_type', 1) == 2 else SessionHistoryConstants.SESSION_EXPIRE_HOURS_SCRIPT
+                session_storage.save_session(session, expires_hours=expire_hours)
                 logger.info(f"[Task] Session {session_id} saved after task completion")
             except Exception as e:
                 logger.error(f"[Task] Failed to save session after task completion: {e}")
@@ -2835,9 +3396,86 @@ async def upload_reference_image(
             'success': True,
             'url': url
         })
-        
+
     except Exception as e:
         logger.error(f'图片上传失败: {str(e)}')
+        return JSONResponse({
+            'success': False,
+            'error': f'上传失败: {str(e)}'
+        }, status_code=500)
+
+
+@router.post('/upload-agent-image')
+@require_permission("script_writer:upload_image")
+async def upload_agent_image(
+    request: Request,
+    file: UploadFile = File(...),
+    session_id: str = Form(...)
+):
+    """
+    上传 Agent 对话模式的图片（支持多图）
+
+    图片保存到 upload/marketing/pic/{session_id}/ 目录，
+    以 session_id 为子目录，方便定时清理脚本比照 chat_sessions 表删除孤立图片。
+
+    Args:
+        file: 图片文件
+        session_id: 会话ID（用于组织存储路径）
+
+    Returns:
+        图片访问 URL
+    """
+    try:
+        # 验证文件类型
+        allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+        file_extension = os.path.splitext(file.filename or '')[1].lower()
+
+        if file_extension not in allowed_extensions:
+            return JSONResponse({
+                'success': False,
+                'error': f'不支持的文件类型。允许的类型: {", ".join(allowed_extensions)}'
+            }, status_code=400)
+
+        # 验证文件大小
+        max_size_mb = get_dynamic_config_value('upload', 'max_image_size_mb', default=10)
+        max_size_bytes = max_size_mb * 1024 * 1024
+
+        content = await file.read()
+        if len(content) > max_size_bytes:
+            return JSONResponse({
+                'success': False,
+                'error': f'图片大小不能超过 {max_size_mb}MB'
+            }, status_code=400)
+
+        # 存储路径: upload/marketing/pic/{session_id}/
+        upload_dir = os.path.join('upload', 'marketing', 'pic', session_id)
+        app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        full_upload_dir = os.path.join(app_dir, upload_dir)
+
+        os.makedirs(full_upload_dir, exist_ok=True)
+
+        # 生成唯一文件名
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+        unique_id = uuid.uuid4().hex[:8]
+        filename = f"{timestamp}_{unique_id}{file_extension}"
+        file_path = os.path.join(full_upload_dir, filename)
+
+        with open(file_path, 'wb') as f:
+            f.write(content)
+
+        # 获取服务器地址，构建访问 URL
+        server_host = get_config()["server"]["host"]
+        url = f"{server_host.rstrip('/')}/{upload_dir.replace(os.sep, '/')}/{filename}"
+
+        logger.info(f'Agent 图片上传成功: {url}')
+
+        return JSONResponse({
+            'success': True,
+            'url': url
+        })
+
+    except Exception as e:
+        logger.error(f'Agent 图片上传失败: {str(e)}')
         return JSONResponse({
             'success': False,
             'error': f'上传失败: {str(e)}'
@@ -3141,3 +3779,77 @@ async def delete_skill(
     except Exception as e:
         logger.error(f"删除技能自定义失败: {e}", exc_info=True)
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+# ==================== 世界导出/导入 ====================
+
+@router.get('/export-world')
+@require_permission("script:list")
+async def export_world(
+    request: Request,
+    user_id: str = QueryParam(...),
+    world_id: str = QueryParam(...)
+):
+    """导出世界完整数据（含图片）为 zip 包，上传到图床后返回下载链接"""
+    zip_path = None
+    try:
+        zip_path = await asyncio.to_thread(file_manager.export_world, user_id, world_id)
+        filename = os.path.basename(zip_path)
+        storage = get_file_storage(get_config())
+        storage_key = storage.generate_key_with_datetime(filename)
+        upload_result = await storage.upload_file(storage_key, zip_path, content_type='application/zip')
+        if not upload_result.success:
+            return JSONResponse({'success': False, 'error': upload_result.error or '上传导出文件失败'}, status_code=500)
+        download_url = storage.get_download_url(upload_result.key)
+        return JSONResponse({
+            'success': True,
+            'download_url': download_url,
+            'filename': filename
+        })
+    except FileNotFoundError as e:
+        return JSONResponse({'success': False, 'error': str(e)}, status_code=404)
+    except Exception as e:
+        logger.error(f'导出世界失败: {str(e)}', exc_info=True)
+        return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
+    finally:
+        if zip_path and os.path.exists(zip_path):
+            try:
+                os.remove(zip_path)
+            except Exception:
+                logger.warning(f'清理导出临时文件失败: {zip_path}', exc_info=True)
+
+
+@router.post('/import-world')
+@require_permission("script:create")
+async def import_world(
+    request: Request,
+    user_id: str = Form(...),
+    world_id: str = Form(...),
+    file: UploadFile = File(...)
+):
+    """从 zip 包导入世界数据"""
+    try:
+        import tempfile as _tempfile
+        suffix = '.zip'
+        with _tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            content = await file.read()
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        try:
+            result = file_manager.import_world(user_id, world_id, tmp_path)
+            return JSONResponse({
+                'success': True,
+                'message': f'导入完成: 剧本{result["scripts"]}个, 角色{result["characters"]}个, '
+                           f'场景{result["locations"]}个, 道具{result["props"]}个, 图片{result["images"]}张',
+                'result': result
+            })
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+    except Exception as e:
+        logger.error(f'导入世界失败: {str(e)}')
+        return JSONResponse({'success': False, 'error': str(e)}, status_code=500)

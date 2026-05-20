@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Callable
 from script_writer_core.file_manager import FileManager
 from script_writer_core.mcp_tool import (
     MCP_TOOLS,
@@ -28,18 +28,32 @@ from script_writer_core.mcp_tool import (
     generate_4grid_character_images,
     generate_4grid_location_images,
     generate_4grid_prop_images,
-    get_task_status
+    get_task_status,
+    check_image_status,
+    edit_image,
+    get_text_to_image_model_info,
+    get_user_computing_power,
+    fetch_image_as_base64,
 )
 
 logger = logging.getLogger(__name__)
 
+# 企业版动态注册的工具函数（在 enterprise 模块加载时注入）
+_enterprise_tool_functions: Dict[str, Callable] = {}
+
+
+def register_enterprise_tool(name: str, func: Callable):
+    """注册企业版工具函数（由 enterprise 模块调用）"""
+    _enterprise_tool_functions[name] = func
+    logger.info(f"已注册企业版工具: {name}")
+
 
 class ToolExecutor:
     """工具执行器 - 统一管理所有工具的执行"""
-    
+
     def __init__(self, file_manager: FileManager):
         self.file_manager = file_manager
-        
+
         self.tool_map = {
             # MCP 工具函数（直接调用）
             "read_world": read_world,
@@ -68,7 +82,15 @@ class ToolExecutor:
             "generate_4grid_location_images": generate_4grid_location_images,
             "generate_4grid_prop_images": generate_4grid_prop_images,
             "get_task_status": get_task_status,
+            "check_image_status": check_image_status,
+            "edit_image": edit_image,
+            "get_text_to_image_model_info": get_text_to_image_model_info,
+            "get_user_computing_power": get_user_computing_power,
+            "fetch_image_as_base64": fetch_image_as_base64,
         }
+
+        # 注入企业版工具函数
+        self.tool_map.update(_enterprise_tool_functions)
     
     def execute_tool(
         self, 
@@ -82,10 +104,11 @@ class ToolExecutor:
         # 调试日志：记录接收到的工具名称和参数
         logger.info(f"Requesting execution for tool: '{tool_name}' (repr: {repr(tool_name)})")
 
-        # 检查工具是否存在
-        if tool_name not in self.tool_map:
+        # 检查工具是否存在（优先本地 tool_map，再查企业版动态注册表）
+        tool_func = self.tool_map.get(tool_name) or _enterprise_tool_functions.get(tool_name)
+        if not tool_func:
             return {"error": f"未知工具: {tool_name}"}
-        
+
         try:
             # MCP 工具现在需要 user_id, world_id, auth_token 作为前三个参数
             mcp_tool_names = [
@@ -97,17 +120,20 @@ class ToolExecutor:
                 "update_character_json", "update_script_json", "update_location_json",
                 "update_prop_json", "get_long_user_input", "generate_text_to_image",
                 "generate_4grid_character_images", "generate_4grid_location_images",
-                "generate_4grid_prop_images", "get_task_status"
+                "generate_4grid_prop_images", "get_task_status", "check_image_status",
+                "edit_image", "get_text_to_image_model_info", "get_user_computing_power",
+                "generate_text_to_video", "image_to_video",
+                "fetch_image_as_base64"
             ]
             
             if tool_name in mcp_tool_names:
                 # MCP 工具：将 user_id, world_id, auth_token 作为前三个参数传递
-                result = self.tool_map[tool_name](user_id, world_id, auth_token, **tool_args)
+                result = tool_func(user_id, world_id, auth_token, **tool_args)
             else:
                 # 兼容旧逻辑，但理论上现在应该都走上面
                 tool_args["user_id"] = user_id
                 tool_args["world_id"] = world_id
-                result = self.tool_map[tool_name](**tool_args)
+                result = tool_func(**tool_args)
             
             return result
         except Exception as e:

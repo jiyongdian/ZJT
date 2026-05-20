@@ -687,12 +687,13 @@
               </div>
               <div class="mode-select-check" v-if="creationMode === 'short_drama'">✓</div>
             </div>
-            <div class="mode-select-item disabled" style="opacity: 0.5; cursor: not-allowed;">
-              <div class="mode-select-icon">🛒</div>
+            <div class="mode-select-item" :class="{active: creationMode === 'marketing'}" @click="selectCreationMode('marketing')">
+              <div class="mode-select-icon">🎯</div>
               <div class="mode-select-content">
-                <div class="mode-select-title">电商模式</div>
-                <div class="mode-select-desc">即将推出...</div>
+                <div class="mode-select-title">营销模式 <span class="beta-tag">Beta</span></div>
+                <div class="mode-select-desc">适用于营销内容创作，包含带货脚本、广告创意、产品文案等全流程</div>
               </div>
+              <div class="mode-select-check" v-if="creationMode === 'marketing'">✓</div>
             </div>
           </div>
         </div>
@@ -715,143 +716,164 @@
     },
     template: `
       <div class="homepage-container">
+        <!-- 短剧模式内容 -->
         <!-- 当前模式显示 -->
-        <div class="current-mode-bar">
-          <span class="current-mode-label">当前模式：</span>
-          <span class="current-mode-value">{{ $root.creationMode === 'short_drama' ? '🎬 短剧模式' : '未选择' }}</span>
-          <button class="mode-switch-btn" @click.stop="$root.showModeSelectModal = true">切换模式</button>
-        </div>
-        
-        <!-- 开始创作大横幅 -->
-        <div class="start-creation-banner" @click="handleStartCreation">
-          <div class="banner-content">
-            <div class="banner-title-row">
-              <span class="banner-sparkle">✨</span>
-              <h1 class="banner-title">开始创作</h1>
-              <span class="banner-sparkle">✨</span>
-            </div>
-            <p class="banner-desc">创建新的短剧工作流，一站式完成剧本、角色、场景到视频的全流程制作</p>
-            <p class="banner-subtitle">→ 点击开始您的创作之旅</p>
+          <div class="current-mode-bar">
+            <span class="current-mode-label">当前模式：</span>
+            <span class="current-mode-value" v-if="$root.creationMode === 'marketing'">🎯 营销模式</span>
+            <span class="current-mode-value" v-else>🎬 短剧模式</span>
+            <button class="mode-switch-btn" @click.stop="$root.showModeSelectModal = true">切换模式</button>
           </div>
-        </div>
-        
-        <!-- 工作流入口卡片 -->
-        <div class="feature-cards">
-          <div class="feature-card" @click="handleVideoWorkflowClick">
-            <div class="feature-card-header">
-              <div class="feature-card-icon blue">📹</div>
-              <div class="feature-card-info">
-                <div class="feature-card-title">视频工作流</div>
-                <div class="feature-card-subtitle">空画布 + 节点式工作流编辑</div>
-              </div>
-            </div>
-            <div class="feature-card-body">
-              <p class="feature-card-desc">创建和管理视频的视频项目</p>
-            </div>
-            <div class="feature-card-footer">
-              <span class="feature-card-link">→</span>
+
+          <!-- 开始创作大横幅 -->
+          <div class="start-creation-banner" @click="handleStartCreation">
+            <div class="banner-content">
+              <template v-if="$root.creationMode === 'marketing'">
+                <div class="banner-title-row">
+                  <span class="banner-sparkle">🎯</span>
+                  <h1 class="banner-title">开始营销创作</h1>
+                  <span class="banner-sparkle">🎯</span>
+                </div>
+                <p class="banner-desc">AI 智能营销助手，一键生成带货脚本、广告创意、产品文案，让营销更高效</p>
+                <p class="banner-subtitle">→ 点击开启您的营销创作之旅</p>
+              </template>
+              <template v-else>
+                <div class="banner-title-row">
+                  <span class="banner-sparkle">✨</span>
+                  <h1 class="banner-title">开始创作</h1>
+                  <span class="banner-sparkle">✨</span>
+                </div>
+                <p class="banner-desc">创建新的短剧工作流，一站式完成剧本、角色、场景到视频的全流程制作</p>
+                <p class="banner-subtitle">→ 点击开始您的创作之旅</p>
+              </template>
             </div>
           </div>
-          <div class="feature-card" @click="handleScriptWriterClick">
-            <div class="feature-card-header">
-              <div class="feature-card-icon purple">✨</div>
-              <div class="feature-card-info">
-                <div class="feature-card-title">剧本智能创作系统</div>
-                <div class="feature-card-subtitle">AI智能体生成 · 人物 · 场景 · 道具</div>
+
+          <!-- 工作流入口卡片 -->
+          <div class="feature-cards" v-if="$root.creationMode !== 'marketing'">
+            <div class="feature-card" @click="handleVideoWorkflowClick">
+              <div class="feature-card-header">
+                <div class="feature-card-icon blue">📹</div>
+                <div class="feature-card-info">
+                  <div class="feature-card-title">视频工作流</div>
+                  <div class="feature-card-subtitle">空画布 + 节点式工作流编辑</div>
+                </div>
+              </div>
+              <div class="feature-card-body">
+                <p class="feature-card-desc">创建和管理视频的视频项目</p>
+              </div>
+              <div class="feature-card-footer">
+                <span class="feature-card-link">→</span>
               </div>
             </div>
-            <div class="feature-card-body">
-              <p class="feature-card-desc">一键创作完整的短剧素材</p>
-            </div>
-            <div class="feature-card-footer">
-              <span class="feature-card-link">→</span>
-            </div>
-          </div>
-        </div>
-        
-        <!-- AI工具区域 -->
-        <div class="ai-tools-section">
-          <div class="ai-tools-header" @click="aiToolsExpanded = !aiToolsExpanded">
-            <div class="ai-tools-left">
-              <div class="ai-tools-icon">🤖</div>
-              <div class="ai-tools-info">
-                <span class="ai-tools-title">AI 工具箱</span>
-                <span class="ai-tools-subtitle" v-if="!aiToolsExpanded">展开查看所有可用工具</span>
-              </div>
-            </div>
-            <div class="ai-tools-toggle" :class="{expanded: aiToolsExpanded}">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M6 9l6 6 6-6"/>
-              </svg>
-            </div>
-          </div>
-          <div class="ai-tools-content" v-show="aiToolsExpanded">
-            <div class="ai-tools-grid">
-              <div class="tool-card" @click="$router.push({name:'image-edit'})">
-                <div class="tool-card-icon blue">🖼️</div>
-                <div class="tool-card-info">
-                  <div class="tool-card-title">图片编辑</div>
-                  <div class="tool-card-desc">上传图片 + 提示词</div>
+            <div class="feature-card" @click="handleScriptWriterClick">
+              <div class="feature-card-header">
+                <div class="feature-card-icon purple">✨</div>
+                <div class="feature-card-info">
+                  <div class="feature-card-title">剧本智能创作系统</div>
+                  <div class="feature-card-subtitle">AI智能体生成 · 人物 · 场景 · 道具</div>
                 </div>
               </div>
-              <div class="tool-card" @click="$router.push({name:'text-to-image'})">
-                <div class="tool-card-icon purple">🎨</div>
-                <div class="tool-card-info">
-                  <div class="tool-card-title">AI文生图</div>
-                  <div class="tool-card-desc">输入文本提示词生成图片</div>
-                </div>
+              <div class="feature-card-body">
+                <p class="feature-card-desc">一键创作完整的短剧素材</p>
               </div>
-              <div class="tool-card" @click="$router.push({name:'ai-video-gen'})">
-                <div class="tool-card-icon orange">📹</div>
-                <div class="tool-card-info">
-                  <div class="tool-card-title">AI视频生成</div>
-                  <div class="tool-card-desc">输入文本提示词生成视频</div>
-                </div>
-              </div>
-              <div class="tool-card" @click="$router.push({name:'image-to-video'})">
-                <div class="tool-card-icon green">🎬</div>
-                <div class="tool-card-info">
-                  <div class="tool-card-title">图片生成视频</div>
-                  <div class="tool-card-desc">上传图片 + 提示词生成视频</div>
-                </div>
-              </div>
-              <div class="tool-card" @click="$router.push({name:'video-enhance'})">
-                <div class="tool-card-icon yellow">✨</div>
-                <div class="tool-card-info">
-                  <div class="tool-card-title">视频高清修复</div>
-                  <div class="tool-card-desc">上传模糊视频进行高清修复</div>
-                </div>
-              </div>
-              <div class="tool-card" @click="$router.push({name:'audio-generate'})">
-                <div class="tool-card-icon purple">🎵</div>
-                <div class="tool-card-info">
-                  <div class="tool-card-title">AI音频生成</div>
-                  <div class="tool-card-desc">输入文本生成语音，支持声音克隆</div>
-                </div>
-              </div>
-              <div class="tool-card" @click="$router.push({name:'digital-human'})">
-                <div class="tool-card-icon pink">👤</div>
-                <div class="tool-card-info">
-                  <div class="tool-card-title">在线图片数字人</div>
-                  <div class="tool-card-desc">上传图片+文本+音频生成数字人</div>
-                </div>
-              </div>
-              <div class="tool-card" @click="$router.push({name:'skill-config'})">
-                <div class="tool-card-icon teal">⚙️</div>
-                <div class="tool-card-info">
-                  <div class="tool-card-title">技能配置</div>
-                  <div class="tool-card-desc">自定义 AI 专家的能力</div>
-                </div>
+              <div class="feature-card-footer">
+                <span class="feature-card-link">→</span>
               </div>
             </div>
           </div>
-        </div>
+
+          <!-- AI工具区域 -->
+          <div class="ai-tools-section">
+            <div class="ai-tools-header" @click="aiToolsExpanded = !aiToolsExpanded">
+              <div class="ai-tools-left">
+                <div class="ai-tools-icon">🤖</div>
+                <div class="ai-tools-info">
+                  <span class="ai-tools-title">AI 工具箱</span>
+                  <span class="ai-tools-subtitle" v-if="!aiToolsExpanded">展开查看所有可用工具</span>
+                </div>
+              </div>
+              <div class="ai-tools-toggle" :class="{expanded: aiToolsExpanded}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M6 9l6 6 6-6"/>
+                </svg>
+              </div>
+            </div>
+            <div class="ai-tools-content" v-show="aiToolsExpanded">
+              <div class="ai-tools-grid">
+                <div class="tool-card" @click="$router.push({name:'image-edit'})">
+                  <div class="tool-card-icon blue">🖼️</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-title">图片编辑</div>
+                    <div class="tool-card-desc">上传图片 + 提示词</div>
+                  </div>
+                </div>
+                <div class="tool-card" @click="$router.push({name:'text-to-image'})">
+                  <div class="tool-card-icon purple">🎨</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-title">AI文生图</div>
+                    <div class="tool-card-desc">输入文本提示词生成图片</div>
+                  </div>
+                </div>
+                <div class="tool-card" @click="$router.push({name:'ai-video-gen'})">
+                  <div class="tool-card-icon orange">📹</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-title">AI视频生成</div>
+                    <div class="tool-card-desc">输入文本提示词生成视频</div>
+                  </div>
+                </div>
+                <div class="tool-card" @click="$router.push({name:'image-to-video'})">
+                  <div class="tool-card-icon green">🎬</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-title">图片生成视频</div>
+                    <div class="tool-card-desc">上传图片 + 提示词生成视频</div>
+                  </div>
+                </div>
+                <div class="tool-card" @click="$router.push({name:'video-enhance'})">
+                  <div class="tool-card-icon yellow">✨</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-title">视频高清修复</div>
+                    <div class="tool-card-desc">上传模糊视频进行高清修复</div>
+                  </div>
+                </div>
+                <div class="tool-card" @click="$router.push({name:'audio-generate'})">
+                  <div class="tool-card-icon purple">🎵</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-title">AI音频生成</div>
+                    <div class="tool-card-desc">输入文本生成语音，支持声音克隆</div>
+                  </div>
+                </div>
+                <div class="tool-card" @click="$router.push({name:'digital-human'})">
+                  <div class="tool-card-icon pink">👤</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-title">在线图片数字人</div>
+                    <div class="tool-card-desc">上传图片+文本+音频生成数字人</div>
+                  </div>
+                </div>
+                <div class="tool-card" @click="$router.push({name:'skill-config'})">
+                  <div class="tool-card-icon teal">⚙️</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-title">技能配置</div>
+                    <div class="tool-card-desc">自定义 AI 专家的能力</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
       </div>
     `,
     methods: {
+      goHome() {
+        this.$router.push({name:'list'});
+      },
       handleStartCreation() {
-        // 跳转到工作流列表页面并自动打开新建表单，加随机数防止缓存
-        window.location.href = '/video-workflow-list?action=create&_t=' + Date.now();
+        if (this.$root.creationMode === 'marketing') {
+          const userId = localStorage.getItem('user_id') || '';
+          window.location.href = '/marketing-agent?user_id=' + encodeURIComponent(userId);
+        } else {
+          // 跳转到工作流列表页面并自动打开新建表单，加随机数防止缓存
+          window.location.href = '/video-workflow-list?action=create&_t=' + Date.now();
+        }
       },
       handleVideoWorkflowClick() {
         window.location.href = '/video-workflow-list';
@@ -859,16 +881,16 @@
       handleScriptWriterClick() {
         const authToken = localStorage.getItem('auth_token');
         const userId = localStorage.getItem('user_id');
-        
+
         if (!authToken || !userId) {
           alert('请先登录');
           return;
         }
-        
+
         // auth_token 已在 localStorage 中，无需通过 URL 传递
         const url = `/script-writer?user_id=${encodeURIComponent(userId)}`;
         window.location.href = url;
-      }
+      },
     }
   };
 
@@ -5120,6 +5142,17 @@
                     </template>
                   </div>
                 </div>
+                <div v-if="item.reference_images" style="margin-top: 12px; padding: 12px; background: #0f1620; border-radius: 8px; border: 1px solid var(--border);">
+                  <div style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">参考图:</div>
+                  <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <template v-for="(img, idx) in (typeof item.reference_images === 'string' ? JSON.parse(item.reference_images) : item.reference_images)" :key="idx">
+                      <div v-if="img" style="display: flex; align-items: center; gap: 12px;">
+                        <img :src="img" style="max-width: 120px; max-height: 80px; border-radius: 6px; object-fit: cover; border: 1px solid var(--border);" />
+                        <a :href="img" target="_blank" class="btn secondary" style="font-size: 12px; padding: 4px 12px; text-decoration: none;">查看原图</a>
+                      </div>
+                    </template>
+                  </div>
+                </div>
                 <div v-if="item.result_url" style="margin-top: 8px;">
                   <a :href="item.result_url" target="_blank" class="btn secondary" style="display: inline-block; text-decoration: none;">查看结果</a>
                   <button v-if="item.status == 2 && item.type == 3" class="btn" @click="enhanceVideo(item, item.id)" :disabled="enhancingVideos[item.id]" style="margin-left: 8px;">{{ enhancingVideos[item.id] ? '已修复' : '生成高清视频' }}</button>
@@ -7512,13 +7545,26 @@
           });
           
           if (response.data.success) {
+            // 检查是否需要管理员审核
+            const pendingApproval = response.data.data && response.data.data.pending_approval;
+            if (pendingApproval) {
+              // 待审核：提示用户并切换到登录表单
+              this.registerError = '';
+              this.authMode = 'login';
+              this.showLoginModal = true;
+              this.loginForm.phone = this.registerForm.phone;
+              this.registerForm = { phone: '', code: '', password: '', inviteCode: '', termsAgreed: false };
+              alert(response.data.message || '注册成功，请等待管理员审核通过后登录');
+              return;
+            }
+
             // 检查是否是首个管理员
             const isFirstAdmin = response.data.data && response.data.data.is_first_admin;
             if (isFirstAdmin) {
               // 保存标记，登录后跳转到快速配置
               localStorage.setItem('redirect_after_login', '/admin?quick_config=1');
             }
-            
+
             // 注册成功后自动登录
             this.showLoginModal = true;
             this.authMode = 'login';
@@ -8520,8 +8566,9 @@
         if (savedMode) {
           this.creationMode = savedMode;
         } else {
-          // 未选择模式，显示模式选择弹窗
-          this.showModeSelectModal = true;
+          // 未选择模式，默认短剧模式
+          this.creationMode = 'short_drama';
+          localStorage.setItem('creation_mode', 'short_drama');
         }
       },
       

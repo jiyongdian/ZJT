@@ -378,7 +378,7 @@ CREATE TABLE IF NOT EXISTS `grid_image_tasks` (
   `id` int NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `task_key` varchar(255) NOT NULL COMMENT '任务唯一键 (格式: item_type_item_name)',
   `project_id` varchar(100) NOT NULL COMMENT 'ComfyUI project_id',
-  `item_type` tinyint NOT NULL COMMENT '项目类型 (1=character, 2=location, 3=props, 4=character_grid, 5=location_grid, 6=prop_grid)',
+  `item_type` tinyint NOT NULL COMMENT '项目类型 (0=general, 1=character, 2=location, 3=props, 4=character_grid, 5=location_grid, 6=prop_grid)',
   `item_name` varchar(255) NOT NULL COMMENT '项目名称（宫格任务为逗号分隔的多个名称）',
   `user_id` varchar(50) NOT NULL COMMENT '用户ID',
   `world_id` varchar(50) NOT NULL COMMENT '世界观ID',
