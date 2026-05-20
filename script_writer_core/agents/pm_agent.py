@@ -368,6 +368,7 @@ class PMAgent(BaseAgent, AskUserMixin):
         self.add_to_history("assistant", history_entry)
 
         deferred_user_inputs = []
+        deferred_expert_outputs = []  # 专家输出延迟添加，确保在所有 tool 消息之后
 
         for tool_call in tool_calls:
             tool_name = tool_call.function.name
@@ -377,6 +378,12 @@ class PMAgent(BaseAgent, AskUserMixin):
                 tool_args = {}
 
             result = self._execute_tool(tool_name, tool_args, task, session_data)
+
+            # call_agent 工具：收集专家输出，延迟添加到历史（确保在 tool 消息之后）
+            if tool_name == "call_agent" and isinstance(result, dict) and result.get("success"):
+                expert_output = result.get("result", "")
+                if expert_output:
+                    deferred_expert_outputs.append(expert_output)
 
             # ask_user 工具：在 tool 回答之前，将问题写入历史（保证顺序正确）
             if tool_name == "ask_user" and isinstance(result, dict) and "_verification_meta" in result:
@@ -403,6 +410,11 @@ class PMAgent(BaseAgent, AskUserMixin):
         # 避免在 assistant(tool_calls) 和 tool 之间插入 user 消息导致 API 报错
         for user_input in deferred_user_inputs:
             self.add_to_history("user", user_input)
+
+        # 将专家输出作为 assistant 消息写入历史，确保刷新后能恢复显示
+        # 顺序：assistant(tool_calls) -> tool -> user(如有) -> assistant(专家输出)
+        for expert_output in deferred_expert_outputs:
+            self.add_to_history("assistant", expert_output)
 
     def _execute_tool(
         self,

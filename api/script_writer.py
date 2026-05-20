@@ -1605,8 +1605,9 @@ async def list_sessions(
                             content = msg.get('content', '')
                             if isinstance(content, str) and content.strip():
                                 clean = re.sub(r'<[^>]+>', '', content).strip()
-                                # 去除图片标签，只保留用户文字
-                                clean = re.sub(r'\[图片\d+]（URL:[\s\S]*?）\n?', '', clean).strip()
+                                # 去除 URL 和图片标签，只保留用户文字
+                                clean = re.sub(r'https?://\S+', '', clean).strip()
+                                clean = re.sub(r'\[图片\d+][（(]URL:[\s\S]*?[）)]\n?', '', clean).strip()
                                 clean = re.sub(r'\s+', ' ', clean).strip()
                                 if clean:
                                     title = clean[:20] + ('...' if len(clean) > 20 else '')

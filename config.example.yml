@@ -194,6 +194,9 @@ frontend:
   # 用于上线后强制浏览器重新加载新版本的前端资源
   cache_bust:
     enabled: true  # 前端 Debug 模式密码
+  # Vue 错误输出开关（开发调试用）
+  # enabled: true 时，Vue 运行时错误会输出到浏览器控制台
+  enable_vue_error_output: false
 
 # Workflow configuration
 workflow:

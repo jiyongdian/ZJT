@@ -64,7 +64,10 @@
                     @mouseleave="hoveredSessionId = null; activeMenuId = null"
                 >
                     <span class="sidebar-nav-icon">💬</span>
-                    <span class="history-title" v-if="renamingSessionId !== session.id">{{ session.title || '新对话' }}</span>
+                    <div class="history-title-wrap" v-if="renamingSessionId !== session.id">
+                        <span class="history-title">{{ session.title || '新对话' }}</span>
+                        <span class="history-id" :title="session.id">{{ session.id }}</span>
+                    </div>
                     <input
                         v-else
                         class="history-rename-input"
@@ -746,7 +749,7 @@
     <script>
     const { createApp, ref, computed, onMounted, onUnmounted, nextTick } = Vue;
 
-    createApp({
+    const app = createApp({
         setup() {
             // ========== 状态 ==========
             const messages = ref([]);
@@ -792,6 +795,9 @@
             // 专用视频模型状态（独立于图片模型的 selectedModelKey）
             const selectedVideoModelKey = ref('');
             const selectedVideoModelName = ref('');
+            // 图生视频模型偏好（页面加载时预取，上传图片后使用）
+            const savedImg2VidModelKey = ref('');
+            const savedImg2VidModelName = ref('');
 
             // 上传图片状态
             const hasUploadedImage = ref(false);
@@ -2153,7 +2159,7 @@
                                 imageUrls.push(img.serverUrl);
                             }
                         });
-                        console.log('[Agent] 发送图片 URL:', imageUrls.length, '张');
+                        console.log('[Agent] 发送图片 URL:', imageUrls.length, '张', imageUrls);
                     } else if (isAgentVideo && hasUploadedImage.value) {
                         // Agent 视频模式：等待服务器上传完成获取 HTTP URL
                         const existingServerUrl = uploadedImageServerUrl.value || (agentImageFiles.value.length > 0 && agentImageFiles.value[0].serverUrl) || null;
@@ -2455,6 +2461,18 @@
             // 处理 AI 向用户提问（ask_user 工具）
             function handleHumanVerification(verification) {
                 if (!verification) return;
+
+                // 校验：verification 的 task_id 必须匹配当前 session 的活跃 task
+                const currentActiveTaskId = sessionActiveTaskId[currentSessionId.value];
+                if (currentActiveTaskId && verification.task_id !== currentActiveTaskId) {
+                    console.warn('[Verification] 忽略不属于当前 session 的验证请求', {
+                        verificationTaskId: verification.task_id,
+                        currentSessionId: currentSessionId.value,
+                        currentActiveTaskId
+                    });
+                    return;
+                }
+
                 pendingVerificationId.value = verification.verification_id;
 
                 const title = verification.title || 'AI 向您提问';
@@ -2515,9 +2533,15 @@
                     const data = await response.json();
                     if (data.success) {
                         pendingVerificationId.value = null;
-                showOtherInput.value = false;
-                otherInputText.value = '';
+                        showOtherInput.value = false;
+                        otherInputText.value = '';
                     } else {
+                        // 验证已处理或不存在时，清除状态避免阻塞后续对话
+                        if (data.status === 'approved' || data.status === 'not_found' || data.status === 'cancelled') {
+                            pendingVerificationId.value = null;
+                            showOtherInput.value = false;
+                            otherInputText.value = '';
+                        }
                         showError(data.error || '提交回答失败');
                     }
                 } catch (e) {
@@ -2531,6 +2555,11 @@
                 clearAllTaskIntervals();
                 if (currentEventSource) { currentEventSource.close(); currentEventSource = null; }
 
+                // 清除验证状态
+                pendingVerificationId.value = null;
+                showOtherInput.value = false;
+                otherInputText.value = '';
+
                 messages.value = [];
                 isLoading.value = false;
                 showContinue.value = false;
@@ -2540,6 +2569,7 @@
                 // 清空所有媒体状态
                 mediaItems.value = [];
                 mediaCounters.value = { image: 0, video: 0, audio: 0 };
+                agentImageFiles.value = [];
                 referenceImageFiles.value = [];
                 hasUploadedImage.value = false;
                 uploadedImageUrl.value = '';
@@ -2828,14 +2858,21 @@
                 clearAllTaskIntervals();
                 if (currentEventSource) { currentEventSource.close(); currentEventSource = null; }
 
+                // 清除验证状态（防止跨 session 验证泄露）
+                pendingVerificationId.value = null;
+                showOtherInput.value = false;
+                otherInputText.value = '';
+
                 currentSessionId.value = sessionId;
                 // 完全重置所有媒体状态
                 mediaItems.value = [];
                 mediaCounters.value = { image: 0, video: 0, audio: 0 };
+                agentImageFiles.value = [];
                 referenceImageFiles.value = [];
                 hasUploadedImage.value = false;
                 uploadedImageUrl.value = '';
                 uploadedImageFile.value = null;
+                uploadedImageServerUrl.value = '';
                 // 重置 UI 状态
                 isLoading.value = false;
                 showContinue.value = false;
@@ -2877,14 +2914,16 @@
                         const statusData = await statusRes.json();
                         const taskStatus = statusData.success && statusData.task ? statusData.task.status : null;
                         if (taskStatus === 'running' || taskStatus === 'pending' || taskStatus === 'waiting_human') {
-                            // 任务仍在运行，重连 SSE 流
-                            await handleStream(activeTaskId);
+                            // 任务仍在运行，后台重连 SSE 流，不阻塞切换操作
+                            handleStream(activeTaskId).catch(e => {
+                                console.error('恢复活跃任务流失败:', e);
+                            });
                         } else {
                             // 任务已完成或不存在，清理
                             delete sessionActiveTaskId[sessionId];
                         }
                     } catch (e) {
-                        console.error('恢复活跃任务流失败:', e);
+                        console.error('查询活跃任务状态失败:', e);
                         delete sessionActiveTaskId[sessionId];
                     }
                 }
@@ -2947,11 +2986,18 @@
                 if (!currentSessionId.value || !text) return;
                 const session = sessions.value.find(s => s.id === currentSessionId.value);
                 if (session && (!session.title || session.title === '新对话')) {
-                    // 去除图片标签，只保留用户文字内容作为标题
-                    const cleanText = text.replace(/\[图片\d+]（URL:[\s\S]*?）\n?/g, '').trim();
-                    session.title = cleanText.slice(0, 20) + (cleanText.length > 20 ? '...' : '');
+                    // 去除图片标签和 URL，只保留用户文字内容作为标题
+                    let cleanText = text.replace(/https?:\/\/\S+/g, '').replace(/\[图片\d+][（(]URL:[\s\S]*?[）)]\n?/g, '').replace(/<[^>]+>/g, '').trim();
+                    const newTitle = (cleanText || text).slice(0, 20) + ((cleanText || text).length > 20 ? '...' : '');
+                    session.title = newTitle;
                     session.updatedAt = new Date().toISOString();
                     saveLocalSessions();
+                    // 调用后端 API 保存标题到数据库
+                    fetch(`/api/session/${currentSessionId.value}/title`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ title: newTitle })
+                    }).catch(err => console.warn('保存会话标题失败:', err));
                 }
             }
 
@@ -3091,20 +3137,28 @@
                         messages.value = history.filter(filterHistoryMessage).map(parseHistoryMessage);
                         await recoverPendingTasks();
                     }
+                }
 
-                    // 检查是否有活跃的 Agent 任务（页面刷新恢复）
+                // 页面已就绪，先解除 loading 状态
+                isInitializing.value = false;
+
+                // 检查是否有活跃的 Agent 任务（页面刷新恢复）— 不阻塞页面
+                if (currentSessionId.value) {
                     try {
-                        const taskRes = await fetch(`/api/session/${latestSession.id}/latest-task`);
+                        const taskRes = await fetch(`/api/session/${currentSessionId.value}/latest-task`);
                         const taskData = await taskRes.json();
                         if (taskData.success && taskData.task) {
                             const taskStatus = taskData.task.status;
                             if (taskStatus === 'running' || taskStatus === 'pending' || taskStatus === 'waiting_human') {
-                                sessionActiveTaskId[latestSession.id] = taskData.task.task_id;
-                                await handleStream(taskData.task.task_id);
+                                sessionActiveTaskId[currentSessionId.value] = taskData.task.task_id;
+                                // 不 await，让流在后台运行，不阻塞页面
+                                handleStream(taskData.task.task_id).catch(e => {
+                                    console.error('恢复活跃任务流失败:', e);
+                                });
                             }
                         }
                     } catch (e) {
-                        console.error('恢复活跃任务失败:', e);
+                        console.error('查询活跃任务失败:', e);
                     }
                 }
 
@@ -3200,22 +3254,83 @@
                         syncImageModelToBackend(allImageModels.value.find(m => m.name === selectedModel.value));
                     }
 
-                    // 恢复用户保存的视频模型偏好
-                    const savedVideoModel = localStorage.getItem('marketing_selected_video_model');
-                    if (savedVideoModel && allTextToVideoModels.value.length > 0) {
-                        const vm = allTextToVideoModels.value.find(m => m.name === savedVideoModel);
-                        if (vm) {
-                            syncVideoModelToBackend(vm);
+                    // 恢复用户保存的视频模型偏好（优先从服务端获取，回退到 localStorage）
+                    // --- 文生视频模型偏好 ---
+                    if (allTextToVideoModels.value.length > 0) {
+                        let restoredT2VModel = null;
+                        try {
+                            if (userId.value && worldId.value) {
+                                const resp = await fetch(`/api/video-model?category=text_to_video&user_id=${encodeURIComponent(userId.value)}&world_id=${encodeURIComponent(worldId.value)}`, {
+                                    headers: { 'Authorization': authToken.value, 'X-User-Id': userId.value }
+                                });
+                                if (resp.ok) {
+                                    const data = await resp.json();
+                                    if (data.success && data.current_task_id) {
+                                        const task = window.TaskConfig?.getTaskById ? window.TaskConfig.getTaskById(data.current_task_id) : null;
+                                        if (task && task.key) {
+                                            restoredT2VModel = allTextToVideoModels.value.find(m => m.key === task.key || task.key.startsWith(m.key + '_'));
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (e) {
+                            console.warn('[初始化] 从服务端获取文生视频模型偏好失败:', e);
+                        }
+                        if (!restoredT2VModel) {
+                            const saved = localStorage.getItem('marketing_selected_t2v_model');
+                            if (saved) {
+                                restoredT2VModel = allTextToVideoModels.value.find(m => m.name === saved);
+                            }
+                        }
+                        if (restoredT2VModel) {
+                            selectedVideoModelKey.value = restoredT2VModel.key || '';
+                            selectedVideoModelName.value = restoredT2VModel.name;
+                            selectedModel.value = restoredT2VModel.name;
+                            selectedModelKey.value = restoredT2VModel.key || '';
+                            localStorage.setItem('marketing_selected_t2v_model', restoredT2VModel.name);
+                            console.log('[初始化] 恢复文生视频模型:', restoredT2VModel.name);
+                        } else {
+                            const vm = allTextToVideoModels.value[0];
                             selectedVideoModelKey.value = vm.key || '';
                             selectedVideoModelName.value = vm.name;
-                            console.log('[初始化] 恢复用户偏好视频模型:', vm.name);
+                            console.log('[初始化] 默认文生视频模型:', vm.name);
                         }
-                    } else if (allTextToVideoModels.value.length > 0) {
-                        // 没有保存的偏好，使用第一个视频模型
-                        const vm = allTextToVideoModels.value[0];
-                        selectedVideoModelKey.value = vm.key || '';
-                        selectedVideoModelName.value = vm.name;
-                        console.log('[初始化] 默认选择视频模型:', vm.name);
+                    }
+                    // --- 图生视频模型偏好（预取，上传图片后使用） ---
+                    if (allImageToVideoModels.value.length > 0) {
+                        try {
+                            if (userId.value && worldId.value) {
+                                const resp = await fetch(`/api/video-model?category=image_to_video&user_id=${encodeURIComponent(userId.value)}&world_id=${encodeURIComponent(worldId.value)}`, {
+                                    headers: { 'Authorization': authToken.value, 'X-User-Id': userId.value }
+                                });
+                                if (resp.ok) {
+                                    const data = await resp.json();
+                                    if (data.success && data.current_task_id) {
+                                        const task = window.TaskConfig?.getTaskById ? window.TaskConfig.getTaskById(data.current_task_id) : null;
+                                        if (task && task.key) {
+                                            const matched = allImageToVideoModels.value.find(m => m.key === task.key || task.key.startsWith(m.key + '_'));
+                                            if (matched) {
+                                                savedImg2VidModelKey.value = matched.key;
+                                                savedImg2VidModelName.value = matched.name;
+                                                console.log('[初始化] 预取图生视频模型偏好:', matched.name);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (e) {
+                            console.warn('[初始化] 从服务端获取图生视频模型偏好失败:', e);
+                        }
+                        if (!savedImg2VidModelKey.value) {
+                            const saved = localStorage.getItem('marketing_selected_i2v_model');
+                            if (saved) {
+                                const matched = allImageToVideoModels.value.find(m => m.name === saved);
+                                if (matched) {
+                                    savedImg2VidModelKey.value = matched.key;
+                                    savedImg2VidModelName.value = matched.name;
+                                }
+                            }
+                        }
                     }
 
                     // 恢复用户保存的比例偏好
@@ -3350,7 +3465,51 @@
             }
 
             function handleFileChange(e) {
-                const file = e.target.files[0];
+                const files = e.target.files;
+                if (!files || files.length === 0) return;
+                // Agent 对话模式：支持多图上传（最多 9 张）
+                const isAgentChatMode = selectedType.value === 'Agent 模式' && mediaType.value !== 'video';
+                if (isAgentChatMode) {
+                    const filesToProcess = Array.from(files);
+                    const remainingSlots = AGENT_IMAGE_MAX_COUNT - agentImageFiles.value.length;
+                    if (remainingSlots <= 0) {
+                        showError(`最多上传 ${AGENT_IMAGE_MAX_COUNT} 张图片`);
+                        if (fileInputRef.value) fileInputRef.value.value = '';
+                        return;
+                    }
+                    const validFiles = filesToProcess.slice(0, remainingSlots).filter(file => {
+                        if (!file.type.startsWith('image/')) {
+                            showError(`"${file.name}" 不是图片文件，已跳过`);
+                            return false;
+                        }
+                        if (file.size > maxImageSizeMB.value * 1024 * 1024) {
+                            showError(`"${file.name}" 超过 ${maxImageSizeMB.value}MB 限制，已跳过`);
+                            return false;
+                        }
+                        return true;
+                    });
+                    if (filesToProcess.length > remainingSlots) {
+                        showError(`仅上传前 ${remainingSlots} 张，已达上限 ${AGENT_IMAGE_MAX_COUNT} 张`);
+                    }
+                    validFiles.forEach(file => {
+                        const previewUrl = URL.createObjectURL(file);
+                        const imgItem = { file, previewUrl, serverUrl: null, uploading: true, uploadFailed: false };
+                        agentImageFiles.value.push(imgItem);
+                        addMediaItem(file, 'image', previewUrl, { uploading: true, agentImageItem: imgItem });
+                        uploadAgentImage(file, imgItem);
+                    });
+                    if (validFiles.length > 0) {
+                        const last = agentImageFiles.value[agentImageFiles.value.length - 1];
+                        uploadedImageFile.value = last.file;
+                        uploadedImageUrl.value = last.previewUrl;
+                        hasUploadedImage.value = true;
+                        refreshModelSettings();
+                    }
+                    if (fileInputRef.value) fileInputRef.value.value = '';
+                    return;
+                }
+                // 其他模式只取第一个文件
+                const file = files[0];
                 if (!file) return;
                 // 简单校验：只接受图片
                 if (!file.type.startsWith('image/')) {
@@ -3406,29 +3565,6 @@
                     addMediaItem(file, 'image', refUrl);
                     return;
                 }
-                // Agent 对话模式：支持多图上传（最多 9 张），上传到服务器获取 HTTP URL
-                const isAgentChatMode = selectedType.value === 'Agent 模式' && mediaType.value !== 'video';
-                if (isAgentChatMode) {
-                    if (agentImageFiles.value.length >= AGENT_IMAGE_MAX_COUNT) {
-                        showError(`最多上传 ${AGENT_IMAGE_MAX_COUNT} 张图片`);
-                        if (fileInputRef.value) fileInputRef.value.value = '';
-                        return;
-                    }
-                    const previewUrl = URL.createObjectURL(file);
-                    const imgItem = { file, previewUrl, serverUrl: null, uploading: true, uploadFailed: false };
-                    agentImageFiles.value.push(imgItem);
-                    // 同步到 mediaItems
-                    addMediaItem(file, 'image', previewUrl, { uploading: true, agentImageItem: imgItem });
-                    // 同步设置主图状态（兼容其他模式检查）
-                    uploadedImageFile.value = file;
-                    uploadedImageUrl.value = previewUrl;
-                    hasUploadedImage.value = true;
-                    refreshModelSettings();
-                    // 异步上传到服务器获取 HTTP URL
-                    uploadAgentImage(file, imgItem);
-                    if (fileInputRef.value) fileInputRef.value.value = '';
-                    return;
-                }
                 // 保存原始 File 对象并生成本地预览 URL
                 uploadedImageFile.value = file;
                 const previewUrl = URL.createObjectURL(file);
@@ -3468,6 +3604,7 @@
                             mediaItems.value = [...mediaItems.value];
                         }
                         console.error('图片上传失败:', data.error);
+                        showError('图片上传失败: ' + (data.error || '未知错误'));
                     }
                 }).catch(err => {
                     const item = mediaItems.value.find(m => m.fileUrl === previewUrl);
@@ -3477,6 +3614,7 @@
                         mediaItems.value = [...mediaItems.value];
                     }
                     console.error('图片上传异常:', err);
+                    showError('图片上传异常，请重试');
                 });
             }
 
@@ -3687,6 +3825,22 @@
                             uploadedImageFile.value = null;
                         }
                     }
+                    // 同步清理 referenceImageFiles 中匹配的项（首尾帧/全能参考模式）
+                    const refIdx = referenceImageFiles.value.findIndex(ref => ref.url === removed.fileUrl);
+                    if (refIdx >= 0) {
+                        const refImg = referenceImageFiles.value[refIdx];
+                        if (refImg.url && refImg.url.startsWith('blob:')) {
+                            URL.revokeObjectURL(refImg.url);
+                        }
+                        referenceImageFiles.value.splice(refIdx, 1);
+                    }
+                    // 检查是否删除的是主图，重置主图状态
+                    if (removed.fileUrl === uploadedImageUrl.value || removed.fileUrl === uploadedImageServerUrl.value) {
+                        hasUploadedImage.value = false;
+                        uploadedImageUrl.value = '';
+                        uploadedImageFile.value = null;
+                        uploadedImageServerUrl.value = '';
+                    }
                 }
                 // 从 mediaItems 删除并重新编号
                 mediaItems.value = mediaItems.value.filter(m => m.id !== id);
@@ -3817,6 +3971,46 @@
                 isDragging.value = false;
                 const files = e.dataTransfer.files;
                 if (!files || files.length === 0) return;
+                // Agent 对话模式：支持多图拖拽上传
+                const isAgentChat = selectedType.value === 'Agent 模式' && mediaType.value !== 'video';
+                if (isAgentChat) {
+                    const filesToProcess = Array.from(files);
+                    const remainingSlots = AGENT_IMAGE_MAX_COUNT - agentImageFiles.value.length;
+                    if (remainingSlots <= 0) {
+                        showError(`最多上传 ${AGENT_IMAGE_MAX_COUNT} 张图片`);
+                        return;
+                    }
+                    const validFiles = filesToProcess.slice(0, remainingSlots).filter(file => {
+                        if (!file.type.startsWith('image/')) {
+                            showError(`"${file.name}" 不是图片文件，已跳过`);
+                            return false;
+                        }
+                        if (file.size > maxImageSizeMB.value * 1024 * 1024) {
+                            showError(`"${file.name}" 超过 ${maxImageSizeMB.value}MB 限制，已跳过`);
+                            return false;
+                        }
+                        return true;
+                    });
+                    if (filesToProcess.length > remainingSlots) {
+                        showError(`仅上传前 ${remainingSlots} 张，已达上限 ${AGENT_IMAGE_MAX_COUNT} 张`);
+                    }
+                    validFiles.forEach(file => {
+                        const previewUrl = URL.createObjectURL(file);
+                        const imgItem = { file, previewUrl, serverUrl: null, uploading: true, uploadFailed: false };
+                        agentImageFiles.value.push(imgItem);
+                        addMediaItem(file, 'image', previewUrl, { uploading: true, agentImageItem: imgItem });
+                        uploadAgentImage(file, imgItem);
+                    });
+                    if (validFiles.length > 0) {
+                        const last = agentImageFiles.value[agentImageFiles.value.length - 1];
+                        uploadedImageFile.value = last.file;
+                        uploadedImageUrl.value = last.previewUrl;
+                        hasUploadedImage.value = true;
+                        refreshModelSettings();
+                    }
+                    return;
+                }
+                // 其他模式只取第一个文件
                 const file = files[0];
                 if (!file.type.startsWith('image/')) {
                     showError('请上传图片文件');
@@ -3858,24 +4052,6 @@
                         url: refUrl
                     });
                     addMediaItem(file, 'image', refUrl);
-                    return;
-                }
-                // Agent 对话模式：支持多图上传
-                const isAgentChat = selectedType.value === 'Agent 模式' && mediaType.value !== 'video';
-                if (isAgentChat) {
-                    if (agentImageFiles.value.length >= AGENT_IMAGE_MAX_COUNT) {
-                        showError(`最多上传 ${AGENT_IMAGE_MAX_COUNT} 张图片`);
-                        return;
-                    }
-                    const previewUrl = URL.createObjectURL(file);
-                    const imgItem = { file, previewUrl, serverUrl: null, uploading: true, uploadFailed: false };
-                    agentImageFiles.value.push(imgItem);
-                    addMediaItem(file, 'image', previewUrl, { uploading: true, agentImageItem: imgItem });
-                    uploadedImageFile.value = file;
-                    uploadedImageUrl.value = previewUrl;
-                    hasUploadedImage.value = true;
-                    refreshModelSettings();
-                    uploadAgentImage(file, imgItem);
                     return;
                 }
                 const previewUrl = URL.createObjectURL(file);
@@ -3970,8 +4146,14 @@
                     syncVideoModelToBackend(model);
                     selectedVideoModelKey.value = model.key || '';
                     selectedVideoModelName.value = model.name;
-                    localStorage.setItem('marketing_selected_video_model', model.name);
-                    localStorage.setItem('marketing_selected_video_model_key', model.key || '');
+                    // 区分文生视频和图生视频的 localStorage key
+                    if (hasUploadedImage.value) {
+                        localStorage.setItem('marketing_selected_i2v_model', model.name);
+                        savedImg2VidModelKey.value = model.key || '';
+                        savedImg2VidModelName.value = model.name;
+                    } else {
+                        localStorage.setItem('marketing_selected_t2v_model', model.name);
+                    }
                 } else {
                     // 图片模型同步到后端
                     syncImageModelToBackend(model);
@@ -4103,7 +4285,7 @@
             }
 
             // 监听 mediaType 变化，重置选中模型
-            Vue.watch(mediaType, (newType, oldType) => {
+            Vue.watch(mediaType, async (newType, oldType) => {
                 // Agent 模式下从 image 切换到 video 时，清理 agentImageFiles
                 if (selectedType.value === 'Agent 模式' && oldType === 'image' && newType === 'video') {
                     agentImageFiles.value.forEach(img => {
@@ -4122,9 +4304,96 @@
                         selectedModelKey.value = m.key || '';
                     }
                 } else {
+                    // 根据 hasUploadedImage 决定恢复文生视频还是图生视频偏好
+                    const useImg2Vid = hasUploadedImage.value;
+                    const list = useImg2Vid ? allImageToVideoModels.value : allTextToVideoModels.value;
+                    const category = useImg2Vid ? 'image_to_video' : 'text_to_video';
+                    const storageKey = useImg2Vid ? 'marketing_selected_i2v_model' : 'marketing_selected_t2v_model';
+                    let m = null;
+                    try {
+                        if (userId.value && worldId.value) {
+                            const resp = await fetch(`/api/video-model?category=${category}&user_id=${encodeURIComponent(userId.value)}&world_id=${encodeURIComponent(worldId.value)}`, {
+                                headers: { 'Authorization': authToken.value, 'X-User-Id': userId.value }
+                            });
+                            if (resp.ok) {
+                                const data = await resp.json();
+                                if (data.success && data.current_task_id) {
+                                    const task = window.TaskConfig?.getTaskById ? window.TaskConfig.getTaskById(data.current_task_id) : null;
+                                    if (task && task.key) {
+                                        m = list.find(item => item.key === task.key || task.key.startsWith(item.key + '_'));
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('[mediaType] 从服务端获取视频模型偏好失败:', e);
+                    }
+                    if (!m) {
+                        const saved = localStorage.getItem(storageKey);
+                        m = (saved && list.find(item => item.name === saved)) || list[0];
+                    }
+                    if (m) {
+                        selectedModel.value = m.name;
+                        selectedModelKey.value = m.key || '';
+                        selectedVideoModelKey.value = m.key || '';
+                        selectedVideoModelName.value = m.name;
+                        if (useImg2Vid) {
+                            savedImg2VidModelKey.value = m.key || '';
+                            savedImg2VidModelName.value = m.name;
+                        }
+                    }
+                }
+                refreshModelSettings();
+            });
+
+            // 监听 hasUploadedImage 变化，在视频模式下自动切换文生/图生视频模型
+            Vue.watch(hasUploadedImage, async (newVal, oldVal) => {
+                if (oldVal === newVal) return;
+                if (!isVideoMode.value) return;
+                if (newVal) {
+                    // 有图片了，切换到图生视频模型偏好（直接从 API 获取，更可靠）
+                    const list = allImageToVideoModels.value;
+                    let m = null;
+                    try {
+                        if (userId.value && worldId.value) {
+                            const resp = await fetch(`/api/video-model?category=image_to_video&user_id=${encodeURIComponent(userId.value)}&world_id=${encodeURIComponent(worldId.value)}`, {
+                                headers: { 'Authorization': authToken.value, 'X-User-Id': userId.value }
+                            });
+                            if (resp.ok) {
+                                const data = await resp.json();
+                                if (data.success && data.current_task_id) {
+                                    const task = window.TaskConfig?.getTaskById ? window.TaskConfig.getTaskById(data.current_task_id) : null;
+                                    if (task && task.key) {
+                                        m = list.find(item => item.key === task.key || task.key.startsWith(item.key + '_'));
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('[hasUploadedImage] 从服务端获取图生视频模型偏好失败:', e);
+                    }
+                    // 回退到预取缓存
+                    if (!m && savedImg2VidModelKey.value) {
+                        m = list.find(item => item.key === savedImg2VidModelKey.value);
+                    }
+                    if (!m && savedImg2VidModelName.value) {
+                        m = list.find(item => item.name === savedImg2VidModelName.value);
+                    }
+                    if (!m) {
+                        const saved = localStorage.getItem('marketing_selected_i2v_model');
+                        m = (saved && list.find(item => item.name === saved)) || list[0];
+                    }
+                    if (m) {
+                        selectedModel.value = m.name;
+                        selectedModelKey.value = m.key || '';
+                        selectedVideoModelKey.value = m.key || '';
+                        selectedVideoModelName.value = m.name;
+                    }
+                } else {
+                    // 没有图片了，切回文生视频模型偏好
+                    const saved = localStorage.getItem('marketing_selected_t2v_model');
                     const list = allTextToVideoModels.value;
-                    const saved = localStorage.getItem('marketing_selected_video_model');
-                    const m = (saved && list.find(m => m.name === saved)) || list[0];
+                    const m = (saved && list.find(item => item.name === saved)) || list[0];
                     if (m) {
                         selectedModel.value = m.name;
                         selectedModelKey.value = m.key || '';
@@ -4346,7 +4615,22 @@
                 submitVerificationAnswer
             };
         }
-    }).mount('#app');
+    });
+
+    // Vue 错误处理器（通过服务器配置控制）
+    fetch('/api/system/server-config')
+        .then(resp => resp.json())
+        .then(cfg => {
+            if (cfg.data?.enable_vue_error_output) {
+                app.config.errorHandler = (err, vm, info) => {
+                    console.error('[Vue Error]', info, err);
+                };
+                console.info('[Vue] 错误输出已启用（enable_vue_error_output: true）');
+            }
+        })
+        .catch(() => {});
+
+    app.mount('#app');
     </script>
 </body>
 </html>

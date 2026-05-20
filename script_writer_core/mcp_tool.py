@@ -222,7 +222,7 @@ def fetch_image_as_base64(user_id: str, world_id: str, auth_token: str,
         user_id: 用户ID（必填）
         world_id: 世界ID（必填）
         auth_token: 认证令牌（必填）
-        image_url: 图片 HTTP/HTTPS URL（必填），对话中 [图片N]（URL: ...）标签里的 URL
+        image_url: 图片 URL（必填），支持绝对路径（HTTP/HTTPS）和相对路径（以 / 开头）
         max_size_mb: 最大文件大小 MB（可选，默认 2.0）
 
     Returns:
@@ -231,6 +231,15 @@ def fetch_image_as_base64(user_id: str, world_id: str, auth_token: str,
     try:
         if not image_url or not isinstance(image_url, str):
             return {'success': False, 'error': 'image_url 参数不能为空且必须是字符串'}
+
+        # 支持相对路径：以 / 开头的路径拼接服务器 host 转为完整 URL
+        if image_url.startswith('/'):
+            server_config = get_config().get("server", {})
+            server_host = server_config.get("https_host") or server_config.get("host", "")
+            if not server_host:
+                return {'success': False, 'error': '相对路径无法解析：未配置 server.host'}
+            image_url = f"{server_host.rstrip('/')}{image_url}"
+            logger.info(f"[fetch_image_as_base64] 相对路径转换为完整 URL: {image_url}")
 
         from urllib.parse import urlparse
         parsed = urlparse(image_url)
