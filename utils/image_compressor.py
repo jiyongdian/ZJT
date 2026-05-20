@@ -287,20 +287,22 @@ def get_image_size_mb(image_path: str) -> Optional[float]:
         return None
 
 
-def download_and_compress_to_base64(
-    image_url: str,
+def compress_local_image_to_base64(
+    local_path: str,
     max_size_mb: float = 2.0,
-    max_pixels: int = 0
+    max_pixels: int = 0,
+    cleanup: bool = False
 ) -> Tuple[bool, Optional[str], Optional[str]]:
     """
-    从 URL 下载图片，压缩并返回 base64 data URL。
+    从本地文件路径读取图片，压缩并返回 base64 data URL。
 
-    供 PM Agent 在专家返回图片 URL 后，将图片注入到 LLM 对话历史。
+    不涉及任何 HTTP 下载，仅处理本地磁盘上的文件。
 
     Args:
-        image_url: 图片 URL
+        local_path: 本地图片文件路径
         max_size_mb: 最大文件大小（MB），默认 2MB
         max_pixels: 最大总像素数（width * height），0 表示不限制
+        cleanup: 是否在完成后清理临时文件（当输入文件本身就是临时文件时设为 True）
 
     Returns:
         Tuple[bool, Optional[str], Optional[str]]:
@@ -309,51 +311,22 @@ def download_and_compress_to_base64(
             - 错误信息（失败时）
     """
     import base64
-    import tempfile
-    import httpx
 
-    # 验证 URL 格式：仅允许 http/https 协议
-    from urllib.parse import urlparse
-    parsed_url = urlparse(image_url)
-    if parsed_url.scheme not in ('http', 'https'):
-        return False, None, f"不支持的 URL 协议: {parsed_url.scheme}"
+    if not os.path.exists(local_path):
+        return False, None, f"本地文件不存在: {local_path}"
 
-    temp_path = None
     _temp_files = []  # 跟踪所有临时文件，确保最终清理
+    if cleanup:
+        _temp_files.append(local_path)
+
     try:
-        # 下载图片（使用 httpx 同步客户端，避免阻塞事件循环）
-        logger.info(f"[VL] 下载图片: {image_url[:100]}...")
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        with httpx.Client(timeout=30, verify=False) as client:
-            resp = client.get(image_url, headers=headers)
-            resp.raise_for_status()
-            img_data = resp.content
-
-        if not img_data:
-            return False, None, "下载图片为空"
-
-        # 保存到临时文件
-        from utils.media_cache import get_temp_date_dir
-        from datetime import datetime
-        temp_dir = get_temp_date_dir(datetime.now())
-        # 从 URL 推断扩展名
-        url_path = image_url.split('?')[0]
-        ext = os.path.splitext(url_path)[1].lower() or '.jpg'
-        if ext not in ('.jpg', '.jpeg', '.png', '.webp', '.gif'):
-            ext = '.jpg'
-        temp_path = str(temp_dir / f"vl_gen_{uuid.uuid4().hex[:8]}{ext}")
-        _temp_files.append(temp_path)
-
-        with open(temp_path, 'wb') as f:
-            f.write(img_data)
-
-        logger.info(f"[VL] 图片已下载: {len(img_data) // 1024} KB")
+        logger.info(f"[VL] 处理本地图片: {local_path}")
 
         # 像素限制 + 强制 PNG→JPEG 转换（LLM 按像素消耗 token，必须处理）
-        file_to_compress = temp_path
+        file_to_compress = local_path
         if max_pixels > 0:
             try:
-                img = Image.open(temp_path)
+                img = Image.open(local_path)
                 total_pixels = img.width * img.height
                 needs_resize = total_pixels > max_pixels
                 needs_convert = (img.format or '').upper() == 'PNG' or img.mode in ('RGBA', 'LA', 'P')
@@ -378,7 +351,7 @@ def download_and_compress_to_base64(
                         logger.info(f"[VL] 像素缩放: {total_pixels:,} -> {new_w * new_h:,} px")
 
                     # 强制保存为 JPEG
-                    jpeg_path = temp_path.rsplit('.', 1)[0] + '_llm.jpg'
+                    jpeg_path = local_path.rsplit('.', 1)[0] + '_llm.jpg'
                     img.save(jpeg_path, 'JPEG', quality=85, optimize=True)
                     img.close()
                     _temp_files.append(jpeg_path)
@@ -413,6 +386,77 @@ def download_and_compress_to_base64(
 
         return True, data_url, None
 
+    except Exception as e:
+        logger.error(f"[VL] 处理本地图片异常: {e}", exc_info=True)
+        return False, None, f"处理图片异常: {e}"
+    finally:
+        for f in _temp_files:
+            try:
+                os.remove(f)
+            except Exception:
+                pass
+
+
+def download_and_compress_to_base64(
+    image_url: str,
+    max_size_mb: float = 2.0,
+    max_pixels: int = 0
+) -> Tuple[bool, Optional[str], Optional[str]]:
+    """
+    从 URL 下载图片，压缩并返回 base64 data URL。
+
+    供 PM Agent 在专家返回图片 URL 后，将图片注入到 LLM 对话历史。
+
+    Args:
+        image_url: 图片 URL
+        max_size_mb: 最大文件大小（MB），默认 2MB
+        max_pixels: 最大总像素数（width * height），0 表示不限制
+
+    Returns:
+        Tuple[bool, Optional[str], Optional[str]]:
+            - 是否成功
+            - base64 data URL（如 "data:image/jpeg;base64,..."）
+            - 错误信息（失败时）
+    """
+    import httpx
+
+    # 验证 URL 格式：仅允许 http/https 协议
+    from urllib.parse import urlparse
+    parsed_url = urlparse(image_url)
+    if parsed_url.scheme not in ('http', 'https'):
+        return False, None, f"不支持的 URL 协议: {parsed_url.scheme}"
+
+    temp_path = None
+    try:
+        # 下载图片（使用 httpx 同步客户端，避免阻塞事件循环）
+        logger.info(f"[VL] 下载图片: {image_url[:100]}...")
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        with httpx.Client(timeout=30, verify=False) as client:
+            resp = client.get(image_url, headers=headers)
+            resp.raise_for_status()
+            img_data = resp.content
+
+        if not img_data:
+            return False, None, "下载图片为空"
+
+        # 保存到临时文件
+        from utils.media_cache import get_temp_date_dir
+        from datetime import datetime
+        temp_dir = get_temp_date_dir(datetime.now())
+        url_path = image_url.split('?')[0]
+        ext = os.path.splitext(url_path)[1].lower() or '.jpg'
+        if ext not in ('.jpg', '.jpeg', '.png', '.webp', '.gif'):
+            ext = '.jpg'
+        temp_path = str(temp_dir / f"vl_gen_{uuid.uuid4().hex[:8]}{ext}")
+
+        with open(temp_path, 'wb') as f:
+            f.write(img_data)
+
+        logger.info(f"[VL] 图片已下载: {len(img_data) // 1024} KB")
+
+        # 复用本地压缩函数（cleanup=True 表示临时文件需要清理）
+        return compress_local_image_to_base64(temp_path, max_size_mb, max_pixels, cleanup=True)
+
     except httpx.HTTPStatusError as e:
         logger.error(f"[VL] 下载图片网络错误: {e}")
         return False, None, f"下载图片失败: {e}"
@@ -421,13 +465,6 @@ def download_and_compress_to_base64(
         import traceback
         logger.error(traceback.format_exc())
         return False, None, f"处理图片异常: {e}"
-    finally:
-        # 清理所有临时文件
-        for f in _temp_files:
-            try:
-                os.remove(f)
-            except Exception:
-                pass
 
 
 def url_to_base64(image_url: str, max_size_mb: float = 2.0, max_pixels: int = 0) -> Optional[str]:
