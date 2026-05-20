@@ -57,8 +57,8 @@ class AuthHelper:
                 if not world:
                     return False, f'世界不存在: world_id={world_id}'
 
-                # 商业版才验证用户隔离
-                if Edition.is_enterprise():
+                # 独立空间模式才验证用户隔离
+                if Edition.is_space_isolated():
                     world_user_id = str(world.user_id)
 
                     # 验证世界的用户ID与token的用户ID是否一致

@@ -104,6 +104,21 @@ class Edition:
         mode = Edition.get_mode()
         return "社区版" if mode == Edition.COMMUNITY else "商业版"
 
+    @staticmethod
+    def is_space_isolated() -> bool:
+        """
+        判断是否为独立空间模式（用户数据隔离）
+
+        - 社区版：始终为共享空间（返回 False）
+        - 商业版：默认为独立空间（返回 True），
+          但可通过 edition.shared_space=true 配置为共享空间（返回 False）
+        """
+        if Edition.is_community():
+            return False
+        from config.config_util import get_dynamic_config_value
+        shared = get_dynamic_config_value('edition', 'shared_space', default=False)
+        return not shared
+
 
 class TaskType:
     """任务类型常量"""
@@ -464,12 +479,18 @@ class SystemConfigConstants:
 CONFIG_KEY_MAX_LENGTH = SystemConfigConstants.CONFIG_KEY_MAX_LENGTH
 
 
+# 营销智能体固定 world_id（营销场景不需要多世界概念）
+MARKETING_WORLD_ID = "1"
+
+
 # 会话历史配置相关常量
 class SessionHistoryConstants:
     """会话历史配置相关常量"""
     MAX_HISTORY_MESSAGES = 100  # 最大历史消息数量（剧本创作需要较多上下文）
     MIN_HISTORY_MESSAGES = 10   # 最小保留的历史消息数量（确保上下文连续性）
     TRUNCATION_KEEP_SYSTEM = True  # 截断时保留系统提示
+    SESSION_EXPIRE_HOURS_SCRIPT = 24      # 剧本智能体过期时长（小时）
+    SESSION_EXPIRE_HOURS_MARKETING = 336  # 营销智能体过期时长（14天 = 336小时）
 
 
 # 向后兼容别名

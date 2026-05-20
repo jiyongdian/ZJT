@@ -15,6 +15,20 @@ logger = logging.getLogger(__name__)
 class SkillLoader:
     """技能加载器类"""
 
+    # 类级别：额外技能目录列表（企业版等）
+    _extra_skills_dirs: list = []
+
+    @classmethod
+    def add_skills_dir(cls, path: str):
+        """注册额外的技能目录（如企业版技能目录），同名技能优先使用额外目录"""
+        dir_path = Path(path)
+        if dir_path.exists() and dir_path.is_dir():
+            if dir_path not in cls._extra_skills_dirs:
+                cls._extra_skills_dirs.append(dir_path)
+                logger.info(f"已注册额外技能目录: {dir_path}")
+        else:
+            logger.warning(f"额外技能目录不存在: {path}")
+
     def __init__(self, skills_dir: str = None, user_id: int = None):
         """初始化技能加载器
 
@@ -32,19 +46,31 @@ class SkillLoader:
         self._load_all_skills_metadata()
 
     def _load_all_skills_metadata(self):
-        """加载所有技能的元数据（从文件系统）"""
-        if not self.skills_dir.exists():
-            logger.warning(f"技能目录不存在: {self.skills_dir}")
-            return
+        """加载所有技能的元数据（从文件系统），额外目录同名技能覆盖主目录"""
+        # 先加载主目录
+        if self.skills_dir.exists():
+            for skill_dir in self.skills_dir.iterdir():
+                if skill_dir.is_dir():
+                    skill_file = skill_dir / 'SKILL.md'
+                    if skill_file.exists():
+                        skill_name = skill_dir.name
+                        metadata = self._parse_skill_metadata(skill_file)
+                        if metadata:
+                            self.skills_metadata[skill_name] = metadata
 
-        for skill_dir in self.skills_dir.iterdir():
-            if skill_dir.is_dir():
-                skill_file = skill_dir / 'SKILL.md'
-                if skill_file.exists():
-                    skill_name = skill_dir.name
-                    metadata = self._parse_skill_metadata(skill_file)
-                    if metadata:
-                        self.skills_metadata[skill_name] = metadata
+        # 再加载额外目录（覆盖同名技能）
+        for extra_dir in self._extra_skills_dirs:
+            if extra_dir.exists():
+                for skill_dir in extra_dir.iterdir():
+                    if skill_dir.is_dir():
+                        skill_file = skill_dir / 'SKILL.md'
+                        if skill_file.exists():
+                            skill_name = skill_dir.name
+                            metadata = self._parse_skill_metadata(skill_file)
+                            if metadata:
+                                if skill_name in self.skills_metadata:
+                                    logger.info(f"企业版技能覆盖: {skill_name}")
+                                self.skills_metadata[skill_name] = metadata
 
         logger.info(f"已加载 {len(self.skills_metadata)} 个技能元数据: {', '.join(self.skills_metadata.keys())}")
 
@@ -193,8 +219,15 @@ class SkillLoader:
         if skill_name not in self.skills_metadata:
             return None
 
-        # 回退到文件系统
-        skill_file = self.skills_dir / skill_name / 'SKILL.md'
+        # 优先从额外目录查找，再从主目录查找
+        skill_file = None
+        for extra_dir in self._extra_skills_dirs:
+            candidate = extra_dir / skill_name / 'SKILL.md'
+            if candidate.exists():
+                skill_file = candidate
+                break
+        if skill_file is None:
+            skill_file = self.skills_dir / skill_name / 'SKILL.md'
         if skill_file.exists():
             skill_data = self._parse_skill_file(skill_file)
             if skill_data:

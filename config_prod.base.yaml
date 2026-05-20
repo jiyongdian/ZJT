@@ -176,7 +176,7 @@ checkin:
     30: 30
 
 enterprise:
-  min_version: "1.0.0"
+  min_version: "1.1.0"
 
 
 # 自动升级配置

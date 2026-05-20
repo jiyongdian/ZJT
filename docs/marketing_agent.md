@@ -1,0 +1,136 @@
+# 营销模式（Marketing Mode）
+
+## 概述
+
+营销模式是面向营销内容创作场景的全新交互模式，与短剧模式并列为系统的两大创作模式。该模式提供营销智能体（Marketing Agent）对话式创作能力，可帮助用户生成带货脚本、广告创意、产品文案等营销内容。
+
+## 模式入口
+
+### 模式切换
+
+用户首次进入系统时，会弹出"选择创作模式"弹窗，可在以下两种模式中选择：
+
+- 🎬 **短剧模式**：适用于 AI 短剧创作，包含剧本、角色、场景、视频生成全流程
+- 🎯 **营销模式**：适用于营销内容创作，包含带货脚本、广告创意、产品文案等全流程
+
+模式选择后保存在 `localStorage` 的 `creation_mode` 字段中（值为 `short_drama` 或 `marketing`）。用户可在首页顶部"切换模式"按钮重新选择。
+
+### 首页模式感知
+
+`web/index.html`（短剧首页）会根据当前模式动态调整内容，切换模式仅改变首页状态，不立即跳转：
+
+| 模式 | 当前模式标签 | "开始创作"横幅 | 功能卡片区域 | 点击跳转目标 |
+|------|-------------|---------------|-------------|-------------|
+| 短剧模式 | 🎬 短剧模式 | ✨ 开始创作（短剧话术） | 显示视频工作流 + 剧本智能创作系统 | `/video-workflow-list?action=create` |
+| 营销模式 | 🎯 营销模式 | 🎯 开始营销创作（营销话术） | 隐藏（与营销场景无关） | `/marketing-agent` |
+
+### 实现位置
+
+- 模式选择弹窗：`web/index.html`，约第 630-660 行
+- 模式切换方法：`web/index.html` 中 `selectCreationMode(mode)` 方法（仅保存模式，不自动跳转）
+- 动态内容渲染：`web/index.html` 中 `handleStartCreation()` 及模板条件渲染
+
+## 页面结构
+
+### 营销智能体对话页面（`/marketing-agent`）
+
+营销智能体对话界面位于 `web/marketing_agent.html`，使用 Vue 3 单文件应用实现。页面布局参考"营销智能体参考图/智能体对话.png"。
+
+#### 页面布局
+
+| 区块 | 说明 |
+|------|------|
+| 左侧窄导航 | 灵感（置灰禁用）、生成（高亮）、资产、工作流 |
+| 左侧边栏 | 新对话按钮、搜索框、默认创作、最近对话列表、用户信息 |
+| 顶部栏 | 当前日期、搜索框、时间/生成类型筛选器 |
+| 消息流 | 欢迎卡片 + 用户/AI 消息气泡，支持 Markdown 渲染 |
+| 底部输入区 | 文本输入框 + 上传按钮 + 类型选择 + 模型选择 + 比例/分辨率选择 + 技能/主体（置灰）+ 发送按钮 |
+
+#### 后端路由
+
+由 `server.py` 中的 `serve_marketing_agent` 函数（约第 8077-8083 行）服务静态 HTML：
+
+```python
+@app.get("/marketing-agent")
+async def serve_marketing_agent():
+    file_path = os.path.join(static_dir, "marketing_agent.html")
+    if os.path.isfile(file_path):
+        content = _get_processed_html(file_path)
+        return Response(content=content, media_type="text/html")
+    raise HTTPException(status_code=404, detail="Marketing agent page not found")
+```
+
+#### 接口复用
+
+营销智能体的对话能力**复用 `script_writer` 的现有接口**：
+
+| 用途 | 接口 | 方法 |
+|------|------|------|
+| 创建会话 | `/api/session/create` | POST |
+| 发送消息 | `/api/session/{session_id}/task` | POST |
+| 接收流式响应 | `/api/task/{task_id}/stream` | GET (SSE) |
+| 加载历史 | `/api/session/{session_id}/history` | GET |
+| 获取/创建世界 | `/api/worlds` | GET / POST |
+
+**图片 VL 流程**：用户上传图片后，前端在客户端压缩到 ~2MB 并转为 base64。发送消息时通过 `image_urls` 字段将 base64 传给后端，后端直接透传给 LLM，使大模型能够"看到"图片。
+
+**Agent 图片上传流程**：Agent 对话模式下，用户上传图片后会先调用 `POST /api/upload-agent-image` 保存到服务端并获取稳定 HTTP URL。图片上传中或上传失败时禁止发送消息，避免对话消息引用本地 `blob:` 预览地址；发送成功后的对话框图片统一使用服务端 URL 渲染，确保本地预览地址释放后历史消息仍可显示。
+
+**专家图片注入流程**：PM Agent 委托 `marketing-image` 专家生图后，系统自动检测返回结果中的图片 URL（优先从专家对话历史的 tool result 中提取），下载压缩为 base64 并注入 PM 的对话历史（多模态消息），使 PM 的 LLM 能"看到"生成的图片并向用户描述。实现位于 `pm_agent.py` 的 `_extract_image_url_from_result` 和 `_inject_image_to_history` 方法。
+
+**图片模型与偏好同步**：用户在前端选择图片模型/比例/分辨率后：
+- 模型通过 `POST /api/text-to-image-model` 同步到后端，持久化存储到 `user_preferences` 数据库表
+- 比例和分辨率通过同一个 API 同步，持久化存储到 `user_preferences` 数据库表（pref_type=image_preferences）
+- 比例/分辨率非 `auto` 时，系统会在 `generate_text_to_image` / `edit_image` 中强制校验，LLM 传入的参数若与用户设置冲突会直接返回错误
+- 发送消息时通过 `image_preferences` 字段同时注入用户消息，供 PM LLM 参考
+
+**历史消息图片渲染**：刷新页面加载历史时，多模态消息（包含 `image_url` 的 JSON 数组）会被解析为文本+图片分别渲染，不会显示原始 base64 文本。
+
+页面初始化流程：
+1. 从 URL 参数获取 `user_id`，从 `localStorage` 获取 `auth_token`
+2. 调用 `GET /api/worlds` 获取用户的世界列表
+3. 若用户没有世界，自动调用 `POST /api/worlds` 创建"营销世界"
+4. 调用 `POST /api/session/create` 创建新会话
+5. 若 URL 中有 `initial_message` 参数，自动发送首条消息
+
+## 样式与主题
+
+营销模式采用**浅色主题**（白底蓝调），与短剧模式的深色主题形成视觉区分。
+
+### 主题色变量
+
+定义于 `web/css/marketing_agent.css` 顶部 `:root` 中：
+
+```css
+--bg-primary: #f5f5f5;       /* 主背景 */
+--bg-secondary: #ffffff;     /* 卡片/输入框背景 */
+--accent-color: #00a8e6;     /* 主题色（亮蓝） */
+--text-primary: #1a1a1a;     /* 主文本 */
+--text-secondary: #666666;   /* 次要文本 */
+--text-muted: #999999;       /* 弱化文本 */
+--border-color: #e8e8e8;     /* 边框 */
+```
+
+## 文件清单
+
+| 文件路径 | 类型 | 说明 |
+|----------|------|------|
+| `web/index.html` | 修改 | 模式选择器（电商模式→营销模式）、选择后跳转 `/marketing-agent` |
+| `web/css/index.css` | 修改 | 末尾追加"营销模式首页样式"区块 |
+| `web/marketing_agent.html` | 新建 | 营销智能体对话页面（Vue 3） |
+| `web/css/marketing_agent.css` | 新建 | 对话页面样式（浅色主题） |
+| `server.py` | 修改 | 新增 `/marketing-agent` 路由 |
+
+## 本地存储键
+
+| 键名 | 用途 |
+|------|------|
+| `creation_mode` | 当前选择的创作模式（`short_drama` / `marketing`） |
+| `marketing_sessions` | 营销模式本地会话历史缓存 |
+
+## 后续可扩展点
+
+1. **左侧导航功能**：当前左侧"灵感、生成、资产、画布"和"无限画布、Agent 模式、图片生成、视频生成"功能卡片为纯 UI 展示，可逐步实现实际页面跳转。
+2. **筛选器联动**：顶部"时间、生成类型"筛选器目前仅有 UI，可结合后端实现历史记录筛选。
+3. **营销技能库**：可在 `script_writer_core/skills/` 下新增营销专用 skill（如 `marketing-script-writer`、`product-copy-writer`），并通过 `system_prompt` 切换使营销 Agent 拥有专属能力。
+4. **营销专用世界**：当前自动创建"营销世界"，未来可根据营销主题（如"美妆"、"3C数码"）创建多个细分世界。

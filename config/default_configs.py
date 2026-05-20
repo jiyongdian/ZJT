@@ -8,6 +8,26 @@ from typing import List, Dict, Any
 # 每个配置包含：key, value_type, description, editable, is_sensitive
 # 可选字段：quick_config - 标记是否为快速配置项（在快速配置弹窗中显示）
 DEFAULT_CONFIGS: List[Dict[str, Any]] = [
+    # ==================== 版本空间配置 ====================
+    {
+        'key': 'edition.shared_space',
+        'value_type': 'bool',
+        'description': '商业版是否使用共享空间模式（true=所有用户共享数据，false=按用户隔离）',
+        'editable': True,
+        'is_sensitive': False,
+        'quick_config': True
+    },
+
+    # ==================== 用户注册配置 ====================
+    {
+        'key': 'user_registration.require_admin_approval',
+        'value_type': 'bool',
+        'description': '用户注册后是否需要管理员审核才能登录',
+        'editable': True,
+        'is_sensitive': False,
+        'quick_config': True
+    },
+
     # ==================== 任务队列配置 ====================
     {
         'key': 'task_queue.max_retry_count',

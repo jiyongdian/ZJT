@@ -7,6 +7,9 @@
 class ItemType:
     """item_type 类型定义，用于标识生成图片的项目类型"""
 
+    # 通用类型 (0)
+    GENERAL = 0         # 通用生图（营销等场景，不绑定具体item）
+
     # 单图类型 (1-3)
     CHARACTER = 1       # 角色
     LOCATION = 2        # 场景
@@ -20,10 +23,12 @@ class ItemType:
     # 类型列表
     SINGLE_TYPES = [1, 2, 3]
     GRID_TYPES = [4, 5, 6]
-    ALL_TYPES = [1, 2, 3, 4, 5, 6]
+    ALL_TYPES = [0, 1, 2, 3, 4, 5, 6]
 
     # 完整映射表
     MAP = {
+        # 通用
+        0: {'name': 'general', 'name_cn': '通用', 'is_grid': False},
         # 单图
         1: {'name': 'character', 'name_cn': '角色', 'is_grid': False},
         2: {'name': 'location', 'name_cn': '场景', 'is_grid': False},

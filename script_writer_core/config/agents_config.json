@@ -135,6 +135,7 @@
         "read_character_json",
         "generate_text_to_image",
         "generate_4grid_character_images",
+        "get_text_to_image_model_info",
         "get_task_status",
         "read_world",
         "ask_user"
@@ -151,9 +152,43 @@
         "read_location_json",
         "read_prop_json",
         "generate_text_to_image",
+        "get_text_to_image_model_info",
         "generate_4grid_location_images",
         "generate_4grid_prop_images",
         "get_task_status",
+        "ask_user"
+      ],
+      "summary_only": true
+    },
+    "marketing-image": {
+      "skills": ["marketing-image"],
+      "model": "gemini/gemini-3-flash-preview",
+      "allowed_tools": [
+        "generate_text_to_image",
+        "edit_image",
+        "check_image_status",
+        "get_text_to_image_model_info",
+        "get_user_computing_power",
+        "ask_user"
+      ],
+      "summary_only": true
+    },
+    "marketing-video": {
+      "skills": ["marketing-video"],
+      "model": "gemini/gemini-3-flash-preview",
+      "allowed_tools": [
+        "generate_text_to_video",
+        "image_to_video",
+        "get_user_computing_power",
+        "ask_user"
+      ],
+      "summary_only": true
+    },
+    "image-understanding": {
+      "skills": ["image-understanding"],
+      "model": "gemini/gemini-3-flash-preview",
+      "allowed_tools": [
+        "fetch_image_as_base64",
         "ask_user"
       ],
       "summary_only": true

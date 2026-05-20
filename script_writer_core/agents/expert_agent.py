@@ -74,6 +74,7 @@ class ExpertAgent(BaseAgent, AskUserMixin):
         
         self.tool_calls_made: List[Dict[str, Any]] = []
         self.outputs: List[Any] = []
+        self.pending_project_ids: List[str] = []
     
     def _build_system_prompt(self, skill_names: List[str], context: str) -> str:
         """构建系统提示"""
@@ -115,9 +116,10 @@ class ExpertAgent(BaseAgent, AskUserMixin):
         session_id = task.get("session_id", "unknown")
         task_description = task.get("description", "")
         conversation_history = task.get("conversation_history", [])
-        
+        image_urls = task.get("image_urls", [])
+
         logger.info(f"{self.agent_id}: Starting task execution - {task_description}")
-        
+
         try:
             # 如果提供了对话历史，先添加到历史记录中
             if conversation_history:
@@ -126,8 +128,17 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                     content = msg.get("content")
                     if role and content:
                         self.add_to_history(role, content)
-            
-            self.add_to_history("user", task_description)
+
+            # 图片以文字标签形式注入，不需要 base64
+            # 需要看图的专家（如 image-understanding）通过 fetch_image_as_base64 工具按需获取
+            if image_urls:
+                image_labels = []
+                for i, img_url in enumerate(image_urls, 1):
+                    image_labels.append(f"[图片{i}]（URL: {img_url}）")
+                combined = "\n".join(image_labels) + "\n\n" + task_description
+                self.add_to_history("user", combined)
+            else:
+                self.add_to_history("user", task_description)
 
             result = self._run_task_loop(task_description)
             
@@ -141,7 +152,8 @@ class ExpertAgent(BaseAgent, AskUserMixin):
             logger.info(f"{self.agent_id}: Task completed successfully")
             return {
                 "success": True,
-                "result": result
+                "result": result,
+                "project_ids": self.pending_project_ids
             }
 
         except InsufficientComputingPowerError:
@@ -159,7 +171,8 @@ class ExpertAgent(BaseAgent, AskUserMixin):
             
             return {
                 "success": False,
-                "error": str(e)
+                "error": str(e),
+                "project_ids": self.pending_project_ids
             }
     
     def _run_task_loop(self, task_description: str, max_iterations: int = 10) -> str:
@@ -257,28 +270,40 @@ class ExpertAgent(BaseAgent, AskUserMixin):
             history_entry["reasoning_content"] = message.reasoning_content
         
         self.add_to_history("assistant", history_entry)
-        
+
+        deferred_user_inputs = []
+        deferred_multimodal_content = []  # fetch_image_as_base64 成功时注入的多模态图片
+
         for tool_call in tool_calls:
             tool_name = tool_call.function.name
             tool_args = json.loads(tool_call.function.arguments) if isinstance(tool_call.function.arguments, str) else tool_call.function.arguments
-            
+
             self.tool_calls_made.append({
                 "tool": tool_name,
                 "args": tool_args,
                 "timestamp": datetime.now().isoformat()
             })
-            
+
             result = self._execute_tool(tool_name, tool_args)
+
+            # 收集图片/视频生成任务的 project_ids
+            if tool_name in ("generate_text_to_image", "edit_image", "generate_text_to_video", "image_to_video"):
+                if isinstance(result, dict) and result.get("project_ids"):
+                    self.pending_project_ids.extend(result["project_ids"])
 
             # ask_user 工具：在 tool 回答之前，将问题写入历史（保证顺序正确）
             # 同时移除 _verification_meta，避免 LLM 看到后重复提问
             if tool_name == "ask_user" and isinstance(result, dict) and "_verification_meta" in result:
                 meta = result.pop("_verification_meta")
+                agent_name = self._get_agent_display_name()
                 self.add_to_history("verification", {
-                    "title": "需要用户输入",
+                    "title": f"{agent_name} 向您提问",
                     "description": meta["question"],
                     "options": meta["options"]
                 })
+                user_input = result.get("user_input", "")
+                if user_input:
+                    deferred_user_inputs.append(user_input)
 
             self.outputs.append(result)
 
@@ -288,6 +313,29 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                 "name": tool_name,
                 "content": json.dumps(result, ensure_ascii=False)
             })
+
+            # fetch_image_as_base64 成功时，将 base64 数据存入延迟多模态列表
+            if tool_name == "fetch_image_as_base64" and isinstance(result, dict) and result.get("success"):
+                base64_data_url = result.get("base64_data_url")
+                if base64_data_url:
+                    deferred_multimodal_content.append({
+                        "type": "text",
+                        "text": f"[系统注入] 以下是工具成功获取的图片（URL: {tool_args.get('image_url', '')}）："
+                    })
+                    deferred_multimodal_content.append({
+                        "type": "image_url",
+                        "image_url": {"url": base64_data_url}
+                    })
+
+        # 将用户的回答作为 user 消息写入历史，放在所有 tool 消息之后
+        # 避免在 assistant(tool_calls) 和 tool 之间插入 user 消息导致 API 报错
+        for user_input in deferred_user_inputs:
+            self.add_to_history("user", user_input)
+
+        # 将 fetch_image_as_base64 获取的图片作为多模态 user 消息注入
+        # API 工具结果消息只支持文本内容，多模态图片必须通过 user 消息注入
+        if deferred_multimodal_content:
+            self.add_to_history("user", deferred_multimodal_content)
     
     def _execute_tool(self, tool_name: str, tool_args: Dict[str, Any]) -> Dict[str, Any]:
         """执行工具调用"""
@@ -376,6 +424,12 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                     "reasoning_content": ""
                 }
                 messages.append(assistant_msg)
+            elif role == "user" and isinstance(content, list):
+                # 多模态消息（包含图片）
+                messages.append({
+                    "role": "user",
+                    "content": content
+                })
             elif role == "verification":
                 # 跳过 verification 消息（仅供前端展示，不发给 LLM）
                 continue
@@ -386,7 +440,7 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                 })
 
         return messages
-    
+
     def _get_tool_definitions(self) -> List[Dict[str, Any]]:
         """获取工具定义"""
         tool_defs = self.tool_executor.get_tool_definitions(self.allowed_tools)

@@ -2,6 +2,7 @@
 MediaFileMapping Model - Database operations for media_file_mapping table
 """
 import json
+import hashlib
 from typing import Optional, Dict, Any, List
 from .database import execute_query, execute_update, execute_insert
 import logging
@@ -62,6 +63,7 @@ class MediaFileMapping:
         self.status = kwargs.get('status')
         self.created_at = kwargs.get('created_at')
         self.updated_at = kwargs.get('updated_at')
+        self.local_path_hash = kwargs.get('local_path_hash')
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
@@ -79,12 +81,19 @@ class MediaFileMapping:
             'file_size': self.file_size,
             'status': self.status,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'local_path_hash': self.local_path_hash
         }
 
 
 class MediaFileMappingModel:
     """MediaFileMapping database operations"""
+
+    @staticmethod
+    def _compute_local_path_hash(local_path: str) -> str:
+        """计算 local_path 的 SHA256 哈希值（统一使用正斜杠，兼容 Windows）"""
+        normalized = local_path.replace('\\', '/')
+        return hashlib.sha256(normalized.encode('utf-8')).hexdigest()
 
     @staticmethod
     def create(
@@ -117,10 +126,11 @@ class MediaFileMappingModel:
         """
         sql = """
             INSERT INTO media_file_mapping
-            (user_id, local_path, cloud_path, policy_code, entity_type, source_id, media_type, original_url, file_size, status, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'active', NOW(), NOW())
+            (user_id, local_path, cloud_path, policy_code, entity_type, source_id, media_type, original_url, file_size, local_path_hash, status, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'active', NOW(), NOW())
         """
-        params = (user_id, local_path, cloud_path, policy_code, entity_type, source_id, media_type, original_url, file_size)
+        local_path_hash = MediaFileMappingModel._compute_local_path_hash(local_path)
+        params = (user_id, local_path, cloud_path, policy_code, entity_type, source_id, media_type, original_url, file_size, local_path_hash)
 
         try:
             record_id = execute_insert(sql, params)
@@ -172,6 +182,28 @@ class MediaFileMappingModel:
             return None
         except Exception as e:
             logger.error(f"Failed to get media_file_mapping by local_path '{local_path}': {e}")
+            raise
+
+    @staticmethod
+    def get_by_local_path_hash(url_hash: str) -> Optional['MediaFileMapping']:
+        """
+        通过 local_path_hash 快速查找记录（用于 CDN 重定向）
+
+        Args:
+            url_hash: local_path 的 SHA256 哈希值
+
+        Returns:
+            MediaFileMapping object or None
+        """
+        sql = "SELECT * FROM media_file_mapping WHERE local_path_hash = %s AND status = 'active' LIMIT 1"
+
+        try:
+            result = execute_query(sql, (url_hash,), fetch_one=True)
+            if result:
+                return MediaFileMapping(**result)
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get media_file_mapping by local_path_hash '{url_hash}': {e}")
             raise
 
     @staticmethod
@@ -439,6 +471,7 @@ CREATE TABLE IF NOT EXISTS `media_file_mapping` (
   `media_type` varchar(50) NOT NULL COMMENT '媒体类型（MIME type）',
   `original_url` varchar(1000) DEFAULT NULL COMMENT '原始URL',
   `file_size` bigint DEFAULT NULL COMMENT '文件大小',
+  `local_path_hash` varchar(64) DEFAULT NULL COMMENT 'local_path 的 SHA256 哈希，用于快速 CDN 重定向查找',
   `status` varchar(20) DEFAULT NULL COMMENT '状态',
   `created_at` datetime DEFAULT NULL,
   `updated_at` datetime DEFAULT NULL,
@@ -447,6 +480,7 @@ CREATE TABLE IF NOT EXISTS `media_file_mapping` (
   KEY `idx_user_id` (`user_id`),
   KEY `idx_cloud_path` (`cloud_path`),
   KEY `idx_entity` (`entity_type`,`source_id`),
-  KEY `idx_status` (`status`,`created_at`)
+  KEY `idx_status` (`status`,`created_at`),
+  KEY `idx_local_path_hash` (`local_path_hash`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 """

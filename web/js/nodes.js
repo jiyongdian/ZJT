@@ -2358,6 +2358,15 @@
       };
     }
 
+    function pickFirstDefinedValue(...values){
+      return values.find(value => value !== undefined && value !== null && value !== '');
+    }
+
+    function getVideoModelFromData(data){
+      if(!data) return undefined;
+      return pickFirstDefinedValue(data.videoModel, data.video_model, data.video_model_key, data.videoModelKey);
+    }
+
     function getOutputPortPos(nodeId){
       const nid = Number(nodeId);
       const node = state.nodes.find(n => n.id === nid);
@@ -6474,6 +6483,9 @@
             
             statusEl.style.color = '#16a34a';
             statusEl.textContent = `解析成功！共${result.data.shot_groups?.length || 0}个分镜组`;
+            if(window.TaskConfig && !window.TaskConfig.isLoaded()) {
+              await window.TaskConfig.load();
+            }
             
             // 创建分镜组节点
             if(result.data.shot_groups && result.data.shot_groups.length > 0) {
@@ -7859,6 +7871,7 @@
       }
       
       const groupName = shotGroupData.groupName || shotGroupData.group_name || shotGroupData.group_id || '分镜组';
+      const resolvedVideoModel = getVideoModelFromData(shotGroupData) || defaultVideoModel;
       const node = {
         id,
         type: 'shot_group',
@@ -7872,9 +7885,9 @@
           shots: shotGroupData.shots || [],
           scriptData: scriptData,
           model: shotGroupData.model || defaultImageModel,
-          videoModel: shotGroupData.videoModel || defaultVideoModel,
-          videoDuration: shotGroupData.videoDuration || 5,
-          videoDrawCount: shotGroupData.videoDrawCount || 1,
+          videoModel: resolvedVideoModel,
+          videoDuration: pickFirstDefinedValue(shotGroupData.videoDuration, shotGroupData.video_duration) || 5,
+          videoDrawCount: pickFirstDefinedValue(shotGroupData.videoDrawCount, shotGroupData.video_draw_count) || 1,
           gridPreview: shotGroupData.gridPreview || {},
         }
       };
@@ -8667,6 +8680,7 @@
           y: 0,  // 临时位置，后面会重新定位
           shotData: shotDataWithLocation,
           model: shotGroupNode.data.model,
+          videoModel: shotGroupNode.data.videoModel,
           checkCollision: false
         });
         createdNodeIds.push(shotFrameNodeId);
@@ -8917,6 +8931,7 @@
       }
       
       const inheritedModel = opts && opts.model ? opts.model : defaultImageModel;
+      const inheritedVideoModel = (opts && opts.videoModel) || getVideoModelFromData(shotData) || defaultVideoModel;
       
       const shotTitle = shotData.shot_id || shotData.shot_number ? `镜头${shotData.shot_number || ''}` : '分镜图';
       
@@ -8980,7 +8995,7 @@
           previewImageUrl: '',
           videoDrawCount: 1,
           videoDuration: 5,
-          videoModel: defaultVideoModel,
+          videoModel: inheritedVideoModel,
         }
       };
       state.nodes.push(node);

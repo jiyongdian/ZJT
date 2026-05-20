@@ -54,6 +54,10 @@ class TestRunner:
             'drivers': {'passed': 0, 'failed': 0, 'errors': 0},
             'driver_integration': {'passed': 0, 'failed': 0, 'errors': 0},
             'llm': {'passed': 0, 'failed': 0, 'errors': 0},
+            'agents': {'passed': 0, 'failed': 0, 'errors': 0},
+            'services': {'passed': 0, 'failed': 0, 'errors': 0},
+            'script_writer_core': {'passed': 0, 'failed': 0, 'errors': 0},
+            'enterprise': {'passed': 0, 'failed': 0, 'errors': 0},
             'total': {'passed': 0, 'failed': 0, 'errors': 0}
         }
         # 收集所有失败测试的详细信息
@@ -324,13 +328,85 @@ class TestRunner:
         print()
         return errors == 0 and failed == 0
 
+    def run_llm_tests(self):
+        """执行 LLM 相关测试"""
+        print("=" * 60)
+        print("LLM 测试")
+        print("=" * 60)
+
+        passed, failed, errors = self._discover_and_run('llm')
+        self.test_results['llm']['passed'] = passed
+        self.test_results['llm']['failed'] = failed
+        self.test_results['llm']['errors'] = errors
+
+        print()
+        return errors == 0 and failed == 0
+
+    def run_agents_tests(self):
+        """执行 Agents 相关测试"""
+        print("=" * 60)
+        print("Agents 测试")
+        print("=" * 60)
+
+        passed, failed, errors = self._discover_and_run('agents')
+        self.test_results['agents']['passed'] = passed
+        self.test_results['agents']['failed'] = failed
+        self.test_results['agents']['errors'] = errors
+
+        print()
+        return errors == 0 and failed == 0
+
+    def run_services_tests(self):
+        """执行 Services 相关测试"""
+        print("=" * 60)
+        print("Services 测试")
+        print("=" * 60)
+
+        passed, failed, errors = self._discover_and_run('services')
+        self.test_results['services']['passed'] = passed
+        self.test_results['services']['failed'] = failed
+        self.test_results['services']['errors'] = errors
+
+        print()
+        return errors == 0 and failed == 0
+
+    def run_script_writer_core_tests(self):
+        """执行 Script Writer Core 相关测试"""
+        print("=" * 60)
+        print("Script Writer Core 测试")
+        print("=" * 60)
+
+        passed, failed, errors = self._discover_and_run('script_writer_core')
+        self.test_results['script_writer_core']['passed'] = passed
+        self.test_results['script_writer_core']['failed'] = failed
+        self.test_results['script_writer_core']['errors'] = errors
+
+        print()
+        return errors == 0 and failed == 0
+
+    def run_enterprise_tests(self):
+        """执行企业版相关测试"""
+        print("=" * 60)
+        print("Enterprise 测试")
+        print("=" * 60)
+
+        passed, failed, errors = self._discover_and_run('enterprise')
+        self.test_results['enterprise']['passed'] = passed
+        self.test_results['enterprise']['failed'] = failed
+        self.test_results['enterprise']['errors'] = errors
+
+        print()
+        return errors == 0 and failed == 0
+
     def generate_junit_xml(self):
         """生成 JUnit XML 格式的测试报告供 GitLab CI 解析"""
         import xml.etree.ElementTree as ET
 
         testsuites = ET.Element('testsuites')
 
-        for category in ['db_connection', 'crud', 'driver', 'utils', 'config']:
+        for category in ['db_connection', 'crud', 'driver', 'utils', 'config',
+                         'drivers', 'driver_integration', 'llm',
+                         'agents', 'services', 'script_writer_core', 'enterprise']:
             results = self.test_results[category]
             total = results['passed'] + results['failed'] + results['errors']
 
@@ -375,7 +451,9 @@ class TestRunner:
         print("=" * 60)
 
         # 计算总数
-        for category in ['db_connection', 'cdn', 'crud', 'driver', 'utils', 'config', 'auth', 'reference_images', 'stats', 'drivers', 'driver_integration']:
+        for category in ['db_connection', 'cdn', 'crud', 'driver', 'utils', 'config',
+                         'auth', 'reference_images', 'stats', 'drivers', 'driver_integration',
+                         'llm', 'agents', 'services', 'script_writer_core', 'enterprise']:
             for key in ['passed', 'failed', 'errors']:
                 self.test_results['total'][key] += self.test_results[category][key]
 
@@ -428,6 +506,31 @@ class TestRunner:
               f"通过 {self.test_results['drivers']['passed']}, "
               f"失败 {self.test_results['drivers']['failed']}, "
               f"错误 {self.test_results['drivers']['errors']}")
+
+        print(f"LLM 测试:        "
+              f"通过 {self.test_results['llm']['passed']}, "
+              f"失败 {self.test_results['llm']['failed']}, "
+              f"错误 {self.test_results['llm']['errors']}")
+
+        print(f"Agents 测试:     "
+              f"通过 {self.test_results['agents']['passed']}, "
+              f"失败 {self.test_results['agents']['failed']}, "
+              f"错误 {self.test_results['agents']['errors']}")
+
+        print(f"Services 测试:   "
+              f"通过 {self.test_results['services']['passed']}, "
+              f"失败 {self.test_results['services']['failed']}, "
+              f"错误 {self.test_results['services']['errors']}")
+
+        print(f"ScriptWriterCore:"
+              f"通过 {self.test_results['script_writer_core']['passed']}, "
+              f"失败 {self.test_results['script_writer_core']['failed']}, "
+              f"错误 {self.test_results['script_writer_core']['errors']}")
+
+        print(f"Enterprise 测试:  "
+              f"通过 {self.test_results['enterprise']['passed']}, "
+              f"失败 {self.test_results['enterprise']['failed']}, "
+              f"错误 {self.test_results['enterprise']['errors']}")
 
         print("-" * 60)
         print(f"总计:            "
@@ -485,6 +588,11 @@ class TestRunner:
             self.args.stats_only,
             self.args.drivers_only,
             self.args.driver_integration_only,
+            self.args.llm_only,
+            self.args.agents_only,
+            self.args.services_only,
+            self.args.script_writer_core_only,
+            self.args.enterprise_only,
         ])
 
         # 步骤 2: CDN 专项测试
@@ -531,7 +639,27 @@ class TestRunner:
         if self.args.drivers_only or not has_only_flag:
             self.run_drivers_tests()
 
-        # 步骤 12: 输出摘要
+        # 步骤 12: LLM 测试
+        if self.args.llm_only or not has_only_flag:
+            self.run_llm_tests()
+
+        # 步骤 13: Agents 测试
+        if self.args.agents_only or not has_only_flag:
+            self.run_agents_tests()
+
+        # 步骤 14: Services 测试
+        if self.args.services_only or not has_only_flag:
+            self.run_services_tests()
+
+        # 步骤 15: Script Writer Core 测试
+        if self.args.script_writer_core_only or not has_only_flag:
+            self.run_script_writer_core_tests()
+
+        # 步骤 16: Enterprise 测试
+        if self.args.enterprise_only or not has_only_flag:
+            self.run_enterprise_tests()
+
+        # 步骤 17: 输出摘要
         return_code = self.print_summary()
 
         # 步骤 13: 输出失败测试详情
@@ -580,6 +708,11 @@ def main():
     parser.add_argument('--auth-only', action='store_true', help='只执行认证测试')
     parser.add_argument('--reference-images-only', action='store_true', help='只执行引用图片测试')
     parser.add_argument('--stats-only', action='store_true', help='只执行统计测试')
+    parser.add_argument('--llm-only', action='store_true', help='只执行 LLM 测试')
+    parser.add_argument('--agents-only', action='store_true', help='只执行 Agents 测试')
+    parser.add_argument('--services-only', action='store_true', help='只执行 Services 测试')
+    parser.add_argument('--script-writer-core-only', action='store_true', help='只执行 Script Writer Core 测试')
+    parser.add_argument('--enterprise-only', action='store_true', help='只执行企业版测试')
     parser.add_argument('--verbose', '-v', action='store_true', help='显示详细输出')
     parser.add_argument('--failfast', '-x', action='store_true', help='遇到失败立即停止')
     parser.add_argument('--coverage', action='store_true', help='生成覆盖率报告')

@@ -19,6 +19,8 @@ class ChatSessionEntity:
         self.session_id = kwargs.get('session_id')
         self.user_id = kwargs.get('user_id')
         self.world_id = kwargs.get('world_id')
+        self.session_type = kwargs.get('session_type', 1)
+        self.title = kwargs.get('title', None)
         self.auth_token = kwargs.get('auth_token', '')
         self.model = kwargs.get('model', 'gemini-3-flash-preview')
         self.model_id = kwargs.get('model_id')
@@ -52,6 +54,8 @@ class ChatSessionEntity:
             'session_id': self.session_id,
             'user_id': self.user_id,
             'world_id': self.world_id,
+            'session_type': self.session_type,
+            'title': self.title,
             'auth_token': self.auth_token,
             'model': self.model,
             'model_id': self.model_id,
@@ -81,7 +85,8 @@ class ChatSessionsModel:
         model_id: Optional[int] = None,
         text_to_image_model_id: Optional[int] = None,
         conversation_history: list = None,
-        expires_at: Optional[datetime] = None
+        expires_at: Optional[datetime] = None,
+        session_type: int = 1
     ) -> int:
         """
         Create a new chat session
@@ -96,18 +101,19 @@ class ChatSessionsModel:
             text_to_image_model_id: Text-to-image model task ID
             conversation_history: Initial conversation history (default: empty list)
             expires_at: Session expiration time (None = never expires)
+            session_type: Session type (1=script writer, 2=marketing agent)
 
         Returns:
             Inserted record ID
         """
         sql = """
             INSERT INTO chat_sessions
-            (session_id, user_id, world_id, auth_token, model, model_id,
+            (session_id, user_id, world_id, session_type, auth_token, model, model_id,
              text_to_image_model_id, conversation_history, expires_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         history_json = json.dumps(conversation_history or [], ensure_ascii=False)
-        params = (session_id, user_id, world_id, auth_token, model,
+        params = (session_id, user_id, world_id, session_type, auth_token, model,
                   model_id, text_to_image_model_id, history_json, expires_at)
 
         try:
@@ -145,7 +151,8 @@ class ChatSessionsModel:
         user_id: str,
         world_id: Optional[str] = None,
         active_only: bool = True,
-        limit: int = 100
+        limit: int = 100,
+        session_type: Optional[int] = None
     ) -> List[ChatSessionEntity]:
         """
         List sessions by user
@@ -155,27 +162,29 @@ class ChatSessionsModel:
             world_id: Optional world ID filter
             active_only: Only return active sessions
             limit: Maximum number of sessions to return
+            session_type: Optional session type filter (1=script, 2=marketing)
 
         Returns:
             List of ChatSessionEntity objects
         """
+        conditions = ["user_id = %s", "is_active = %s"]
+        params = [user_id, 1 if active_only else 0]
+
         if world_id:
-            sql = """
-                SELECT * FROM chat_sessions
-                WHERE user_id = %s AND world_id = %s
-                AND is_active = %s
-                ORDER BY updated_at DESC
-                LIMIT %s
-            """
-            params = (user_id, world_id, 1 if active_only else 0, limit)
-        else:
-            sql = """
-                SELECT * FROM chat_sessions
-                WHERE user_id = %s AND is_active = %s
-                ORDER BY updated_at DESC
-                LIMIT %s
-            """
-            params = (user_id, 1 if active_only else 0, limit)
+            conditions.append("world_id = %s")
+            params.append(world_id)
+
+        if session_type is not None:
+            conditions.append("session_type = %s")
+            params.append(session_type)
+
+        params.append(limit)
+        sql = f"""
+            SELECT * FROM chat_sessions
+            WHERE {' AND '.join(conditions)}
+            ORDER BY updated_at DESC
+            LIMIT %s
+        """
 
         try:
             results = execute_query(sql, params, fetch_all=True)
@@ -384,6 +393,26 @@ class ChatSessionsModel:
             raise
 
     @staticmethod
+    def update_title(session_id: str, title: str) -> int:
+        """
+        Update session title
+
+        Args:
+            session_id: Session identifier
+            title: New title
+
+        Returns:
+            Number of affected rows
+        """
+        sql = "UPDATE chat_sessions SET title = %s, updated_at = NOW() WHERE session_id = %s"
+        try:
+            affected_rows = execute_update(sql, (title[:100], session_id))
+            return affected_rows
+        except Exception as e:
+            logger.error(f"Failed to update title for session {session_id}: {e}")
+            raise
+
+    @staticmethod
     def soft_delete(session_id: str) -> int:
         """
         Soft delete session (set is_active = 0)
@@ -404,6 +433,51 @@ class ChatSessionsModel:
             raise
 
     @staticmethod
+    def get_expired_session_ids(before_date: Optional[datetime] = None) -> List[Dict[str, Any]]:
+        """
+        获取即将被删除的过期 session 的 session_id 和 session_type
+
+        Args:
+            before_date: 截止时间（默认: 当前时间）
+
+        Returns:
+            包含 session_id 和 session_type 的字典列表
+        """
+        if before_date is None:
+            before_date = datetime.now()
+
+        sql = """
+            SELECT session_id, session_type FROM chat_sessions
+            WHERE expires_at <= %s AND is_active = 1
+        """
+
+        try:
+            results = execute_query(sql, (before_date,), fetch_all=True)
+            return results if results else []
+        except Exception as e:
+            logger.error(f"[DB] Failed to get expired session ids: {e}")
+            raise
+
+    @staticmethod
+    def session_exists(session_id: str) -> bool:
+        """
+        检查 session 是否存在于数据库中（包括已标记为 inactive 的）
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            True if session exists
+        """
+        sql = "SELECT 1 AS cnt FROM chat_sessions WHERE session_id = %s LIMIT 1"
+        try:
+            result = execute_query(sql, (session_id,), fetch_one=True)
+            return result is not None
+        except Exception as e:
+            logger.error(f"[DB] Failed to check session existence for {session_id}: {e}")
+            raise  # 出错时向上抛出，由调用方决定如何处理
+
+    @staticmethod
     def delete_expired_sessions(before_date: Optional[datetime] = None) -> int:
         """
         Delete expired sessions (hard delete)
@@ -417,12 +491,13 @@ class ChatSessionsModel:
         if before_date is None:
             before_date = datetime.now()
 
-        sql = """
-            DELETE FROM chat_sessions
-            WHERE expires_at <= %s AND is_active = 1
-        """
-
         try:
+            # 先查出即将被删除的 session_id 和 session_type
+            expired_sessions = ChatSessionsModel.get_expired_session_ids(before_date)
+            session_ids_to_cleanup = [
+                s['session_id'] for s in expired_sessions if s.get('session_type') == 2
+            ]
+
             # 先查询有多少条符合条件的记录
             check_sql = "SELECT COUNT(*) as count FROM chat_sessions WHERE expires_at <= %s AND is_active = 1"
             check_result = execute_query(check_sql, (before_date,), fetch_one=True)
@@ -430,13 +505,50 @@ class ChatSessionsModel:
                 logger.info(f"[DB] Found {check_result['count']} sessions matching criteria")
             else:
                 logger.warning(f"[DB] Query returned no results")
-            
+
+            sql = """
+                DELETE FROM chat_sessions
+                WHERE expires_at <= %s AND is_active = 1
+            """
             affected_rows = execute_update(sql, (before_date,))
             logger.info(f"[DB] Deleted {affected_rows} expired sessions")
+
+            # 清理营销 session 对应的图片目录
+            if session_ids_to_cleanup:
+                ChatSessionsModel._cleanup_marketing_images(session_ids_to_cleanup)
+
             return affected_rows
         except Exception as e:
             logger.error(f"[DB] Failed to delete expired sessions: {e}")
             raise
+
+    @staticmethod
+    def _cleanup_marketing_images(session_ids: List[str]):
+        """
+        清理营销 session 对应的图片目录
+
+        Args:
+            session_ids: 需要清理图片的 session_id 列表
+        """
+        import os
+        import shutil
+
+        app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        base_dir = os.path.join(app_dir, 'upload', 'marketing', 'pic')
+
+        cleaned = 0
+        for sid in session_ids:
+            session_pic_dir = os.path.join(base_dir, sid)
+            if os.path.isdir(session_pic_dir):
+                try:
+                    shutil.rmtree(session_pic_dir)
+                    cleaned += 1
+                    logger.info(f"[DB] Cleaned up marketing images for session {sid}")
+                except Exception as e:
+                    logger.error(f"[DB] Failed to clean up marketing images for session {sid}: {e}")
+
+        if cleaned > 0:
+            logger.info(f"[DB] Cleaned up marketing image directories for {cleaned} sessions")
 
     @staticmethod
     def count_active_sessions() -> int:
@@ -462,6 +574,7 @@ CREATE TABLE IF NOT EXISTS `chat_sessions` (
   `session_id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'UUID session identifier',
   `user_id` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'User ID',
   `world_id` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'World ID',
+  `session_type` tinyint NOT NULL DEFAULT '1' COMMENT '会话类型: 1=剧本智能体, 2=营销智能体',
   `auth_token` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Authentication token',
   `model` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'gemini-3-flash-preview' COMMENT 'AI model name',
   `model_id` int DEFAULT NULL COMMENT 'Model ID from vendor',
@@ -477,7 +590,7 @@ CREATE TABLE IF NOT EXISTS `chat_sessions` (
   `is_active` tinyint(1) NOT NULL DEFAULT '1' COMMENT 'Whether session is active (1=active, 0=inactive)',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_session_id` (`session_id`),
-  KEY `idx_user_world` (`user_id`,`world_id`),
+  KEY `idx_user_world_type` (`user_id`,`world_id`,`session_type`),
   KEY `idx_expires_at` (`expires_at`),
   KEY `idx_updated_at` (`updated_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Chat sessions table'
