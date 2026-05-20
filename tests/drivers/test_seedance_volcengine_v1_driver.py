@@ -45,7 +45,7 @@ def _create_driver(driver_type=21, model_name='doubao-seedance-1-5-pro-251215',
 
 def _make_ai_tool(prompt='测试提示词', image_path='http://example.com/first.jpg',
                   extra_config=None, duration=5, reference_images=None,
-                  audio_path=None, video_path=None):
+                  audio_path=None, video_path=None, ratio=None):
     """创建模拟的 ai_tool 对象"""
     tool = MagicMock()
     tool.id = 1001
@@ -56,6 +56,7 @@ def _make_ai_tool(prompt='测试提示词', image_path='http://example.com/first
     tool.reference_images = reference_images
     tool.audio_path = audio_path
     tool.video_path = video_path
+    tool.ratio = ratio
     return tool
 
 
@@ -566,16 +567,29 @@ class TestBuildCreateRequestPayload(unittest.TestCase):
         self.assertFalse(result['json'].get('watermark'))
 
     @patch('task.visual_drivers.seedance_volcengine_v1_driver.compress_and_upload_image_sync')
-    def test_optional_ratio(self, mock_compress):
-        """可选参数 ratio"""
+    def test_ratio_from_ai_tool(self, mock_compress):
+        """ratio 从 ai_tool.ratio 获取（如 9:16）"""
         mock_compress.return_value = (True, 'https://cdn.example.com/first.jpg', None)
         ai_tool = _make_ai_tool(
             image_path='http://example.com/first.jpg',
-            extra_config={'image_mode': 'first_last_frame', 'ratio': '16:9'}
+            extra_config={'image_mode': 'first_last_frame'},
+            ratio='9:16'
         )
 
         result = self.driver.build_create_request(ai_tool)
-        self.assertEqual(result['json'].get('ratio'), '16:9')
+        self.assertEqual(result['json'].get('ratio'), '9:16')
+
+    @patch('task.visual_drivers.seedance_volcengine_v1_driver.compress_and_upload_image_sync')
+    def test_ratio_not_set(self, mock_compress):
+        """ai_tool 未设置 ratio 时，payload 中不包含 ratio"""
+        mock_compress.return_value = (True, 'https://cdn.example.com/first.jpg', None)
+        ai_tool = _make_ai_tool(
+            image_path='http://example.com/first.jpg',
+            extra_config={'image_mode': 'first_last_frame'}
+        )
+
+        result = self.driver.build_create_request(ai_tool)
+        self.assertNotIn('ratio', result['json'])
 
     @patch('task.visual_drivers.seedance_volcengine_v1_driver.compress_and_upload_image_sync')
     def test_duration_from_ai_tool(self, mock_compress):
