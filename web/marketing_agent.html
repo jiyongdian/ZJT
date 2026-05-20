@@ -2234,7 +2234,7 @@
                             image_urls: imageUrls.length > 0 ? imageUrls : undefined,
                             model: selectedLLMModel.value ? selectedLLMModel.value.name : '',
                             model_id: selectedLLMModel.value ? selectedLLMModel.value.id : undefined,
-                            vendor_id: 1,
+                            vendor_id: selectedLLMModel.value ? (selectedLLMModel.value.vendor_id || 1) : 1,
                             image_preferences: imagePreferences,
                             video_preferences: isAgentVideo ? {
                                 ratio: selectedRatio.value,
@@ -3362,6 +3362,7 @@
                             id: m.model_id,
                             name: m.name,
                             vendor: m.vendor_name,
+                            vendor_id: m.vendor_id,
                             supportsVl: m.supports_vl || false,
                             supportsThinking: m.supports_thinking || false
                         }));
