@@ -5302,22 +5302,22 @@
                 imagePreviewRow.style.display = 'block';
                 
                 statusEl.style.color = '#22c55e';
-                statusEl.textContent = '涂色完成！';
-                showToast('涂色完成！', 'success');
-                
+                statusEl.textContent = window.t ? window.t('fill_complete_msg') : '涂色完成！';
+                showToast(window.t ? window.t('fill_complete_msg') : '涂色完成！', 'success');
+
                 try{ autoSaveWorkflow(); } catch(e){}
                 renderMinimap();
               } catch(err){
                 console.error('涂色编辑失败:', err);
                 statusEl.style.color = '#dc2626';
-                statusEl.textContent = '涂色失败';
-                showToast('涂色失败: ' + err.message, 'error');
+                statusEl.textContent = window.t ? window.t('fill_error_msg') : '涂色失败';
+                showToast((window.t ? window.t('fill_error_msg') : '涂色失败: ') + err.message, 'error');
               } finally {
                 coloringBtn.disabled = false;
               }
             });
           } else {
-            showToast('涂色编辑器未加载', 'error');
+            showToast(window.t ? window.t('fill_editor_not_loaded') : '涂色编辑器未加载', 'error');
           }
         });
       }
@@ -5335,7 +5335,7 @@
           if(connectedShotFrameNode.updatePreview){
             connectedShotFrameNode.updatePreview();
           }
-          showToast('已设置为视频首帧', 'success');
+          showToast(window.t ? window.t('set_as_first_frame_msg') : '已设置为视频首帧', 'success');
           try{ autoSaveWorkflow(); } catch(e){}
         }
       });
