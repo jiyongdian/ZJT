@@ -36,10 +36,7 @@ def upgrade():
           `completed_at` datetime DEFAULT NULL COMMENT '完成时间',
           `failed_at` datetime DEFAULT NULL COMMENT '失败时间',
           PRIMARY KEY (`id`),
-          KEY `idx_implementation` (`implementation`),
-          KEY `idx_status` (`status`),
           KEY `idx_user_id` (`user_id`),
-          KEY `idx_created_at` (`created_at`),
           KEY `idx_impl_status` (`implementation`, `status`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='通用异步任务表';
     """)
