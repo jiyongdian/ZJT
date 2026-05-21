@@ -4,6 +4,7 @@ Audio generation task processing
 import logging
 from datetime import datetime, timedelta
 import uuid
+from typing import Optional, Dict, Any
 from model import TasksModel, AIAudioModel
 from config.constant import (
     TASK_TYPE_GENERATE_AUDIO,
@@ -14,7 +15,8 @@ from config.constant import (
     TASK_STATUS_QUEUED,
     TASK_STATUS_PROCESSING,
     TASK_STATUS_COMPLETED,
-    TASK_STATUS_FAILED
+    TASK_STATUS_FAILED,
+    RunningHubAudioConfig
 )
 from utils.index_tts_util import generate_audio, validate_emotion_vector
 import os
@@ -316,3 +318,123 @@ async def process_task_with_retry(task_type, process_func):
 async def generate_audio_task(app=None):
     """Audio generation task entry point"""
     await process_task_with_retry(TASK_TYPE_GENERATE_AUDIO, process_generate_audio)
+
+
+def build_character_audio_text(character_data: Dict[str, Any], custom_text: Optional[str]) -> str:
+    """
+    构建角色音频文本
+
+    Args:
+        character_data: 角色数据字典
+        custom_text: 自定义文本（可选）
+
+    Returns:
+        str: 音频文本
+    """
+    if custom_text and custom_text.strip():
+        return custom_text.strip()
+    character_name = character_data.get('name') or '我'
+    identity = character_data.get('identity') or '故事中的角色'
+    return f"大家好，我是{character_name}，是{identity}。很高兴在这个故事里与你相遇。"
+
+
+async def build_character_audio_style_prompt(
+    character_data: Dict[str, Any],
+    custom_prompt: Optional[str],
+    model: Optional[str] = None,
+    vendor_id: Optional[int] = None
+) -> str:
+    """
+    构建角色音色风格提示词。
+    如果用户提供了自定义提示词，直接返回；
+    否则调用 LLM 根据角色信息自动生成专业的音色描述。
+
+    Args:
+        character_data: 角色数据字典
+        custom_prompt: 自定义提示词（可选）
+        model: LLM 模型名称（可选）
+        vendor_id: 供应商 ID（可选）
+
+    Returns:
+        str: 音色风格提示词
+    """
+    # 1. 用户自定义提示词优先
+    if custom_prompt and custom_prompt.strip():
+        return custom_prompt.strip()
+
+    # 2. 角色数据为空时返回默认提示词
+    if not character_data:
+        return RunningHubAudioConfig.AUDIO_STYLE_DEFAULT_PROMPT
+
+    # 3. 构建角色信息文本
+    field_mapping = {
+        'name': '角色名',
+        'age': '年龄',
+        'identity': '身份',
+        'personality': '性格',
+        'behavior': '行为习惯',
+        'other_info': '补充设定',
+    }
+    character_lines = []
+    for key, label in field_mapping.items():
+        value = character_data.get(key)
+        if value and str(value).strip():
+            character_lines.append(f"{label}：{str(value).strip()}")
+
+    if not character_lines:
+        return RunningHubAudioConfig.AUDIO_STYLE_DEFAULT_PROMPT
+
+    # 4. 前端未传模型信息时 fallback
+    if not model:
+        return RunningHubAudioConfig.AUDIO_STYLE_DEFAULT_PROMPT
+
+    # 5. 构造 LLM 提示词
+    system_prompt = (
+        "你是一位专业的声音设计师，擅长根据角色设定生成精准的音色描述。\n\n"
+        "你的任务是根据用户提供的角色信息，生成一段简洁的音色描述提示词，用于 AI 音频生成系统。\n\n"
+        "要求：\n"
+        '1. 描述必须聚焦于"声音特征"：音色、音调、语速、语气、年龄感、性别特征\n'
+        "2. 长度控制在一两句话以内（20-50字）\n"
+        "3. 只输出音色描述本身，不要输出任何解释、前缀或多余内容\n"
+        "4. 如果角色信息包含明确的声音相关描述（如性格急躁、温柔等），据此推断声音特征\n"
+        "5. 如果角色信息不足以推断声音特征，根据角色的年龄、身份、性别做合理推断\n\n"
+        "参考示例：\n"
+        '- "一位30岁左右的成熟男性，声音沉稳有力"\n'
+        '- "年轻女性，声音清脆悦耳，约25岁"\n'
+        '- "专业新闻主播，声音清晰标准，语速适中"\n'
+        '- "童话故事讲述者，声音温柔梦幻，略带神秘感"\n'
+        '- "性格急躁的少年，声音清亮，语速偏快，充满活力"'
+    )
+    user_prompt = "请根据以下角色信息，生成音色描述提示词：\n\n" + "\n".join(character_lines) + "\n\n请直接输出音色描述："
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    # 6. 调用 LLM（使用 asyncio.to_thread 包装同步调用）
+    try:
+        from llm.llm_client_factory import get_llm_client
+        import asyncio
+
+        llm_client = get_llm_client(model, vendor_id=vendor_id)
+        response = await asyncio.to_thread(
+            llm_client.call_api,
+            model=model,
+            messages=messages,
+            temperature=RunningHubAudioConfig.AUDIO_STYLE_LLM_TEMPERATURE,
+            max_tokens=RunningHubAudioConfig.AUDIO_STYLE_LLM_MAX_TOKENS,
+        )
+
+        result = response.choices[0].message.content.strip() if response and response.choices else ""
+
+        if result:
+            logger.info(f"LLM 生成音色描述成功: {result}")
+            return result
+        else:
+            logger.warning("LLM 返回空内容，使用默认音色提示词")
+            return RunningHubAudioConfig.AUDIO_STYLE_DEFAULT_PROMPT
+
+    except Exception as e:
+        logger.warning(f"LLM 生成音色描述失败，使用默认提示词: {e}")
+        return RunningHubAudioConfig.AUDIO_STYLE_DEFAULT_PROMPT
