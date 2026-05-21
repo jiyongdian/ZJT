@@ -21,7 +21,6 @@ def upgrade():
     op.execute("""
         CREATE TABLE IF NOT EXISTS `async_tasks` (
           `id` int NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-          `task_key` varchar(255) NOT NULL COMMENT '任务唯一键',
           `implementation` int unsigned NOT NULL DEFAULT '0' COMMENT '实现 ID（参考 AsyncTaskImplementationId）',
           `external_task_id` varchar(100) DEFAULT NULL COMMENT '外部任务 ID（如 RunningHub taskId）',
           `user_id` int NOT NULL COMMENT '用户 ID',
@@ -37,7 +36,6 @@ def upgrade():
           `completed_at` datetime DEFAULT NULL COMMENT '完成时间',
           `failed_at` datetime DEFAULT NULL COMMENT '失败时间',
           PRIMARY KEY (`id`),
-          UNIQUE KEY `uk_task_key` (`task_key`),
           KEY `idx_implementation` (`implementation`),
           KEY `idx_status` (`status`),
           KEY `idx_user_id` (`user_id`),

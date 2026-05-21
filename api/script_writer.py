@@ -2028,7 +2028,7 @@ async def generate_character_reference_audio(
     """
     提交角色参考音频生成任务（异步非阻塞）
 
-    提交后立即返回 task_key，前端通过 GET /script-writer/characters/reference-audio-status/{task_key} 轮询结果
+    提交后立即返回任务 ID，前端通过 GET /script-writer/characters/reference-audio-status/{task_id} 轮询结果
     """
     try:
         if not user_id:
@@ -2067,10 +2067,8 @@ async def generate_character_reference_audio(
         runninghub_task_id = submit_result['project_id']
 
         # 写入异步任务表，由 scheduler 后台轮询
-        import uuid as _uuid
         from model import AsyncTasksModel
         from config.unified_config import AsyncTaskImplementationId
-        task_key = f"audio_{_uuid.uuid4().hex[:12]}"
 
         # 构建任务参数（JSON 格式）
         params = {
@@ -2080,8 +2078,7 @@ async def generate_character_reference_audio(
             'text': text
         }
 
-        AsyncTasksModel.create(
-            task_key=task_key,
+        task_id = AsyncTasksModel.create(
             implementation=AsyncTaskImplementationId.RUNNINGHUB_AUDIO,
             user_id=int(user_id),
             external_task_id=runninghub_task_id,
@@ -2091,22 +2088,22 @@ async def generate_character_reference_audio(
 
         return JSONResponse({
             'success': True,
-            'task_key': task_key,
+            'task_id': task_id,
             'runninghub_task_id': runninghub_task_id,
-            'message': '音频生成任务已提交，请通过 task_key 查询状态'
+            'message': '音频生成任务已提交，请通过 task_id 查询状态'
         })
     except Exception as e:
         logger.error(f'生成角色参考音频失败: {str(e)}', exc_info=True)
         return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
 
 
-@router.get('/script-writer/characters/reference-audio-status/{task_key}')
+@router.get('/script-writer/characters/reference-audio-status/{task_id}')
 @require_permission("character:view")
-async def get_reference_audio_status(request: Request, task_key: str):
+async def get_reference_audio_status(request: Request, task_id: int):
     """查询角色参考音频生成任务状态"""
     try:
         from model import AsyncTasksModel, AsyncTaskStatus
-        task = AsyncTasksModel.get_by_task_key(task_key)
+        task = AsyncTasksModel.get_by_id(task_id)
         if not task:
             return JSONResponse({'success': False, 'error': '任务不存在'}, status_code=404)
 
@@ -2114,7 +2111,7 @@ async def get_reference_audio_status(request: Request, task_key: str):
             return JSONResponse({
                 'success': True,
                 'status': 'SUCCESS',
-                'task_key': task_key,
+                'task_id': task_id,
                 'result_url': task.result_url,
                 'character_id': task.get_params_dict().get('character_id')
             })
@@ -2122,21 +2119,21 @@ async def get_reference_audio_status(request: Request, task_key: str):
             return JSONResponse({
                 'success': True,
                 'status': 'FAILED',
-                'task_key': task_key,
+                'task_id': task_id,
                 'error': task.error_message or '音频生成失败'
             })
         elif task.status == AsyncTaskStatus.TIMEOUT:
             return JSONResponse({
                 'success': True,
                 'status': 'TIMEOUT',
-                'task_key': task_key,
+                'task_id': task_id,
                 'error': '任务超时'
             })
         else:
             return JSONResponse({
                 'success': True,
                 'status': 'RUNNING',
-                'task_key': task_key
+                'task_id': task_id
             })
     except Exception as e:
         logger.error(f'查询音频任务状态失败: {str(e)}')

@@ -4,12 +4,6 @@ Async Tasks Model - Database operations for async_tasks table
 
 参考 ai_tools 的 implementation 模式，通过 implementation (数字 ID) 区分不同的异步驱动，
 每个驱动负责自己的 params 序列化/反序列化和业务逻辑。
-
-使用方式：
-1. API 提交任务时，指定 implementation (数字 ID) 和 params（JSON 格式）
-2. Driver 负责将 params 提交到外部服务
-3. Scheduler 后台轮询，调用 Driver 的 check_status() 方法
-4. Driver 根据结果更新数据库
 """
 from typing import List, Optional, Dict, Any
 from .database import execute_query, execute_update, execute_insert
@@ -33,8 +27,7 @@ class AsyncTask:
 
     def __init__(self, **kwargs):
         self.id = kwargs.get('id')
-        self.task_key = kwargs.get('task_key')
-        self.implementation = kwargs.get('implementation')  # 改为 implementation (int)
+        self.implementation = kwargs.get('implementation')
         self.external_task_id = kwargs.get('external_task_id')
         self.user_id = kwargs.get('user_id')
         self.params = kwargs.get('params')  # JSON 字符串或已解析的 dict
@@ -75,7 +68,6 @@ class AsyncTask:
     def to_dict(self) -> Dict[str, Any]:
         return {
             'id': self.id,
-            'task_key': self.task_key,
             'implementation': self.implementation,
             'external_task_id': self.external_task_id,
             'user_id': self.user_id,
@@ -98,7 +90,6 @@ class AsyncTasksModel:
 
     @staticmethod
     def create(
-        task_key: str,
         implementation: int,
         user_id: int,
         external_task_id: Optional[str] = None,
@@ -109,7 +100,6 @@ class AsyncTasksModel:
         创建新的异步任务记录
 
         Args:
-            task_key: 任务唯一键
             implementation: 实现 ID（参考 AsyncTaskImplementationId 常量）
             user_id: 用户 ID
             external_task_id: 外部任务 ID（可选，如 RunningHub taskId）
@@ -123,31 +113,31 @@ class AsyncTasksModel:
 
         sql = """
             INSERT INTO async_tasks
-            (task_key, implementation, user_id, external_task_id, params, status, max_attempts)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            (implementation, user_id, external_task_id, params, status, max_attempts)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """
         db_params = (
-            task_key, implementation, user_id, external_task_id,
+            implementation, user_id, external_task_id,
             params_json, AsyncTaskStatus.QUEUED, max_attempts
         )
 
         try:
             record_id = execute_insert(sql, db_params)
-            logger.info(f"Created async task: {task_key}, implementation: {implementation}, record_id: {record_id}")
+            logger.info(f"Created async task: id={record_id}, implementation={implementation}")
             return record_id
         except Exception as e:
-            logger.error(f"Failed to create async task {task_key}: {e}")
+            logger.error(f"Failed to create async task: {e}")
             raise
 
     @staticmethod
-    def get_by_task_key(task_key: str) -> Optional[AsyncTask]:
-        """根据 task_key 获取任务"""
-        sql = "SELECT * FROM async_tasks WHERE task_key = %s"
+    def get_by_id(record_id: int) -> Optional[AsyncTask]:
+        """根据 ID 获取任务"""
+        sql = "SELECT * FROM async_tasks WHERE id = %s"
         try:
-            result = execute_query(sql, (task_key,), fetch_one=True)
+            result = execute_query(sql, (record_id,), fetch_one=True)
             return AsyncTask(**result) if result else None
         except Exception as e:
-            logger.error(f"Failed to get async task {task_key}: {e}")
+            logger.error(f"Failed to get async task by id {record_id}: {e}")
             raise
 
     @staticmethod
@@ -266,7 +256,7 @@ class AsyncTasksModel:
 
     @staticmethod
     def update_status(
-        task_key: str,
+        record_id: int,
         status: int,
         error_message: str = None,
         result_url: str = None,
@@ -276,7 +266,7 @@ class AsyncTasksModel:
         更新任务状态
 
         Args:
-            task_key: 任务唯一键
+            record_id: 记录 ID
             status: 新状态
             error_message: 错误信息（可选）
             result_url: 结果 URL（可选）
@@ -306,37 +296,37 @@ class AsyncTasksModel:
         elif status in (AsyncTaskStatus.FAILED, AsyncTaskStatus.TIMEOUT):
             update_fields.append("failed_at = NOW()")
 
-        params.append(task_key)
-        sql = f"UPDATE async_tasks SET {', '.join(update_fields)} WHERE task_key = %s"
+        params.append(record_id)
+        sql = f"UPDATE async_tasks SET {', '.join(update_fields)} WHERE id = %s"
 
         try:
             affected = execute_update(sql, tuple(params))
-            logger.info(f"Updated async task {task_key} status to {status}")
+            logger.info(f"Updated async task {record_id} status to {status}")
             return affected
         except Exception as e:
-            logger.error(f"Failed to update async task {task_key}: {e}")
+            logger.error(f"Failed to update async task {record_id}: {e}")
             raise
 
     @staticmethod
-    def update_external_task_id(task_key: str, external_task_id: str) -> int:
+    def update_external_task_id(record_id: int, external_task_id: str) -> int:
         """更新外部任务 ID（用于任务提交后回填）"""
-        sql = "UPDATE async_tasks SET external_task_id = %s WHERE task_key = %s"
+        sql = "UPDATE async_tasks SET external_task_id = %s WHERE id = %s"
         try:
-            affected = execute_update(sql, (external_task_id, task_key))
-            logger.info(f"Updated external_task_id for {task_key}: {external_task_id}")
+            affected = execute_update(sql, (external_task_id, record_id))
+            logger.info(f"Updated external_task_id for id={record_id}: {external_task_id}")
             return affected
         except Exception as e:
-            logger.error(f"Failed to update external_task_id for {task_key}: {e}")
+            logger.error(f"Failed to update external_task_id for id={record_id}: {e}")
             raise
 
     @staticmethod
-    def increment_try_count(task_key: str) -> int:
+    def increment_try_count(record_id: int) -> int:
         """增加任务尝试次数"""
-        sql = "UPDATE async_tasks SET try_count = try_count + 1 WHERE task_key = %s"
+        sql = "UPDATE async_tasks SET try_count = try_count + 1 WHERE id = %s"
         try:
-            return execute_update(sql, (task_key,))
+            return execute_update(sql, (record_id,))
         except Exception as e:
-            logger.error(f"Failed to increment try_count for {task_key}: {e}")
+            logger.error(f"Failed to increment try_count for id={record_id}: {e}")
             raise
 
     @staticmethod
@@ -391,7 +381,6 @@ class AsyncTasksModel:
 CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS `async_tasks` (
   `id` int NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `task_key` varchar(255) NOT NULL COMMENT '任务唯一键',
   `implementation` int unsigned NOT NULL DEFAULT '0' COMMENT '实现 ID（参考 AsyncTaskImplementationId）',
   `external_task_id` varchar(100) DEFAULT NULL COMMENT '外部任务 ID（如 RunningHub taskId）',
   `user_id` int NOT NULL COMMENT '用户 ID',
@@ -407,7 +396,6 @@ CREATE TABLE IF NOT EXISTS `async_tasks` (
   `completed_at` datetime DEFAULT NULL COMMENT '完成时间',
   `failed_at` datetime DEFAULT NULL COMMENT '失败时间',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_task_key` (`task_key`),
   KEY `idx_implementation` (`implementation`),
   KEY `idx_status` (`status`),
   KEY `idx_user_id` (`user_id`),
