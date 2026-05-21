@@ -584,6 +584,22 @@
   "video_prompt_suffix_hint": "This suffix will be automatically added to the prompt when generating videos through shot nodes",
   "coloring_undo": "Undo",
   "coloring_clear": "Clear",
-  "coloring_confirm": "Confirm"
+  "coloring_confirm": "Confirm",
+  "select_world_label": "Select World",
+  "select_world_placeholder": "Please select a world first...",
+  "world_not_selected": "Please select a world first",
+  "search_character_label": "Search Character",
+  "search_character_placeholder": "Enter character name to search...",
+  "search_location_label": "Search Scene",
+  "search_location_placeholder": "Enter scene name to search...",
+  "search_props_label": "Search Props",
+  "search_props_placeholder": "Enter props name to search...",
+  "style_reference_image": "Reference Image",
+  "style_composition_label": "Composition Tendency",
+  "style_composition_placeholder": "E.g.: Rule of thirds, Symmetry, Golden spiral, etc.",
+  "style_composition_hint": "Composition tendency will be added to the prompt when generating images",
+  "style_image_label": "Select file",
+  "style_image_not_selected": "No file selected",
+  "style_remove_image": "Remove image"
 }
 

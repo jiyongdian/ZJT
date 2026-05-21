@@ -584,6 +584,22 @@
   "video_prompt_suffix_hint": "此后缀将在通过镜头节点生成视频时自动添加到提示词末尾",
   "coloring_undo": "撤销",
   "coloring_clear": "清空",
-  "coloring_confirm": "确认"
+  "coloring_confirm": "确认",
+  "select_world_label": "选择世界",
+  "select_world_placeholder": "请先选择世界...",
+  "world_not_selected": "请先选择世界",
+  "search_character_label": "搜索角色",
+  "search_character_placeholder": "输入角色名称搜索...",
+  "search_location_label": "搜索场景",
+  "search_location_placeholder": "输入场景名称搜索...",
+  "search_props_label": "搜索道具",
+  "search_props_placeholder": "输入道具名称搜索...",
+  "style_reference_image": "参考图",
+  "style_composition_label": "构图倾向",
+  "style_composition_placeholder": "如：三分法、对称构图、黄金螺旋等",
+  "style_composition_hint": "构图倾向将附加到图片生成的提示词中",
+  "style_image_label": "选择文件",
+  "style_image_not_selected": "未选择文件",
+  "style_remove_image": "移除图片"
 }
 

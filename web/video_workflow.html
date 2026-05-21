@@ -311,7 +311,7 @@
               <a href="/image-style-guide" target="_blank" style="margin-left: 8px; font-size: 12px; color: #3b82f6; text-decoration: none; font-weight: normal; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'" title="${window.t ? window.t('style_guide_link') : '查看画风说明'}" data-i18n="style_guide_link">${window.t ? window.t('style_guide_link') : '查看画风说明'}</a>
               <span style="margin-left: 8px; font-size: 12px; color: #6b7280; font-weight: normal;" data-i18n="style_guide_intro">${window.t ? window.t('style_guide_intro') : '如果您不知道如何描述画风，可以在其他网站寻找画风。例如：'}<a href="https://bq3mlz1jiae.feishu.cn/wiki/LBw5w7zZaiuQhuk4sT7c42zcn0e#share-NKbIdQfDdouM8xx3LxIcZrPHn7c" target="_blank" style="color: #3b82f6; text-decoration: none; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'">即梦</a>。</span>
             </label>
-            <input type="text" id="styleNameInput" list="stylePresets" placeholder="${window.t ? window.t('style_placeholder') : '选择或输入画风'}" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" data-i18n="style_placeholder" />
+            <input type="text" id="styleNameInput" list="stylePresets" placeholder="选择或输入画风" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" data-i18n="style_placeholder:placeholder" />
             <datalist id="stylePresets">
               <option value="漫画风格">
               <option value="写实风格">
@@ -336,17 +336,17 @@
             <button type="button" id="styleSyncBtn" style="padding: 6px 14px; background: #3b82f6; color: #ffffff; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; white-space: nowrap; font-weight: 500;" data-i18n="sync_world_style">${window.t ? window.t('sync_world_style') : '同步世界画风'}</button>
           </div>
           <div class="field">
-            <label class="label" style="color: #0f172a;">参考图</label>
+            <label class="label" style="color: #0f172a;" data-i18n="style_reference_image">${window.t ? window.t('style_reference_image') : '参考图'}</label>
             <input type="file" id="styleImageInput" accept="image/*" style="width: 100%; background: #f9fafb; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 8px; font-size: 13px;" />
             <div id="styleImagePreview" style="margin-top: 12px; display: none;">
               <img id="styleImagePreviewImg" style="max-width: 100%; max-height: 200px; border-radius: 8px; border: 1px solid #e5e7eb; object-fit: contain;" />
-              <button type="button" id="styleImageRemoveBtn" style="margin-top: 8px; padding: 6px 12px; background: #f3f4f6; color: #111827; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; cursor: pointer;">移除图片</button>
+              <button type="button" id="styleImageRemoveBtn" style="margin-top: 8px; padding: 6px 12px; background: #f3f4f6; color: #111827; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; cursor: pointer;" data-i18n="style_remove_image">${window.t ? window.t('style_remove_image') : '移除图片'}</button>
             </div>
           </div>
           <div class="field">
-            <label class="label" style="color: #0f172a;">构图倾向</label>
-            <input type="text" id="compositionInput" placeholder="如：三分法、对称构图、黄金螺旋等" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" />
-            <div style="margin-top: 4px; font-size: 12px; color: #6b7280;">构图倾向将附加到图片生成的提示词中</div>
+            <label class="label" style="color: #0f172a;" data-i18n="style_composition_label">${window.t ? window.t('style_composition_label') : '构图倾向'}</label>
+            <input type="text" id="compositionInput" placeholder="如：三分法、对称构图、黄金螺旋等" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" data-i18n="style_composition_placeholder:placeholder" />
+            <div style="margin-top: 4px; font-size: 12px; color: #6b7280;" data-i18n="style_composition_hint">${window.t ? window.t('style_composition_hint') : '构图倾向将附加到图片生成的提示词中'}</div>
           </div>
         </div>
       </div>
@@ -367,10 +367,10 @@
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
         <div style="display: flex; flex-direction: column; gap: 16px;">
           <div class="field">
-            <label class="label" style="color: #0f172a;">选择世界</label>
+            <label class="label" style="color: #0f172a;" data-i18n="select_world_label">${window.t ? window.t('select_world_label') : '选择世界'}</label>
             <div style="display: flex; gap: 8px; align-items: center;">
               <select id="characterWorldSelect" style="flex: 1; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;">
-                <option value="">请先选择世界...</option>
+                <option value="" data-i18n="select_world_placeholder">${window.t ? window.t('select_world_placeholder') : '请先选择世界...'}</option>
               </select>
               <a id="characterCreateWorldBtn" href="javascript:void(0)" style="padding: 10px 16px; color: #22c55e; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#22c55e'" onmouseout="this.style.borderColor='transparent'" data-i18n="create_world">${window.t ? window.t('create_world') : '创建世界'}</a>
             </div>
@@ -383,8 +383,8 @@
             </div>
           </div>
           <div id="characterList" style="max-height: 400px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px;">
-            <div style="text-align: center; color: #9ca3af; padding: 40px 20px;">
-              请先选择世界
+            <div style="text-align: center; color: #9ca3af; padding: 40px 20px;" data-i18n="world_not_selected">
+              ${window.t ? window.t('world_not_selected') : '请先选择世界'}
             </div>
           </div>
         </div>
@@ -402,12 +402,12 @@
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
         <div style="display: flex; flex-direction: column; gap: 16px;">
           <div class="field">
-            <label class="label" style="color: #0f172a;">选择世界</label>
+            <label class="label" style="color: #0f172a;" data-i18n="select_world_label">${window.t ? window.t('select_world_label') : '选择世界'}</label>
             <div style="display: flex; gap: 8px; align-items: center;">
               <select id="locationWorldSelect" style="flex: 1; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;">
-                <option value="">请先选择世界...</option>
+                <option value="" data-i18n="select_world_placeholder">${window.t ? window.t('select_world_placeholder') : '请先选择世界...'}</option>
               </select>
-              <a id="locationCreateWorldBtn" href="javascript:void(0)" style="padding: 10px 16px; color: #22c55e; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#22c55e'" onmouseout="this.style.borderColor='transparent'">创建世界</a>
+              <a id="locationCreateWorldBtn" href="javascript:void(0)" style="padding: 10px 16px; color: #22c55e; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#22c55e'" onmouseout="this.style.borderColor='transparent'" data-i18n="create_world">${window.t ? window.t('create_world') : '创建世界'}</a>
             </div>
           </div>
           <div class="field">
@@ -418,8 +418,8 @@
             </div>
           </div>
           <div id="locationList" style="max-height: 400px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px;">
-            <div style="text-align: center; color: #9ca3af; padding: 40px 20px;">
-              请先选择世界
+            <div style="text-align: center; color: #9ca3af; padding: 40px 20px;" data-i18n="world_not_selected">
+              ${window.t ? window.t('world_not_selected') : '请先选择世界'}
             </div>
           </div>
         </div>
@@ -888,7 +888,7 @@
         <div style="display: flex; flex-direction: column; gap: 16px;">
           <div class="field">
             <label class="label" style="color: #0f172a;">提示词后缀</label>
-            <textarea id="videoPromptSuffixInput" placeholder="${window.t ? window.t('video_prompt_suffix_placeholder') : '输入视频提示词后缀，生成视频时会自动添加到提示词末尾...'}" rows="6" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;" data-i18n="video_prompt_suffix_placeholder"></textarea>
+            <textarea id="videoPromptSuffixInput" placeholder="输入视频提示词后缀，生成视频时会自动添加到提示词末尾..." rows="6" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;" data-i18n="video_prompt_suffix_placeholder:placeholder"></textarea>
             <div style="margin-top: 8px; font-size: 12px; color: #6b7280;" data-i18n="video_prompt_suffix_hint">
               ${window.t ? window.t('video_prompt_suffix_hint') : '此后缀将在通过镜头节点生成视频时自动添加到提示词末尾'}
             </div>
