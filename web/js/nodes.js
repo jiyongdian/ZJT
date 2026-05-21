@@ -201,7 +201,7 @@
           console.log('Position:', { x: node.x, y: node.y });
           console.log('Data:', node.data);
           console.log('完整节点对象:', node);
-          showToast(`节点 ${node.title} 信息已输出到控制台`, 'info');
+          showToast(window.t ? window.t('node_info_output').replace('${node.title}', node.title) : `节点 ${node.title} 信息已输出到控制台`, 'info');
         });
         
         // 查找按钮容器（场景节点等有按钮容器的情况）
@@ -390,24 +390,24 @@
       el.style.top = node.y + 'px';
 
       el.innerHTML = `
-        <div class="port input" title="输入（连接图生视频节点或角色节点）"></div>
-        <div class="port output" title="输出（连接到对话组节点作为情感参考）"></div>
+        <div class="port input" title="${window.t ? window.t('node_input_port') : '输入（连接图生视频节点或角色节点）'}"></div>
+        <div class="port output" title="${window.t ? window.t('node_output_port_dialogue') : '输出（连接到对话组节点作为情感参考）'}"></div>
         <div class="node-header">
           <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M10 9.5V14.5L14.5 12L10 9.5Z" fill="currentColor"/></svg>${node.title}</div>
-          <button class="icon-btn" title="删除">×</button>
+          <button class="icon-btn" title="${window.t ? window.t('node_delete_btn') : '删除'}">×</button>
         </div>
         <div class="node-body">
           <div class="field field-collapsible">
-            <div class="label">视频</div>
+            <div class="label" data-i18n="node_video_label">${window.t ? window.t('node_video_label') : '视频'}</div>
             <input class="video-file" type="file" accept="video/*" />
           </div>
           <div class="field field-always-visible video-preview-field" style="display:none;">
-            <div class="label">预览</div>
+            <div class="label" data-i18n="node_preview_label">${window.t ? window.t('node_preview_label') : '预览'}</div>
             <div class="video-preview">
               <video class="video-thumb" playsinline></video>
               <div class="video-preview-actions">
-                <button class="vp-btn vp-play" type="button" aria-label="播放">▶</button>
-                <button class="vp-btn vp-zoom" type="button" aria-label="放大">⤢</button>
+                <button class="vp-btn vp-play" type="button" aria-label="${window.t ? window.t('node_play_btn') : '播放'}">▶</button>
+                <button class="vp-btn vp-zoom" type="button" aria-label="${window.t ? window.t('node_zoom_btn') : '放大'}">⤢</button>
               </div>
             </div>
             <div class="gen-meta video-name"></div>
@@ -415,9 +415,9 @@
           <div class="field field-collapsible video-preview-actions-field" style="display:none;">
             <div class="preview-row" style="margin-top: 8px; justify-content: space-between;">
               <div style="display: flex; gap: 8px;">
-                <button class="mini-btn video-add-timeline" type="button">加时间轴</button>
-                <button class="mini-btn video-download" type="button">下载</button>
-                <button class="mini-btn video-clear" type="button">清除</button>
+                <button class="mini-btn video-add-timeline" type="button" data-i18n="node_add_timeline_btn">${window.t ? window.t('node_add_timeline_btn') : '加时间轴'}</button>
+                <button class="mini-btn video-download" type="button" data-i18n="node_download_btn">${window.t ? window.t('node_download_btn') : '下载'}</button>
+                <button class="mini-btn video-clear" type="button" data-i18n="node_clear_btn">${window.t ? window.t('node_clear_btn') : '清除'}</button>
               </div>
             </div>
           </div>
@@ -587,23 +587,23 @@
       downloadBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         if(!node.data.url){
-          showToast('没有可下载的视频', 'error');
+          showToast(window.t ? window.t('no_downloadable_video') : '没有可下载的视频', 'error');
           return;
         }
-        
+
         // 生成文件名
         const now = new Date();
-        const dateStr = now.getFullYear().toString() + 
-                       (now.getMonth() + 1).toString().padStart(2, '0') + 
+        const dateStr = now.getFullYear().toString() +
+                       (now.getMonth() + 1).toString().padStart(2, '0') +
                        now.getDate().toString().padStart(2, '0');
-        const timeStr = now.getHours().toString().padStart(2, '0') + 
+        const timeStr = now.getHours().toString().padStart(2, '0') +
                        now.getMinutes().toString().padStart(2, '0');
         const filename = `workflow_video_${dateStr}_${timeStr}.mp4`;
-        
+
         // 使用后端代理下载，绕过CORS
         const downloadUrl = `/api/download?url=${encodeURIComponent(node.data.url)}&filename=${encodeURIComponent(filename)}`;
         window.open(downloadUrl, '_blank');
-        showToast('开始下载', 'success');
+        showToast(window.t ? window.t('start_download') : '开始下载', 'success');
       });
 
       // 添加调试按钮
@@ -648,14 +648,14 @@
       el.style.top = node.y + 'px';
 
       el.innerHTML = `
-        <div class="port output" title="输出（连接到图生视频节点）"></div>
+        <div class="port output" title="${window.t ? window.t('node_output_port_video') : '输出（连接到图生视频节点）'}"></div>
         <div class="node-header">
           <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${node.title}</div>
-          <button class="icon-btn" title="删除">×</button>
+          <button class="icon-btn" title="${window.t ? window.t('node_delete_btn') : '删除'}">×</button>
         </div>
         <div class="node-body">
           <div class="field field-collapsible">
-            <div class="label">音频文件</div>
+            <div class="label" data-i18n="node_audio_file_label">${window.t ? window.t('node_audio_file_label') : '音频文件'}</div>
             <input class="audio-file" type="file" accept="audio/*" />
           </div>
           <div class="field field-always-visible audio-preview-field" style="display:none;">
@@ -666,7 +666,7 @@
           </div>
           <div class="field field-collapsible audio-preview-actions-field" style="display:none;">
             <div class="preview-row" style="margin-top: 4px;">
-              <button class="mini-btn audio-clear" type="button">清除</button>
+              <button class="mini-btn audio-clear" type="button" data-i18n="node_clear_btn">${window.t ? window.t('node_clear_btn') : '清除'}</button>
             </div>
           </div>
         </div>
@@ -3618,7 +3618,7 @@
         const canAdd = maxCount - currentCount;
 
         if(canAdd <= 0) {
-          showToast(`已达到最大数量${maxCount}张参考图，请先删除一些图片`, 'error');
+          showToast(window.t ? window.t('max_reference_images').replace('${maxCount}', maxCount) : `已达到最大数量${maxCount}张参考图，请先删除一些图片`, 'error');
           referenceFileEl.value = '';
           return;
         }
@@ -3627,7 +3627,7 @@
 
         // 超出限制时提示还能添加几张
         if(selectedFiles.length > canAdd) {
-          showToast(`最多还能添加${canAdd}张参考图，已自动截取前${canAdd}张`, 'info');
+          showToast(window.t ? window.t('auto_truncate_images').replace('${canAdd}', canAdd) : `最多还能添加${canAdd}张参考图，已自动截取前${canAdd}张`, 'info');
         }
 
         const filesToUpload = selectedFiles.slice(0, canAdd);
@@ -3635,7 +3635,7 @@
 
         // 上传过程中禁用文件输入并显示进度
         referenceFileEl.disabled = true;
-        showToast(`正在上传参考图 (0/${totalToUpload})...`, 'info');
+        showToast(window.t ? window.t('uploading_reference_image').replace('${totalToUpload}', totalToUpload) : `正在上传参考图 (0/${totalToUpload})...`, 'info');
 
         let uploadedCount = 0;
         for(const file of filesToUpload) {
@@ -3646,7 +3646,7 @@
           }
           uploadedCount++;
           if(totalToUpload > 1 && uploadedCount < totalToUpload) {
-            showToast(`正在上传参考图 (${uploadedCount}/${totalToUpload})...`, 'info');
+            showToast(window.t ? window.t('uploading_reference_image_progress').replace('${uploadedCount}', uploadedCount).replace('${totalToUpload}', totalToUpload) : `正在上传参考图 (${uploadedCount}/${totalToUpload})...`, 'info');
           }
         }
 
@@ -3655,7 +3655,7 @@
         referenceFileEl.value = '';
 
         const totalCount = (node.data.referenceUrls || []).length;
-        showToast(`已上传 ${uploadedCount} 张参考图，当前共 ${totalCount}/${maxCount} 张`, 'success');
+        showToast(window.t ? window.t('reference_images_uploaded').replace('${uploadedCount}', uploadedCount).replace('${totalCount}', totalCount).replace('${maxCount}', maxCount) : `已上传 ${uploadedCount} 张参考图，当前共 ${totalCount}/${maxCount} 张`, 'success');
       });
       
       referenceClearBtn.addEventListener('click', (e) => {
@@ -3705,7 +3705,7 @@
             }
           }
           renderAudioPreview();
-          showToast('音频上传成功', 'success');
+          showToast(window.t ? window.t('audio_file_upload_success') : '音频上传成功', 'success');
         }
         audioFileEl.value = '';
       });
@@ -3725,7 +3725,7 @@
         node.data.videoUrls.forEach((item, idx) => {
           const el = document.createElement('div');
           el.className = 'media-item';
-          el.innerHTML = `<span class="media-name" title="${item.name}">🎬 视频${idx + 1}</span><span class="remove-btn">×</span>`;
+          el.innerHTML = `<span class="media-name" title="${item.name}">🎬 ${window.t ? window.t('video') : '视频'}${idx + 1}</span><span class="remove-btn">×</span>`;
           el.querySelector('.remove-btn').addEventListener('click', (e) => {
             e.stopPropagation();
             const removedUrl = item.url;
@@ -3755,7 +3755,7 @@
             }
           }
           renderVideoPreview();
-          showToast('视频上传成功', 'success');
+          showToast(window.t ? window.t('video_file_upload_success') : '视频上传成功', 'success');
         }
         videoFileEl.value = '';
       });
@@ -4135,8 +4135,8 @@
         if(!prompt){
           genStatus.style.display = 'block';
           genStatus.style.color = '#dc2626';
-          genStatus.textContent = '请先输入提示词';
-          showToast('请先输入提示词', 'error');
+          genStatus.textContent = window.t ? window.t('input_prompt_first') : '请先输入提示词';
+          showToast(window.t ? window.t('input_prompt_first') : '请先输入提示词', 'error');
           return;
         }
 
@@ -4734,7 +4734,7 @@
           renderImageConnections();
           renderVideoConnections();
           updateComputingPowerDisplay();  // 更新算力显示
-          showToast('首帧图片上传成功', 'success');
+          showToast(window.t ? window.t('first_frame_upload_success') : '首帧图片上传成功', 'success');
         } else {
           startPreviewRow.style.display = 'none';
           startPreviewImg.removeAttribute('src');
@@ -4763,7 +4763,7 @@
           renderImageConnections();
           renderVideoConnections();
           updateComputingPowerDisplay();  // 更新算力显示
-          showToast('尾帧图片上传成功', 'success');
+          showToast(window.t ? window.t('last_frame_upload_success') : '尾帧图片上传成功', 'success');
         } else {
           endPreviewRow.style.display = 'none';
           endPreviewImg.removeAttribute('src');
@@ -5060,13 +5060,13 @@
               }
               
               if(isCircular){
-                showToast('不能创建循环参考', 'error');
+                showToast(window.t ? window.t('circular_reference_error') : '不能创建循环参考', 'error');
               } else {
                 // 检查参考图数量限制
                 const currentRefCount = state.referenceConnections.filter(c => c.to === id).length;
                 const maxRefs = node.data.model === 'gemini-2.5-flash-image-preview' ? 5 : 13;
                 if(currentRefCount >= maxRefs){
-                  showToast(`最多支持${maxRefs}张参考图`, 'error');
+                  showToast(window.t ? window.t('max_reference_images_msg').replace('${maxRefs}', maxRefs) : `最多支持${maxRefs}张参考图`, 'error');
                 } else {
                   state.referenceConnections.push({
                     id: state.nextReferenceConnId++,
@@ -5676,10 +5676,10 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(blobUrl);
           }
-          showToast('开始下载图片', 'success');
+          showToast(window.t ? window.t('start_download_image') : '开始下载图片', 'success');
         } catch(error) {
           console.error('下载图片失败:', error);
-          showToast('下载图片失败', 'error');
+          showToast(window.t ? window.t('download_image_failed') : '下载图片失败', 'error');
         }
       });
 
@@ -6400,28 +6400,28 @@
           if(isTruncated) {
             content = content.substring(0, 30000);
             warningField.style.display = 'block';
-            showToast(`文件内容已截取至30000字符（原${originalLength}字符）`, 'warning');
+            showToast(window.t ? window.t('file_content_truncated').replace('${originalLength}', originalLength) : `文件内容已截取至30000字符（原${originalLength}字符）`, 'warning');
           } else {
             warningField.style.display = 'none';
-            showToast('剧本文件加载成功', 'success');
+            showToast(window.t ? window.t('script_file_load_success') : '剧本文件加载成功', 'success');
           }
-          
+
           // 更新文本框内容
           textareaEl.value = content;
           updateScriptContent(content, `来源: ${file.name}${isTruncated ? ' (已截取)' : ''}`);
-          
+
           fileEl.value = '';
         } catch(error) {
           console.error('读取文件失败:', error);
-          showToast('读取文件失败', 'error');
+          showToast(window.t ? window.t('file_read_error') : '读取文件失败', 'error');
         }
       });
 
       splitBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        
+
         if(!node.data.scriptContent) {
-          showToast('请先上传剧本文件', 'error');
+          showToast(window.t ? window.t('upload_script_file_first') : '请先上传剧本文件', 'error');
           return;
         }
 
@@ -6432,9 +6432,9 @@
             const targetNode = state.nodes.find(n => n.id === conn.to);
             return targetNode && targetNode.type === 'shot_group';
           });
-          
+
           if(hasShotGroupNode) {
-            showToast('已有分镜组，请勿重复点击', 'warning');
+            showToast(window.t ? window.t('duplicate_shot_group_warning') : '已有分镜组，请勿重复点击', 'warning');
             return;
           }
         }
@@ -6554,7 +6554,7 @@
               statusEl.textContent = `已完成：${createdShotGroupNodes.length}个分镜组，所有分镜已自动生成`;
             }
             
-            showToast('剧本拆分成功！所有分镜已自动生成', 'success');
+            showToast(window.t ? window.t('script_split_complete') : '剧本拆分成功！所有分镜已自动生成', 'success');
           } else {
             throw new Error(result.message || '解析失败');
           }
@@ -6562,7 +6562,7 @@
           console.error('剧本解析失败:', error);
           statusEl.style.color = '#dc2626';
           statusEl.textContent = '解析失败: ' + (error.message || '未知错误');
-          showToast('剧本解析失败', 'error');
+          showToast(window.t ? window.t('script_parse_error') : '剧本解析失败', 'error');
         } finally {
           splitBtn.disabled = false;
           splitGridBtn.disabled = false;
