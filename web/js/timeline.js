@@ -439,7 +439,11 @@
     // 时间轴展开按钮黄色闪烁提示
     function flashExpandButton() {
       const expandBtn = document.getElementById('timelineExpandBtn');
-      if (!expandBtn || expandBtn.style.display === 'none') return;
+      if (!expandBtn) {
+        console.warn('[时间轴] 展开按钮不存在');
+        return;
+      }
+      if (expandBtn.style.display === 'none') return;
       expandBtn.classList.remove('flashing');
       void expandBtn.offsetWidth; // 强制 reflow，重启动画
       expandBtn.classList.add('flashing');
@@ -456,18 +460,24 @@
       const ruler = document.getElementById('timelineRuler');
       const totalDurationEl = document.getElementById('timelineTotalDuration');
       const expandBtn = document.getElementById('timelineExpandBtn');
-      
+
+      // 安全检查：确保所有必要的 DOM 元素存在
+      if (!container || !track || !audioTrack || !ruler || !totalDurationEl || !expandBtn || !canvasContainer) {
+        console.warn('[时间轴] 某些 DOM 元素不存在，无法渲染时间轴');
+        return;
+      }
+
       // 如果有柱子系统，即使没有片段也显示时间轴（显示空柱子）
       const hasPillars = state.timeline.pillars.length > 0;
       const hasClips = state.timeline.clips.length > 0 || state.timeline.audioClips.length > 0;
-      
+
       if (!state.timeline.visible) {
         container.style.display = 'none';
         expandBtn.style.display = 'flex';
         canvasContainer.classList.remove('timeline-visible');
         return;
       }
-      
+
       container.style.display = 'flex';
       expandBtn.style.display = 'none';
       canvasContainer.classList.add('timeline-visible');
