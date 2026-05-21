@@ -3135,7 +3135,7 @@
       const node = {
         id,
         type: 'image_to_video',
-        title: '图生视频',
+        title: window.t ? window.t('image_to_video') : '图生视频',
         x,
         y,
         data: {
@@ -3174,20 +3174,20 @@
       el.style.top = node.y + 'px';
 
       el.innerHTML = `
-        <div class="port output" title="输出（连接到视频节点）"></div>
+        <div class="port output" title="${window.t ? window.t('image_to_video_output_port') : '输出（连接到视频节点）'}"></div>
         <div class="node-header">
           <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="3" y="6" width="14" height="12" rx="2"/><path d="M17 10L21 8V16L17 14V10Z" fill="currentColor"/></svg>${node.title}</div>
-          <button class="icon-btn" title="删除">×</button>
+          <button class="icon-btn" title="${window.t ? window.t('node_delete_btn') : '删除'}">×</button>
         </div>
         <div class="node-body">
           <div class="video-node-body">
             <!-- 左栏：输入源 -->
             <div class="video-section">
               <div class="field field-collapsible image-mode-field">
-                <div class="label">图片模式</div>
+                <div class="label" data-i18n="image_mode_label">${window.t ? window.t('image_mode_label') : '图片模式'}</div>
                 <select class="image-mode-select">
-                  <option value="first_last_frame">首尾帧模式</option>
-                  <option value="multi_reference">多参考图模式</option>
+                  <option value="first_last_frame" data-i18n="image_mode_first_last">${window.t ? window.t('image_mode_first_last') : '首尾帧模式'}</option>
+                  <option value="multi_reference" data-i18n="image_mode_multi_ref">${window.t ? window.t('image_mode_multi_ref') : '多参考图模式'}</option>
                 </select>
                 <div class="image-mode-hint" style="font-size: 11px; color: #6b7280; margin-top: 4px;"></div>
               </div>
@@ -3195,20 +3195,20 @@
               <div class="field field-collapsible first-last-frame-tabs-container" style="display: none;">
                 <!-- 首帧 -->
                 <div class="video-frame-content active" data-frame="start">
-                  <div class="label" style="margin-bottom: 4px;">首帧</div>
-                  <div class="port start-image-port port-anchor-start" data-port-type="start" title="连接图片节点（首帧）" style="position: relative; margin-bottom: 4px;"></div>
+                  <div class="label" style="margin-bottom: 4px;" data-i18n="first_frame_label">${window.t ? window.t('first_frame_label') : '首帧'}</div>
+                  <div class="port start-image-port port-anchor-start" data-port-type="start" title="${window.t ? window.t('first_frame_label') : '连接图片节点（首帧）'}" style="position: relative; margin-bottom: 4px;"></div>
                   <input class="start-file" type="file" accept="image/*" />
-                  <button class="mini-btn start-clear" type="button">清除</button>
+                  <button class="mini-btn start-clear" type="button" data-i18n="node_clear_btn">${window.t ? window.t('node_clear_btn') : '清除'}</button>
                   <div class="preview-row start-preview-row" style="display:none; margin-top: 8px;">
                     <img class="preview start-preview" />
                   </div>
                 </div>
                 <!-- 尾帧 -->
                 <div class="video-frame-content active" data-frame="end" style="margin-top: 8px;">
-                  <div class="label" style="margin-bottom: 4px;">尾帧</div>
-                  <div class="port end-image-port port-anchor-end" data-port-type="end" title="连接图片节点（尾帧）" style="position: relative; margin-bottom: 4px;"></div>
+                  <div class="label" style="margin-bottom: 4px;" data-i18n="last_frame_label">${window.t ? window.t('last_frame_label') : '尾帧'}</div>
+                  <div class="port end-image-port port-anchor-end" data-port-type="end" title="${window.t ? window.t('last_frame_label') : '连接图片节点（尾帧）'}" style="position: relative; margin-bottom: 4px;"></div>
                   <input class="end-file" type="file" accept="image/*" />
-                  <button class="mini-btn end-clear" type="button">清除</button>
+                  <button class="mini-btn end-clear" type="button" data-i18n="node_clear_btn">${window.t ? window.t('node_clear_btn') : '清除'}</button>
                   <div class="preview-row end-preview-row" style="display:none; margin-top: 8px;">
                     <img class="preview end-preview" />
                   </div>
@@ -3216,41 +3216,41 @@
               </div>
               <!-- 参考图片（多参考模式） -->
               <div class="field field-collapsible reference-fields" style="display:none; position: relative;">
-                <div class="port ref-image-input-port" data-port-type="ref-image" title="连接图片节点（参考图）"></div>
-                <div class="label ref-images-label">参考图片 (1-5张)<span class="req">*</span></div>
+                <div class="port ref-image-input-port" data-port-type="ref-image" title="${window.t ? window.t('reference_frame_port') : '连接图片节点（参考图）'}"></div>
+                <div class="label ref-images-label" data-i18n="reference_images_label">${window.t ? window.t('reference_images_label') : '参考图片 (1-5张)'}<span class="req">*</span></div>
                 <input class="reference-file" type="file" accept="image/*" multiple />
-                <button class="mini-btn reference-clear" type="button" style="margin-top: 4px;">清除全部</button>
+                <button class="mini-btn reference-clear" type="button" style="margin-top: 4px;" data-i18n="clear_all_btn">${window.t ? window.t('clear_all_btn') : '清除全部'}</button>
                 <div class="ref-images-counter" style="font-size: 11px; color: var(--muted); margin-top: 4px; display: none;"></div>
                 <div class="reference-preview-list" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;"></div>
               </div>
               <!-- 参考音频 -->
               <div class="field field-collapsible audio-field" style="position: relative;">
-                <div class="port audio-input-port" data-port-type="audio" title="连接音频节点"></div>
-                <div class="label">参考音频（可选，支持多个）</div>
+                <div class="port audio-input-port" data-port-type="audio" title="${window.t ? window.t('audio') : '连接音频节点'}"></div>
+                <div class="label" data-i18n="reference_audio_label">${window.t ? window.t('reference_audio_label') : '参考音频（可选，支持多个）'}</div>
                 <input class="audio-file" type="file" accept="audio/*" multiple />
-                <button class="mini-btn audio-clear-all" type="button" style="margin-top: 4px;">清除全部</button>
+                <button class="mini-btn audio-clear-all" type="button" style="margin-top: 4px;" data-i18n="clear_all_btn">${window.t ? window.t('clear_all_btn') : '清除全部'}</button>
                 <div class="audio-preview-list"></div>
               </div>
               <!-- 参考视频 -->
               <div class="field field-collapsible video-field" style="position: relative;">
-                <div class="port video-ref-input-port" data-port-type="video-ref" title="连接视频节点"></div>
-                <div class="label">参考视频（可选，支持多个）</div>
+                <div class="port video-ref-input-port" data-port-type="video-ref" title="${window.t ? window.t('video') : '连接视频节点'}"></div>
+                <div class="label" data-i18n="reference_video_label">${window.t ? window.t('reference_video_label') : '参考视频（可选，支持多个）'}</div>
                 <input class="video-file" type="file" accept="video/*" multiple />
-                <button class="mini-btn video-clear-all" type="button" style="margin-top: 4px;">清除全部</button>
+                <button class="mini-btn video-clear-all" type="button" style="margin-top: 4px;" data-i18n="clear_all_btn">${window.t ? window.t('clear_all_btn') : '清除全部'}</button>
                 <div class="video-preview-list"></div>
               </div>
             </div>
             <!-- 右栏：配置参数与执行 -->
             <div class="video-section">
               <div class="field field-collapsible">
-                <div class="label">视频长度</div>
+                <div class="label" data-i18n="video_length_label">${window.t ? window.t('video_length_label') : '视频长度'}</div>
                 <select class="duration-select">
-                  <option value="5" selected>5秒</option>
-                  <option value="10">10秒</option>
+                  <option value="5" selected data-i18n="duration_5s">${window.t ? window.t('duration_5s') : '5秒'}</option>
+                  <option value="10" data-i18n="duration_10s">${window.t ? window.t('duration_10s') : '10秒'}</option>
                 </select>
               </div>
               <div class="field field-collapsible">
-                <div class="label">视频比例</div>
+                <div class="label" data-i18n="video_ratio_label">${window.t ? window.t('video_ratio_label') : '视频比例'}</div>
                 <select class="ratio-select">
                   <option value="9:16">9:16</option>
                   <option value="3:4">3:4</option>
@@ -3260,31 +3260,31 @@
                 </select>
               </div>
               <div class="field field-collapsible">
-                <div class="label">视频模型</div>
+                <div class="label" data-i18n="video_model_label">${window.t ? window.t('video_model_label') : '视频模型'}</div>
                 <select class="video-model-select"></select>
               </div>
               <div class="field field-collapsible">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                  <div class="label" style="margin: 0;">提示词</div>
-                  <button class="mini-btn prompt-expand-btn" type="button" style="font-size: 11px; padding: 4px 8px;" title="放大编辑">⤢</button>
+                  <div class="label" style="margin: 0;" data-i18n="prompt_label">${window.t ? window.t('prompt_label') : '提示词'}</div>
+                  <button class="mini-btn prompt-expand-btn" type="button" style="font-size: 11px; padding: 4px 8px;" title="${window.t ? window.t('script_expand_btn') : '放大编辑'}" data-i18n="script_expand_btn:title">⤢</button>
                 </div>
-                <textarea class="prompt" placeholder="请输入提示词，输入 @ 引用媒体文件..." rows="6" style="resize: vertical; min-height: 120px; font-size: 11px;"></textarea>
-                <div style="font-size: 10px; color: var(--muted); margin-top: 4px;">💡 输入 @ 引用资源</div>
+                <textarea class="prompt" placeholder="${window.t ? window.t('prompt_placeholder') : '请输入提示词，输入 @ 引用媒体文件...'}" data-i18n="prompt_placeholder:placeholder" rows="6" style="resize: vertical; min-height: 120px; font-size: 11px;"></textarea>
+                <div style="font-size: 10px; color: var(--muted); margin-top: 4px;" data-i18n="prompt_tip">${window.t ? window.t('prompt_tip') : '💡 输入 @ 引用资源'}</div>
                 <div class="prompt-char-count" style="text-align: right; font-size: 11px; color: var(--muted); margin-top: 2px;">0 字符</div>
               </div>
               <div class="field field-collapsible computing-power-field" style="padding: 6px; border-radius: 6px;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <span style="color: #9ca3af; font-size: 12px;">算力消耗：</span>
-                  <span class="computing-power-value" style="color: #60a5fa; font-weight: bold; font-size: 14px;">0 算力</span>
+                  <span style="color: #9ca3af; font-size: 12px;" data-i18n="computing_power_label">${window.t ? window.t('computing_power_label') : '算力消耗：'}</span>
+                  <span class="computing-power-value" style="color: #60a5fa; font-weight: bold; font-size: 14px;">0 ${window.t ? window.t('computing_power_unit') : '算力'}</span>
                 </div>
                 <div class="computing-power-detail" style="margin-top: 4px; font-size: 11px; color: #6b7280;">
-                  单个 0 算力 × 1 个 = 0 算力
+                  单个 0 ${window.t ? window.t('computing_power_unit') : '算力'} × 1 个 = 0 ${window.t ? window.t('computing_power_unit') : '算力'}
                 </div>
               </div>
               <div class="field field-collapsible">
                 <div class="gen-container">
-                  <button class="gen-btn gen-btn-main" type="button">生成视频</button>
-                  <button class="gen-btn gen-btn-caret" type="button" aria-label="选择抽卡次数">▾</button>
+                  <button class="gen-btn gen-btn-main" type="button" data-i18n="generate_video_btn">${window.t ? window.t('generate_video_btn') : '生成视频'}</button>
+                  <button class="gen-btn gen-btn-caret" type="button" aria-label="${window.t ? window.t('draw_count_menu') : '选择抽卡次数'}" data-i18n="draw_count_menu:aria-label">▾</button>
                   <div class="gen-menu">
                     <div class="gen-item" data-count="1">X1</div>
                     <div class="gen-item" data-count="2">X2</div>
