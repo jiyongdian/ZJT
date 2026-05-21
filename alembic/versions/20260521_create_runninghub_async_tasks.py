@@ -27,7 +27,7 @@ def upgrade():
           `params` json DEFAULT NULL COMMENT '任务参数（JSON 格式，implementation 特定）',
           `status` tinyint DEFAULT '0' COMMENT '状态（0-队列中, 1-处理中, 2-完成, -1-失败, -2-超时）',
           `try_count` int DEFAULT '0' COMMENT '轮询尝试次数',
-          `max_attempts` int DEFAULT '60' COMMENT '最大尝试次数',
+          `max_attempts` int DEFAULT '25' COMMENT '最大尝试次数',
           `error_message` text COMMENT '错误信息',
           `result_url` varchar(1000) DEFAULT NULL COMMENT '结果 URL',
           `result_data` json DEFAULT NULL COMMENT '额外结果数据（JSON 格式）',

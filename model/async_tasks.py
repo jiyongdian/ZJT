@@ -33,7 +33,7 @@ class AsyncTask:
         self.params = kwargs.get('params')  # JSON 字符串或已解析的 dict
         self.status = kwargs.get('status', AsyncTaskStatus.QUEUED)
         self.try_count = kwargs.get('try_count', 0)
-        self.max_attempts = kwargs.get('max_attempts', 60)
+        self.max_attempts = kwargs.get('max_attempts', 25)
         self.error_message = kwargs.get('error_message')
         self.result_url = kwargs.get('result_url')
         self.result_data = kwargs.get('result_data')  # JSON 字符串或已解析的 dict
@@ -94,7 +94,7 @@ class AsyncTasksModel:
         user_id: int,
         external_task_id: Optional[str] = None,
         params: Optional[Dict[str, Any]] = None,
-        max_attempts: int = 60
+        max_attempts: int = 25
     ) -> int:
         """
         创建新的异步任务记录
@@ -249,7 +249,7 @@ CREATE TABLE IF NOT EXISTS `async_tasks` (
   `params` json DEFAULT NULL COMMENT '任务参数（JSON 格式，implementation 特定）',
   `status` tinyint DEFAULT '0' COMMENT '状态（0-队列中, 1-处理中, 2-完成, -1-失败, -2-超时）',
   `try_count` int DEFAULT '0' COMMENT '轮询尝试次数',
-  `max_attempts` int DEFAULT '60' COMMENT '最大尝试次数',
+  `max_attempts` int DEFAULT '25' COMMENT '最大尝试次数',
   `error_message` text COMMENT '错误信息',
   `result_url` varchar(1000) DEFAULT NULL COMMENT '结果 URL',
   `result_data` json DEFAULT NULL COMMENT '额外结果数据（JSON 格式）',

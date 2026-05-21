@@ -2083,7 +2083,7 @@ async def generate_character_reference_audio(
             user_id=int(user_id),
             external_task_id=runninghub_task_id,
             params=params,
-            max_attempts=60
+            max_attempts=25
         )
 
         return JSONResponse({
