@@ -2025,6 +2025,11 @@ async def generate_character_reference_audio(
     auth_token: Optional[str] = Header(None, alias="Authorization"),
     user_id: Optional[int] = Header(None, alias="X-User-Id")
 ):
+    """
+    提交角色参考音频生成任务（异步非阻塞）
+
+    提交后立即返回 task_key，前端通过 GET /script-writer/characters/reference-audio-status/{task_key} 轮询结果
+    """
     try:
         if not user_id:
             body = await request.json()
@@ -2051,7 +2056,7 @@ async def generate_character_reference_audio(
         )
         text = build_character_audio_text(character_data, audio_request.text)
 
-        # 通过驱动提交任务
+        # 通过驱动提交任务到 RunningHub
         from task.async_drivers.runninghub_audio_driver import RunningHubAudioDriver
         driver = RunningHubAudioDriver()
         submit_result = await driver.submit_task(style_prompt=style_prompt, text=text)
@@ -2061,32 +2066,76 @@ async def generate_character_reference_audio(
 
         runninghub_task_id = submit_result['project_id']
 
-        # 轮询等待结果
-        timeout_seconds = get_dynamic_config_value('runninghub', 'audio_reference_timeout', default=180)
-        interval_seconds = get_dynamic_config_value('runninghub', 'audio_reference_poll_interval', default=3)
-        started_at = datetime.now()
-        while (datetime.now() - started_at).total_seconds() < timeout_seconds:
-            status_result = await driver.check_status(runninghub_task_id)
-            if status_result.get('status') == 'SUCCESS':
-                result_url = status_result.get('result_url')
-                if not result_url:
-                    return JSONResponse({'success': False, 'error': 'RunningHub 任务成功但未返回结果 URL', 'task_id': runninghub_task_id}, status_code=502)
-                if character:
-                    await asyncio.to_thread(CharacterModel.update, character.id, default_voice=result_url)
-                return JSONResponse({
-                    'success': True,
-                    'character_id': character.id if character else None,
-                    'task_id': runninghub_task_id,
-                    'default_voice': result_url,
-                    'result_url': result_url
-                })
-            if status_result.get('status') == 'FAILED':
-                error_message = status_result.get('error', 'RunningHub 音频生成失败')
-                return JSONResponse({'success': False, 'error': error_message, 'task_id': runninghub_task_id}, status_code=502)
-            await asyncio.sleep(interval_seconds)
-        return JSONResponse({'success': False, 'error': '生成参考音频超时', 'task_id': runninghub_task_id}, status_code=504)
+        # 写入异步任务表，由 scheduler 后台轮询
+        import uuid as _uuid
+        from model.runninghub_async_tasks import RunningHubAsyncTasksModel
+        task_key = f"audio_{_uuid.uuid4().hex[:12]}"
+
+        RunningHubAsyncTasksModel.create(
+            task_key=task_key,
+            runninghub_task_id=runninghub_task_id,
+            task_type='character_reference_audio',
+            user_id=int(user_id),
+            character_id=character.id if character else None,
+            character_name=character_data.get('name'),
+            style_prompt=style_prompt,
+            text=text,
+            max_attempts=60
+        )
+
+        return JSONResponse({
+            'success': True,
+            'task_key': task_key,
+            'runninghub_task_id': runninghub_task_id,
+            'message': '音频生成任务已提交，请通过 task_key 查询状态'
+        })
     except Exception as e:
         logger.error(f'生成角色参考音频失败: {str(e)}', exc_info=True)
+        return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
+
+
+@router.get('/script-writer/characters/reference-audio-status/{task_key}')
+@require_permission("character:view")
+async def get_reference_audio_status(request: Request, task_key: str):
+    """查询角色参考音频生成任务状态"""
+    try:
+        from model.runninghub_async_tasks import (
+            RunningHubAsyncTasksModel, RunningHubAsyncTaskStatus
+        )
+        task = RunningHubAsyncTasksModel.get_by_task_key(task_key)
+        if not task:
+            return JSONResponse({'success': False, 'error': '任务不存在'}, status_code=404)
+
+        if task.status == RunningHubAsyncTaskStatus.COMPLETED:
+            return JSONResponse({
+                'success': True,
+                'status': 'SUCCESS',
+                'task_key': task_key,
+                'result_url': task.result_url,
+                'character_id': task.character_id
+            })
+        elif task.status == RunningHubAsyncTaskStatus.FAILED:
+            return JSONResponse({
+                'success': True,
+                'status': 'FAILED',
+                'task_key': task_key,
+                'error': task.error_message or '音频生成失败'
+            })
+        elif task.status == RunningHubAsyncTaskStatus.TIMEOUT:
+            return JSONResponse({
+                'success': True,
+                'status': 'TIMEOUT',
+                'task_key': task_key,
+                'error': '任务超时'
+            })
+        else:
+            return JSONResponse({
+                'success': True,
+                'status': 'RUNNING',
+                'task_key': task_key
+            })
+    except Exception as e:
+        logger.error(f'查询音频任务状态失败: {str(e)}')
         return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
 
 @router.get('/world-files')

@@ -15,8 +15,7 @@ sys.modules['requests'] = MagicMock()
 sys.modules['PIL'] = MagicMock()
 sys.modules['PIL.Image'] = MagicMock()
 
-from task.async_drivers.runninghub_audio_driver import RunningHubAudioDriver
-from config.constant import RunningHubAudioConfig
+from task.async_drivers.runninghub_audio_driver import RunningHubAudioDriver, RunningHubAudioConfig
 
 import unittest
 

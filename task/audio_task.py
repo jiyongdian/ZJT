@@ -15,9 +15,9 @@ from config.constant import (
     TASK_STATUS_QUEUED,
     TASK_STATUS_PROCESSING,
     TASK_STATUS_COMPLETED,
-    TASK_STATUS_FAILED,
-    RunningHubAudioConfig
+    TASK_STATUS_FAILED
 )
+from task.async_drivers.runninghub_audio_driver import RunningHubAudioConfig
 from utils.index_tts_util import generate_audio, validate_emotion_vector
 import os
 from config.config_util import get_dynamic_config_value

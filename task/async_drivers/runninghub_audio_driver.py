@@ -8,9 +8,21 @@ from typing import Dict, Any, Optional
 
 from .base_async_driver import BaseAsyncDriver
 from api.clients.runninghub_client import RunningHubClient
-from config.constant import RunningHubAudioConfig
 
 logger = logging.getLogger(__name__)
+
+
+class RunningHubAudioConfig:
+    """RunningHub 音频生成配置常量"""
+    APP_ID = "2055657238609571841"
+    STYLE_NODE_ID = "23"
+    TEXT_NODE_ID = "24"
+    FINAL_STATUSES = ("SUCCESS", "FAILED", "ERROR", "CANCELED", "CANCELLED")
+
+    # 音色提示词 LLM 生成配置
+    AUDIO_STYLE_LLM_MAX_TOKENS = 256
+    AUDIO_STYLE_LLM_TEMPERATURE = 0.7
+    AUDIO_STYLE_DEFAULT_PROMPT = '声音自然清晰，语气平稳，适合角色旁白'
 
 
 class RunningHubAudioDriver(BaseAsyncDriver):
