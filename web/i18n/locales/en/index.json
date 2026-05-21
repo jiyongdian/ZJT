@@ -388,5 +388,8 @@
   "reference_images_display": "Reference Images",
   "create_character_card": "Create Character Card",
   "loading_status": "Loading...",
-  "all_data_loaded": "All data loaded"
+  "all_data_loaded": "All data loaded",
+  "banner_title_marketing": "Start Marketing Creation",
+  "banner_desc_marketing": "AI intelligent marketing assistant, one-click generate marketing scripts, ad creatives, product copy, make marketing more efficient",
+  "banner_subtitle_marketing": "→ Click to start your marketing creation journey"
 }

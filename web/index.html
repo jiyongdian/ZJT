@@ -749,11 +749,11 @@
               <template v-if="$root.creationMode === 'marketing'">
                 <div class="banner-title-row">
                   <span class="banner-sparkle">🎯</span>
-                  <h1 class="banner-title">开始营销创作</h1>
+                  <h1 class="banner-title">{{ $t('banner_title_marketing') }}</h1>
                   <span class="banner-sparkle">🎯</span>
                 </div>
-                <p class="banner-desc">AI 智能营销助手，一键生成带货脚本、广告创意、产品文案，让营销更高效</p>
-                <p class="banner-subtitle">→ 点击开启您的营销创作之旅</p>
+                <p class="banner-desc">{{ $t('banner_desc_marketing') }}</p>
+                <p class="banner-subtitle">{{ $t('banner_subtitle_marketing') }}</p>
               </template>
               <template v-else>
                 <div class="banner-title-row">
@@ -8612,6 +8612,11 @@
 
   // i18n 初始化 - 必须在 Vue 应用创建前执行
   window.__STATIC_VERSION = window.__STATIC_VERSION || '';
+
+  // 先设置 HTML lang 属性为当前保存的语言
+  const savedLocale = localStorage.getItem('zjt_locale') || 'zh-CN';
+  document.documentElement.lang = savedLocale === 'en' ? 'en' : 'zh-CN';
+
   ZJTi18n.init(['common', 'index', 'video_workflow', 'marketing_agent']).then(() => {
     // 初始化完成后创建 Vue 应用
     const app = Vue.createApp(App);

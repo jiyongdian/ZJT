@@ -376,6 +376,9 @@
   "reference_images_display": "参考图",
   "create_character_card": "创建角色卡",
   "loading_status": "加载中...",
-  "all_data_loaded": "已加载全部数据"
+  "all_data_loaded": "已加载全部数据",
+  "banner_title_marketing": "开始营销创作",
+  "banner_desc_marketing": "AI 智能营销助手，一键生成带货脚本、广告创意、产品文案，让营销更高效",
+  "banner_subtitle_marketing": "→ 点击开启您的营销创作之旅"
 }
 

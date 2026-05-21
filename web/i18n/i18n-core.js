@@ -143,6 +143,8 @@ window.ZJTi18n = (() => {
    * @param {Array<string>} namespaces - 需要加载的命名空间
    */
   async function init(namespaces = ['common']) {
+    // 从 localStorage 恢复保存的语言（已在状态初始化时完成）
+    // 这里需要确保所有命名空间都以当前语言加载
     for (const ns of namespaces) {
       await loadMessages(state.locale, ns);
     }
