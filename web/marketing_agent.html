@@ -242,11 +242,31 @@
                         <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
                             <!-- 媒体缩略图条（统一显示所有上传的媒体） -->
                             <div v-if="mediaItems.length > 0" style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
-                                <div v-for="item in mediaItems" :key="item.id" style="position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; background: #f0f4f8; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 11px; color: #475569; flex-shrink: 0;">
-                                    <img v-if="item.thumbnailUrl" :src="item.thumbnailUrl" style="width: 24px; height: 24px; border-radius: 4px; object-fit: cover;" />
-                                    <span v-else style="font-size: 14px;">{{ item.type === 'video' ? '🎬' : '🎵' }}</span>
+                                <div v-for="item in mediaItems" :key="item.id" style="position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 8px; font-size: 11px; flex-shrink: 0;"
+                                     :style="{
+                                         background: item.uploadFailed ? '#fef2f2' : item.uploading ? '#fffbeb' : '#f0f4f8',
+                                         border: item.uploadFailed ? '1px solid #fca5a5' : item.uploading ? '1px solid #fcd34d' : '1px solid #e2e8f0',
+                                         color: item.uploadFailed ? '#dc2626' : '#475569'
+                                     }">
+                                    <div style="position: relative; width: 24px; height: 24px; flex-shrink: 0;">
+                                        <img v-if="item.thumbnailUrl" :src="item.thumbnailUrl"
+                                             style="width: 24px; height: 24px; border-radius: 4px; object-fit: cover;"
+                                             :style="{ opacity: item.uploading ? 0.5 : 1 }" />
+                                        <span v-else style="font-size: 14px;">{{ item.type === 'video' ? '🎬' : '🎵' }}</span>
+                                        <div v-if="item.uploading" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;">
+                                            <svg width="14" height="14" viewBox="0 0 24 24">
+                                                <circle cx="12" cy="12" r="10" fill="none" stroke="#f59e0b" stroke-width="3" stroke-dasharray="31.4 31.4" stroke-linecap="round">
+                                                    <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/>
+                                                </circle>
+                                            </svg>
+                                        </div>
+                                        <div v-if="item.uploadFailed" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;">
+                                            <span style="font-size: 14px; color: #dc2626; font-weight: bold;">!</span>
+                                        </div>
+                                    </div>
                                     <span>{{ item.displayName }}</span>
-                                    <span v-if="item.uploading" style="color: #94a3b8;">...</span>
+                                    <span v-if="item.uploading" style="color: #d97706; font-size: 10px;">上传中</span>
+                                    <span v-if="item.uploadFailed" style="color: #dc2626; font-size: 10px;">失败</span>
                                     <div style="cursor: pointer; color: #94a3b8; margin-left: 2px; font-size: 13px;" @click.stop="removeMediaItem(item.id)">×</div>
                                 </div>
                             </div>
@@ -3685,24 +3705,18 @@
                         }
                         console.log('图片上传成功:', data.url);
                     } else {
-                        const item = mediaItems.value.find(m => m.fileUrl === previewUrl);
-                        if (item) {
-                            item.uploading = false;
-                            item.uploadFailed = true;
-                            mediaItems.value = [...mediaItems.value];
-                        }
                         console.error('图片上传失败:', data.error);
-                        showError('图片上传失败: ' + (data.error || '未知错误'));
+                        if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+                        removeMediaItemByFileUrl(previewUrl);
+                        clearSingleImageState(previewUrl);
+                        showError('图片上传失败，请重新上传');
                     }
                 }).catch(err => {
-                    const item = mediaItems.value.find(m => m.fileUrl === previewUrl);
-                    if (item) {
-                        item.uploading = false;
-                        item.uploadFailed = true;
-                        mediaItems.value = [...mediaItems.value];
-                    }
                     console.error('图片上传异常:', err);
-                    showError('图片上传异常，请重试');
+                    if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+                    removeMediaItemByFileUrl(previewUrl);
+                    clearSingleImageState(previewUrl);
+                    showError('图片上传异常，请重新上传');
                 });
             }
 
@@ -3726,17 +3740,25 @@
                         console.log('[Agent] 图片上传成功:', data.url);
                     } else {
                         imgItem.uploading = false;
-                        imgItem.uploadFailed = true;
-                        syncMediaItemUploadState(imgItem, null, false, true);
                         console.error('[Agent] 图片上传失败:', data.error);
-                        showError('图片上传失败: ' + (data.error || '未知错误'));
+                        if (imgItem.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(imgItem.previewUrl);
+                        const idx = agentImageFiles.value.indexOf(imgItem);
+                        if (idx >= 0) agentImageFiles.value.splice(idx, 1);
+                        const mediaItem = mediaItems.value.find(m => m.agentImageItem === imgItem || m.fileUrl === imgItem.previewUrl);
+                        if (mediaItem) removeMediaItem(mediaItem.id);
+                        updateAgentImageState();
+                        showError('图片上传失败，请重新上传');
                     }
                 } catch (err) {
                     imgItem.uploading = false;
-                    imgItem.uploadFailed = true;
-                    syncMediaItemUploadState(imgItem, null, false, true);
                     console.error('[Agent] 图片上传异常:', err);
-                    showError('图片上传异常');
+                    if (imgItem.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(imgItem.previewUrl);
+                    const idx = agentImageFiles.value.indexOf(imgItem);
+                    if (idx >= 0) agentImageFiles.value.splice(idx, 1);
+                    const mediaItem = mediaItems.value.find(m => m.agentImageItem === imgItem || m.fileUrl === imgItem.previewUrl);
+                    if (mediaItem) removeMediaItem(mediaItem.id);
+                    updateAgentImageState();
+                    showError('图片上传异常，请重新上传');
                 }
             }
 
@@ -3750,6 +3772,34 @@
                 item.uploading = uploading;
                 item.uploadFailed = uploadFailed;
                 mediaItems.value = [...mediaItems.value];
+            }
+
+            // 上传失败自动清理辅助函数
+            function removeMediaItemByFileUrl(fileUrl) {
+                const item = mediaItems.value.find(m => m.fileUrl === fileUrl);
+                if (item) removeMediaItem(item.id);
+            }
+
+            function clearSingleImageState(previewUrl) {
+                if (uploadedImageUrl.value === previewUrl) {
+                    uploadedImageUrl.value = '';
+                    uploadedImageFile.value = null;
+                    uploadedImageServerUrl.value = '';
+                    hasUploadedImage.value = false;
+                }
+            }
+
+            function updateAgentImageState() {
+                if (agentImageFiles.value.length > 0) {
+                    const last = agentImageFiles.value[agentImageFiles.value.length - 1];
+                    uploadedImageUrl.value = last.previewUrl;
+                    uploadedImageFile.value = last.file;
+                    hasUploadedImage.value = true;
+                } else {
+                    hasUploadedImage.value = false;
+                    uploadedImageUrl.value = '';
+                    uploadedImageFile.value = null;
+                }
             }
 
             // Agent 模式：删除单张图片
@@ -4171,22 +4221,18 @@
                         }
                         console.log('图片上传成功:', data.url);
                     } else {
-                        const item = mediaItems.value.find(m => m.fileUrl === previewUrl);
-                        if (item) {
-                            item.uploading = false;
-                            item.uploadFailed = true;
-                            mediaItems.value = [...mediaItems.value];
-                        }
                         console.error('图片上传失败:', data.error);
+                        if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+                        removeMediaItemByFileUrl(previewUrl);
+                        clearSingleImageState(previewUrl);
+                        showError('图片上传失败，请重新上传');
                     }
                 }).catch(err => {
-                    const item = mediaItems.value.find(m => m.fileUrl === previewUrl);
-                    if (item) {
-                        item.uploading = false;
-                        item.uploadFailed = true;
-                        mediaItems.value = [...mediaItems.value];
-                    }
                     console.error('图片上传异常:', err);
+                    if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+                    removeMediaItemByFileUrl(previewUrl);
+                    clearSingleImageState(previewUrl);
+                    showError('图片上传异常，请重新上传');
                 });
             }
             function selectType(type) {
