@@ -2068,18 +2068,24 @@ async def generate_character_reference_audio(
 
         # 写入异步任务表，由 scheduler 后台轮询
         import uuid as _uuid
-        from model.runninghub_async_tasks import RunningHubAsyncTasksModel
+        from model import AsyncTasksModel
+        from config.unified_config import AsyncDriverType
         task_key = f"audio_{_uuid.uuid4().hex[:12]}"
 
-        RunningHubAsyncTasksModel.create(
+        # 构建任务参数（JSON 格式）
+        params = {
+            'character_id': character.id if character else None,
+            'character_name': character_data.get('name'),
+            'style_prompt': style_prompt,
+            'text': text
+        }
+
+        AsyncTasksModel.create(
             task_key=task_key,
-            runninghub_task_id=runninghub_task_id,
-            task_type='character_reference_audio',
+            driver_type=AsyncDriverType.RUNNINGHUB_AUDIO,
             user_id=int(user_id),
-            character_id=character.id if character else None,
-            character_name=character_data.get('name'),
-            style_prompt=style_prompt,
-            text=text,
+            external_task_id=runninghub_task_id,
+            params=params,
             max_attempts=60
         )
 
@@ -2099,29 +2105,27 @@ async def generate_character_reference_audio(
 async def get_reference_audio_status(request: Request, task_key: str):
     """查询角色参考音频生成任务状态"""
     try:
-        from model.runninghub_async_tasks import (
-            RunningHubAsyncTasksModel, RunningHubAsyncTaskStatus
-        )
-        task = RunningHubAsyncTasksModel.get_by_task_key(task_key)
+        from model import AsyncTasksModel, AsyncTaskStatus
+        task = AsyncTasksModel.get_by_task_key(task_key)
         if not task:
             return JSONResponse({'success': False, 'error': '任务不存在'}, status_code=404)
 
-        if task.status == RunningHubAsyncTaskStatus.COMPLETED:
+        if task.status == AsyncTaskStatus.COMPLETED:
             return JSONResponse({
                 'success': True,
                 'status': 'SUCCESS',
                 'task_key': task_key,
                 'result_url': task.result_url,
-                'character_id': task.character_id
+                'character_id': task.get_params_dict().get('character_id')
             })
-        elif task.status == RunningHubAsyncTaskStatus.FAILED:
+        elif task.status == AsyncTaskStatus.FAILED:
             return JSONResponse({
                 'success': True,
                 'status': 'FAILED',
                 'task_key': task_key,
                 'error': task.error_message or '音频生成失败'
             })
-        elif task.status == RunningHubAsyncTaskStatus.TIMEOUT:
+        elif task.status == AsyncTaskStatus.TIMEOUT:
             return JSONResponse({
                 'success': True,
                 'status': 'TIMEOUT',
