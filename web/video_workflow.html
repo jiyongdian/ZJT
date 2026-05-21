@@ -257,9 +257,9 @@
   <div class="modal" id="shotGroupModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 1200px; width: 90%;">
       <div class="modal-header">
-        <div class="modal-title" id="shotGroupModalTitle">分镜组详情</div>
+        <div class="modal-title" id="shotGroupModalTitle" data-i18n="shot_group_details">分镜组详情</div>
         <div style="display: flex; gap: 8px; align-items: center;">
-          <button class="mini-btn" id="shotGroupModalEditBtn" type="button">新建分镜/ 编辑分镜</button>
+          <button class="mini-btn" id="shotGroupModalEditBtn" type="button" data-i18n="create_edit_shot">新建分镜/ 编辑分镜</button>
           <button class="modal-close" id="shotGroupModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
         </div>
       </div>
@@ -272,7 +272,7 @@
   <div class="modal" id="shotDetailModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 800px;">
       <div class="modal-header">
-        <div class="modal-title" id="shotDetailModalTitle">分镜详情</div>
+        <div class="modal-title" id="shotDetailModalTitle" data-i18n="shot_detail">分镜详情</div>
         <button class="modal-close" id="shotDetailModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
@@ -284,15 +284,15 @@
   <div class="modal" id="shotGroupEditModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 1200px; width: 90%;">
       <div class="modal-header">
-        <div class="modal-title">编辑分镜组</div>
+        <div class="modal-title" data-i18n="edit_shot_group">编辑分镜组</div>
         <button class="modal-close" id="shotGroupEditModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
         <div id="shotGroupEditModalContent"></div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
-        <button class="mini-btn secondary" id="shotGroupEditCancelBtn" type="button">取消</button>
-        <button class="mini-btn" id="shotGroupEditSaveBtn" type="button">保存</button>
+        <button class="mini-btn secondary" id="shotGroupEditCancelBtn" type="button" data-i18n="cancel">取消</button>
+        <button class="mini-btn" id="shotGroupEditSaveBtn" type="button" data-i18n="save">保存</button>
       </div>
     </div>
   </div>
@@ -300,7 +300,7 @@
   <div class="modal" id="styleModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 600px; background: #ffffff; color: #111827; border: 1px solid #e5e7eb;">
       <div class="modal-header" style="background: #f8fafc; border-bottom: 1px solid #e5e7eb;">
-        <div class="modal-title" style="color: #0f172a;">画风设置</div>
+        <div class="modal-title" style="color: #0f172a;" data-i18n="style_settings">画风设置</div>
         <button class="modal-close" id="styleModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
@@ -361,7 +361,7 @@
   <div class="modal" id="characterModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 900px; background: #ffffff; color: #111827; border: 1px solid #e5e7eb;">
       <div class="modal-header" style="background: #f8fafc; border-bottom: 1px solid #e5e7eb;">
-        <div class="modal-title" style="color: #0f172a;">选择角色</div>
+        <div class="modal-title" style="color: #0f172a;" data-i18n="select_character">选择角色</div>
         <button class="modal-close" id="characterModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
@@ -396,7 +396,7 @@
   <div class="modal" id="locationModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 900px; background: #ffffff; color: #111827; border: 1px solid #e5e7eb;">
       <div class="modal-header" style="background: #f8fafc; border-bottom: 1px solid #e5e7eb;">
-        <div class="modal-title" style="color: #0f172a;">选择场景</div>
+        <div class="modal-title" style="color: #0f172a;" data-i18n="select_location">选择场景</div>
         <button class="modal-close" id="locationModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
@@ -431,7 +431,7 @@
   <div class="modal" id="createCharacterModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 600px; background: #ffffff; color: #111827; border: 1px solid #e5e7eb;">
       <div class="modal-header" style="background: #f8fafc; border-bottom: 1px solid #e5e7eb;">
-        <div class="modal-title" style="color: #0f172a;">创建角色</div>
+        <div class="modal-title" style="color: #0f172a;" data-i18n="create_character_modal">创建角色</div>
         <button class="modal-close" id="createCharacterModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
@@ -507,7 +507,7 @@
   <div class="modal" id="createLocationModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 600px; background: #ffffff; color: #111827; border: 1px solid #e5e7eb;">
       <div class="modal-header" style="background: #f8fafc; border-bottom: 1px solid #e5e7eb;">
-        <div class="modal-title" style="color: #0f172a;">创建场景</div>
+        <div class="modal-title" style="color: #0f172a;" data-i18n="create_location_modal">创建场景</div>
         <button class="modal-close" id="createLocationModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
@@ -568,7 +568,7 @@
   <div class="modal" id="editLocationModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 600px; background: #ffffff; color: #111827; border: 1px solid #e5e7eb;">
       <div class="modal-header" style="background: #f8fafc; border-bottom: 1px solid #e5e7eb;">
-        <div class="modal-title" style="color: #0f172a;">编辑场景</div>
+        <div class="modal-title" style="color: #0f172a;" data-i18n="edit_location_modal">编辑场景</div>
         <button class="modal-close" id="editLocationModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
@@ -633,7 +633,7 @@
   <div class="modal" id="propsModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 900px; background: #ffffff; color: #111827; border: 1px solid #e5e7eb;">
       <div class="modal-header" style="background: #f8fafc; border-bottom: 1px solid #e5e7eb;">
-        <div class="modal-title" style="color: #0f172a;">选择道具</div>
+        <div class="modal-title" style="color: #0f172a;" data-i18n="select_props">选择道具</div>
         <button class="modal-close" id="propsModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="background: #ffffff; padding: 20px;">

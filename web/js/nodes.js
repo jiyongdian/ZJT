@@ -536,20 +536,20 @@
         
         // 立即上传到服务器获取永久URL
         try {
-          showToast('正在上传视频...', 'info');
+          showToast(window.t ? window.t('uploading_video') : '正在上传视频...', 'info');
           const permanentUrl = await uploadFile(file);
           if(permanentUrl){
             // 更新为服务器URL
             node.data.url = permanentUrl;
             thumbVideo.src = proxyDownloadUrl(permanentUrl);
-            showToast('视频上传成功', 'success');
-            
+            showToast(window.t ? window.t('video_upload_success') : '视频上传成功', 'success');
+
             // 自动保存工作流
             try{ autoSaveWorkflow(); } catch(e){}
           }
         } catch(error){
           console.error('视频上传失败:', error);
-          showToast('视频上传失败，刷新页面后将丢失', 'error');
+          showToast(window.t ? window.t('video_upload_failed') : '视频上传失败，刷新页面后将丢失', 'error');
         }
       });
 
@@ -735,17 +735,17 @@
         setAudioFromFile(file);
         fileEl.value = '';
         try {
-          showToast('正在上传音频...', 'info');
+          showToast(window.t ? window.t('uploading_audio') : '正在上传音频...', 'info');
           const permanentUrl = await uploadFile(file);
           if(permanentUrl){
             node.data.url = permanentUrl;
             playerEl.src = permanentUrl;
-            showToast('音频上传成功', 'success');
+            showToast(window.t ? window.t('audio_upload_success') : '音频上传成功', 'success');
             try{ autoSaveWorkflow(); } catch(e){}
           }
         } catch(error){
           console.error('音频上传失败:', error);
-          showToast('音频上传失败', 'error');
+          showToast(window.t ? window.t('audio_upload_failed') : '音频上传失败', 'error');
         }
       });
 
@@ -1214,7 +1214,7 @@
       if(typeof window.openPropsModalForShot === 'function'){
         window.openPropsModalForShot();
       } else {
-        showToast('道具选择功能未初始化', 'error');
+        showToast(window.t ? window.t('props_selector_not_init') : '道具选择功能未初始化', 'error');
       }
     }
     
@@ -1232,7 +1232,7 @@
       shotGroupEditModalContent.innerHTML = renderShotGroupEditForm(node.data);
       bindShotEditEvents();
       
-      showToast('已移除道具', 'success');
+      showToast(window.t ? window.t('prop_removed') : '已移除道具', 'success');
     }
 
     function addNewShot(insertIndex){
@@ -1349,7 +1349,7 @@
         }
       } catch(e){
         console.error('加载世界列表失败:', e);
-        showToast('加载世界列表失败', 'error');
+        showToast(window.t ? window.t('load_world_list_failed') : '加载世界列表失败', 'error');
       }
     }
 
@@ -1457,7 +1457,7 @@
         shotGroupModalContent.innerHTML = renderShotGroupTable(node.data, nodeId);
       }
 
-      showToast('场景设置成功', 'success');
+      showToast(window.t ? window.t('location_set_success') : '场景设置成功', 'success');
       try{ autoSaveWorkflow(); } catch(e){}
     }
     
@@ -2058,7 +2058,7 @@
       if(typeof window.openPropsModalForShot === 'function'){
         await window.openPropsModalForShot();
       } else {
-        showToast('道具选择功能未初始化', 'error');
+        showToast(window.t ? window.t('props_selector_not_init') : '道具选择功能未初始化', 'error');
       }
     }
     
@@ -2078,7 +2078,7 @@
       }
       
       try{ autoSaveWorkflow(); } catch(e){}
-      showToast('已删除道具', 'success');
+      showToast(window.t ? window.t('prop_removed') : '已删除道具', 'success');
     }
 
     async function selectLocationForShotDetail(nodeId, shotIndex){
@@ -2260,7 +2260,7 @@
       if(typeof window.openPropsModalForShot === 'function'){
         await window.openPropsModalForShot();
       } else {
-        showToast('道具选择功能未初始化', 'error');
+        showToast(window.t ? window.t('props_selector_not_init') : '道具选择功能未初始化', 'error');
       }
     }
     
@@ -2283,7 +2283,7 @@
       }
       
       try{ autoSaveWorkflow(); } catch(e){}
-      showToast('已移除道具', 'success');
+      showToast(window.t ? window.t('prop_removed') : '已移除道具', 'success');
     }
     
     // 添加道具到分镜（供 events.js 调用）
@@ -2301,7 +2301,7 @@
       // 检查是否已存在该道具
       const exists = shot.props.some(p => p.id === props.id);
       if(exists){
-        showToast('该道具已添加', 'warning');
+        showToast(window.t ? window.t('prop_already_added') : '该道具已添加', 'warning');
         return;
       }
       
@@ -2334,7 +2334,7 @@
       window.currentPropsSelectionContext = null;
       
       try{ autoSaveWorkflow(); } catch(e){}
-      showToast('已添加道具', 'success');
+      showToast(window.t ? window.t('prop_added') : '已添加道具', 'success');
     };
 
     function escapeHtml(value){
@@ -4396,12 +4396,12 @@
                 // 全部成功
                 genStatus.style.color = '#16a34a';
                 genStatus.textContent = `全部成功！共${successCount}个视频`;
-                showToast('视频生成成功！', 'success');
+                showToast(window.t ? window.t('video_generation_success') : '视频生成成功！', 'success');
               } else if(failedCount === totalCount && failedCount > 0){
                 // 全部失败
                 genStatus.style.color = '#dc2626';
                 genStatus.textContent = `全部失败：${failedCount}个任务失败`;
-                showToast('视频生成失败', 'error');
+                showToast(window.t ? window.t('video_generation_failed') : '视频生成失败', 'error');
               } else if(successCount > 0 && failedCount > 0){
                 // 部分成功部分失败
                 genStatus.style.color = '#f59e0b';
