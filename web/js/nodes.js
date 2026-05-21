@@ -5261,11 +5261,11 @@
         coloringBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
           if(!node.data.url && !node.data.preview){
-            showToast('请先上传或生成图片', 'error');
+            showToast(window.t ? window.t('upload_or_generate_image_first') : '请先上传或生成图片', 'error');
             return;
           }
           const imageUrl = node.data.url || node.data.preview;
-          
+
           if(window.imageColoringEditor && window.imageColoringEditor.open){
             // Use proxied URL to avoid cross-origin canvas taint
             const safeImageUrl = (typeof proxyImageUrl === 'function') ? proxyImageUrl(imageUrl) : imageUrl;
@@ -5274,7 +5274,7 @@
                 coloringBtn.disabled = true;
                 statusEl.style.display = 'block';
                 statusEl.style.color = '#666';
-                statusEl.textContent = '正在上传涂色图片...';
+                statusEl.textContent = window.t ? window.t('uploading_image') : '正在上传涂色图片...';
                 
                 const coloredImageBlob = await fetch(result.coloredImage).then(r => r.blob());
                 const uploadFormData = new FormData();

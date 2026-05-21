@@ -252,6 +252,7 @@
   "count_unit": "x",
   "equals_total": "=",
   "draw_count_label": "Draw Count: ${count}",
+  "uploading_image": "Uploading colored image...",
   "max_reference_images": "Reached maximum reference images ${maxCount}, please delete some first",
   "auto_truncate_images": "Can only add ${canAdd} more reference images, automatically truncated to first ${canAdd}",
   "uploading_reference_image": "Uploading reference image (0/${totalToUpload})...",

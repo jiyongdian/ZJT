@@ -252,6 +252,7 @@
   "count_unit": "个",
   "equals_total": "=",
   "draw_count_label": "抽卡次数: ${count}",
+  "uploading_image": "正在上传涂色图片...",
   "max_reference_images": "已达到最大数量${maxCount}张参考图，请先删除一些图片",
   "auto_truncate_images": "最多还能添加${canAdd}张参考图，已自动截取前${canAdd}张",
   "uploading_reference_image": "正在上传参考图 (0/${totalToUpload})...",
