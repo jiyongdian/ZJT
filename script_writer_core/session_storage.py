@@ -14,6 +14,23 @@ from config.constant import SessionHistoryConstants
 logger = logging.getLogger(__name__)
 
 
+def _find_safe_preserve_start(msgs: list, desired_start: int) -> int:
+    """找到安全的保留起始索引，确保不会将 tool 消息与其前置的 assistant(tool_calls) 拆分。
+
+    从 desired_start 向前搜索，如果 desired_start 指向的是 tool 消息，
+    则继续向前直到找到对应的 assistant(tool_calls) 消息。
+    """
+    start = desired_start
+    while start > 0:
+        msg = msgs[start]
+        role = msg.get("role")
+        if role == "tool" or role == "verification":
+            start -= 1
+        else:
+            break
+    return start
+
+
 def truncate_conversation_history(history: list, max_messages: int = None, keep_system: bool = True) -> list:
     """
     截断对话历史，保留系统提示和最近的对话
@@ -42,11 +59,21 @@ def truncate_conversation_history(history: list, max_messages: int = None, keep_
         max_other_messages = max_messages - len(system_messages)
         if max_other_messages < SessionHistoryConstants.MIN_HISTORY_MESSAGES:
             max_other_messages = SessionHistoryConstants.MIN_HISTORY_MESSAGES
-        truncated_other = other_messages[-max_other_messages:] if len(other_messages) > max_other_messages else other_messages
+        if len(other_messages) > max_other_messages:
+            # 找到安全的截断起始索引，避免拆分 tool_calls/tool 消息组
+            desired_start = len(other_messages) - max_other_messages
+            safe_start = _find_safe_preserve_start(other_messages, desired_start)
+            truncated_other = other_messages[safe_start:]
+        else:
+            truncated_other = other_messages
         return system_messages + truncated_other
     else:
         # 不保留系统提示，直接截断所有消息
-        return history[-max_messages:] if len(history) > max_messages else history
+        if len(history) > max_messages:
+            desired_start = len(history) - max_messages
+            safe_start = _find_safe_preserve_start(history, desired_start)
+            return history[safe_start:]
+        return history
 
 
 class SessionStorage:
