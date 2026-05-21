@@ -20,8 +20,12 @@ from task.scheduler import init_scheduler, shutdown_scheduler
 def cleanup(signum=None, frame=None):
     """清理并退出"""
     print("[Scheduler] Shutting down...")
-    shutdown_scheduler()
-    sys.exit(0)
+    try:
+        shutdown_scheduler()
+    except Exception as e:
+        print(f"[Scheduler] Cleanup error: {e}")
+    finally:
+        sys.exit(0)
 
 
 if __name__ == "__main__":
@@ -38,9 +42,14 @@ if __name__ == "__main__":
     # init_scheduler 内部会检查文件锁
     init_scheduler(app)
     
-    # 保持进程运行
+    # 保持进程运行，并监控 scheduler 健康状态
+    from task.scheduler import scheduler as _scheduler
     try:
         while True:
             time.sleep(60)
+            # 健康检查：如果 APScheduler 内部线程崩溃，及时退出
+            if _scheduler and not _scheduler.running:
+                print("[Scheduler] Scheduler stopped unexpectedly, exiting...")
+                cleanup()
     except KeyboardInterrupt:
         cleanup()
