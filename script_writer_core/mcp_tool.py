@@ -3183,60 +3183,7 @@ def skill(SkillName: str) -> Dict[str, Any]:
 
 # ============ 音色相关 MCP 工具函数 ============
 
-def _build_character_audio_style_prompt(character_data: Dict[str, Any], custom_prompt: Optional[str] = None) -> str:
-    """
-    构建角色参考音频的风格提示词
-
-    Args:
-        character_data: 角色数据
-        custom_prompt: 自定义提示词（可选）
-
-    Returns:
-        str: 风格提示词
-    """
-    if custom_prompt and custom_prompt.strip():
-        return custom_prompt.strip()
-
-    prompt_parts = []
-    if character_data.get('name'):
-        prompt_parts.append(f"角色名：{character_data.get('name')}")
-    if character_data.get('age'):
-        prompt_parts.append(f"年龄：{character_data.get('age')}")
-    if character_data.get('identity'):
-        prompt_parts.append(f"身份：{character_data.get('identity')}")
-    if character_data.get('personality'):
-        prompt_parts.append(f"性格：{character_data.get('personality')}")
-    if character_data.get('behavior'):
-        prompt_parts.append(f"行为习惯：{character_data.get('behavior')}")
-    if character_data.get('other_info'):
-        prompt_parts.append(f"补充设定：{character_data.get('other_info')}")
-
-    if not prompt_parts:
-        return "请生成平静、自然、清晰、有辨识度的参考音频，语气平和，不带明显情感"
-
-    return "请根据以下角色设定生成平静、自然、清晰、有辨识度的参考音频，语气平和，不带明显情感。" + "；".join(prompt_parts)
-
-
-def _build_character_audio_text(character_data: Dict[str, Any], custom_text: Optional[str] = None) -> str:
-    """
-    构建角色参考音频的文本内容
-
-    Args:
-        character_data: 角色数据
-        custom_text: 自定义文本（可选）
-
-    Returns:
-        str: 文本内容
-    """
-    if custom_text and custom_text.strip():
-        return custom_text.strip()
-
-    character_name = character_data.get('name') or '我'
-    identity = character_data.get('identity') or '故事中的角色'
-    return f"大家好，我是{character_name}，是{identity}。很高兴在这个故事里与你相遇。"
-
-
-def generate_character_reference_audio(user_id: str, world_id: str, auth_token: str,
+async def generate_character_reference_audio(user_id: str, world_id: str, auth_token: str,
                                        character_name: str,
                                        style_prompt: Optional[str] = None,
                                        text: Optional[str] = None) -> Dict[str, Any]:
@@ -3274,63 +3221,33 @@ def generate_character_reference_audio(user_id: str, world_id: str, auth_token: 
                 'error': f'角色 "{character_name}" 不存在'
             }
 
-        # 构建提示词
-        final_style_prompt = _build_character_audio_style_prompt(character_data, style_prompt)
-        final_text = _build_character_audio_text(character_data, text)
+        # 构建提示词（复用 task/audio_task.py 中的函数）
+        from task.audio_task import build_character_audio_text
+        final_text = build_character_audio_text(character_data, text)
 
-        # 构建 RunningHub 节点信息
-        from config.constant import (
-            RUNNINGHUB_AUDIO_APP_ID,
-            RUNNINGHUB_AUDIO_STYLE_NODE_ID,
-            RUNNINGHUB_AUDIO_TEXT_NODE_ID
+        # style_prompt 直接使用用户提供的，如果没提供则使用默认
+        final_style_prompt = style_prompt.strip() if style_prompt and style_prompt.strip() else \
+            "请生成平静、自然、清晰、有辨识度的参考音频，语气平和，不带明显情感"
+
+        # 通过驱动提交任务
+        from task.async_drivers.runninghub_audio_driver import RunningHubAudioDriver
+        driver = RunningHubAudioDriver()
+        result = await driver.submit_task(
+            style_prompt=final_style_prompt,
+            text=final_text
         )
 
-        node_info_list = [
-            {
-                'nodeId': RUNNINGHUB_AUDIO_STYLE_NODE_ID,
-                'fieldName': 'prompt',
-                'fieldValue': final_style_prompt,
-                'description': 'prompt'
-            },
-            {
-                'nodeId': RUNNINGHUB_AUDIO_TEXT_NODE_ID,
-                'fieldName': 'prompt',
-                'fieldValue': final_text,
-                'description': 'prompt'
-            }
-        ]
-
-        # 提交 RunningHub 任务
-        from api.clients.runninghub_client import RunningHubClient
-        import asyncio
-
-        client = RunningHubClient()
-
-        # 使用 asyncio.run 在同步函数中调用异步方法
-        submit_response = asyncio.run(client.run_ai_app_v2(
-            app_id=RUNNINGHUB_AUDIO_APP_ID,
-            node_info_list=node_info_list,
-            instance_type='default',
-            use_personal_queue='false'
-        ))
-
-        runninghub_task_id = submit_response.get('taskId')
-        if not runninghub_task_id:
-            error_message = submit_response.get('errorMessage') or 'RunningHub 未返回任务 ID'
-            return {
-                'success': False,
-                'error': error_message,
-                'response': submit_response
-            }
+        if not result['success']:
+            return result
 
         return {
             'success': True,
-            'runninghub_task_id': runninghub_task_id,
+            'runninghub_task_id': result['project_id'],
             'character_name': character_name,
             'style_prompt': final_style_prompt,
             'text': final_text,
             'status': 'submitted',
-            'message': f'已为角色 "{character_name}" 提交参考音频生成任务 (task_id={runninghub_task_id})，请使用 check_runninghub_audio_status 查询生成状态'
+            'message': f'已为角色 "{character_name}" 提交参考音频生成任务 (task_id={result["project_id"]})，请使用 check_runninghub_audio_status 查询生成状态'
         }
 
     except Exception as e:
@@ -3341,7 +3258,7 @@ def generate_character_reference_audio(user_id: str, world_id: str, auth_token: 
         }
 
 
-def check_runninghub_audio_status(user_id: str, world_id: str, auth_token: str,
+async def check_runninghub_audio_status(user_id: str, world_id: str, auth_token: str,
                                    runninghub_task_id: str,
                                    character_name: Optional[str] = None) -> Dict[str, Any]:
     """
@@ -3358,33 +3275,20 @@ def check_runninghub_audio_status(user_id: str, world_id: str, auth_token: str,
         dict: 包含任务状态和结果URL的结果
     """
     try:
-        from api.clients.runninghub_client import RunningHubClient
-        from config.constant import RUNNINGHUB_AUDIO_FINAL_STATUSES
-        import asyncio
+        from task.async_drivers.runninghub_audio_driver import RunningHubAudioDriver
 
-        client = RunningHubClient()
-
-        # 查询任务状态
-        query_response = asyncio.run(client.query_v2_task(runninghub_task_id))
-        remote_status = query_response.get('status')
+        driver = RunningHubAudioDriver()
+        status_result = await driver.check_status(runninghub_task_id)
 
         result = {
             'success': True,
             'runninghub_task_id': runninghub_task_id,
-            'status': remote_status,
-            'message': f'任务状态: {remote_status}'
+            'status': status_result.get('status'),
+            'message': f"任务状态: {status_result.get('status')}"
         }
 
-        # 如果成功，提取结果URL
-        if remote_status == 'SUCCESS':
-            # 从 results 中提取 URL
-            result_url = None
-            for item in query_response.get('results') or []:
-                url = item.get('url')
-                if url:
-                    result_url = url
-                    break
-
+        if status_result.get('status') == 'SUCCESS':
+            result_url = status_result.get('result_url')
             if result_url:
                 result['audio_url'] = result_url
                 result['message'] = f'音频生成完成，URL: {result_url}'
@@ -3410,12 +3314,10 @@ def check_runninghub_audio_status(user_id: str, world_id: str, auth_token: str,
             else:
                 result['warning'] = '任务成功但未返回结果 URL'
 
-        # 如果失败，返回错误信息
-        elif remote_status in RUNNINGHUB_AUDIO_FINAL_STATUSES:
-            error_message = query_response.get('errorMessage') or str(query_response.get('failedReason') or '音频生成失败')
+        elif status_result.get('status') == 'FAILED':
             result['success'] = False
-            result['error'] = error_message
-            result['message'] = f'音频生成失败: {error_message}'
+            result['error'] = status_result.get('error', '音频生成失败')
+            result['message'] = f"音频生成失败: {result['error']}"
 
         return result
 
