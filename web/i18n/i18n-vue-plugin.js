@@ -9,6 +9,7 @@
 window.ZJTi18nVue = {
   install(app, options = {}) {
     const i18n = window.ZJTi18n;
+    const Vue = window.Vue;
 
     // 全局 $t() 方法
     app.config.globalProperties.$t = (key, params) => i18n.t(key, params);
@@ -21,7 +22,7 @@ window.ZJTi18nVue = {
       i18n.setLocale(locale, namespaces);
 
     // 响应式 locale（用于在模板中判断当前语言）
-    const localeReactive = app.reactive({ current: i18n.getLocale() });
+    const localeReactive = Vue.reactive({ current: i18n.getLocale() });
 
     app.config.globalProperties.$locale$ = localeReactive;
 
