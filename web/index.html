@@ -8612,6 +8612,8 @@
 
   const app = Vue.createApp(App);
   app.use(router);
+  // 注册 Vue i18n 插件
+  app.use(window.ZJTi18nVue);
   app.mount('#app');
   </script>
 
@@ -8619,8 +8621,6 @@
   <script>
     // i18n 初始化 - 在 Vue 应用创建前
     window.__STATIC_VERSION = window.__STATIC_VERSION || '';
-    // 注册 Vue i18n 插件
-    app.use(window.ZJTi18nVue);
     ZJTi18n.init(['common', 'index']).then(() => {
       // 初始化语言切换器到页面头部
       if (window.ZJTi18nSwitcher) {
