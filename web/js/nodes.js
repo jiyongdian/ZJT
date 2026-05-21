@@ -7912,8 +7912,8 @@
       }).join('');
 
       el.innerHTML = `
-        <div class="port input" data-i18n="shot_group_input_port" title="${window.t ? window.t('shot_group_input_port') : '输入（连接剧本节点）'}"></div>
-        <div class="port output" data-i18n="shot_group_output_port" title="${window.t ? window.t('shot_group_output_port') : '输出'}"></div>
+        <div class="port input" data-i18n="shot_group_input_port:title"></div>
+        <div class="port output" data-i18n="shot_group_output_port:title"></div>
         <div class="node-header">
           <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M6 9H18M6 12H14M6 15H12" stroke="currentColor" stroke-linecap="round"/></svg>${window.t ? window.t('shot_group_label') : '分镜组:'} ${escapeHtml(node.title)}</div>
           <button class="icon-btn" data-i18n="node_delete_btn:title" title="${window.t ? window.t('node_delete_btn') : '删除'}">×</button>
@@ -7988,7 +7988,7 @@
               <div class="field field-always-visible" style="margin-top: 10px;">
                 <div style="display: flex; flex-direction: column; gap: 8px;">
                   <div class="gen-container shot-group-merge-container" style="width: 100%;">
-                    <button class="gen-btn gen-btn-main shot-group-generate-video-btn" type="button" style="background: #22c55e; color: white; padding: 10px; flex: 1;" data-i18n="shot_group_merge_generate_video_btn:title" title="${window.t ? window.t('shot_group_merge_generate_tooltip') : '将多个分镜合并为一个视频生成，节省算力（仅 kling/veo3/sora2 支持）'}">${window.t ? window.t('shot_group_merge_generate_video_btn') : '合并生成视频'}</button>
+                    <button class="gen-btn gen-btn-main shot-group-generate-video-btn" type="button" style="background: #22c55e; color: white; padding: 10px; flex: 1;" data-i18n="shot_group_merge_generate_tooltip:title">${window.t ? window.t('shot_group_merge_generate_video_btn') : '合并生成视频'}</button>
                     <button class="gen-btn gen-btn-caret shot-group-video-caret" type="button" aria-label="选择抽卡次数">▾</button>
                     <div class="gen-menu shot-group-video-menu">
                       <div class="gen-item" data-count="1">X1</div>
@@ -7997,7 +7997,7 @@
                       <div class="gen-item" data-count="4">X4</div>
                     </div>
                   </div>
-                  <button class="gen-btn gen-btn-main shot-group-batch-generate-btn" type="button" style="background: #3b82f6; color: white; padding: 10px;" data-i18n="shot_group_batch_generate_video_btn:title" title="${window.t ? window.t('shot_group_batch_generate_tooltip') : '每个分镜独立生成视频，支持所有模型但可能浪费时长'}">${window.t ? window.t('shot_group_batch_generate_video_btn') : '逐个生成视频'}</button>
+                  <button class="gen-btn gen-btn-main shot-group-batch-generate-btn" type="button" style="background: #3b82f6; color: white; padding: 10px;" data-i18n="shot_group_batch_generate_tooltip:title">${window.t ? window.t('shot_group_batch_generate_video_btn') : '逐个生成视频'}</button>
                 </div>
               </div>
               <div style="font-size: 10px; color: #9ca3af; line-height: 1.4; margin-top: 4px;">
@@ -9005,8 +9005,8 @@
       // 不设固定宽度，由CSS .node:has(.script-node-body) 控制
 
       el.innerHTML = `
-        <div class="port input" data-i18n="shot_frame_input_port" title="${window.t ? window.t('shot_frame_input_port') : '输入（连接分镜组节点）'}"></div>
-        <div class="port output" data-i18n="shot_frame_output_port" title="${window.t ? window.t('shot_frame_output_port') : '输出'}"></div>
+        <div class="port input" data-i18n="shot_frame_input_port:title"></div>
+        <div class="port output" data-i18n="shot_frame_output_port:title"></div>
         <div class="node-header">
           <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>${window.t ? window.t('node_shot_frame_label') : '分镜'}: ${node.title}</div>
           <button class="icon-btn" data-i18n="node_delete_btn:title" title="${window.t ? window.t('node_delete_btn') : '删除'}">×</button>
@@ -9048,7 +9048,7 @@
                     <div class="gen-menu shot-frame-image-menu"></div>
                   </div>
                 </div>
-                <div class="port first-frame-port" data-i18n="shot_frame_first_frame_port" title="${window.t ? window.t('shot_frame_first_frame_port') : '连接图片节点（视频首帧）'}"></div>
+                <div class="port first-frame-port" data-i18n="shot_frame_first_frame_port:title"></div>
                 <div class="shot-frame-preview-field" style="position: relative;">
                   <img class="shot-frame-preview-image" src="${node.data.previewImageUrl || ''}" style="max-width: 100%; max-height: 160px; object-fit: contain; border-radius: 6px; cursor: pointer; display: ${node.data.previewImageUrl ? 'block' : 'none'};" />
                 </div>
