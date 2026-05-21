@@ -115,11 +115,5 @@ def process_runninghub_async_tasks(app=None):
         finally:
             loop.close()
 
-        # 清理旧任务（7天前）
-        try:
-            AsyncTasksModel.cleanup_old_tasks(days=7, implementation=AsyncTaskImplementationId.RUNNINGHUB_AUDIO)
-        except Exception as e:
-            logger.error(f"清理旧 RunningHub 异步任务失败: {e}")
-
     except Exception as e:
         logger.error(f"处理 RunningHub 异步任务失败: {e}")

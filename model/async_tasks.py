@@ -239,54 +239,6 @@ class AsyncTasksModel:
             logger.error(f"Failed to increment try_count for id={record_id}: {e}")
             raise
 
-    @staticmethod
-    def cleanup_old_tasks(days: int = 7, implementation: Optional[int] = None) -> int:
-        """
-        清理旧任务
-
-        Args:
-            days: 保留天数
-            implementation: 实现 ID 筛选（可选）
-
-        Returns:
-            删除的行数
-        """
-        if implementation:
-            sql = """
-                DELETE FROM async_tasks
-                WHERE implementation = %s
-                  AND status IN (%s, %s, %s)
-                  AND created_at < DATE_SUB(NOW(), INTERVAL %s DAY)
-            """
-            params = (
-                implementation,
-                AsyncTaskStatus.COMPLETED,
-                AsyncTaskStatus.FAILED,
-                AsyncTaskStatus.TIMEOUT,
-                days
-            )
-        else:
-            sql = """
-                DELETE FROM async_tasks
-                WHERE status IN (%s, %s, %s)
-                AND created_at < DATE_SUB(NOW(), INTERVAL %s DAY)
-            """
-            params = (
-                AsyncTaskStatus.COMPLETED,
-                AsyncTaskStatus.FAILED,
-                AsyncTaskStatus.TIMEOUT,
-                days
-            )
-
-        try:
-            affected = execute_update(sql, params)
-            if affected > 0:
-                logger.info(f"Cleaned up {affected} old async tasks (older than {days} days)")
-            return affected
-        except Exception as e:
-            logger.error(f"Failed to cleanup old async tasks: {e}")
-            raise
-
 
 CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS `async_tasks` (

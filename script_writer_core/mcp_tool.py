@@ -2999,7 +2999,7 @@ MCP_TOOLS = [
     },
     {
         "name": "generate_character_reference_audio",
-        "description": "为角色生成参考音频（异步非阻塞）。使用 RunningHub API 生成平静、自然的参考音频，根据角色设定自动构建提示词。返回 runninghub_task_id，可通过 check_runninghub_audio_status 查询生成状态。",
+        "description": "为角色生成参考音频（异步非阻塞）。根据角色设定自动构建提示词，提交音频生成任务。返回 runninghub_task_id，可通过 check_reference_audio_status 查询生成状态。",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -3020,8 +3020,8 @@ MCP_TOOLS = [
         }
     },
     {
-        "name": "check_runninghub_audio_status",
-        "description": "查询 RunningHub 音频生成任务状态。如果任务成功且提供了角色名称，会自动更新角色的 default_voice 字段。",
+        "name": "check_reference_audio_status",
+        "description": "查询角色参考音频生成任务状态。如果任务成功且提供了角色名称，会自动更新角色的 default_voice 字段。",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -3247,7 +3247,7 @@ async def generate_character_reference_audio(user_id: str, world_id: str, auth_t
             'style_prompt': final_style_prompt,
             'text': final_text,
             'status': 'submitted',
-            'message': f'已为角色 "{character_name}" 提交参考音频生成任务 (task_id={result["project_id"]})，请使用 check_runninghub_audio_status 查询生成状态'
+            'message': f'已为角色 "{character_name}" 提交参考音频生成任务 (task_id={result["project_id"]})，请使用 check_reference_audio_status 查询生成状态'
         }
 
     except Exception as e:
@@ -3258,7 +3258,7 @@ async def generate_character_reference_audio(user_id: str, world_id: str, auth_t
         }
 
 
-async def check_runninghub_audio_status(user_id: str, world_id: str, auth_token: str,
+async def check_reference_audio_status(user_id: str, world_id: str, auth_token: str,
                                    runninghub_task_id: str,
                                    character_name: Optional[str] = None) -> Dict[str, Any]:
     """
