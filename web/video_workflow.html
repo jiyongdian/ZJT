@@ -376,9 +376,9 @@
             </div>
           </div>
           <div class="field">
-            <label class="label" for="characterSearchInput" style="color: #0f172a;">搜索角色</label>
+            <label class="label" for="characterSearchInput" style="color: #0f172a;" data-i18n="search_character_label">${window.t ? window.t('search_character_label') : '搜索角色'}</label>
             <div style="display: flex; gap: 8px; align-items: center;">
-              <input type="text" id="characterSearchInput" placeholder="输入角色名称搜索..." style="flex: 1; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" />
+              <input type="text" id="characterSearchInput" placeholder="${window.t ? window.t('search_character_placeholder') : '输入角色名称搜索...'}" style="flex: 1; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" data-i18n="search_character_placeholder:placeholder" />
               <button type="button" id="createCharacterBtn" style="padding: 10px 16px; background: transparent; color: #3b82f6; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border: none; border-bottom: 1px solid transparent; transition: border-color 0.2s; cursor: pointer;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'">创建角色</button>
             </div>
           </div>
@@ -411,9 +411,9 @@
             </div>
           </div>
           <div class="field">
-            <label class="label" style="color: #0f172a;">搜索场景</label>
+            <label class="label" style="color: #0f172a;" data-i18n="search_location_label">${window.t ? window.t('search_location_label') : '搜索场景'}</label>
             <div style="display: flex; gap: 8px; align-items: center;">
-              <input type="text" id="locationSearchInput" placeholder="输入场景名称搜索..." style="flex: 1; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" />
+              <input type="text" id="locationSearchInput" placeholder="${window.t ? window.t('search_location_placeholder') : '输入场景名称搜索...'}" style="flex: 1; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" data-i18n="search_location_placeholder:placeholder" />
               <a id="createLocationBtn" href="javascript:void(0)" style="padding: 10px 16px; color: #3b82f6; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'">创建场景</a>
             </div>
           </div>
@@ -437,30 +437,30 @@
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
         <div style="display: flex; flex-direction: column; gap: 16px;">
           <div class="field">
-            <label class="label" style="color: #0f172a;">角色名称 <span style="color: #ef4444;">*</span></label>
-            <input type="text" id="createCharacterNameInput" placeholder="请输入角色名称..." style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" />
+            <label class="label" style="color: #0f172a;" data-i18n="character_name_label">${window.t ? window.t('character_name_label') : '角色名称'} <span style="color: #ef4444;">*</span></label>
+            <input type="text" id="createCharacterNameInput" placeholder="${window.t ? window.t('character_name_placeholder') : '请输入角色名称...'}" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" data-i18n="character_name_placeholder:placeholder" />
           </div>
           <div class="field-row">
             <div class="field">
-              <label class="label" style="color: #0f172a;">年龄</label>
-              <input type="text" id="createCharacterAgeInput" placeholder="请输入年龄..." style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" />
+              <label class="label" style="color: #0f172a;" data-i18n="character_age_label">${window.t ? window.t('character_age_label') : '年龄'}</label>
+              <input type="text" id="createCharacterAgeInput" placeholder="${window.t ? window.t('character_age_placeholder') : '请输入年龄...'}" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" data-i18n="character_age_placeholder:placeholder" />
             </div>
             <div class="field">
-              <label class="label" style="color: #0f172a;">身份/职业</label>
-              <input type="text" id="createCharacterIdentityInput" placeholder="请输入身份或职业..." style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" />
+              <label class="label" style="color: #0f172a;" data-i18n="character_identity_label">${window.t ? window.t('character_identity_label') : '身份或职业'}</label>
+              <input type="text" id="createCharacterIdentityInput" placeholder="${window.t ? window.t('character_identity_placeholder') : '请输入身份或职业...'}" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" data-i18n="character_identity_placeholder:placeholder" />
             </div>
           </div>
           <div class="field">
-            <label class="label" style="color: #0f172a;">性格</label>
-            <textarea id="createCharacterPersonalityInput" placeholder="请输入性格描述..." rows="3" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;"></textarea>
+            <label class="label" style="color: #0f172a;" data-i18n="character_personality_label">${window.t ? window.t('character_personality_label') : '性格'}</label>
+            <textarea id="createCharacterPersonalityInput" placeholder="${window.t ? window.t('character_personality_placeholder') : '请输入性格描述...'}" rows="3" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;" data-i18n="character_personality_placeholder:placeholder"></textarea>
           </div>
           <div class="field">
-            <label class="label" style="color: #0f172a;">行为习惯</label>
-            <textarea id="createCharacterBehaviorInput" placeholder="请输入行为习惯..." rows="3" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;"></textarea>
+            <label class="label" style="color: #0f172a;" data-i18n="character_behavior_label">${window.t ? window.t('character_behavior_label') : '行为习惯'}</label>
+            <textarea id="createCharacterBehaviorInput" placeholder="${window.t ? window.t('character_behavior_placeholder') : '请输入行为习惯...'}" rows="3" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;" data-i18n="character_behavior_placeholder:placeholder"></textarea>
           </div>
           <div class="field">
-            <label class="label" style="color: #0f172a;">其他信息</label>
-            <textarea id="createCharacterOtherInfoInput" class="compact-textarea" placeholder="请输入其他信息..." rows="2" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;"></textarea>
+            <label class="label" style="color: #0f172a;" data-i18n="character_other_info_label">${window.t ? window.t('character_other_info_label') : '其他信息'}</label>
+            <textarea id="createCharacterOtherInfoInput" class="compact-textarea" placeholder="${window.t ? window.t('character_other_info_placeholder') : '请输入其他信息...'}" rows="2" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;" data-i18n="character_other_info_placeholder:placeholder"></textarea>
           </div>
           <div class="field-row media-field-row">
             <div class="field">
@@ -513,18 +513,18 @@
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
         <div style="display: flex; flex-direction: column; gap: 16px;">
           <div class="field">
-            <label class="label" style="color: #0f172a;">场景名称 <span style="color: #ef4444;">*</span></label>
-            <input type="text" id="createLocationNameInput" placeholder="请输入场景名称..." style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" />
+            <label class="label" style="color: #0f172a;" data-i18n="location_name_label">${window.t ? window.t('location_name_label') : '场景名称'} <span style="color: #ef4444;">*</span></label>
+            <input type="text" id="createLocationNameInput" placeholder="${window.t ? window.t('location_name_placeholder') : '请输入场景名称...'}" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" data-i18n="location_name_placeholder:placeholder" />
           </div>
           <div class="field">
-            <label class="label" style="color: #0f172a;">父场景</label>
+            <label class="label" style="color: #0f172a;" data-i18n="parent_location_label">${window.t ? window.t('parent_location_label') : '父场景'}</label>
             <select id="createLocationParentSelect" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;">
-              <option value="">无（顶层场景）</option>
+              <option value="" data-i18n="parent_location_option">${window.t ? window.t('parent_location_option') : '无（顶层场景）'}</option>
             </select>
           </div>
           <div class="field">
-            <label class="label" style="color: #0f172a;">场景描述 <span style="color: #6b7280; font-size: 12px; font-weight: normal;">(最多100字)</span></label>
-            <textarea id="createLocationDescInput" placeholder="请输入场景描述..." rows="4" maxlength="100" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;"></textarea>
+            <label class="label" style="color: #0f172a;" data-i18n="location_description_label">${window.t ? window.t('location_description_label') : '场景描述'} <span style="color: #6b7280; font-size: 12px; font-weight: normal;">(最多100字)</span></label>
+            <textarea id="createLocationDescInput" placeholder="${window.t ? window.t('location_description_placeholder') : '请输入场景描述...'}" rows="4" maxlength="100" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;" data-i18n="location_description_placeholder:placeholder"></textarea>
             <div style="text-align: right; font-size: 12px; color: #6b7280; margin-top: 4px;">
               <span id="createLocationDescCount">0</span>/100
             </div>
@@ -674,16 +674,16 @@
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
         <div style="display: flex; flex-direction: column; gap: 16px;">
           <div class="field">
-            <label class="label" style="color: #0f172a;">道具名称 <span style="color: #ef4444;">*</span></label>
-            <input type="text" id="createPropsNameInput" placeholder="请输入道具名称..." style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" />
+            <label class="label" style="color: #0f172a;" data-i18n="props_name_label">${window.t ? window.t('props_name_label') : '道具名称'} <span style="color: #ef4444;">*</span></label>
+            <input type="text" id="createPropsNameInput" placeholder="${window.t ? window.t('props_name_placeholder') : '请输入道具名称...'}" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" data-i18n="props_name_placeholder:placeholder" />
           </div>
           <div class="field">
-            <label class="label" style="color: #0f172a;">道具描述</label>
-            <textarea id="createPropsContentInput" placeholder="请输入道具描述（包括外观、材质、用途等）..." rows="4" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;"></textarea>
+            <label class="label" style="color: #0f172a;" data-i18n="props_description_label">${window.t ? window.t('props_description_label') : '道具描述'}</label>
+            <textarea id="createPropsContentInput" placeholder="${window.t ? window.t('props_description_placeholder') : '请输入道具描述（包括外观、材质、用途等）...'}" rows="4" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;" data-i18n="props_description_placeholder:placeholder"></textarea>
           </div>
           <div class="field">
-            <label class="label" style="color: #0f172a;">其他信息</label>
-            <textarea id="createPropsOtherInfoInput" placeholder="请输入其他信息..." rows="2" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;"></textarea>
+            <label class="label" style="color: #0f172a;" data-i18n="props_other_info_label">${window.t ? window.t('props_other_info_label') : '其他信息'}</label>
+            <textarea id="createPropsOtherInfoInput" placeholder="${window.t ? window.t('props_other_info_placeholder') : '请输入其他信息...'}" rows="2" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-rgba: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;" data-i18n="props_other_info_placeholder:placeholder"></textarea>
           </div>
           <div class="field">
             <label class="label" style="color: #0f172a;">参考图</label>
