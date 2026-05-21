@@ -689,7 +689,7 @@
             <div class="mode-select-item" :class="{active: creationMode === 'short_drama'}" @click="selectCreationMode('short_drama')">
               <div class="mode-select-icon">🎬</div>
               <div class="mode-select-content">
-                <div class="mode-select-title">短剧模式</div>
+                <div class="mode-select-title" data-i18n="mode_short_drama"></div>
                 <div class="mode-select-desc">适用于AI短剧创作，包含剧本、角色、场景、视频生成全流程</div>
               </div>
               <div class="mode-select-check" v-if="creationMode === 'short_drama'">✓</div>
@@ -737,10 +737,10 @@
         <!-- 短剧模式内容 -->
         <!-- 当前模式显示 -->
           <div class="current-mode-bar">
-            <span class="current-mode-label">当前模式：</span>
+            <span class="current-mode-label" data-i18n="current_mode"></span>
             <span class="current-mode-value" v-if="$root.creationMode === 'marketing'">🎯 营销模式</span>
-            <span class="current-mode-value" v-else>🎬 短剧模式</span>
-            <button class="mode-switch-btn" @click.stop="$root.showModeSelectModal = true">切换模式</button>
+            <span class="current-mode-value" v-else>🎬 {{ $t('mode_short_drama') }}</span>
+            <button class="mode-switch-btn" @click.stop="$root.showModeSelectModal = true" data-i18n="switch_mode"></button>
           </div>
 
           <!-- 开始创作大横幅 -->
@@ -758,11 +758,11 @@
               <template v-else>
                 <div class="banner-title-row">
                   <span class="banner-sparkle">✨</span>
-                  <h1 class="banner-title">开始创作</h1>
+                  <h1 class="banner-title">{{ $t('start_creation') }}</h1>
                   <span class="banner-sparkle">✨</span>
                 </div>
-                <p class="banner-desc">创建新的短剧工作流，一站式完成剧本、角色、场景到视频的全流程制作</p>
-                <p class="banner-subtitle">→ 点击开始您的创作之旅</p>
+                <p class="banner-desc">{{ $t('creation_desc') }}</p>
+                <p class="banner-subtitle">→ {{ $t('click_start_journey') }}</p>
               </template>
             </div>
           </div>
@@ -773,12 +773,12 @@
               <div class="feature-card-header">
                 <div class="feature-card-icon blue">📹</div>
                 <div class="feature-card-info">
-                  <div class="feature-card-title">视频工作流</div>
-                  <div class="feature-card-subtitle">空画布 + 节点式工作流编辑</div>
+                  <div class="feature-card-title">{{ $t('video_workflow') }}</div>
+                  <div class="feature-card-subtitle">{{ $t('video_workflow_desc') }}</div>
                 </div>
               </div>
               <div class="feature-card-body">
-                <p class="feature-card-desc">创建和管理视频的视频项目</p>
+                <p class="feature-card-desc">{{ $t('video_workflow_detail') }}</p>
               </div>
               <div class="feature-card-footer">
                 <span class="feature-card-link">→</span>
@@ -788,12 +788,12 @@
               <div class="feature-card-header">
                 <div class="feature-card-icon purple">✨</div>
                 <div class="feature-card-info">
-                  <div class="feature-card-title">剧本智能创作系统</div>
-                  <div class="feature-card-subtitle">AI智能体生成 · 人物 · 场景 · 道具</div>
+                  <div class="feature-card-title">{{ $t('script_system') }}</div>
+                  <div class="feature-card-subtitle">{{ $t('script_system_desc') }}</div>
                 </div>
               </div>
               <div class="feature-card-body">
-                <p class="feature-card-desc">一键创作完整的短剧素材</p>
+                <p class="feature-card-desc">{{ $t('script_system_detail') }}</p>
               </div>
               <div class="feature-card-footer">
                 <span class="feature-card-link">→</span>
@@ -807,8 +807,8 @@
               <div class="ai-tools-left">
                 <div class="ai-tools-icon">🤖</div>
                 <div class="ai-tools-info">
-                  <span class="ai-tools-title">AI 工具箱</span>
-                  <span class="ai-tools-subtitle" v-if="!aiToolsExpanded">展开查看所有可用工具</span>
+                  <span class="ai-tools-title">{{ $t('ai_toolbox') }}</span>
+                  <span class="ai-tools-subtitle" v-if="!aiToolsExpanded">{{ $t('ai_toolbox_desc') }}</span>
                 </div>
               </div>
               <div class="ai-tools-toggle" :class="{expanded: aiToolsExpanded}">
@@ -822,57 +822,57 @@
                 <div class="tool-card" @click="$router.push({name:'image-edit'})">
                   <div class="tool-card-icon blue">🖼️</div>
                   <div class="tool-card-info">
-                    <div class="tool-card-title">图片编辑</div>
-                    <div class="tool-card-desc">上传图片 + 提示词</div>
+                    <div class="tool-card-title">{{ $t('image_edit') }}</div>
+                    <div class="tool-card-desc">{{ $t('image_edit_desc') }}</div>
                   </div>
                 </div>
                 <div class="tool-card" @click="$router.push({name:'text-to-image'})">
                   <div class="tool-card-icon purple">🎨</div>
                   <div class="tool-card-info">
-                    <div class="tool-card-title">AI文生图</div>
-                    <div class="tool-card-desc">输入文本提示词生成图片</div>
+                    <div class="tool-card-title">{{ $t('ai_text_to_image') }}</div>
+                    <div class="tool-card-desc">{{ $t('ai_text_to_image_desc') }}</div>
                   </div>
                 </div>
                 <div class="tool-card" @click="$router.push({name:'ai-video-gen'})">
                   <div class="tool-card-icon orange">📹</div>
                   <div class="tool-card-info">
-                    <div class="tool-card-title">AI视频生成</div>
-                    <div class="tool-card-desc">输入文本提示词生成视频</div>
+                    <div class="tool-card-title">{{ $t('ai_video_generation') }}</div>
+                    <div class="tool-card-desc">{{ $t('ai_video_generation_desc') }}</div>
                   </div>
                 </div>
                 <div class="tool-card" @click="$router.push({name:'image-to-video'})">
                   <div class="tool-card-icon green">🎬</div>
                   <div class="tool-card-info">
-                    <div class="tool-card-title">图片生成视频</div>
-                    <div class="tool-card-desc">上传图片 + 提示词生成视频</div>
+                    <div class="tool-card-title">{{ $t('image_to_video') }}</div>
+                    <div class="tool-card-desc">{{ $t('image_to_video_desc') }}</div>
                   </div>
                 </div>
                 <div class="tool-card" @click="$router.push({name:'video-enhance'})">
                   <div class="tool-card-icon yellow">✨</div>
                   <div class="tool-card-info">
-                    <div class="tool-card-title">视频高清修复</div>
-                    <div class="tool-card-desc">上传模糊视频进行高清修复</div>
+                    <div class="tool-card-title">{{ $t('video_enhance') }}</div>
+                    <div class="tool-card-desc">{{ $t('video_enhance_desc') }}</div>
                   </div>
                 </div>
                 <div class="tool-card" @click="$router.push({name:'audio-generate'})">
                   <div class="tool-card-icon purple">🎵</div>
                   <div class="tool-card-info">
-                    <div class="tool-card-title">AI音频生成</div>
-                    <div class="tool-card-desc">输入文本生成语音，支持声音克隆</div>
+                    <div class="tool-card-title">{{ $t('audio_generation') }}</div>
+                    <div class="tool-card-desc">{{ $t('audio_generation_desc') }}</div>
                   </div>
                 </div>
                 <div class="tool-card" @click="$router.push({name:'digital-human'})">
                   <div class="tool-card-icon pink">👤</div>
                   <div class="tool-card-info">
-                    <div class="tool-card-title">在线图片数字人</div>
-                    <div class="tool-card-desc">上传图片+文本+音频生成数字人</div>
+                    <div class="tool-card-title">{{ $t('digital_human') }}</div>
+                    <div class="tool-card-desc">{{ $t('digital_human_desc') }}</div>
                   </div>
                 </div>
                 <div class="tool-card" @click="$router.push({name:'skill-config'})">
                   <div class="tool-card-icon teal">⚙️</div>
                   <div class="tool-card-info">
-                    <div class="tool-card-title">技能配置</div>
-                    <div class="tool-card-desc">自定义 AI 专家的能力</div>
+                    <div class="tool-card-title">{{ $t('skill_config') }}</div>
+                    <div class="tool-card-desc">{{ $t('skill_config_desc') }}</div>
                   </div>
                 </div>
               </div>
@@ -901,7 +901,7 @@
         const userId = localStorage.getItem('user_id');
 
         if (!authToken || !userId) {
-          alert('请先登录');
+          alert(this.$t('need_login') || '请先登录');
           return;
         }
 
@@ -8621,7 +8621,7 @@
   <script>
     // i18n 初始化 - 在 Vue 应用创建前
     window.__STATIC_VERSION = window.__STATIC_VERSION || '';
-    ZJTi18n.init(['common', 'index']).then(() => {
+    ZJTi18n.init(['common', 'index', 'video_workflow', 'marketing_agent']).then(() => {
       // 初始化语言切换器到页面头部
       if (window.ZJTi18nSwitcher) {
         ZJTi18nSwitcher.attachToHeader();
