@@ -60,55 +60,60 @@ def process_runninghub_async_tasks(app=None):
 
         driver = RunningHubAudioDriver()
 
-        for task in pending_tasks:
-            try:
-                # 增加尝试次数
-                AsyncTasksModel.increment_try_count(task.task_key)
-                task.try_count += 1
+        # 在循环外创建事件循环，避免每次迭代创建/销毁
+        loop = asyncio.new_event_loop()
+        try:
+            for task in pending_tasks:
+                try:
+                    # 增加尝试次数
+                    AsyncTasksModel.increment_try_count(task.task_key)
+                    task.try_count += 1
 
-                # 检查是否超过最大尝试次数
-                if task.try_count > task.max_attempts:
-                    logger.error(f"RunningHub 异步任务超时: {task.task_key}, 尝试次数: {task.try_count}/{task.max_attempts}")
-                    AsyncTasksModel.update_status(
-                        task_key=task.task_key,
-                        status=AsyncTaskStatus.TIMEOUT,
-                        error_message=f"超过最大尝试次数 {task.max_attempts}"
-                    )
-                    continue
+                    # 检查是否超过最大尝试次数
+                    if task.try_count > task.max_attempts:
+                        logger.error(f"RunningHub 异步任务超时: {task.task_key}, 尝试次数: {task.try_count}/{task.max_attempts}")
+                        AsyncTasksModel.update_status(
+                            task_key=task.task_key,
+                            status=AsyncTaskStatus.TIMEOUT,
+                            error_message=f"超过最大尝试次数 {task.max_attempts}"
+                        )
+                        continue
 
-                # 更新为处理中状态（仅在第一次尝试时）
-                if task.try_count == 1:
-                    AsyncTasksModel.update_status(
-                        task_key=task.task_key,
-                        status=AsyncTaskStatus.PROCESSING
-                    )
+                    # 更新为处理中状态（仅在第一次尝试时）
+                    if task.try_count == 1:
+                        AsyncTasksModel.update_status(
+                            task_key=task.task_key,
+                            status=AsyncTaskStatus.PROCESSING
+                        )
 
-                # 查询 RunningHub 任务状态
-                status_result = asyncio.run(driver.check_status(task.external_task_id))
+                    # 查询 RunningHub 任务状态
+                    status_result = loop.run_until_complete(driver.check_status(task.external_task_id))
 
-                if status_result.get('status') == 'SUCCESS':
-                    result_url = status_result.get('result_url')
-                    AsyncTasksModel.update_status(
-                        task_key=task.task_key,
-                        status=AsyncTaskStatus.COMPLETED,
-                        result_url=result_url
-                    )
-                    _handle_audio_task_success(task, result_url)
-                    logger.info(f"RunningHub 异步任务完成: {task.task_key}, result: {result_url}")
+                    if status_result.get('status') == 'SUCCESS':
+                        result_url = status_result.get('result_url')
+                        AsyncTasksModel.update_status(
+                            task_key=task.task_key,
+                            status=AsyncTaskStatus.COMPLETED,
+                            result_url=result_url
+                        )
+                        _handle_audio_task_success(task, result_url)
+                        logger.info(f"RunningHub 异步任务完成: {task.task_key}, result: {result_url}")
 
-                elif status_result.get('status') == 'FAILED':
-                    error_message = status_result.get('error', '任务失败')
-                    AsyncTasksModel.update_status(
-                        task_key=task.task_key,
-                        status=AsyncTaskStatus.FAILED,
-                        error_message=error_message
-                    )
-                    logger.error(f"RunningHub 异步任务失败: {task.task_key}, error: {error_message}")
+                    elif status_result.get('status') == 'FAILED':
+                        error_message = status_result.get('error', '任务失败')
+                        AsyncTasksModel.update_status(
+                            task_key=task.task_key,
+                            status=AsyncTaskStatus.FAILED,
+                            error_message=error_message
+                        )
+                        logger.error(f"RunningHub 异步任务失败: {task.task_key}, error: {error_message}")
 
-                # RUNNING 状态不做处理，等待下次轮询
+                    # RUNNING 状态不做处理，等待下次轮询
 
-            except Exception as e:
-                logger.error(f"处理 RunningHub 异步任务异常: {task.task_key}, error: {str(e)}")
+                except Exception as e:
+                    logger.error(f"处理 RunningHub 异步任务异常: {task.task_key}, error: {str(e)}")
+        finally:
+            loop.close()
 
         # 清理旧任务（7天前）
         try:
