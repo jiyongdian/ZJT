@@ -1,0 +1,20 @@
+{
+  "page_title": "营销文案生成",
+  "loading": "加载中...",
+  "success": "成功",
+  "error": "错误",
+  "confirm": "确认",
+  "cancel": "取消",
+  "close": "关闭",
+  "send": "发送",
+  "sending": "发送中...",
+  "generate": "生成",
+  "generating": "生成中...",
+  "copy": "复制",
+  "copied": "已复制",
+  "clear": "清空",
+  "save": "保存",
+  "saved": "已保存",
+  "delete": "删除",
+  "refresh": "刷新"
+}

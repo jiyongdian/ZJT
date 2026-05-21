@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>营销智能体</title>
+    <title data-i18n="page_title">营销智能体</title>
     <link rel="icon" href="/files/logo.ico" type="image/vnd.microsoft.icon"/>
     <link rel="stylesheet" href="/css/marketing_agent.css">
     <script src="/js/vue.global.prod.js"></script>
@@ -11,6 +11,12 @@
     <script src="/js/marked.min.js"></script>
     <script src="/js/task_config.js"></script>
     <link rel="stylesheet" href="/css/github.min.css">
+    <!-- i18n 支持 -->
+    <script src="/i18n/i18n-core.js?v=__VERSION__"></script>
+    <script src="/i18n/i18n-vue-plugin.js?v=__VERSION__"></script>
+    <script src="/i18n/i18n-dom.js?v=__VERSION__"></script>
+    <link rel="stylesheet" href="/i18n/i18n-switcher.css?v=__VERSION__" />
+    <script src="/i18n/i18n-switcher.js?v=__VERSION__"></script>
 </head>
 <body>
     <div id="app" class="app-container">
@@ -21,15 +27,15 @@
             </a>
             <div class="marketing-nav-item" style="opacity: 0.4; cursor: not-allowed;" title="开发中">
                 <div class="marketing-nav-icon">💡</div>
-                <div class="marketing-nav-text">灵感</div>
+                <div class="marketing-nav-text" data-i18n="nav_inspiration">灵感</div>
             </div>
             <div class="marketing-nav-item active">
                 <div class="marketing-nav-icon">✨</div>
-                <div class="marketing-nav-text">生成</div>
+                <div class="marketing-nav-text" data-i18n="nav_generate">生成</div>
             </div>
             <div class="marketing-nav-item" style="opacity: 0.4; cursor: not-allowed;" title="开发中">
                 <div class="marketing-nav-icon">📁</div>
-                <div class="marketing-nav-text">资产</div>
+                <div class="marketing-nav-text" data-i18n="nav_assets">资产</div>
             </div>
         </nav>
 
@@ -37,22 +43,22 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <div class="sidebar-header-top">
-                    <span class="sidebar-title">开启创作</span>
+                    <span class="sidebar-title" data-i18n="sidebar_create">开启创作</span>
                 </div>
                 <button class="new-chat-btn" @click="newChat">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 5v14M5 12h14"/>
                     </svg>
-                    <span>新对话</span>
+                    <span data-i18n="new_chat">新对话</span>
                 </button>
             </div>
 
             <div class="sidebar-search">
-                <input type="text" v-model="searchQuery" placeholder="搜索对话...">
+                <input type="text" v-model="searchQuery" placeholder="搜索对话..." data-i18n-attr="placeholder:search_history">
             </div>
 
 
-            <div class="sidebar-section">最近</div>
+            <div class="sidebar-section" data-i18n="recent">最近</div>
             <div class="sidebar-history">
                 <div
                     v-for="session in filteredSessions"
@@ -91,14 +97,14 @@
                         @click.stop
                     >
                         <div class="history-menu-item" @click="startRename(session)">
-                            <span>✏️</span> 重命名
+                            <span>✏️</span> <span data-i18n="rename">重命名</span>
                         </div>
-                        <div class="history-menu-item danger" :class="{ disabled: sessions.length <= 1 }" @click="sessions.length <= 1 ? null : deleteSession(session.id)">
-                            <span>🗑️</span> 删除
+                        <div class="history-menu-item danger" @click="deleteSession(session.id)">
+                            <span>🗑️</span> <span data-i18n="delete">删除</span>
                         </div>
                     </div>
                 </div>
-                <div v-if="filteredSessions.length === 0" style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 13px;">
+                <div v-if="filteredSessions.length === 0" style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 13px;" data-i18n="no_history">
                     暂无历史对话
                 </div>
             </div>
@@ -118,7 +124,7 @@
                 <div class="top-bar-right">
                     <div class="top-bar-search">
                         <span class="search-icon">🔍</span>
-                        <input type="text" v-model="searchQuery" placeholder="搜索...">
+                        <input type="text" v-model="searchQuery" placeholder="搜索..." data-i18n-attr="placeholder:search">
                     </div>
                     <!-- 算力显示 -->
                     <div class="computing-power-display"
@@ -136,8 +142,8 @@
                 <!-- 欢迎卡片 -->
                 <div v-if="messages.length === 0" class="welcome-card">
                     <div class="welcome-icon">🎯</div>
-                    <h2 class="welcome-title">营销智能体</h2>
-                    <p class="welcome-desc">我是您的营销助手，可以帮助您创作带货脚本、广告创意、产品文案等营销内容。请告诉我您的需求。</p>
+                    <h2 class="welcome-title" data-i18n="page_title">营销智能体</h2>
+                    <p class="welcome-desc" data-i18n="welcome_desc">我是您的营销助手，可以帮助您创作带货脚本、广告创意、产品文案等营销内容。请告诉我您的需求。</p>
                 </div>
 
                 <!-- 消息列表 -->
@@ -4772,6 +4778,18 @@
         .catch(() => {});
 
     app.mount('#app');
+    </script>
+
+    <!-- i18n 初始化 -->
+    <script>
+      // i18n 初始化 - 在 Vue 应用创建前
+      window.__STATIC_VERSION = window.__STATIC_VERSION || '';
+      ZJTi18n.init(['common', 'marketing_agent']).then(() => {
+        // 初始化语言切换器到页面头部
+        if (window.ZJTi18nSwitcher) {
+          ZJTi18nSwitcher.attachToHeader();
+        }
+      });
     </script>
 </body>
 </html>

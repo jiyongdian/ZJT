@@ -1,0 +1,105 @@
+/**
+ * ZJT i18n 语言切换 UI 样式
+ */
+
+.language-switcher {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.language-switcher-btn {
+  background: transparent;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  color: #475569;
+}
+
+.language-switcher-btn:hover {
+  background-color: #f8fafc;
+  border-color: #94a3b8;
+  color: #1e293b;
+}
+
+.language-switcher-btn:active {
+  background-color: #e2e8f0;
+}
+
+.language-icon {
+  font-size: 16px;
+}
+
+.language-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: white;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  min-width: 140px;
+  margin-top: 4px;
+  overflow: hidden;
+}
+
+.language-dropdown.show {
+  display: block;
+}
+
+.language-option {
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #475569;
+  transition: background-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.language-option:hover {
+  background-color: #f1f5f9;
+  color: #1e293b;
+}
+
+.language-option.active {
+  background-color: #e0e7ff;
+  color: #4f46e5;
+  font-weight: 500;
+}
+
+.language-option::before {
+  content: '';
+  display: inline-block;
+  width: 16px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.language-option.active::before {
+  content: '✓';
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .language-switcher-btn {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+
+  .language-option {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+}

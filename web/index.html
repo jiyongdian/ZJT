@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>智剧通 AI短剧制作平台</title>
+  <title data-i18n="page_title">智剧通 AI短剧制作平台</title>
   <meta name="description" content="智剧通是专业的AI短剧制作平台，提供图片编辑、AI文生图、AI视频生成、图片生成视频、数字人视频、音频生成等一站式AI创作工具。" />
   <meta name="keywords" content="AI短剧,AI视频,AI图片,文生图,图生视频,数字人,音频生成,视频工作流" />
   
@@ -21,6 +21,13 @@
   
   <link rel="icon" href="/files/logo.ico" type="image/vnd.microsoft.icon"/>
   <link rel="stylesheet" href="/css/index.css" />
+
+  <!-- i18n 支持 -->
+  <script src="/i18n/i18n-core.js?v=__VERSION__"></script>
+  <script src="/i18n/i18n-vue-plugin.js?v=__VERSION__"></script>
+  <script src="/i18n/i18n-dom.js?v=__VERSION__"></script>
+  <link rel="stylesheet" href="/i18n/i18n-switcher.css?v=__VERSION__" />
+  <script src="/i18n/i18n-switcher.js?v=__VERSION__"></script>
 </head>
 <body>
   <div id="app" class="container" v-cloak>
@@ -30,37 +37,37 @@
           <img src="/files/logo.svg" alt="Logo" style="width: 48px; height: 48px;" />
           <div class="header-title-group">
             <div class="title">{{ mainTitle }}</div>
-            <div class="subtitle" v-if="route.name==='list'">AI短剧制作平台</div>
+            <div class="subtitle" v-if="route.name==='list'" data-i18n="subtitle">AI短剧制作平台</div>
           </div>
         </div>
         <div style="display: flex; gap: 10px; align-items: center;">
-          <button class="btn secondary" v-if="route.name!=='list'" @click="goHome">返回</button>
+          <button class="btn secondary" v-if="route.name!=='list'" @click="goHome" data-i18n="back">返回</button>
           <template v-if="isLoggedIn">
             <div class="user-info-wrapper">
-              <span class="user-phone clickable" @click="openInviteModal" title="点击查看邀请码">{{ maskedPhone }}</span>
+              <span class="user-phone clickable" @click="openInviteModal" title="点击查看邀请码" data-i18n="invite_code:title">{{ maskedPhone }}</span>
               <div class="computing-power-display">
                 <template v-if="checkinStatus.checkin_enabled">
-                  <button class="checkin-badge" v-if="!checkinStatus.checked_in_today" @click="performCheckin" :disabled="checkinLoading" title="点击签到领算力">
+                  <button class="checkin-badge" v-if="!checkinStatus.checked_in_today" @click="performCheckin" :disabled="checkinLoading" title="点击签到领算力" data-i18n="check_in">
                     签到
                   </button>
-                  <span class="checkin-badge checked" v-else title="今日已签到">
+                  <span class="checkin-badge checked" v-else title="今日已签到" data-i18n="checked_in_today:title">
                     已签
                   </span>
                 </template>
-                <span class="clickable" @click="openComputingPowerLogs" title="点击查看算力日志">
-                  算力: <span class="computing-power-value">{{ computingPower !== null ? computingPower : '加载中...' }}</span>
+                <span class="clickable" @click="openComputingPowerLogs" title="点击查看算力日志" data-i18n="click_power_logs:title">
+                  算力: <span class="computing-power-value" data-i18n="power_loading">{{ computingPower !== null ? computingPower : '加载中...' }}</span>
                 </span>
-                <button class="refresh-btn" @click="fetchComputingPower" title="刷新算力">
+                <button class="refresh-btn" @click="fetchComputingPower" title="刷新算力" data-i18n="refresh:title">
                   ↻
                 </button>
               </div>
-              <button class="btn secondary" @click="handleRechargeClick" style="margin-top: 8px; font-size: 12px; padding: 4px 12px;">算力充值</button>
+              <button class="btn secondary" @click="handleRechargeClick" style="margin-top: 8px; font-size: 12px; padding: 4px 12px;" data-i18n="recharge">算力充值</button>
             </div>
-            <a v-if="userRole === 'admin'" href="/admin" class="btn secondary" style="text-decoration: none;">管理后台</a>
-            <button class="btn secondary" @click="showUserSettingsModal">设置</button>
-            <button class="btn secondary" @click="handleLogout">登出</button>
+            <a v-if="userRole === 'admin'" href="/admin" class="btn secondary" style="text-decoration: none;" data-i18n="admin_panel">管理后台</a>
+            <button class="btn secondary" @click="showUserSettingsModal" data-i18n="settings">设置</button>
+            <button class="btn secondary" @click="handleLogout" data-i18n="logout">登出</button>
           </template>
-          <button class="btn" v-else @click="showLoginModal = true">登录</button>
+          <button class="btn" v-else @click="showLoginModal = true" data-i18n="login">登录</button>
         </div>
       </header>
 
@@ -8606,6 +8613,20 @@
   const app = Vue.createApp(App);
   app.use(router);
   app.mount('#app');
+  </script>
+
+  <!-- i18n 初始化 -->
+  <script>
+    // i18n 初始化 - 在 Vue 应用创建前
+    window.__STATIC_VERSION = window.__STATIC_VERSION || '';
+    // 注册 Vue i18n 插件
+    app.use(window.ZJTi18nVue);
+    ZJTi18n.init(['common', 'index']).then(() => {
+      // 初始化语言切换器到页面头部
+      if (window.ZJTi18nSwitcher) {
+        ZJTi18nSwitcher.attachToHeader();
+      }
+    });
   </script>
 </body>
 </html>

@@ -1,0 +1,20 @@
+{
+  "page_title": "Marketing Copy Generator",
+  "loading": "Loading...",
+  "success": "Success",
+  "error": "Error",
+  "confirm": "Confirm",
+  "cancel": "Cancel",
+  "close": "Close",
+  "send": "Send",
+  "sending": "Sending...",
+  "generate": "Generate",
+  "generating": "Generating...",
+  "copy": "Copy",
+  "copied": "Copied",
+  "clear": "Clear",
+  "save": "Save",
+  "saved": "Saved",
+  "delete": "Delete",
+  "refresh": "Refresh"
+}
