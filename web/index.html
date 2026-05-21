@@ -329,30 +329,30 @@
     <div class="modal-overlay" v-if="showLoginModal" @click.self="closeModal">
       <div class="modal" style="position: relative;">
         <button class="modal-close" @click="closeModal">×</button>
-        <div class="modal-title">{{ authMode === 'login' ? '用户登录' : (authMode === 'register' ? '用户注册' : '重置密码') }}</div>
-        
+        <div class="modal-title">{{ authMode === 'login' ? $t('user_login') : (authMode === 'register' ? $t('user_register') : $t('reset_password')) }}</div>
+
         <!-- Tab Switcher -->
         <div class="modal-tabs">
           <button class="modal-tab" :class="{active: authMode === 'login'}" @click="switchAuthMode('login')">
-            登录
+            {{ $t('login') }}
           </button>
           <button class="modal-tab" :class="{active: authMode === 'register'}" @click="switchAuthMode('register')">
-            注册
+            {{ $t('register') }}
           </button>
           <button class="modal-tab" :class="{active: authMode === 'reset'}" @click="switchAuthMode('reset')">
-            重置密码
+            {{ $t('reset_password') }}
           </button>
         </div>
 
         <!-- Login Form -->
         <div v-if="authMode === 'login'">
           <div class="field">
-            <label class="label">手机号</label>
-            <input class="input" type="tel" v-model="loginForm.phone" placeholder="请输入手机号" maxlength="11" />
+            <label class="label">{{ $t('phone') }}</label>
+            <input class="input" type="tel" v-model="loginForm.phone" :placeholder="$t('enter_phone')" maxlength="11" />
           </div>
           <div class="field">
-            <label class="label">密码</label>
-            <input class="input" type="password" v-model="loginForm.password" placeholder="请输入密码" @keyup.enter="handleLogin" />
+            <label class="label">{{ $t('password') }}</label>
+            <input class="input" type="password" v-model="loginForm.password" :placeholder="$t('enter_password')" @keyup.enter="handleLogin" />
           </div>
           <div v-if="loginShowTerms" class="terms-checkbox">
             <input type="checkbox" id="login-terms" v-model="loginForm.termsAgreed" />
@@ -371,21 +371,21 @@
         <!-- Register Form -->
         <div v-if="authMode === 'register'">
           <div class="field">
-            <label class="label">手机号</label>
-            <input class="input" type="tel" v-model="registerForm.phone" placeholder="请输入手机号" maxlength="11" />
+            <label class="label">{{ $t('phone') }}</label>
+            <input class="input" type="tel" v-model="registerForm.phone" :placeholder="$t('enter_phone')" maxlength="11" />
           </div>
           <div class="field">
-            <label class="label">验证码</label>
+            <label class="label">{{ $t('verification_code') }}</label>
             <div class="row">
-              <input class="input" type="text" v-model="registerForm.code" placeholder="请输入验证码" maxlength="6" />
+              <input class="input" type="text" v-model="registerForm.code" :placeholder="$t('enter_verification_code')" maxlength="6" />
               <button class="code-btn" @click="sendVerificationCode" :disabled="codeSending || codeCountdown > 0">
-                {{ codeCountdown > 0 ? `${codeCountdown}秒后重试` : (codeSending ? '发送中...' : '发送验证码') }}
+                {{ codeCountdown > 0 ? `${codeCountdown}s` : (codeSending ? $t('sending') : $t('send_code')) }}
               </button>
             </div>
           </div>
           <div class="field">
-            <label class="label">密码</label>
-            <input class="input" type="password" v-model="registerForm.password" placeholder="请输入密码" />
+            <label class="label">{{ $t('password') }}</label>
+            <input class="input" type="password" v-model="registerForm.password" :placeholder="$t('enter_password')" />
           </div>
           <!-- 本地模式提示 -->
           <div v-if="isLocal" class="field">
@@ -397,22 +397,22 @@
           </div>
           <!-- 非本地模式显示邀请码 -->
           <div class="field" v-if="!isLocal">
-            <label class="label">邀请码（选填）</label>
-            <input class="input" type="text" v-model="registerForm.inviteCode" placeholder="请输入邀请码" maxlength="10" @keyup.enter="handleRegister" />
+            <label class="label">{{ $t('invite_code_optional') }}</label>
+            <input class="input" type="text" v-model="registerForm.inviteCode" :placeholder="$t('enter_invite_code')" maxlength="10" @keyup.enter="handleRegister" />
             <div class="invite-tip">
               <span class="tip-icon">🎁</span>
-              <span class="tip-text">填写邀请码，额外赠送 <strong>25 算力</strong></span>
+              <span class="tip-text">{{ $t('invite_tip_text') }}<strong> 25 {{ $t('power') }}</strong></span>
             </div>
           </div>
           <div class="terms-checkbox">
             <input type="checkbox" id="register-terms" v-model="registerForm.termsAgreed" />
             <label for="register-terms" style="cursor: pointer;">
-              我已阅读并同意 <span class="terms-link" @click.stop="showTermsModal = true">《AI工具服务使用条款》</span>
+              {{ $t('agree_terms') }} <span class="terms-link" @click.stop="showTermsModal = true">{{ $t('ai_service_terms') }}</span>
             </label>
           </div>
           <div class="field" style="margin-top: 20px;">
             <button class="btn" style="width: 100%;" @click="handleRegister" :disabled="registerLoading">
-              {{ registerLoading ? '注册中...' : '注册' }}
+              {{ registerLoading ? $t('registering') : $t('register') }}
             </button>
           </div>
           <div class="status danger" v-if="registerError" style="text-align: center; margin-top: 10px;">{{ registerError }}</div>
@@ -421,29 +421,29 @@
         <!-- Reset Password Form -->
         <div v-if="authMode === 'reset'">
           <div class="field">
-            <label class="label">手机号</label>
-            <input class="input" type="tel" v-model="resetForm.phone" placeholder="请输入手机号" maxlength="11" />
+            <label class="label">{{ $t('phone') }}</label>
+            <input class="input" type="tel" v-model="resetForm.phone" :placeholder="$t('enter_phone')" maxlength="11" />
           </div>
           <div class="field">
-            <label class="label">验证码</label>
+            <label class="label">{{ $t('verification_code') }}</label>
             <div class="row">
-              <input class="input" type="text" v-model="resetForm.code" placeholder="请输入验证码" maxlength="6" />
+              <input class="input" type="text" v-model="resetForm.code" :placeholder="$t('enter_verification_code')" maxlength="6" />
               <button class="code-btn" @click="sendResetCode" :disabled="resetCodeSending || resetCodeCountdown > 0">
-                {{ resetCodeCountdown > 0 ? `${resetCodeCountdown}秒后重试` : (resetCodeSending ? '发送中...' : '发送验证码') }}
+                {{ resetCodeCountdown > 0 ? `${resetCodeCountdown}$t('seconds_retry')` : (resetCodeSending ? $t('sending') : $t('send_code')) }}
               </button>
             </div>
           </div>
           <div class="field">
-            <label class="label">新密码</label>
-            <input class="input" type="password" v-model="resetForm.newPassword" placeholder="请输入新密码" />
+            <label class="label">{{ $t('new_password') }}</label>
+            <input class="input" type="password" v-model="resetForm.newPassword" :placeholder="$t('enter_new_password')" />
           </div>
           <div class="field">
-            <label class="label">确认新密码</label>
-            <input class="input" type="password" v-model="resetForm.confirmPassword" placeholder="请再次输入新密码" @keyup.enter="handleResetPassword" />
+            <label class="label">{{ $t('confirm_password') }}</label>
+            <input class="input" type="password" v-model="resetForm.confirmPassword" :placeholder="$t('enter_confirm_password')" @keyup.enter="handleResetPassword" />
           </div>
           <div class="field" style="margin-top: 20px;">
             <button class="btn" style="width: 100%;" @click="handleResetPassword" :disabled="resetLoading">
-              {{ resetLoading ? '重置中...' : '重置密码' }}
+              {{ resetLoading ? $t('resetting') : $t('reset_button') }}
             </button>
           </div>
           <div class="status danger" v-if="resetError" style="text-align: center; margin-top: 10px;">{{ resetError }}</div>
@@ -2372,7 +2372,7 @@
             </div>
             
             <div v-if="historyList.length === 0" style="padding: 40px; text-align: center; color: var(--muted);">
-              暂无历史记录
+              {{ $t('no_history') }}
             </div>
             
             <div v-else style="padding: 16px;">
@@ -3174,14 +3174,14 @@
             <div style="position: relative;">
               <div style="display: flex; justify-content: space-between; align-items: flex-start; padding-right: 40px; margin-bottom: 12px;">
                 <div style="display: flex; align-items: flex-start; gap: 12px;">
-                  <div class="modal-title">历史记录 (共 {{ historyTotal }} 条)</div>
+                  <div class="modal-title">{{ $t('history_modal_title') }} ({{ $t('total_records') }} {{ historyTotal }})</div>
                   <button
                     class="btn secondary"
                     @click="fetchHistory(false)"
                     :disabled="historyLoading"
                     style="display: inline-flex; align-items: center; justify-content: center; padding: 4px 12px; font-size: 12px;"
                   >
-                    {{ historyLoading ? '刷新中...' : '刷新' }}
+                    {{ historyLoading ? $t('refreshing') : $t('refresh') }}
                   </button>
                 </div>
                 <button class="modal-close" @click="closeHistory">×</button>
@@ -3189,14 +3189,14 @@
             </div>
             
             <div v-if="historyList.length === 0" style="padding: 40px; text-align: center; color: var(--muted);">
-              暂无历史记录
+              {{ $t('no_history') }}
             </div>
             
             <div v-else style="padding: 16px;">
               <div v-for="item in historyList" :key="item.id" style="margin-bottom: 16px; padding: 12px; background: #0b1220; border: 1px solid var(--border); border-radius: 8px;">
                 <div style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
                   <div>
-                    <strong>提示词:</strong> {{ item.prompt }}
+                    <strong>{{ $t('prompt_label') }}</strong> {{ item.prompt }}
                   </div>
                   <span :style="{ padding: '4px 12px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', backgroundColor: getStatusColor(item.status) + '20', color: getStatusColor(item.status), border: '1px solid ' + getStatusColor(item.status), cursor: item.status == -1 && item.message ? 'help' : 'default' }" :title="item.status == -1 && item.message ? item.message : ''">
                     {{ getStatusText(item.status) }}
@@ -3228,7 +3228,7 @@
                   </div>
                 </div>
                 <div v-if="item.result_url" style="margin-top: 8px;">
-                  <a :href="item.result_url" target="_blank" class="btn secondary" style="display: inline-block; text-decoration: none;">查看结果</a>
+                  <a :href="item.result_url" target="_blank" class="btn secondary" style="display: inline-block; text-decoration: none;">{{ $t('view_result') }}</a>
                   <button v-if="item.type == 1" class="btn" @click="upscaleHistoryImage(item)" style="margin-left: 8px; display: none;">高清放大</button>
                 </div>
               </div>
@@ -3686,33 +3686,33 @@
       <div>
         <div class="form">
           <div class="field">
-            <label class="label">提示词 <span style="color: red;">*</span></label>
-            <textarea class="textarea" v-model.trim="prompt" placeholder="请输入图片描述，例如：中文海报:ai视频生成器,智能角色" rows="4"></textarea>
+            <label class="label">{{ $t('prompt') }} <span style="color: red;">*</span></label>
+            <textarea class="textarea" v-model.trim="prompt" :placeholder="$t('prompt_placeholder')" rows="4"></textarea>
           </div>
 
           <div class="field">
-            <label class="label">模型选择</label>
+            <label class="label">{{ $t('model_selection') }}</label>
             <select class="input" v-model="model">
               <option v-for="opt in modelOptions" :key="opt.value" :value="opt.value" :disabled="opt.disabled">{{ opt.label }}</option>
             </select>
           </div>
 
           <div class="field">
-            <label class="label">宽高比</label>
+            <label class="label">{{ $t('aspect_ratio') }}</label>
             <select class="input" v-model="aspectRatio">
               <option v-for="opt in aspectRatioOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
           </div>
 
           <div class="field" v-if="imageSizeOptions.length > 0">
-            <label class="label">分辨率</label>
+            <label class="label">{{ $t('resolution') }}</label>
             <select class="input" v-model="imageSize">
               <option v-for="opt in imageSizeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
           </div>
 
           <div class="field">
-            <label class="label">生成数量</label>
+            <label class="label">{{ $t('number_of_images') }}</label>
             <select class="input" v-model.number="count">
               <option v-for="opt in countOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
@@ -3720,8 +3720,8 @@
 
           <div class="field">
             <div class="row">
-              <button class="btn" :disabled="!canSubmit" @click="submit">{{ loading ? '生成中...' : '开始生成' }}</button>
-              <button class="btn secondary" @click="fetchHistory" :disabled="historyLoading">{{ historyLoading ? '加载中...' : '历史记录' }}</button>
+              <button class="btn" :disabled="!canSubmit" @click="submit">{{ loading ? $t('generating') : $t('start_generating') }}</button>
+              <button class="btn secondary" @click="fetchHistory" :disabled="historyLoading">{{ historyLoading ? $t('loading_more') : $t('history') }}</button>
             </div>
           </div>
         </div>
@@ -3732,11 +3732,11 @@
 
         <div class="preview" v-if="results.length">
           <div class="imgbox" v-for="(result, i) in results" :key="i">
-            <div style="margin-bottom: 8px; font-weight: bold; color: var(--primary); text-align: center;">生成结果 #{{ i + 1 }}</div>
+            <div style="margin-bottom: 8px; font-weight: bold; color: var(--primary); text-align: center;">{{ $t('generation_result') }} #{{ i + 1 }}</div>
             <img :src="result.file_url" :alt="'result-'+i" />
             <div style="padding: 8px; text-align: center;">
-              <button class="btn secondary" @click="downloadImage(result.file_url, i)">下载图片</button>
-              <div class="muted" style="margin-top: 4px; font-size: 11px;" v-if="result.task_cost_time">耗时: {{ result.task_cost_time }}s</div>
+              <button class="btn secondary" @click="downloadImage(result.file_url, i)">{{ $t('download_image') }}</button>
+              <div class="muted" style="margin-top: 4px; font-size: 11px;" v-if="result.task_cost_time">{{ $t('time_cost') }}: {{ result.task_cost_time }}s</div>
             </div>
           </div>
         </div>
@@ -3747,14 +3747,14 @@
             <div style="position: relative;">
               <div style="display: flex; justify-content: space-between; align-items: flex-start; padding-right: 40px; margin-bottom: 12px;">
                 <div style="display: flex; align-items: flex-start; gap: 12px;">
-                  <div class="modal-title">历史记录 (共 {{ historyTotal }} 条)</div>
+                  <div class="modal-title">{{ $t('history_modal_title') }} ({{ $t('total_records') }} {{ historyTotal }})</div>
                   <button
                     class="btn secondary"
                     @click="fetchHistory(false)"
                     :disabled="historyLoading"
                     style="display: inline-flex; align-items: center; justify-content: center; padding: 4px 12px; font-size: 12px;"
                   >
-                    {{ historyLoading ? '刷新中...' : '刷新' }}
+                    {{ historyLoading ? $t('refreshing') : $t('refresh') }}
                   </button>
                 </div>
                 <button class="modal-close" @click="closeHistory">×</button>
@@ -3762,35 +3762,35 @@
             </div>
             
             <div v-if="historyList.length === 0" style="padding: 40px; text-align: center; color: var(--muted);">
-              暂无历史记录
+              {{ $t('no_history') }}
             </div>
             
             <div v-else style="padding: 16px;">
               <div v-for="item in historyList" :key="item.id" style="margin-bottom: 16px; padding: 12px; background: #0b1220; border: 1px solid var(--border); border-radius: 8px;">
                 <div style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
                   <div>
-                    <strong>提示词:</strong> {{ item.prompt }}
+                    <strong>{{ $t('prompt_label') }}</strong> {{ item.prompt }}
                   </div>
                   <span :style="{ padding: '4px 12px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', backgroundColor: getStatusColor(item.status) + '20', color: getStatusColor(item.status), border: '1px solid ' + getStatusColor(item.status), cursor: item.status == -1 && item.message ? 'help' : 'default' }" :title="item.status == -1 && item.message ? item.message : ''">
                     {{ getStatusText(item.status) }}
                   </span>
                 </div>
                 <div style="display: flex; gap: 16px; font-size: 13px; color: var(--muted); margin-bottom: 8px;">
-                  <span>类型: 文生图</span>
-                  <span>宽高比: {{ getAspectRatioLabel(item.ratio) }}</span>
-                  <span>创建时间: {{ item.create_time ? new Date(item.create_time).toLocaleString('zh-CN') : '未知' }}</span>
+                  <span>{{ $t('type_label') }}: {{ $t('text_to_image') }}</span>
+                  <span>{{ $t('aspect_ratio_label') }}: {{ getAspectRatioLabel(item.ratio) }}</span>
+                  <span>{{ $t('created_at') }}: {{ item.create_time ? new Date(item.create_time).toLocaleString('zh-CN') : $t('unknown') }}</span>
                 </div>
                 <div v-if="item.result_url" style="margin-top: 8px;">
-                  <a :href="item.result_url" target="_blank" class="btn secondary" style="display: inline-block; text-decoration: none;">查看结果</a>
+                  <a :href="item.result_url" target="_blank" class="btn secondary" style="display: inline-block; text-decoration: none;">{{ $t('view_result') }}</a>
                 </div>
               </div>
               
               <div v-if="historyLoading" style="text-align: center; padding: 20px; color: var(--muted);">
-                加载中...
+                {{ $t('loading_more') }}
               </div>
-              
+
               <div v-else-if="historyList.length >= historyTotal" style="text-align: center; padding: 20px; color: var(--muted);">
-                已加载全部数据
+                {{ $t('all_data_loaded') }}
               </div>
             </div>
           </div>
@@ -5130,14 +5130,14 @@
             </div>
 
             <div v-if="historyList.length === 0" style="padding: 40px; text-align: center; color: var(--muted);">
-              暂无历史记录
+              {{ $t('no_history') }}
             </div>
             
             <div v-else style="padding: 16px;">
               <div v-for="item in historyList" :key="item.id" style="margin-bottom: 16px; padding: 12px; background: #0b1220; border: 1px solid var(--border); border-radius: 8px;">
                 <div style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
                   <div>
-                    <strong>提示词:</strong> {{ item.prompt }}
+                    <strong>{{ $t('prompt_label') }}</strong> {{ item.prompt }}
                   </div>
                   <span :style="{ padding: '4px 12px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', backgroundColor: getStatusColor(item.status) + '20', color: getStatusColor(item.status), border: '1px solid ' + getStatusColor(item.status), cursor: item.status == -1 && item.message ? 'help' : 'default' }" :title="item.status == -1 && item.message ? item.message : ''">
                     {{ getStatusText(item.status) }}
@@ -5172,7 +5172,7 @@
                   </div>
                 </div>
                 <div v-if="item.result_url" style="margin-top: 8px;">
-                  <a :href="item.result_url" target="_blank" class="btn secondary" style="display: inline-block; text-decoration: none;">查看结果</a>
+                  <a :href="item.result_url" target="_blank" class="btn secondary" style="display: inline-block; text-decoration: none;">{{ $t('view_result') }}</a>
                   <button v-if="item.status == 2 && item.type == 3" class="btn" @click="enhanceVideo(item, item.id)" :disabled="enhancingVideos[item.id]" style="margin-left: 8px;">{{ enhancingVideos[item.id] ? '已修复' : '生成高清视频' }}</button>
                   <button v-if="item.status == 2 && item.project_id" class="btn" @click="goToCharacterCard(item.project_id)" style="margin-left: 8px;">创建角色卡</button>
                 </div>
@@ -5899,7 +5899,7 @@
             </div>
             
             <div v-if="historyList.length === 0" style="padding: 40px; text-align: center; color: var(--muted);">
-              暂无历史记录
+              {{ $t('no_history') }}
             </div>
             
             <div v-else style="padding: 16px;">
@@ -7308,15 +7308,15 @@
     },
     computed: {
       route(){ return this.$route },
-      mainTitle(){ 
+      mainTitle(){
         if (this.route.name === 'list') return '智剧通';
-        if (this.route.name === 'image-edit') return '图片编辑';
-        if (this.route.name === 'ai-video-gen') return 'AI 视频生成';
-        if (this.route.name === 'image-to-video') return '图片生成视频';
-        if (this.route.name === 'ai-script-gen') return '图生视频智能体';
-        if (this.route.name === 'video-enhance') return '视频高清修复';
-        if (this.route.name === 'audio-generate') return 'AI 音频生成';
-        return 'AI 工具';
+        if (this.route.name === 'image-edit') return this.$t('page_title_image_edit');
+        if (this.route.name === 'ai-video-gen') return this.$t('page_title_ai_video_gen');
+        if (this.route.name === 'image-to-video') return this.$t('page_title_image_to_video');
+        if (this.route.name === 'ai-script-gen') return this.$t('page_title_ai_script_gen');
+        if (this.route.name === 'video-enhance') return this.$t('page_title_video_enhance');
+        if (this.route.name === 'audio-generate') return this.$t('page_title_audio_generate');
+        return this.$t('page_title_ai_tools');
       },
       isLoggedIn() {
         return !!(this.authToken && this.userPhone);
@@ -8610,23 +8610,21 @@
     }
   };
 
-  const app = Vue.createApp(App);
-  app.use(router);
-  // 注册 Vue i18n 插件
-  app.use(window.ZJTi18nVue);
-  app.mount('#app');
-  </script>
+  // i18n 初始化 - 必须在 Vue 应用创建前执行
+  window.__STATIC_VERSION = window.__STATIC_VERSION || '';
+  ZJTi18n.init(['common', 'index', 'video_workflow', 'marketing_agent']).then(() => {
+    // 初始化完成后创建 Vue 应用
+    const app = Vue.createApp(App);
+    app.use(router);
+    // 注册 Vue i18n 插件
+    app.use(window.ZJTi18nVue);
+    app.mount('#app');
 
-  <!-- i18n 初始化 -->
-  <script>
-    // i18n 初始化 - 在 Vue 应用创建前
-    window.__STATIC_VERSION = window.__STATIC_VERSION || '';
-    ZJTi18n.init(['common', 'index', 'video_workflow', 'marketing_agent']).then(() => {
-      // 初始化语言切换器到页面头部
-      if (window.ZJTi18nSwitcher) {
-        ZJTi18nSwitcher.attachToHeader();
-      }
-    });
+    // 初始化语言切换器到页面头部
+    if (window.ZJTi18nSwitcher) {
+      ZJTi18nSwitcher.attachToHeader();
+    }
+  });
   </script>
 </body>
 </html>

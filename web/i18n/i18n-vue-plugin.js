@@ -11,8 +11,16 @@ window.ZJTi18nVue = {
     const i18n = window.ZJTi18n;
     const Vue = window.Vue;
 
-    // 全局 $t() 方法
-    app.config.globalProperties.$t = (key, params) => i18n.t(key, params);
+    // 响应式 locale（用于在模板中判断当前语言）
+    const localeReactive = Vue.reactive({ current: i18n.getLocale() });
+
+    // 全局 $t() 方法 - 依赖 locale 响应式值以触发重渲染
+    app.config.globalProperties.$t = (key, params) => {
+      // 通过访问 localeReactive.current 来建立响应式依赖
+      // 这样当语言变化时，Vue 会自动重新计算此表达式
+      const _ = localeReactive.current;
+      return i18n.t(key, params);
+    };
 
     // 全局 $locale() 方法
     app.config.globalProperties.$locale = () => i18n.getLocale();
@@ -20,9 +28,6 @@ window.ZJTi18nVue = {
     // 全局 $setLocale() 方法
     app.config.globalProperties.$setLocale = (locale, namespaces) =>
       i18n.setLocale(locale, namespaces);
-
-    // 响应式 locale（用于在模板中判断当前语言）
-    const localeReactive = Vue.reactive({ current: i18n.getLocale() });
 
     app.config.globalProperties.$locale$ = localeReactive;
 
