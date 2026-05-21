@@ -120,7 +120,7 @@
         <div class="world-sidebar-header">
             <h3 class="world-sidebar-title" data-i18n="select_world">🌍 选择世界</h3>
             <div class="world-header-actions">
-                <button class="world-add-btn" onclick="showNewWorldModal()" title="新建世界" data-i18n="new_world">
+                <button class="world-add-btn" onclick="showNewWorldModal()" title="新建世界" data-i18n="new_world:title">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 5v14M5 12h14"/>
                     </svg>
@@ -141,7 +141,7 @@
         <!-- 顶部导航栏 -->
         <header class="top-header">
             <div class="header-left">
-                <button class="hamburger-btn" onclick="toggleWorldSidebar()" title="选择世界" data-i18n="select_world_btn">
+                <button class="hamburger-btn" onclick="toggleWorldSidebar()" title="选择世界" data-i18n="select_world_btn:title">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M3 12h18M3 6h18M3 18h18"/>
                     </svg>
@@ -159,21 +159,21 @@
             <div class="header-right">
                 <div class="model-selector-card">
                     <div class="model-selector-item">
-                        <div class="model-icon text-model-icon" id="llm-model-icon" title="AI 模型" data-i18n="ai_model">
+                        <div class="model-icon text-model-icon" id="llm-model-icon" title="AI 模型" data-i18n="ai_model:title">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/>
                                 <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/>
                             </svg>
                         </div>
                         <div class="model-select-wrapper">
-                            <select id="model-selector" class="model-select" onchange="changeModel()" title="选择 AI 模型" data-i18n="select_ai_model">
+                            <select id="model-selector" class="model-select" onchange="changeModel()" title="选择 AI 模型" data-i18n="select_ai_model:title">
                                 <option value="" data-i18n="loading">加载中...</option>
                             </select>
                             <div class="model-select-display" id="model-selector-display">加载中...</div>
                         </div>
                     </div>
                     <div class="thinking-mode-wrapper" id="thinking-mode-wrapper" style="display: none; align-items: center; gap: 6px; margin-left: 8px;">
-                        <label class="thinking-toggle" title="思考模式：让模型先深度思考再回答，提高回答质量" data-i18n="thinking_mode">
+                        <label class="thinking-toggle" title="思考模式：让模型先深度思考再回答，提高回答质量" data-i18n="thinking_mode:title">
                             <input type="checkbox" id="thinking-toggle" onchange="onThinkingToggleChange()">
                             <span class="thinking-toggle-slider"></span>
                         </label>
@@ -186,7 +186,7 @@
                     </div>
                     <div class="model-divider"></div>
                     <div class="model-selector-item">
-                        <div class="model-icon image-model-icon" id="image-model-icon" title="生图模型" data-i18n="image_model">
+                        <div class="model-icon image-model-icon" id="image-model-icon" title="生图模型" data-i18n="image_model:title">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M12 5c-2.5 0-4.5 1.5-4.5 3.5 0 1.5 1 2.8 2.5 3.4-.3.8-.5 1.6-.5 2.6 0 3 2.5 5.5 5.5 5.5s5.5-2.5 5.5-5.5c0-1-.2-1.8-.5-2.6 1.5-.6 2.5-1.9 2.5-3.4 0-2-2-3.5-4.5-3.5z"/>
                                 <path d="M12 5c0-1.5-1-2.5-2.5-2.5s-2.5 1-2.5 2.5"/>
@@ -196,21 +196,21 @@
                                 <path d="M9 12c0 1.5 1 3 3 3s3-1.5 3-3"/>
                             </svg>
                         </div>
-                        <select id="text-to-image-model-selector" class="model-select" onchange="changeTextToImageModel()" title="选择生图模型" style="display: none;" data-i18n="select_image_model">
+                        <select id="text-to-image-model-selector" class="model-select" onchange="changeTextToImageModel()" title="选择生图模型" style="display: none;" data-i18n="select_image_model:title">
                             <option value="" data-i18n="loading">加载中...</option>
                         </select>
                     </div>
                 </div>
-                <div class="computing-power-display" id="computing-power-display" title="当前算力余额（点击查看日志）" onclick="openComputingPowerLogsModal()" style="cursor: pointer;" data-i18n="current_power_balance">
+                <div class="computing-power-display" id="computing-power-display" title="当前算力余额（点击查看日志）" onclick="openComputingPowerLogsModal()" style="cursor: pointer;" data-i18n="current_power_balance:title">
                     <span class="power-icon">⚡</span>
                     <span class="power-value" id="power-value">--</span>
                 </div>
-                <button class="header-action-btn primary" onclick="submitToDatabase()" title="提交数据" data-i18n="submit_data">
+                <button class="header-action-btn primary" onclick="submitToDatabase()" title="提交数据" data-i18n="submit_data:title">
                     <span class="btn-icon">💾</span>
                     <span class="btn-text" data-i18n="submit_data">提交数据</span>
                 </button>
                 <div class="auto-submit-container">
-                    <label class="auto-submit-toggle" title="开启后每分钟自动提交" data-i18n="auto_submit_tip">
+                    <label class="auto-submit-toggle" title="开启后每分钟自动提交" data-i18n="auto_submit_tip:title">
                         <input type="checkbox" id="auto-submit-switch" onchange="toggleAutoSubmit()">
                         <span class="toggle-slider"></span>
                         <span class="toggle-label" data-i18n="auto_submit">自动</span>
@@ -226,12 +226,12 @@
         <main class="main-layout">
             <!-- 聊天区域 -->
             <div class="chat-area">
-                <button class="chat-compress-btn" onclick="compressHistory()" title="压缩对话历史（保留关键信息，减少上下文长度）" data-i18n="compress_history">
+                <button class="chat-compress-btn" onclick="compressHistory()" title="压缩对话历史（保留关键信息，减少上下文长度）" data-i18n="compress_history:title">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/>
                     </svg>
                 </button>
-                <button class="chat-refresh-btn" onclick="refreshPage()" title="新建会话（刷新页面，清空对话历史）" data-i18n="new_session">
+                <button class="chat-refresh-btn" onclick="refreshPage()" title="新建会话（刷新页面，清空对话历史）" data-i18n="new_session:title">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
                     </svg>
@@ -410,14 +410,14 @@
                 <div class="sidebar-header">
                     <h3 class="sidebar-title" data-i18n="file_management">📁 暂存文件管理</h3>
                     <div class="sidebar-header-actions">
-                        <button class="export-icon-btn" onclick="exportWorld()" title="导出世界数据" data-i18n="export_world">
+                        <button class="export-icon-btn" onclick="exportWorld()" title="导出世界数据" data-i18n="export_world:title">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                                 <polyline points="7 10 12 15 17 10"/>
                                 <line x1="12" y1="15" x2="12" y2="3"/>
                             </svg>
                         </button>
-                        <button class="import-icon-btn" onclick="triggerImportWorld()" title="导入世界数据" data-i18n="import_world">
+                        <button class="import-icon-btn" onclick="triggerImportWorld()" title="导入世界数据" data-i18n="import_world:title">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                                 <polyline points="17 8 12 3 7 8"/>
@@ -425,14 +425,14 @@
                             </svg>
                         </button>
                         <input type="file" id="import-world-file" accept=".zip" style="display:none" onchange="handleImportWorld(event)">
-                        <button class="refresh-icon-btn" onclick="refreshFiles()" title="刷新文件列表" data-i18n="refresh_files">
+                        <button class="refresh-icon-btn" onclick="refreshFiles()" title="刷新文件列表" data-i18n="refresh_files:title">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="23 4 23 10 17 10"/>
                                 <polyline points="1 20 1 14 7 14"/>
                                 <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
                             </svg>
                         </button>
-                        <button class="delete-icon-btn" onclick="newSession()" title="删除暂存，重置会话" data-i18n="delete_staging">
+                        <button class="delete-icon-btn" onclick="newSession()" title="删除暂存，重置会话" data-i18n="delete_staging:title">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="3 6 5 6 21 6"/>
                                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
