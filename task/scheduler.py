@@ -381,5 +381,8 @@ def shutdown_scheduler():
         logger.error(f"关闭同步任务执行器失败: {e}")
 
     if scheduler:
-        scheduler.shutdown()
+        try:
+            scheduler.shutdown()
+        except Exception as e:
+            logger.warning(f"Scheduler shutdown error (ignored): {e}")
     _release_scheduler_lock()
