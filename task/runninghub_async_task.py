@@ -2,13 +2,13 @@
 RunningHub 异步任务处理
 在 scheduler 进程中定时轮询 RunningHub 任务状态并更新数据库
 
-使用通用 async_tasks 表，通过 driver_type = 'runninghub_audio' 区分 RunningHub 音频任务。
+使用通用 async_tasks 表，通过 implementation = AsyncTaskImplementationId.RUNNINGHUB_AUDIO 区分任务。
 """
 import logging
 from typing import Any
 
 from model import AsyncTasksModel, AsyncTaskStatus
-from config.unified_config import AsyncDriverType
+from config.unified_config import AsyncTaskImplementationId
 from task.async_drivers.runninghub_audio_driver import RunningHubAudioDriver
 
 logger = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ def process_runninghub_async_tasks(app=None):
     处理 RunningHub 异步任务（在 scheduler 进程中定时执行）
 
     流程：
-    1. 从 async_tasks 表获取 driver_type='runninghub_audio' 且状态为 QUEUED/PROCESSING 的任务
+    1. 从 async_tasks 表获取 implementation=RUNNINGHUB_AUDIO 且状态为 QUEUED/PROCESSING 的任务
     2. 调用 RunningHubAudioDriver.check_status() 查询远程状态
     3. 根据结果更新数据库
     """
@@ -49,7 +49,7 @@ def process_runninghub_async_tasks(app=None):
 
     try:
         pending_tasks = AsyncTasksModel.get_pending_tasks(
-            driver_type=AsyncDriverType.RUNNINGHUB_AUDIO,
+            implementation=AsyncTaskImplementationId.RUNNINGHUB_AUDIO,
             limit=50
         )
 
@@ -112,7 +112,7 @@ def process_runninghub_async_tasks(app=None):
 
         # 清理旧任务（7天前）
         try:
-            AsyncTasksModel.cleanup_old_tasks(days=7, driver_type=AsyncDriverType.RUNNINGHUB_AUDIO)
+            AsyncTasksModel.cleanup_old_tasks(days=7, implementation=AsyncTaskImplementationId.RUNNINGHUB_AUDIO)
         except Exception as e:
             logger.error(f"清理旧 RunningHub 异步任务失败: {e}")
 

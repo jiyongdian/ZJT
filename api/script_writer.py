@@ -2069,7 +2069,7 @@ async def generate_character_reference_audio(
         # 写入异步任务表，由 scheduler 后台轮询
         import uuid as _uuid
         from model import AsyncTasksModel
-        from config.unified_config import AsyncDriverType
+        from config.unified_config import AsyncTaskImplementationId
         task_key = f"audio_{_uuid.uuid4().hex[:12]}"
 
         # 构建任务参数（JSON 格式）
@@ -2082,7 +2082,7 @@ async def generate_character_reference_audio(
 
         AsyncTasksModel.create(
             task_key=task_key,
-            driver_type=AsyncDriverType.RUNNINGHUB_AUDIO,
+            implementation=AsyncTaskImplementationId.RUNNINGHUB_AUDIO,
             user_id=int(user_id),
             external_task_id=runninghub_task_id,
             params=params,

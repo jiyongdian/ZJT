@@ -2,11 +2,11 @@
 Async Tasks Model - Database operations for async_tasks table
 通用异步任务模型 - 支持多进程环境下的异步任务状态共享
 
-参考 ai_tools 的 implementation 模式，通过 driver_type 区分不同的异步驱动，
+参考 ai_tools 的 implementation 模式，通过 implementation (数字 ID) 区分不同的异步驱动，
 每个驱动负责自己的 params 序列化/反序列化和业务逻辑。
 
 使用方式：
-1. API 提交任务时，指定 driver_type 和 params（JSON 格式）
+1. API 提交任务时，指定 implementation (数字 ID) 和 params（JSON 格式）
 2. Driver 负责将 params 提交到外部服务
 3. Scheduler 后台轮询，调用 Driver 的 check_status() 方法
 4. Driver 根据结果更新数据库
@@ -34,7 +34,7 @@ class AsyncTask:
     def __init__(self, **kwargs):
         self.id = kwargs.get('id')
         self.task_key = kwargs.get('task_key')
-        self.driver_type = kwargs.get('driver_type')
+        self.implementation = kwargs.get('implementation')  # 改为 implementation (int)
         self.external_task_id = kwargs.get('external_task_id')
         self.user_id = kwargs.get('user_id')
         self.params = kwargs.get('params')  # JSON 字符串或已解析的 dict
@@ -76,7 +76,7 @@ class AsyncTask:
         return {
             'id': self.id,
             'task_key': self.task_key,
-            'driver_type': self.driver_type,
+            'implementation': self.implementation,
             'external_task_id': self.external_task_id,
             'user_id': self.user_id,
             'params': self.get_params_dict(),
@@ -99,7 +99,7 @@ class AsyncTasksModel:
     @staticmethod
     def create(
         task_key: str,
-        driver_type: str,
+        implementation: int,
         user_id: int,
         external_task_id: Optional[str] = None,
         params: Optional[Dict[str, Any]] = None,
@@ -110,7 +110,7 @@ class AsyncTasksModel:
 
         Args:
             task_key: 任务唯一键
-            driver_type: 驱动类型（参考 AsyncDriverType 常量）
+            implementation: 实现 ID（参考 AsyncTaskImplementationId 常量）
             user_id: 用户 ID
             external_task_id: 外部任务 ID（可选，如 RunningHub taskId）
             params: 任务参数（JSON 可序列化对象）
@@ -123,17 +123,17 @@ class AsyncTasksModel:
 
         sql = """
             INSERT INTO async_tasks
-            (task_key, driver_type, user_id, external_task_id, params, status, max_attempts)
+            (task_key, implementation, user_id, external_task_id, params, status, max_attempts)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
         """
         db_params = (
-            task_key, driver_type, user_id, external_task_id,
+            task_key, implementation, user_id, external_task_id,
             params_json, AsyncTaskStatus.QUEUED, max_attempts
         )
 
         try:
             record_id = execute_insert(sql, db_params)
-            logger.info(f"Created async task: {task_key}, driver: {driver_type}, record_id: {record_id}")
+            logger.info(f"Created async task: {task_key}, implementation: {implementation}, record_id: {record_id}")
             return record_id
         except Exception as e:
             logger.error(f"Failed to create async task {task_key}: {e}")
@@ -151,16 +151,16 @@ class AsyncTasksModel:
             raise
 
     @staticmethod
-    def get_by_driver_type(
-        driver_type: str,
+    def get_by_implementation(
+        implementation: int,
         status: Optional[int] = None,
         limit: int = 50
     ) -> List[AsyncTask]:
         """
-        根据驱动类型获取任务列表
+        根据实现 ID 获取任务列表
 
         Args:
-            driver_type: 驱动类型
+            implementation: 实现 ID
             status: 状态筛选（可选）
             limit: 最大返回数量
 
@@ -170,47 +170,47 @@ class AsyncTasksModel:
         if status is not None:
             sql = """
                 SELECT * FROM async_tasks
-                WHERE driver_type = %s AND status = %s
+                WHERE implementation = %s AND status = %s
                 ORDER BY created_at ASC
                 LIMIT %s
             """
-            params = (driver_type, status, limit)
+            params = (implementation, status, limit)
         else:
             sql = """
                 SELECT * FROM async_tasks
-                WHERE driver_type = %s
+                WHERE implementation = %s
                 ORDER BY created_at ASC
                 LIMIT %s
             """
-            params = (driver_type, limit)
+            params = (implementation, limit)
 
         try:
             results = execute_query(sql, params, fetch_all=True)
             return [AsyncTask(**row) for row in results] if results else []
         except Exception as e:
-            logger.error(f"Failed to get async tasks by driver_type {driver_type}: {e}")
+            logger.error(f"Failed to get async tasks by implementation {implementation}: {e}")
             raise
 
     @staticmethod
-    def get_pending_tasks(driver_type: Optional[str] = None, limit: int = 50) -> List[AsyncTask]:
+    def get_pending_tasks(implementation: Optional[int] = None, limit: int = 50) -> List[AsyncTask]:
         """
         获取待处理的任务（状态为 QUEUED 或 PROCESSING）
 
         Args:
-            driver_type: 驱动类型筛选（可选，不传则获取所有驱动类型的任务）
+            implementation: 实现 ID 筛选（可选，不传则获取所有实现的任务）
             limit: 最大返回数量
 
         Returns:
             AsyncTask 对象列表
         """
-        if driver_type:
+        if implementation:
             sql = """
                 SELECT * FROM async_tasks
-                WHERE driver_type = %s AND status IN (%s, %s)
+                WHERE implementation = %s AND status IN (%s, %s)
                 ORDER BY created_at ASC
                 LIMIT %s
             """
-            params = (driver_type, AsyncTaskStatus.QUEUED, AsyncTaskStatus.PROCESSING, limit)
+            params = (implementation, AsyncTaskStatus.QUEUED, AsyncTaskStatus.PROCESSING, limit)
         else:
             sql = """
                 SELECT * FROM async_tasks
@@ -228,26 +228,26 @@ class AsyncTasksModel:
             raise
 
     @staticmethod
-    def get_user_tasks(user_id: int, driver_type: Optional[str] = None, limit: int = 50) -> List[AsyncTask]:
+    def get_user_tasks(user_id: int, implementation: Optional[int] = None, limit: int = 50) -> List[AsyncTask]:
         """
         获取用户的任务列表
 
         Args:
             user_id: 用户 ID
-            driver_type: 驱动类型筛选（可选）
+            implementation: 实现 ID 筛选（可选）
             limit: 最大返回数量
 
         Returns:
             AsyncTask 对象列表
         """
-        if driver_type:
+        if implementation:
             sql = """
                 SELECT * FROM async_tasks
-                WHERE user_id = %s AND driver_type = %s
+                WHERE user_id = %s AND implementation = %s
                 ORDER BY created_at DESC
                 LIMIT %s
             """
-            params = (user_id, driver_type, limit)
+            params = (user_id, implementation, limit)
         else:
             sql = """
                 SELECT * FROM async_tasks
@@ -340,26 +340,26 @@ class AsyncTasksModel:
             raise
 
     @staticmethod
-    def cleanup_old_tasks(days: int = 7, driver_type: Optional[str] = None) -> int:
+    def cleanup_old_tasks(days: int = 7, implementation: Optional[int] = None) -> int:
         """
         清理旧任务
 
         Args:
             days: 保留天数
-            driver_type: 驱动类型筛选（可选）
+            implementation: 实现 ID 筛选（可选）
 
         Returns:
             删除的行数
         """
-        if driver_type:
+        if implementation:
             sql = """
                 DELETE FROM async_tasks
-                WHERE driver_type = %s
+                WHERE implementation = %s
                   AND status IN (%s, %s, %s)
                   AND created_at < DATE_SUB(NOW(), INTERVAL %s DAY)
             """
             params = (
-                driver_type,
+                implementation,
                 AsyncTaskStatus.COMPLETED,
                 AsyncTaskStatus.FAILED,
                 AsyncTaskStatus.TIMEOUT,
@@ -392,10 +392,10 @@ CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS `async_tasks` (
   `id` int NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `task_key` varchar(255) NOT NULL COMMENT '任务唯一键',
-  `driver_type` varchar(50) NOT NULL COMMENT '驱动类型（如 runninghub_audio）',
+  `implementation` int unsigned NOT NULL DEFAULT '0' COMMENT '实现 ID（参考 AsyncTaskImplementationId）',
   `external_task_id` varchar(100) DEFAULT NULL COMMENT '外部任务 ID（如 RunningHub taskId）',
   `user_id` int NOT NULL COMMENT '用户 ID',
-  `params` json DEFAULT NULL COMMENT '任务参数（JSON 格式，driver 特定）',
+  `params` json DEFAULT NULL COMMENT '任务参数（JSON 格式，implementation 特定）',
   `status` tinyint DEFAULT '0' COMMENT '状态（0-队列中, 1-处理中, 2-完成, -1-失败, -2-超时）',
   `try_count` int DEFAULT '0' COMMENT '轮询尝试次数',
   `max_attempts` int DEFAULT '60' COMMENT '最大尝试次数',
@@ -408,10 +408,10 @@ CREATE TABLE IF NOT EXISTS `async_tasks` (
   `failed_at` datetime DEFAULT NULL COMMENT '失败时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_task_key` (`task_key`),
-  KEY `idx_driver_type` (`driver_type`),
+  KEY `idx_implementation` (`implementation`),
   KEY `idx_status` (`status`),
   KEY `idx_user_id` (`user_id`),
   KEY `idx_created_at` (`created_at`),
-  KEY `idx_driver_status` (`driver_type`, `status`)
+  KEY `idx_impl_status` (`implementation`, `status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='通用异步任务表';
 """

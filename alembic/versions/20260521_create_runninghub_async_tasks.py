@@ -22,10 +22,10 @@ def upgrade():
         CREATE TABLE IF NOT EXISTS `async_tasks` (
           `id` int NOT NULL AUTO_INCREMENT COMMENT '主键ID',
           `task_key` varchar(255) NOT NULL COMMENT '任务唯一键',
-          `driver_type` varchar(50) NOT NULL COMMENT '驱动类型（如 runninghub_audio）',
+          `implementation` int unsigned NOT NULL DEFAULT '0' COMMENT '实现 ID（参考 AsyncTaskImplementationId）',
           `external_task_id` varchar(100) DEFAULT NULL COMMENT '外部任务 ID（如 RunningHub taskId）',
           `user_id` int NOT NULL COMMENT '用户 ID',
-          `params` json DEFAULT NULL COMMENT '任务参数（JSON 格式，driver 特定）',
+          `params` json DEFAULT NULL COMMENT '任务参数（JSON 格式，implementation 特定）',
           `status` tinyint DEFAULT '0' COMMENT '状态（0-队列中, 1-处理中, 2-完成, -1-失败, -2-超时）',
           `try_count` int DEFAULT '0' COMMENT '轮询尝试次数',
           `max_attempts` int DEFAULT '60' COMMENT '最大尝试次数',
@@ -38,11 +38,11 @@ def upgrade():
           `failed_at` datetime DEFAULT NULL COMMENT '失败时间',
           PRIMARY KEY (`id`),
           UNIQUE KEY `uk_task_key` (`task_key`),
-          KEY `idx_driver_type` (`driver_type`),
+          KEY `idx_implementation` (`implementation`),
           KEY `idx_status` (`status`),
           KEY `idx_user_id` (`user_id`),
           KEY `idx_created_at` (`created_at`),
-          KEY `idx_driver_status` (`driver_type`, `status`)
+          KEY `idx_impl_status` (`implementation`, `status`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='通用异步任务表';
     """)
 

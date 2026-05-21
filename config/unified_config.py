@@ -57,12 +57,14 @@ class TaskProvider:
     ZJT = 'zjt'
 
 
-class AsyncDriverType:
-    """异步任务驱动类型常量（用于 async_tasks 表的 driver_type 字段）"""
-    RUNNINGHUB_AUDIO = 'runninghub_audio'  # RunningHub 音频生成
-    # 后续可添加其他异步驱动类型，如：
-    # RUNNINGHUB_VIDEO = 'runninghub_video'
-    # CUSTOM_LLM_TASK = 'custom_llm_task'
+# ============ 异步任务实现 ID 常量 ============
+class AsyncTaskImplementationId:
+    """异步任务实现 ID 常量（用于 async_tasks 表的 implementation 字段）"""
+    UNKNOWN = 0
+    RUNNINGHUB_AUDIO = 1  # RunningHub 音频生成
+    # 后续可添加其他异步任务实现：
+    # RUNNINGHUB_VIDEO = 2
+    # CUSTOM_LLM_TASK = 3
     # etc.
 
 
