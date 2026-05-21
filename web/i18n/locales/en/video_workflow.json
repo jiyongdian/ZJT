@@ -490,6 +490,14 @@
   "timeline_expand": "Expand",
   "timeline_track_video": "Video",
   "timeline_track_audio": "Audio",
-  "timeline_drag_hint": "Tip: Drag to reorder | Hold Shift to replace"
+  "timeline_drag_hint": "Tip: Drag to reorder | Hold Shift to replace",
+  "cancel": "Cancel",
+  "select_world_label": "Select World",
+  "select_world_placeholder": "Please select a world first...",
+  "world_name_label": "World Name",
+  "world_name_placeholder": "Please enter world name...",
+  "world_description_label": "World Description",
+  "world_description_placeholder": "Please enter world description...",
+  "create_btn": "Create"
 }
 

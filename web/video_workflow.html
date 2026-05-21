@@ -351,8 +351,8 @@
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
-        <button class="mini-btn secondary" id="styleCancelBtn" type="button">取消</button>
-        <button class="mini-btn" id="styleSaveBtn" type="button">保存</button>
+        <button class="mini-btn secondary" id="styleCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
+        <button class="mini-btn" id="styleSaveBtn" type="button" data-i18n="save">${window.t ? window.t('save') : '保存'}</button>
       </div>
     </div>
   </div>
@@ -497,8 +497,8 @@
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
-        <button class="mini-btn secondary" id="createCharacterCancelBtn" type="button">取消</button>
-        <button class="mini-btn" id="createCharacterSaveBtn" type="button">创建</button>
+        <button class="mini-btn secondary" id="createCharacterCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
+        <button class="mini-btn" id="createCharacterSaveBtn" type="button" data-i18n="create_btn">${window.t ? window.t('create_btn') : '创建'}</button>
       </div>
     </div>
   </div>
@@ -558,8 +558,8 @@
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
-        <button class="mini-btn secondary" id="createLocationCancelBtn" type="button">取消</button>
-        <button class="mini-btn" id="createLocationSaveBtn" type="button">创建</button>
+        <button class="mini-btn secondary" id="createLocationCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
+        <button class="mini-btn" id="createLocationSaveBtn" type="button" data-i18n="create_btn">${window.t ? window.t('create_btn') : '创建'}</button>
       </div>
     </div>
   </div>
@@ -622,7 +622,7 @@
       <div class="modal-footer" style="display: flex; justify-content: space-between; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
         <button class="mini-btn danger" id="editLocationDeleteBtn" type="button" style="background: #ef4444; color: #ffffff;">删除</button>
         <div style="display: flex; gap: 10px;">
-          <button class="mini-btn secondary" id="editLocationCancelBtn" type="button">取消</button>
+          <button class="mini-btn secondary" id="editLocationCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
           <button class="mini-btn" id="editLocationSaveBtn" type="button">保存</button>
         </div>
       </div>
@@ -692,8 +692,8 @@
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
-        <button class="mini-btn secondary" id="createPropsCancelBtn" type="button">取消</button>
-        <button class="mini-btn" id="createPropsSaveBtn" type="button">创建</button>
+        <button class="mini-btn secondary" id="createPropsCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
+        <button class="mini-btn" id="createPropsSaveBtn" type="button" data-i18n="create_btn">${window.t ? window.t('create_btn') : '创建'}</button>
       </div>
     </div>
   </div>
@@ -735,7 +735,7 @@
       <div class="modal-footer" style="display: flex; justify-content: space-between; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
         <button class="mini-btn danger" id="editPropsDeleteBtn" type="button" style="background: #ef4444; color: #ffffff;">删除</button>
         <div style="display: flex; gap: 10px;">
-          <button class="mini-btn secondary" id="editPropsCancelBtn" type="button">取消</button>
+          <button class="mini-btn secondary" id="editPropsCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
           <button class="mini-btn" id="editPropsSaveBtn" type="button">保存</button>
         </div>
       </div>
@@ -752,18 +752,18 @@
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
         <div style="display: flex; flex-direction: column; gap: 16px;">
           <div class="field">
-            <label class="label" style="color: #0f172a;">世界名称 <span style="color: #ef4444;">*</span></label>
-            <input type="text" id="createWorldNameInput" placeholder="请输入世界名称..." style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" />
+            <label class="label" style="color: #0f172a;" data-i18n="world_name_label">${window.t ? window.t('world_name_label') : '世界名称'} <span style="color: #ef4444;">*</span></label>
+            <input type="text" id="createWorldNameInput" placeholder="${window.t ? window.t('world_name_placeholder') : '请输入世界名称...'}" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" data-i18n="world_name_placeholder:placeholder" />
           </div>
           <div class="field">
-            <label class="label" style="color: #0f172a;">世界描述</label>
-            <textarea id="createWorldDescInput" placeholder="请输入世界描述..." rows="4" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;"></textarea>
+            <label class="label" style="color: #0f172a;" data-i18n="world_description_label">${window.t ? window.t('world_description_label') : '世界描述'}</label>
+            <textarea id="createWorldDescInput" placeholder="${window.t ? window.t('world_description_placeholder') : '请输入世界描述...'}" rows="4" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;" data-i18n="world_description_placeholder:placeholder"></textarea>
           </div>
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
-        <button class="mini-btn secondary" id="createWorldCancelBtn" type="button">取消</button>
-        <button class="mini-btn" id="createWorldSaveBtn" type="button">创建</button>
+        <button class="mini-btn secondary" id="createWorldCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
+        <button class="mini-btn" id="createWorldSaveBtn" type="button" data-i18n="create_btn">${window.t ? window.t('create_btn') : '创建'}</button>
       </div>
     </div>
   </div>
@@ -788,7 +788,7 @@
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
-        <button class="mini-btn secondary" id="editWorldCancelBtn" type="button">取消</button>
+        <button class="mini-btn secondary" id="editWorldCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
         <button class="mini-btn" id="editWorldSaveBtn" type="button">保存</button>
       </div>
     </div>
@@ -870,7 +870,7 @@
       <div class="modal-footer" style="display: flex; justify-content: space-between; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
         <button class="mini-btn danger" id="editCharacterDeleteBtn" type="button" style="background: #ef4444; color: #ffffff;">删除</button>
         <div style="display: flex; gap: 10px;">
-          <button class="mini-btn secondary" id="editCharacterCancelBtn" type="button">取消</button>
+          <button class="mini-btn secondary" id="editCharacterCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
           <button class="mini-btn" id="editCharacterSaveBtn" type="button">保存</button>
         </div>
       </div>
@@ -896,7 +896,7 @@
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
-        <button class="mini-btn secondary" id="videoPromptSuffixCancelBtn" type="button">取消</button>
+        <button class="mini-btn secondary" id="videoPromptSuffixCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
         <button class="mini-btn" id="videoPromptSuffixSaveBtn" type="button">保存</button>
       </div>
     </div>
@@ -941,7 +941,7 @@
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
-        <button class="mini-btn secondary" id="coloringCancelBtn" type="button">取消</button>
+        <button class="mini-btn secondary" id="coloringCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
         <button class="mini-btn" id="coloringConfirmBtn" type="button">确认</button>
       </div>
     </div>

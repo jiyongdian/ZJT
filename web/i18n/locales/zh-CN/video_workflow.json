@@ -490,6 +490,14 @@
   "timeline_expand": "展开",
   "timeline_track_video": "视频",
   "timeline_track_audio": "音频",
-  "timeline_drag_hint": "提示: 拖拽调整顺序 | 按住Shift拖拽可替换"
+  "timeline_drag_hint": "提示: 拖拽调整顺序 | 按住Shift拖拽可替换",
+  "cancel": "取消",
+  "select_world_label": "选择世界",
+  "select_world_placeholder": "请先选择世界...",
+  "world_name_label": "世界名称",
+  "world_name_placeholder": "请输入世界名称...",
+  "world_description_label": "世界描述",
+  "world_description_placeholder": "请输入世界描述...",
+  "create_btn": "创建"
 }
 
