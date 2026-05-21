@@ -5759,17 +5759,17 @@
       el.style.top = node.y + 'px';
 
       el.innerHTML = `
-        <div class="port output" title="输出（拆分为分镜组）"></div>
+        <div class="port output" title="${window.t ? window.t('script_output_port') : '输出（拆分为分镜组）'}"></div>
         <div class="node-header">
           <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><path d="M9 5H7C5.89543 5 5 5.89543 5 7V19C5 20.1046 5.89543 21 7 21H17C18.1046 21 19 20.1046 19 19V7C19 5.89543 18.1046 5 17 5H15"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>剧本 ${scriptId}</div>
-          <button class="icon-btn" title="删除">×</button>
+          <button class="icon-btn" title="${window.t ? window.t('node_delete_btn') : '删除'}">×</button>
         </div>
         <div class="node-body script-node-body">
           <!-- 第1部分：剧本内容 -->
           <div class="script-section">
             <div class="script-section-header">
               <span class="script-section-number">1</span>
-              <span class="script-section-title">剧本内容</span>
+              <span class="script-section-title" data-i18n="script_section_1">${window.t ? window.t('script_section_1') : '剧本内容'}</span>
             </div>
             <div class="field field-always-visible script-info-field" style="display:none;">
               <div class="gen-meta script-name"></div>
@@ -5778,19 +5778,19 @@
             <div class="field field-always-visible">
               <div style="display: flex; justify-content: flex-end; align-items: center; gap: 6px; margin-bottom: 4px;">
                 <span class="script-char-count" style="color: #666; font-size: 12px;">0/30000</span>
-                <button class="mini-btn script-expand-btn" type="button" style="font-size: 11px; padding: 4px 8px;" title="放大编辑">⤢</button>
+                <button class="mini-btn script-expand-btn" type="button" style="font-size: 11px; padding: 4px 8px;" title="${window.t ? window.t('script_expand_btn') : '放大编辑'}" data-i18n="script_expand_btn:title">⤢</button>
               </div>
-              <textarea class="script-textarea" rows="16" maxlength="30000" placeholder="在此输入剧本内容，或上传文件（最多30000字符）"></textarea>
+              <textarea class="script-textarea" rows="16" maxlength="30000" placeholder="${window.t ? window.t('script_placeholder') : '在此输入剧本内容，或上传文件（最多30000字符）'}" data-i18n="script_placeholder:placeholder"></textarea>
             </div>
             <div class="field field-always-visible" style="margin-top: auto; padding-top: 8px;">
               <div style="display: flex; gap: 6px;">
-                <button class="gen-btn gen-btn-white script-upload-btn" type="button" style="border-radius: 8px; flex: 1; padding: 7px 0; font-size: 12px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>上传</button>
-                <button class="gen-btn gen-btn-green script-load-btn" type="button" style="border-radius: 8px; flex: 1; padding: 7px 0; font-size: 12px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>加载</button>
+                <button class="gen-btn gen-btn-white script-upload-btn" type="button" style="border-radius: 8px; flex: 1; padding: 7px 0; font-size: 12px;" data-i18n="script_upload_btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>${window.t ? window.t('script_upload_btn') : '上传'}</button>
+                <button class="gen-btn gen-btn-green script-load-btn" type="button" style="border-radius: 8px; flex: 1; padding: 7px 0; font-size: 12px;" data-i18n="script_load_btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>${window.t ? window.t('script_load_btn') : '加载'}</button>
               </div>
               <input class="script-file" type="file" accept=".txt,.md" style="display:none;" />
             </div>
             <div class="field field-always-visible script-warning-field" style="display:none;">
-              <div class="gen-meta" style="color: #f59e0b;">文件内容超过30000字符，已自动截取前30000字符。建议将剧本分段处理。</div>
+              <div class="gen-meta" style="color: #f59e0b;" data-i18n="script_file_truncated">${window.t ? window.t('script_file_truncated') : '文件内容超过30000字符，已自动截取前30000字符。建议将剧本分段处理。'}</div>
             </div>
           </div>
 
@@ -5798,67 +5798,67 @@
           <div class="script-section">
             <div class="script-section-header">
               <span class="script-section-number">2</span>
-              <span class="script-section-title">参数配置</span>
+              <span class="script-section-title" data-i18n="script_section_2">${window.t ? window.t('script_section_2') : '参数配置'}</span>
             </div>
             <div class="field field-always-visible">
-              <div class="label">镜头组时长</div>
+              <div class="label" data-i18n="script_duration_label">${window.t ? window.t('script_duration_label') : '镜头组时长'}</div>
               <select class="script-duration-select" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;">
-                <option value="5">5秒</option>
-                <option value="8">8秒</option>
-                <option value="10">10秒</option>
-                <option value="15" selected>15秒</option>
+                <option value="5" data-i18n="duration_5s">${window.t ? window.t('duration_5s') : '5秒'}</option>
+                <option value="8" data-i18n="duration_8s">${window.t ? window.t('duration_8s') : '8秒'}</option>
+                <option value="10" data-i18n="duration_10s">${window.t ? window.t('duration_10s') : '10秒'}</option>
+                <option value="15" selected data-i18n="duration_15s">${window.t ? window.t('duration_15s') : '15秒'}</option>
               </select>
             </div>
             <div class="field field-always-visible">
-              <div class="label">宫格生图模型</div>
+              <div class="label" data-i18n="script_grid_model_label">${window.t ? window.t('script_grid_model_label') : '宫格生图模型'}</div>
               <select class="script-grid-model" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;"></select>
             </div>
             <div class="field field-always-visible">
-              <div class="label">宫格类型</div>
+              <div class="label" data-i18n="script_grid_layout_label">${window.t ? window.t('script_grid_layout_label') : '宫格类型'}</div>
               <select class="script-grid-layout" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;">
-                <option value="auto">自动选择</option>
-                <option value="4">4宫格 (2x2)</option>
-                <option value="9">9宫格 (3x3)</option>
+                <option value="auto" data-i18n="script_grid_layout_auto">${window.t ? window.t('script_grid_layout_auto') : '自动选择'}</option>
+                <option value="4" data-i18n="script_grid_layout_4">${window.t ? window.t('script_grid_layout_4') : '4宫格 (2x2)'}</option>
+                <option value="9" data-i18n="script_grid_layout_9">${window.t ? window.t('script_grid_layout_9') : '9宫格 (3x3)'}</option>
               </select>
             </div>
             <div class="field field-always-visible">
-              <div class="label">拆分模型</div>
+              <div class="label" data-i18n="script_split_model_label">${window.t ? window.t('script_split_model_label') : '拆分模型'}</div>
               <select class="script-split-model" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;">
-                <option value="">加载中...</option>
+                <option value="" data-i18n="script_loading">${window.t ? window.t('script_loading') : '加载中...'}</option>
               </select>
             </div>
             <div class="field field-always-visible">
-              <div class="label">视频生成模型</div>
+              <div class="label" data-i18n="script_video_model_label">${window.t ? window.t('script_video_model_label') : '视频生成模型'}</div>
               <select class="script-video-model" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;"></select>
             </div>
             <div class="field field-always-visible">
-              <div class="label">输出语言</div>
+              <div class="label" data-i18n="script_output_language_label">${window.t ? window.t('script_output_language_label') : '输出语言'}</div>
               <select class="script-language" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;">
-                <option value="">中文（默认）</option>
+                <option value="" data-i18n="script_language_default">${window.t ? window.t('script_language_default') : '中文（默认）'}</option>
                 <option value="English">English</option>
                 <option value="Deutsch">Deutsch</option>
                 <option value="Français">Français</option>
                 <option value="Русский">Русский</option>
-                <option value="__custom__">自定义语言...</option>
+                <option value="__custom__" data-i18n="script_language_custom">${window.t ? window.t('script_language_custom') : '自定义语言...'}</option>
               </select>
-              <input type="text" class="script-language-custom" placeholder="或输入自定义语言..." style="display: none; width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white; margin-top: 4px;" />
+              <input type="text" class="script-language-custom" placeholder="${window.t ? window.t('script_language_custom') : '或输入自定义语言...'}" style="display: none; width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white; margin-top: 4px;" />
             </div>
             <div class="script-checkbox-group">
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
                 <input type="checkbox" class="script-force-medium-shot" style="cursor: pointer;" checked />
-                <span>对话禁止全景</span>
+                <span data-i18n="script_force_medium_shot">${window.t ? window.t('script_force_medium_shot') : '对话禁止全景'}</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
                 <input type="checkbox" class="script-no-bg-music" style="cursor: pointer;" checked />
-                <span>不生成背景音乐</span>
+                <span data-i18n="script_no_bg_music">${window.t ? window.t('script_no_bg_music') : '不生成背景音乐'}</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
                 <input type="checkbox" class="script-split-multi-dialogue" style="cursor: pointer;" />
-                <span>拆分多人对话镜头</span>
+                <span data-i18n="script_split_multi_dialogue">${window.t ? window.t('script_split_multi_dialogue') : '拆分多人对话镜头'}</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
                 <input type="checkbox" class="script-narration-as-dialogue" style="cursor: pointer;" />
-                <span>解说剧（仅旁白说话）</span>
+                <span data-i18n="script_narration_as_dialogue">${window.t ? window.t('script_narration_as_dialogue') : '解说剧（仅旁白说话）'}</span>
               </label>
             </div>
           </div>
@@ -5867,23 +5867,23 @@
           <div class="script-section script-section-actions">
             <div class="script-section-header">
               <span class="script-section-number">3</span>
-              <span class="script-section-title">执行操作</span>
+              <span class="script-section-title" data-i18n="script_section_3">${window.t ? window.t('script_section_3') : '执行操作'}</span>
             </div>
             <div class="field field-always-visible">
               <div style="display: flex; gap: 6px;">
-                <button class="gen-btn gen-btn-white script-split-btn" type="button" style="border-radius: 8px; flex: 1; padding: 18px 0;" disabled>拆分镜组</button>
-                <button class="gen-btn gen-btn-white script-grid-only-btn" type="button" style="border-radius: 8px; flex: 1; padding: 18px 0;">宫格生图</button>
+                <button class="gen-btn gen-btn-white script-split-btn" type="button" style="border-radius: 8px; flex: 1; padding: 18px 0;" disabled data-i18n="script_split_btn">${window.t ? window.t('script_split_btn') : '拆分镜组'}</button>
+                <button class="gen-btn gen-btn-white script-grid-only-btn" type="button" style="border-radius: 8px; flex: 1; padding: 18px 0;" data-i18n="script_grid_only_btn">${window.t ? window.t('script_grid_only_btn') : '宫格生图'}</button>
               </div>
               <div class="gen-meta script-status" style="display:none; margin-top: 6px;"></div>
               <div class="gen-meta script-grid-only-status" style="display:none; margin-top: 6px;"></div>
             </div>
             <div class="field field-always-visible">
-              <button class="gen-btn gen-btn-green script-split-grid-btn" type="button" style="border-radius: 8px; width: 100%; padding: 18px 0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>拆分分镜组 + 宫格生图</button>
+              <button class="gen-btn gen-btn-green script-split-grid-btn" type="button" style="border-radius: 8px; width: 100%; padding: 18px 0;" data-i18n="script_split_grid_btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>${window.t ? window.t('script_split_grid_btn') : '拆分分镜组 + 宫格生图'}</button>
               <div class="gen-meta script-grid-status" style="display:none; margin-top: 6px;"></div>
             </div>
             <div class="field field-always-visible">
-              <button class="gen-btn gen-btn-blue script-batch-generate-btn" type="button" style="border-radius: 8px; width: 100%; background: #3b82f6; color: white; padding: 18px 0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><polygon points="5 3 19 12 5 21 5 3"/></svg>逐个生成视频</button>
-              <div class="gen-meta" style="margin-top: 4px; font-size: 11px; color: #666;">支持所有模型，逐个生成可能浪费时长</div>
+              <button class="gen-btn gen-btn-blue script-batch-generate-btn" type="button" style="border-radius: 8px; width: 100%; background: #3b82f6; color: white; padding: 18px 0;" data-i18n="script_batch_generate_btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><polygon points="5 3 19 12 5 21 5 3"/></svg>${window.t ? window.t('script_batch_generate_btn') : '逐个生成视频'}</button>
+              <div class="gen-meta" style="margin-top: 4px; font-size: 11px; color: #666;" data-i18n="script_batch_info">${window.t ? window.t('script_batch_info') : '支持所有模型，逐个生成可能浪费时长'}</div>
               <div class="gen-meta script-batch-status" style="display:none; margin-top: 6px;"></div>
             </div>
           </div>
