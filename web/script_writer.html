@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>剧本智能创作系统</title>
+    <title data-i18n="script_writer_title">剧本智能创作系统</title>
     <link rel="icon" href="/files/logo.ico" type="image/vnd.microsoft.icon"/>
     <link rel="stylesheet" href="css/script_writer.css">
     <!-- Markdown渲染支持 -->
@@ -14,6 +14,10 @@
     <script src="js/axios.min.js"></script>
     <!-- 任务配置模块 -->
     <script src="/js/task_config.js"></script>
+    <!-- i18n 多语言支持 -->
+    <script src="/i18n/i18n-core.js"></script>
+    <script src="/i18n/i18n-dom.js"></script>
+    <link rel="stylesheet" href="/i18n/i18n-switcher.css">
     <style>
         .thinking-toggle {
             position: relative;
@@ -91,17 +95,17 @@
     <!-- 左侧导览条 - 悬浮模式 -->
     <nav class="step-nav" id="step-nav">
         <div class="step-nav-content">
-            <div class="step-nav-title">创作流程</div>
+            <div class="step-nav-title" data-i18n="creation_process">创作流程</div>
             <div class="step-nav-list">
                 <div class="step-nav-item active" data-step="script">
                     <div class="step-nav-icon">📚</div>
-                    <div class="step-nav-text">剧本资产</div>
-                    <div class="step-nav-badge current">当前</div>
+                    <div class="step-nav-text" data-i18n="script_assets">剧本资产</div>
+                    <div class="step-nav-badge current" data-i18n="current">当前</div>
                 </div>
                 <div class="step-nav-connector"></div>
                 <div class="step-nav-item clickable" data-step="canvas" onclick="goToWorkflowCanvas()">
                     <div class="step-nav-icon">🎬</div>
-                    <div class="step-nav-text">制作工坊</div>
+                    <div class="step-nav-text" data-i18n="production_workshop">制作工坊</div>
                     <div class="step-nav-arrow">→</div>
                 </div>
             </div>
@@ -114,9 +118,9 @@
     <!-- 世界选择侧边栏 -->
     <aside class="world-sidebar" id="world-sidebar">
         <div class="world-sidebar-header">
-            <h3 class="world-sidebar-title">🌍 选择世界</h3>
+            <h3 class="world-sidebar-title" data-i18n="select_world">🌍 选择世界</h3>
             <div class="world-header-actions">
-                <button class="world-add-btn" onclick="showNewWorldModal()" title="新建世界">
+                <button class="world-add-btn" onclick="showNewWorldModal()" title="新建世界" data-i18n="new_world">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 5v14M5 12h14"/>
                     </svg>
@@ -129,7 +133,7 @@
             </div>
         </div>
         <div class="world-list" id="world-list">
-            <div class="world-empty">加载中...</div>
+            <div class="world-empty" data-i18n="loading">加载中...</div>
         </div>
     </aside>
 
@@ -137,7 +141,7 @@
         <!-- 顶部导航栏 -->
         <header class="top-header">
             <div class="header-left">
-                <button class="hamburger-btn" onclick="toggleWorldSidebar()" title="选择世界">
+                <button class="hamburger-btn" onclick="toggleWorldSidebar()" title="选择世界" data-i18n="select_world_btn">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M3 12h18M3 6h18M3 18h18"/>
                     </svg>
@@ -146,43 +150,43 @@
                     <img src="/files/logo.svg" alt="Logo" class="app-logo">
                 </a>
                 <nav class="breadcrumb-nav">
-                    <a href="/video-workflow-list" class="breadcrumb-link">工作流列表</a>
+                    <a href="/video-workflow-list" class="breadcrumb-link" data-i18n="workflow_list">工作流列表</a>
                     <span class="breadcrumb-separator">/</span>
-                    <span class="breadcrumb-current">剧本智能创作系统</span>
+                    <span class="breadcrumb-current" data-i18n="script_writer_title">剧本智能创作系统</span>
                 </nav>
-                <span class="world-name-display" id="world-name-display">加载中...</span>
+                <span class="world-name-display" id="world-name-display" data-i18n="loading">加载中...</span>
             </div>
             <div class="header-right">
                 <div class="model-selector-card">
                     <div class="model-selector-item">
-                        <div class="model-icon text-model-icon" id="llm-model-icon" title="AI 模型">
+                        <div class="model-icon text-model-icon" id="llm-model-icon" title="AI 模型" data-i18n="ai_model">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/>
                                 <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/>
                             </svg>
                         </div>
                         <div class="model-select-wrapper">
-                            <select id="model-selector" class="model-select" onchange="changeModel()" title="选择 AI 模型">
-                                <option value="">加载中...</option>
+                            <select id="model-selector" class="model-select" onchange="changeModel()" title="选择 AI 模型" data-i18n="select_ai_model">
+                                <option value="" data-i18n="loading">加载中...</option>
                             </select>
                             <div class="model-select-display" id="model-selector-display">加载中...</div>
                         </div>
                     </div>
                     <div class="thinking-mode-wrapper" id="thinking-mode-wrapper" style="display: none; align-items: center; gap: 6px; margin-left: 8px;">
-                        <label class="thinking-toggle" title="思考模式：让模型先深度思考再回答，提高回答质量">
+                        <label class="thinking-toggle" title="思考模式：让模型先深度思考再回答，提高回答质量" data-i18n="thinking_mode">
                             <input type="checkbox" id="thinking-toggle" onchange="onThinkingToggleChange()">
                             <span class="thinking-toggle-slider"></span>
                         </label>
-                        <span class="thinking-label" onclick="document.getElementById('thinking-toggle').click()" style="cursor: pointer; font-size: 12px; color: var(--text-secondary); white-space: nowrap;">思考</span>
+                        <span class="thinking-label" onclick="document.getElementById('thinking-toggle').click()" style="cursor: pointer; font-size: 12px; color: var(--text-secondary); white-space: nowrap;" data-i18n="thinking">思考</span>
                         <select id="thinking-effort" class="thinking-effort-select" onchange="onThinkingEffortChange()" style="display: none; font-size: 11px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary);">
-                            <option value="low">低</option>
-                            <option value="medium" selected>中</option>
-                            <option value="high">高</option>
+                            <option value="low" data-i18n="low">低</option>
+                            <option value="medium" selected data-i18n="medium">中</option>
+                            <option value="high" data-i18n="high">高</option>
                         </select>
                     </div>
                     <div class="model-divider"></div>
                     <div class="model-selector-item">
-                        <div class="model-icon image-model-icon" id="image-model-icon" title="生图模型">
+                        <div class="model-icon image-model-icon" id="image-model-icon" title="生图模型" data-i18n="image_model">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M12 5c-2.5 0-4.5 1.5-4.5 3.5 0 1.5 1 2.8 2.5 3.4-.3.8-.5 1.6-.5 2.6 0 3 2.5 5.5 5.5 5.5s5.5-2.5 5.5-5.5c0-1-.2-1.8-.5-2.6 1.5-.6 2.5-1.9 2.5-3.4 0-2-2-3.5-4.5-3.5z"/>
                                 <path d="M12 5c0-1.5-1-2.5-2.5-2.5s-2.5 1-2.5 2.5"/>
@@ -192,27 +196,29 @@
                                 <path d="M9 12c0 1.5 1 3 3 3s3-1.5 3-3"/>
                             </svg>
                         </div>
-                        <select id="text-to-image-model-selector" class="model-select" onchange="changeTextToImageModel()" title="选择生图模型" style="display: none;">
-                            <option value="">加载中...</option>
+                        <select id="text-to-image-model-selector" class="model-select" onchange="changeTextToImageModel()" title="选择生图模型" style="display: none;" data-i18n="select_image_model">
+                            <option value="" data-i18n="loading">加载中...</option>
                         </select>
                     </div>
                 </div>
-                <div class="computing-power-display" id="computing-power-display" title="当前算力余额（点击查看日志）" onclick="openComputingPowerLogsModal()" style="cursor: pointer;">
+                <div class="computing-power-display" id="computing-power-display" title="当前算力余额（点击查看日志）" onclick="openComputingPowerLogsModal()" style="cursor: pointer;" data-i18n="current_power_balance">
                     <span class="power-icon">⚡</span>
                     <span class="power-value" id="power-value">--</span>
                 </div>
-                <button class="header-action-btn primary" onclick="submitToDatabase()" title="提交数据">
+                <button class="header-action-btn primary" onclick="submitToDatabase()" title="提交数据" data-i18n="submit_data">
                     <span class="btn-icon">💾</span>
-                    <span class="btn-text">提交数据</span>
+                    <span class="btn-text" data-i18n="submit_data">提交数据</span>
                 </button>
                 <div class="auto-submit-container">
-                    <label class="auto-submit-toggle" title="开启后每分钟自动提交">
+                    <label class="auto-submit-toggle" title="开启后每分钟自动提交" data-i18n="auto_submit_tip">
                         <input type="checkbox" id="auto-submit-switch" onchange="toggleAutoSubmit()">
                         <span class="toggle-slider"></span>
-                        <span class="toggle-label">自动</span>
+                        <span class="toggle-label" data-i18n="auto_submit">自动</span>
                     </label>
                     <span id="auto-submit-countdown" class="auto-submit-countdown" style="display: none;"></span>
                 </div>
+                <!-- 语言切换器 -->
+                <div class="i18n-switcher-container" id="i18n-switcher-container" style="margin-left: 12px;"></div>
             </div>
         </header>
 
@@ -220,12 +226,12 @@
         <main class="main-layout">
             <!-- 聊天区域 -->
             <div class="chat-area">
-                <button class="chat-compress-btn" onclick="compressHistory()" title="压缩对话历史（保留关键信息，减少上下文长度）">
+                <button class="chat-compress-btn" onclick="compressHistory()" title="压缩对话历史（保留关键信息，减少上下文长度）" data-i18n="compress_history">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/>
                     </svg>
                 </button>
-                <button class="chat-refresh-btn" onclick="refreshPage()" title="新建会话（刷新页面，清空对话历史）">
+                <button class="chat-refresh-btn" onclick="refreshPage()" title="新建会话（刷新页面，清空对话历史）" data-i18n="new_session">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
                     </svg>
@@ -233,8 +239,8 @@
                 <div class="chat-messages" id="chat-messages">
                     <div class="welcome-card">
                         <div class="welcome-icon">🎬</div>
-                        <h2 class="welcome-title">欢迎使用剧本智能创作系统</h2>
-                        <p class="welcome-desc">我是剧本架构师，可以调度所有智能体完成从大纲到合规的全流程创作。</p>
+                        <h2 class="welcome-title" data-i18n="welcome_title">欢迎使用剧本智能创作系统</h2>
+                        <p class="welcome-desc" data-i18n="welcome_desc">我是剧本架构师，可以调度所有智能体完成从大纲到合规的全流程创作。</p>
 
                         <!-- 需求选择区域（有世界时显示） -->
                         <div class="requirement-selector" id="requirement-selector" style="display: none;">
@@ -394,7 +400,7 @@
                             <span class="status-dot"></span>
                             <span id="status-text">就绪</span>
                         </span>
-                        <span class="status-item">会话: <span id="session-id">未创建</span></span>
+                        <span class="status-item"><span data-i18n="session_label">会话:</span> <span id="session-id" data-i18n="session_not_created">未创建</span></span>
                     </div>
                 </div>
             </div>
@@ -402,16 +408,16 @@
             <!-- 文件管理面板 -->
             <aside class="file-sidebar">
                 <div class="sidebar-header">
-                    <h3 class="sidebar-title">📁 暂存文件管理</h3>
+                    <h3 class="sidebar-title" data-i18n="file_management">📁 暂存文件管理</h3>
                     <div class="sidebar-header-actions">
-                        <button class="export-icon-btn" onclick="exportWorld()" title="导出世界数据">
+                        <button class="export-icon-btn" onclick="exportWorld()" title="导出世界数据" data-i18n="export_world">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                                 <polyline points="7 10 12 15 17 10"/>
                                 <line x1="12" y1="15" x2="12" y2="3"/>
                             </svg>
                         </button>
-                        <button class="import-icon-btn" onclick="triggerImportWorld()" title="导入世界数据">
+                        <button class="import-icon-btn" onclick="triggerImportWorld()" title="导入世界数据" data-i18n="import_world">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                                 <polyline points="17 8 12 3 7 8"/>
@@ -419,14 +425,14 @@
                             </svg>
                         </button>
                         <input type="file" id="import-world-file" accept=".zip" style="display:none" onchange="handleImportWorld(event)">
-                        <button class="refresh-icon-btn" onclick="refreshFiles()" title="刷新文件列表">
+                        <button class="refresh-icon-btn" onclick="refreshFiles()" title="刷新文件列表" data-i18n="refresh_files">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="23 4 23 10 17 10"/>
                                 <polyline points="1 20 1 14 7 14"/>
                                 <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
                             </svg>
                         </button>
-                        <button class="delete-icon-btn" onclick="newSession()" title="删除暂存，重置会话">
+                        <button class="delete-icon-btn" onclick="newSession()" title="删除暂存，重置会话" data-i18n="delete_staging">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="3 6 5 6 21 6"/>
                                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -439,23 +445,23 @@
                 <div class="file-tabs">
                     <button class="tab-btn active" onclick="switchFileTab('worlds')">
                         <span class="tab-icon">🌍</span>
-                        <span>世界</span>
+                        <span data-i18n="tab_world">世界</span>
                     </button>
                     <button class="tab-btn" onclick="switchFileTab('characters')">
                         <span class="tab-icon">👥</span>
-                        <span>角色卡</span>
+                        <span data-i18n="tab_character">角色卡</span>
                     </button>
                     <button class="tab-btn" onclick="switchFileTab('scripts')">
                         <span class="tab-icon">📜</span>
-                        <span>剧本</span>
+                        <span data-i18n="tab_script">剧本</span>
                     </button>
                     <button class="tab-btn" onclick="switchFileTab('locations')">
                         <span class="tab-icon">🏛️</span>
-                        <span>场景</span>
+                        <span data-i18n="tab_location">场景</span>
                     </button>
                     <button class="tab-btn" onclick="switchFileTab('props')">
                         <span class="tab-icon">🎁</span>
-                        <span>道具</span>
+                        <span data-i18n="tab_prop">道具</span>
                     </button>
                 </div>
                 <div class="file-list-container" id="file-list">
@@ -467,7 +473,7 @@
                         </button>
                     </div>
                     <div id="file-items-container">
-                        <div class="file-empty">加载中...</div>
+                        <div class="file-empty" data-i18n="loading">加载中...</div>
                     </div>
                 </div>
             </aside>
@@ -1453,7 +1459,32 @@
             startCarouselAutoplay();
         }
 
+        // 在 DOM 加载前恢复语言设置（避免中文闪现）
+        const savedLocale = localStorage.getItem('zjt_locale') || 'zh-CN';
+        document.documentElement.lang = savedLocale === 'en' ? 'en' : 'zh-CN';
+
         document.addEventListener('DOMContentLoaded', async () => {
+            // i18n 初始化
+            try {
+                // 初始化所有所需的命名空间
+                await ZJTi18n.init(['common', 'index']);
+
+                // 确保当前语言设置正确（从 localStorage 读取）
+                const currentLocale = ZJTi18n.getLocale();
+                if (currentLocale !== savedLocale) {
+                    await ZJTi18n.setLocale(savedLocale, ['common', 'index']);
+                }
+
+                // 扫描并翻译所有 data-i18n 属性的 DOM 元素
+                if (window.ZJTi18nDOM && window.ZJTi18nDOM.scanDOM) {
+                    window.ZJTi18nDOM.scanDOM(document);
+                }
+                // 初始化语言切换器
+                initLanguageSwitcher();
+            } catch (e) {
+                console.warn('[i18n] 初始化失败，使用中文:', e);
+            }
+
             // 检查是否缺少 user_id 参数
             if (!USER_ID || USER_ID === 'null' || USER_ID === '') {
                 alert('⚠️ 缺少关键参数\n\n请回到工作流列表后，再进入。');
@@ -6550,46 +6581,51 @@
             chatMessages.innerHTML = `
                 <div class="welcome-card world-selection-prompt">
                     <div class="welcome-icon">🌍</div>
-                    <h2 class="welcome-title">请选择一个世界开始创作</h2>
-                    <p class="welcome-desc">您需要先选择一个世界才能开始使用剧本智能创作系统</p>
+                    <h2 class="welcome-title" data-i18n="no_world_selected">请选择一个世界开始创作</h2>
+                    <p class="welcome-desc" data-i18n="select_world_desc">您需要先选择一个世界才能开始使用剧本智能创作系统</p>
                     <div class="world-selection-actions">
                         <div class="selection-step">
                             <span class="step-icon">←</span>
-                            <span class="step-text">左侧侧边栏中选择一个现有世界</span>
+                            <span class="step-text" data-i18n="select_world_step">左侧侧边栏中选择一个现有世界</span>
                         </div>
-                        <div class="selection-divider">或</div>
+                        <div class="selection-divider" data-i18n="or_divider">或</div>
                         <div class="selection-step">
                             <button class="btn btn-primary" onclick="showNewWorldModal()">
                                 <span class="btn-icon">➕</span>
-                                <span class="btn-text">创建新世界</span>
+                                <span class="btn-text" data-i18n="create_new_world_btn">创建新世界</span>
                             </button>
                         </div>
                     </div>
                     <div class="selection-note">
                         <span class="note-icon">ℹ️</span>
-                        <span>世界是您的创作空间，包含角色、场景、道具和剧本等内容</span>
+                        <span data-i18n="world_desc">世界是您的创作空间，包含角色、场景、道具和剧本等内容</span>
                     </div>
                 </div>
             `;
-            
+
+            // 翻译新添加的 data-i18n 元素
+            if (window.ZJTi18nDOM && window.ZJTi18nDOM.scanDOM) {
+                window.ZJTi18nDOM.scanDOM(chatMessages);
+            }
+
             // 禁用输入区域
             const messageInput = document.getElementById('message-input');
             const sendBtn = document.getElementById('send-btn');
             if (messageInput) {
                 messageInput.disabled = true;
-                messageInput.placeholder = '请先选择一个世界...';
+                messageInput.placeholder = window.t ? window.t('world_placeholder') : '请先选择一个世界...';
             }
             if (sendBtn) {
                 sendBtn.disabled = true;
             }
-            
+
             // 更新状态显示
-            updateStatus('请选择一个世界开始创作');
+            updateStatus(window.t ? window.t('no_world_selected') : '请选择一个世界开始创作');
             
             // 更新世界名称显示
             const worldNameDisplay = document.getElementById('world-name-display');
             if (worldNameDisplay) {
-                worldNameDisplay.textContent = '未选择世界';
+                worldNameDisplay.textContent = window.t ? window.t('world_not_selected') : '未选择世界';
                 worldNameDisplay.style.color = 'var(--warning-color)';
             }
         }
@@ -6912,6 +6948,78 @@
                 });
             }
         });
+
+        // ========== 语言切换器初始化 ==========
+        function initLanguageSwitcher() {
+            const container = document.getElementById('i18n-switcher-container');
+            if (!container) return;
+
+            const currentLocale = localStorage.getItem('zjt_locale') || 'zh-CN';
+            const isEnglish = currentLocale === 'en';
+
+            // 创建切换按钮
+            const btn = document.createElement('button');
+            btn.className = 'i18n-switcher-btn';
+            btn.innerHTML = isEnglish ? '中文' : 'English';
+            btn.title = isEnglish ? '切换为中文' : 'Switch to English';
+            btn.style.cssText = `
+                padding: 6px 12px;
+                border: 1px solid var(--border-color, #d1d5db);
+                background: var(--bg-primary, #ffffff);
+                color: var(--text-primary, #1f2937);
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 13px;
+                transition: all 0.3s ease;
+                white-space: nowrap;
+            `;
+
+            btn.onmouseover = () => {
+                btn.style.backgroundColor = 'var(--bg-hover, #f3f4f6)';
+            };
+            btn.onmouseout = () => {
+                btn.style.backgroundColor = 'var(--bg-primary, #ffffff)';
+            };
+
+            btn.onclick = async () => {
+                // 每次点击时重新获取当前语言，而不是使用闭包中的变量
+                const currentLocale = localStorage.getItem('zjt_locale') || 'zh-CN';
+                const newLocale = currentLocale === 'en' ? 'zh-CN' : 'en';
+                localStorage.setItem('zjt_locale', newLocale);
+                await ZJTi18n.setLocale(newLocale, ['common', 'index']);
+                // 更新HTML lang属性
+                document.documentElement.lang = newLocale === 'en' ? 'en' : 'zh-CN';
+                // 更新按钮文本
+                btn.innerHTML = newLocale === 'en' ? '中文' : 'English';
+                btn.title = newLocale === 'en' ? '切换为中文' : 'Switch to English';
+                // 重新扫描并翻译 DOM
+                if (window.ZJTi18nDOM && window.ZJTi18nDOM.scanDOM) {
+                    window.ZJTi18nDOM.scanDOM(document);
+                }
+            };
+
+            container.appendChild(btn);
+        }
+
+        // 监听语言变化事件，更新动态设置的文本值
+        if (window.ZJTi18n) {
+            window.ZJTi18n.on('locale-changed', () => {
+                // 如果没有选择世界，更新占位符和状态文本
+                if (!window.WORLD_ID) {
+                    const messageInput = document.getElementById('message-input');
+                    if (messageInput && messageInput.disabled) {
+                        messageInput.placeholder = window.t('world_placeholder');
+                    }
+                    // 更新状态显示
+                    updateStatus(window.t('no_world_selected'));
+                    // 更新世界名称显示
+                    const worldNameDisplay = document.getElementById('world-name-display');
+                    if (worldNameDisplay) {
+                        worldNameDisplay.textContent = window.t('world_not_selected');
+                    }
+                }
+            });
+        }
 
     </script>
     <!-- 导入剧本弹窗 -->
