@@ -4845,7 +4845,7 @@
       const node = {
         id,
         type: 'image',
-        title: '图片',
+        title: window.t ? window.t('image') : '图片',
         x,
         y,
         data: {
@@ -4869,12 +4869,12 @@
       el.style.top = node.y + 'px';
 
       el.innerHTML = `
-        <div class="port reference" title="参考端口（接收其他图片作为参考）"></div>
-        <div class="port input" title="输入（连接分镜节点）"></div>
-        <div class="port output" title="输出（连接到图生视频节点）"></div>
+        <div class="port reference" title="${window.t ? window.t('image_node_reference_port') : '参考端口（接收其他图片作为参考）'}"></div>
+        <div class="port input" title="${window.t ? window.t('image_node_input_port') : '输入（连接分镜节点）'}"></div>
+        <div class="port output" title="${window.t ? window.t('image_node_output_port') : '输出（连接到图生视频节点）'}"></div>
         <div class="node-header">
           <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M7 15L10 12L13 15L16 11L20 17H4L7 15Z" fill="currentColor" opacity="0.35"/></svg>${node.title}</div>
-          <button class="icon-btn" title="删除">×</button>
+          <button class="icon-btn" title="${window.t ? window.t('node_delete_btn') : '删除'}">×</button>
         </div>
         <div class="node-body">
           <div class="field field-always-visible">
@@ -4884,47 +4884,47 @@
           </div>
           <div class="reference-images-section" style="display:none;">
             <div class="reference-images-header">
-              <span>参考图片 (<span class="reference-images-count">0</span>)</span>
+              <span data-i18n="image_node_reference_images">${window.t ? window.t('image_node_reference_images') : '参考图片'} (<span class="reference-images-count">0</span>)</span>
             </div>
             <div class="reference-images-grid"></div>
           </div>
           <div class="field field-collapsible">
-            <div class="label">上传图片</div>
+            <div class="label" data-i18n="image_node_upload_label">${window.t ? window.t('image_node_upload_label') : '上传图片'}</div>
             <input class="image-file" type="file" accept="image/*" />
             <div style="display: flex; gap: 8px; margin-top: 8px;">
-              <button class="mini-btn image-clear" type="button">清除</button>
-              <button class="mini-btn image-download-icon-btn" type="button">下载</button>
+              <button class="mini-btn image-clear" type="button" data-i18n="image_node_clear_btn">${window.t ? window.t('image_node_clear_btn') : '清除'}</button>
+              <button class="mini-btn image-download-icon-btn" type="button" data-i18n="image_node_download_btn">${window.t ? window.t('image_node_download_btn') : '下载'}</button>
             </div>
           </div>
           <div class="field field-collapsible">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-              <div class="label" style="margin: 0;">编辑提示词（可选）</div>
-              <button class="mini-btn image-prompt-expand-btn" type="button" style="font-size: 11px; padding: 4px 8px;" title="放大编辑">⤢</button>
+              <div class="label" style="margin: 0;" data-i18n="image_node_prompt_label">${window.t ? window.t('image_node_prompt_label') : '编辑提示词（可选）'}</div>
+              <button class="mini-btn image-prompt-expand-btn" type="button" style="font-size: 11px; padding: 4px 8px;" title="${window.t ? window.t('script_expand_btn') : '放大编辑'}" data-i18n="script_expand_btn:title">⤢</button>
             </div>
-            <textarea class="image-prompt" rows="2" placeholder="输入提示词进行图片编辑"></textarea>
+            <textarea class="image-prompt" rows="2" placeholder="${window.t ? window.t('image_node_prompt_placeholder') : '输入提示词进行图片编辑'}" data-i18n="image_node_prompt_placeholder:placeholder"></textarea>
           </div>
           <div class="field field-collapsible">
-            <div class="label">模型</div>
+            <div class="label" data-i18n="image_node_model_label">${window.t ? window.t('image_node_model_label') : '模型'}</div>
             <select class="image-model"></select>
           </div>
           <div class="field field-collapsible">
-            <div class="label">图片比例</div>
+            <div class="label" data-i18n="image_node_ratio_label">${window.t ? window.t('image_node_ratio_label') : '图片比例'}</div>
             <select class="image-ratio">
-              <option value="9:16">竖屏 (9:16)</option>
-              <option value="16:9">横屏 (16:9)</option>
-              <option value="1:1">正方形 (1:1)</option>
-              <option value="3:4">竖屏 (3:4)</option>
-              <option value="4:3">横屏 (4:3)</option>
+              <option value="9:16" data-i18n="image_ratio_portrait_9_16">${window.t ? window.t('image_ratio_portrait_9_16') : '竖屏 (9:16)'}</option>
+              <option value="16:9" data-i18n="image_ratio_landscape_16_9">${window.t ? window.t('image_ratio_landscape_16_9') : '横屏 (16:9)'}</option>
+              <option value="1:1" data-i18n="image_ratio_square_1_1">${window.t ? window.t('image_ratio_square_1_1') : '正方形 (1:1)'}</option>
+              <option value="3:4" data-i18n="image_ratio_portrait_3_4">${window.t ? window.t('image_ratio_portrait_3_4') : '竖屏 (3:4)'}</option>
+              <option value="4:3" data-i18n="image_ratio_landscape_4_3">${window.t ? window.t('image_ratio_landscape_4_3') : '横屏 (4:3)'}</option>
             </select>
           </div>
           <div class="field field-collapsible">
-            <button class="mini-btn image-camera-control-btn" type="button" style="width:100%;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;">相机控制</button>
+            <button class="mini-btn image-camera-control-btn" type="button" style="width:100%;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;" data-i18n="image_node_camera_control_btn">${window.t ? window.t('image_node_camera_control_btn') : '相机控制'}</button>
           </div>
           <div class="field field-collapsible">
             <div class="btn-row" style="display: flex; gap: 8px;">
               <div class="gen-container">
-                <button class="gen-btn gen-btn-main image-edit-btn" type="button">编辑图片</button>
-                <button class="gen-btn gen-btn-caret" type="button" aria-label="选择抽卡次数">▾</button>
+                <button class="gen-btn gen-btn-main image-edit-btn" type="button" data-i18n="image_node_edit_btn">${window.t ? window.t('image_node_edit_btn') : '编辑图片'}</button>
+                <button class="gen-btn gen-btn-caret" type="button" aria-label="${window.t ? window.t('draw_count_menu') : '选择抽卡次数'}" data-i18n="draw_count_menu:aria-label">▾</button>
                 <div class="gen-menu">
                   <div class="gen-item" data-count="1">X1</div>
                   <div class="gen-item" data-count="2">X2</div>
@@ -4932,13 +4932,13 @@
                   <div class="gen-item" data-count="4">X4</div>
                 </div>
               </div>
-              <button class="mini-btn secondary image-coloring-btn" type="button" style="border-radius: 10px;">涂色编辑</button>
+              <button class="mini-btn secondary image-coloring-btn" type="button" style="border-radius: 10px;" data-i18n="image_node_coloring_btn">${window.t ? window.t('image_node_coloring_btn') : '涂色编辑'}</button>
             </div>
             <div class="gen-meta image-draw-count-label"></div>
             <div class="muted image-edit-status" style="display:none;"></div>
           </div>
           <div class="field field-collapsible image-confirm-field" style="display:none;">
-            <button class="mini-btn image-confirm-shot-btn" type="button" style="background: #10b981; color: white; width: 100%;">确认分镜图</button>
+            <button class="mini-btn image-confirm-shot-btn" type="button" style="background: #10b981; color: white; width: 100%;" data-i18n="image_node_confirm_shot_btn">${window.t ? window.t('image_node_confirm_shot_btn') : '确认分镜图'}</button>
           </div>
         </div>
       `;
@@ -7912,11 +7912,11 @@
       }).join('');
 
       el.innerHTML = `
-        <div class="port input" title="输入（连接剧本节点）"></div>
-        <div class="port output" title="输出"></div>
+        <div class="port input" data-i18n="shot_group_input_port" title="${window.t ? window.t('shot_group_input_port') : '输入（连接剧本节点）'}"></div>
+        <div class="port output" data-i18n="shot_group_output_port" title="${window.t ? window.t('shot_group_output_port') : '输出'}"></div>
         <div class="node-header">
-          <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M6 9H18M6 12H14M6 15H12" stroke="currentColor" stroke-linecap="round"/></svg>分镜组: ${escapeHtml(node.title)}</div>
-          <button class="icon-btn" title="删除">×</button>
+          <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M6 9H18M6 12H14M6 15H12" stroke="currentColor" stroke-linecap="round"/></svg>${window.t ? window.t('shot_group_label') : '分镜组:'} ${escapeHtml(node.title)}</div>
+          <button class="icon-btn" data-i18n="node_delete_btn:title" title="${window.t ? window.t('node_delete_btn') : '删除'}">×</button>
         </div>
         <div class="node-body">
           <div class="script-node-body">
@@ -7924,47 +7924,47 @@
             <div class="script-section">
               <div class="script-section-header">
                 <div class="script-section-number">1</div>
-                <div class="script-section-title">分镜详情</div>
+                <div class="script-section-title" data-i18n="shot_group_details_section">${window.t ? window.t('shot_group_details_section') : '分镜详情'}</div>
               </div>
               <div class="field field-always-visible">
-                <div class="label">分镜组: ${escapeHtml(node.data.groupId || node.data.group_id)}</div>
-                <div class="gen-meta">共 ${node.data.shots.length} 个分镜</div>
+                <div class="label" data-i18n="shot_group_label">${window.t ? window.t('shot_group_label') : '分镜组:'} ${escapeHtml(node.data.groupId || node.data.group_id)}</div>
+                <div class="gen-meta" data-i18n="shot_group_shot_count">${window.t ? window.t('shot_group_shot_count', { count: node.data.shots.length }) : `共 ${node.data.shots.length} 个分镜`}</div>
               </div>
               <div class="field field-always-visible" style="flex: 1; max-height: 300px; overflow-y: auto;">
                 ${shotsHtml}
               </div>
               <div class="field field-always-visible btn-row" style="margin-top: 12px;">
-                <button class="mini-btn secondary shot-group-detail-btn" type="button" style="flex: 1; padding: 9px 12px;">查看/编辑</button>
-                <button class="mini-btn gen-btn-white shot-group-generate-btn" type="button" style="padding: 9px 12px;">生成分镜</button>
+                <button class="mini-btn secondary shot-group-detail-btn" type="button" style="flex: 1; padding: 9px 12px;" data-i18n="shot_group_detail_btn">${window.t ? window.t('shot_group_detail_btn') : '查看/编辑'}</button>
+                <button class="mini-btn gen-btn-white shot-group-generate-btn" type="button" style="padding: 9px 12px;" data-i18n="shot_group_generate_shot_btn">${window.t ? window.t('shot_group_generate_shot_btn') : '生成分镜'}</button>
               </div>
             </div>
             <!-- 第2列: 分镜预览与生成 -->
             <div class="script-section">
               <div class="script-section-header">
                 <div class="script-section-number">2</div>
-                <div class="script-section-title">分镜预览与生成</div>
+                <div class="script-section-title" data-i18n="shot_group_preview_section">${window.t ? window.t('shot_group_preview_section') : '分镜预览与生成'}</div>
               </div>
               <div class="field field-always-visible">
-                <div class="shot-grid-preview-label" style="font-size: 11px; color: #666; margin-bottom: 4px;">分镜预览（0个分镜）</div>
+                <div class="shot-grid-preview-label" style="font-size: 11px; color: #666; margin-bottom: 4px;" data-i18n="shot_group_preview_label">${window.t ? window.t('shot_group_preview_label', { count: 0 }) : '分镜预览（0个分镜）'}</div>
                 <div class="shot-grid-preview-container grid-2x2">
-                  <div style="padding: 16px; text-align: center; color: #666; font-size: 11px; grid-column: 1/-1;">暂无分镜节点</div>
+                  <div style="padding: 16px; text-align: center; color: #666; font-size: 11px; grid-column: 1/-1;" data-i18n="shot_group_no_shot_node">${window.t ? window.t('shot_group_no_shot_node') : '暂无分镜节点'}</div>
                 </div>
                 <div class="grid-merge-status"></div>
               </div>
               <div class="field field-always-visible">
-                <div class="label">宫格生图模型</div>
+                <div class="label" data-i18n="shot_group_grid_model_label">${window.t ? window.t('shot_group_grid_model_label') : '宫格生图模型'}</div>
                 <select class="shot-group-grid-model" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;"></select>
               </div>
               <div class="field field-always-visible">
-                <div class="label" style="margin-top:5px">宫格类型</div>
+                <div class="label" style="margin-top:5px" data-i18n="shot_group_grid_type_label">${window.t ? window.t('shot_group_grid_type_label') : '宫格类型'}</div>
                 <select class="shot-group-grid-layout" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;">
-                  <option value="auto">自动选择</option>
-                  <option value="4">4宫格 (2x2)</option>
-                  <option value="9">9宫格 (3x3)</option>
+                  <option value="auto" data-i18n="shot_group_grid_auto">${window.t ? window.t('shot_group_grid_auto') : '自动选择'}</option>
+                  <option value="4" data-i18n="shot_group_grid_4">${window.t ? window.t('shot_group_grid_4') : '4宫格 (2x2)'}</option>
+                  <option value="9" data-i18n="shot_group_grid_9">${window.t ? window.t('shot_group_grid_9') : '9宫格 (3x3)'}</option>
                 </select>
               </div>
               <div class="field field-always-visible btn-row" style="margin-top: 12px;">
-                <button class="mini-btn gen-btn-green shot-group-grid-btn" type="button" style="width: 100%; padding: 9px 12px;">宫格生图</button>
+                <button class="mini-btn gen-btn-green shot-group-grid-btn" type="button" style="width: 100%; padding: 9px 12px;" data-i18n="shot_group_grid_btn">${window.t ? window.t('shot_group_grid_btn') : '宫格生图'}</button>
               </div>
               <div class="gen-meta shot-group-grid-status" style="display:none; margin-top: 8px;"></div>
             </div>
@@ -7972,23 +7972,23 @@
             <div class="script-section" style="background: #f9fafb;">
               <div class="script-section-header">
                 <div class="script-section-number">3</div>
-                <div class="script-section-title">视频生成</div>
+                <div class="script-section-title" data-i18n="shot_group_video_section">${window.t ? window.t('shot_group_video_section') : '视频生成'}</div>
               </div>
               <div class="field field-always-visible">
-                <div class="label">视频模型</div>
+                <div class="label" data-i18n="shot_group_video_model_label">${window.t ? window.t('shot_group_video_model_label') : '视频模型'}</div>
                 <select class="shot-group-video-model"></select>
               </div>
               <div class="field field-always-visible" style="margin-top:5px">
-                <div class="label">视频时长</div>
+                <div class="label" data-i18n="shot_group_video_duration_label">${window.t ? window.t('shot_group_video_duration_label') : '视频时长'}</div>
                 <select class="shot-group-video-duration">
-                  <option value="5" selected>5秒</option>
-                  <option value="10">10秒</option>
+                  <option value="5" selected data-i18n="shot_group_video_duration_5s">${window.t ? window.t('shot_group_video_duration_5s') : '5秒'}</option>
+                  <option value="10" data-i18n="shot_group_video_duration_10s">${window.t ? window.t('shot_group_video_duration_10s') : '10秒'}</option>
                 </select>
               </div>
               <div class="field field-always-visible" style="margin-top: 10px;">
                 <div style="display: flex; flex-direction: column; gap: 8px;">
                   <div class="gen-container shot-group-merge-container" style="width: 100%;">
-                    <button class="gen-btn gen-btn-main shot-group-generate-video-btn" type="button" style="background: #22c55e; color: white; padding: 10px; flex: 1;" title="将多个分镜合并为一个视频生成，节省算力（仅 kling/veo3/sora2 支持）">合并生成视频</button>
+                    <button class="gen-btn gen-btn-main shot-group-generate-video-btn" type="button" style="background: #22c55e; color: white; padding: 10px; flex: 1;" data-i18n="shot_group_merge_generate_video_btn:title" title="${window.t ? window.t('shot_group_merge_generate_tooltip') : '将多个分镜合并为一个视频生成，节省算力（仅 kling/veo3/sora2 支持）'}">${window.t ? window.t('shot_group_merge_generate_video_btn') : '合并生成视频'}</button>
                     <button class="gen-btn gen-btn-caret shot-group-video-caret" type="button" aria-label="选择抽卡次数">▾</button>
                     <div class="gen-menu shot-group-video-menu">
                       <div class="gen-item" data-count="1">X1</div>
@@ -7997,23 +7997,21 @@
                       <div class="gen-item" data-count="4">X4</div>
                     </div>
                   </div>
-                  <button class="gen-btn gen-btn-main shot-group-batch-generate-btn" type="button" style="background: #3b82f6; color: white; padding: 10px;" title="每个分镜独立生成视频，支持所有模型但可能浪费时长">逐个生成视频</button>
+                  <button class="gen-btn gen-btn-main shot-group-batch-generate-btn" type="button" style="background: #3b82f6; color: white; padding: 10px;" data-i18n="shot_group_batch_generate_video_btn:title" title="${window.t ? window.t('shot_group_batch_generate_tooltip') : '每个分镜独立生成视频，支持所有模型但可能浪费时长'}">${window.t ? window.t('shot_group_batch_generate_video_btn') : '逐个生成视频'}</button>
                 </div>
               </div>
               <div style="font-size: 10px; color: #9ca3af; line-height: 1.4; margin-top: 4px;">
-                <span style="color: #10b981;">● 合并生成</span>：多个分镜合并为一个视频，节省算力<br>
-                <span style="color: #3b82f6;">● 逐个生成</span>：每个分镜独立生成，支持所有模型
+                <span style="color: #10b981;" data-i18n="shot_group_merge_info_title">${window.t ? window.t('shot_group_merge_info_title') : '● 合并生成'}</span><span data-i18n="shot_group_merge_info_desc">：${window.t ? window.t('shot_group_merge_info_desc') : '多个分镜合并为一个视频，节省算力'}</span><br>
+                <span style="color: #3b82f6;" data-i18n="shot_group_batch_info_title">${window.t ? window.t('shot_group_batch_info_title') : '● 逐个生成'}</span><span data-i18n="shot_group_batch_info_desc">：${window.t ? window.t('shot_group_batch_info_desc') : '每个分镜独立生成，支持所有模型'}</span>
               </div>
               <div style="margin-top: auto; padding-top: 12px; border-top: 1px dashed #e5e7eb;">
-                <div class="gen-meta shot-group-video-draw-count-label"></div>
+                <div class="gen-meta shot-group-video-draw-count-label" data-i18n="shot_group_merge_draw_count"></div>
                 <div class="shot-group-computing-power" style="padding: 6px; border-radius: 6px;">
                   <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="color: #9ca3af; font-size: 11px;">算力消耗：</span>
-                    <span class="shot-group-computing-power-value" style="color: #3b82f6; font-weight: bold; font-size: 12px;">0 算力</span>
+                    <span style="color: #9ca3af; font-size: 11px;" data-i18n="shot_group_computing_power">${window.t ? window.t('shot_group_computing_power') : '算力消耗：'}</span>
+                    <span class="shot-group-computing-power-value" style="color: #3b82f6; font-weight: bold; font-size: 12px;" data-i18n="shot_group_computing_power_value">${window.t ? window.t('shot_group_computing_power_value', { power: 0 }) : '0 算力'}</span>
                   </div>
-                  <div class="shot-group-computing-power-detail" style="margin-top: 2px; font-size: 10px; color: #6b7280; text-align: right;">
-                    单个 0 算力 × 1 个 = 0 算力
-                  </div>
+                  <div class="shot-group-computing-power-detail" style="margin-top: 2px; font-size: 10px; color: #6b7280; text-align: right;" data-i18n="shot_group_computing_power_detail">${window.t ? window.t('shot_group_computing_power_detail', { individual: 0, count: 1, total: 0 }) : '单个 0 算力 × 1 个 = 0 算力'}</div>
                 </div>
               </div>
             </div>
@@ -9007,11 +9005,11 @@
       // 不设固定宽度，由CSS .node:has(.script-node-body) 控制
 
       el.innerHTML = `
-        <div class="port input" title="输入（连接分镜组节点）"></div>
-        <div class="port output" title="输出"></div>
+        <div class="port input" data-i18n="shot_frame_input_port" title="${window.t ? window.t('shot_frame_input_port') : '输入（连接分镜组节点）'}"></div>
+        <div class="port output" data-i18n="shot_frame_output_port" title="${window.t ? window.t('shot_frame_output_port') : '输出'}"></div>
         <div class="node-header">
-          <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>分镜: ${node.title}</div>
-          <button class="icon-btn" title="删除">×</button>
+          <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>${window.t ? window.t('node_shot_frame_label') : '分镜'}: ${node.title}</div>
+          <button class="icon-btn" data-i18n="node_delete_btn:title" title="${window.t ? window.t('node_delete_btn') : '删除'}">×</button>
         </div>
         <div class="node-body">
           <div class="script-node-body">
@@ -9019,38 +9017,38 @@
             <div class="script-section">
               <div class="script-section-header">
                 <div class="script-section-number">1</div>
-                <div class="script-section-title">基础信息</div>
+                <div class="script-section-title" data-i18n="shot_frame_basic_info_section">${window.t ? window.t('shot_frame_basic_info_section') : '基础信息'}</div>
               </div>
               <div class="field field-always-visible">
                 <div style="font-size: 13px; font-weight: 600; color: var(--text);">${escapeHtml(node.data.description)}</div>
-                <div class="gen-meta" style="margin-top: 4px;">时长: ${node.data.duration}秒 | ${escapeHtml(node.data.shotType)} | ${escapeHtml(node.data.cameraMovement)}</div>
+                <div class="gen-meta" style="margin-top: 4px;" data-i18n="shot_frame_duration_label">${window.t ? window.t('shot_frame_duration_label') : '时长:'} ${node.data.duration}${window.t ? window.t('shot_frame_seconds') : '秒'} | ${escapeHtml(node.data.shotType)} | ${escapeHtml(node.data.cameraMovement)}</div>
               </div>
               <div class="field field-always-visible">
                 <div class="shot-ref-section" style="position: relative;">
                   <div class="shot-ref-row">
-                    <span class="shot-ref-label">场景</span>
+                    <span class="shot-ref-label" data-i18n="shot_frame_scene_label">${window.t ? window.t('shot_frame_scene_label') : '场景'}</span>
                     <div class="shot-ref-tags shot-ref-scene-tags"></div>
                   </div>
                   <div class="shot-ref-row">
-                    <span class="shot-ref-label">道具</span>
+                    <span class="shot-ref-label" data-i18n="shot_frame_prop_label">${window.t ? window.t('shot_frame_prop_label') : '道具'}</span>
                     <div class="shot-ref-tags shot-ref-prop-tags"></div>
                   </div>
                   <div class="shot-ref-row">
-                    <span class="shot-ref-label">角色</span>
+                    <span class="shot-ref-label" data-i18n="shot_frame_character_label">${window.t ? window.t('shot_frame_character_label') : '角色'}</span>
                     <div class="shot-ref-tags shot-ref-char-tags"></div>
                   </div>
                 </div>
               </div>
               <div class="field field-always-visible">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                  <div class="label" style="margin: 0;">视频首帧</div>
+                  <div class="label" style="margin: 0;" data-i18n="shot_frame_video_first_frame_label">${window.t ? window.t('shot_frame_video_first_frame_label') : '视频首帧'}</div>
                   <div class="gen-container shot-frame-image-selector-container" style="display: none;">
-                    <button class="mini-btn shot-frame-image-selector-btn" type="button" style="font-size: 11px; padding: 4px 8px; background: white; color: #333; border: 1px solid #ddd;">选择图片</button>
-                    <button class="gen-btn-caret" type="button" aria-label="选择图片" style="font-size: 11px; padding: 4px 6px;">▾</button>
+                    <button class="mini-btn shot-frame-image-selector-btn" type="button" style="font-size: 11px; padding: 4px 8px; background: white; color: #333; border: 1px solid #ddd;" data-i18n="shot_frame_select_image_btn">${window.t ? window.t('shot_frame_select_image_btn') : '选择图片'}</button>
+                    <button class="gen-btn-caret" type="button" aria-label="${window.t ? window.t('shot_frame_select_image_btn') : '选择图片'}" style="font-size: 11px; padding: 4px 6px;">▾</button>
                     <div class="gen-menu shot-frame-image-menu"></div>
                   </div>
                 </div>
-                <div class="port first-frame-port" title="连接图片节点（视频首帧）"></div>
+                <div class="port first-frame-port" data-i18n="shot_frame_first_frame_port" title="${window.t ? window.t('shot_frame_first_frame_port') : '连接图片节点（视频首帧）'}"></div>
                 <div class="shot-frame-preview-field" style="position: relative;">
                   <img class="shot-frame-preview-image" src="${node.data.previewImageUrl || ''}" style="max-width: 100%; max-height: 160px; object-fit: contain; border-radius: 6px; cursor: pointer; display: ${node.data.previewImageUrl ? 'block' : 'none'};" />
                 </div>
@@ -9058,25 +9056,25 @@
               <div class="field field-always-visible shot-frame-image-field" style="display:${node.data.imageUrl ? 'flex' : 'none'};">
                 <img class="shot-frame-image" src="${node.data.imageUrl}" style="max-width: 100%; max-height: 160px; object-fit: contain; border-radius: 6px; cursor: pointer;" />
               </div>
-              <button class="gen-btn shot-frame-generate-dialogue-btn" type="button" style="background: #3b82f6; color: white; width: 100%; padding: 8px; border-radius: 6px; margin-top: auto;" disabled>生成对话音频</button>
+              <button class="gen-btn shot-frame-generate-dialogue-btn" type="button" style="background: #3b82f6; color: white; width: 100%; padding: 8px; border-radius: 6px; margin-top: auto;" disabled data-i18n="shot_frame_generate_dialogue_audio_btn">${window.t ? window.t('shot_frame_generate_dialogue_audio_btn') : '生成对话音频'}</button>
             </div>
             <!-- 第2列: 提示词编辑 -->
             <div class="script-section" style="background: #fcfcfc;">
               <div class="script-section-header">
                 <div class="script-section-number">2</div>
-                <div class="script-section-title">提示词编辑</div>
+                <div class="script-section-title" data-i18n="shot_frame_prompt_edit_section">${window.t ? window.t('shot_frame_prompt_edit_section') : '提示词编辑'}</div>
               </div>
               <div class="field field-always-visible" style="flex: 1; display: flex; flex-direction: column;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                  <div class="label" style="margin: 0;">图片提示词</div>
-                  <span style="font-size: 10px; color: #9ca3af;">点击编辑 | 按 / 选择角色</span>
+                  <div class="label" style="margin: 0;" data-i18n="shot_frame_image_prompt_label">${window.t ? window.t('shot_frame_image_prompt_label') : '图片提示词'}</div>
+                  <span style="font-size: 10px; color: #9ca3af;" data-i18n="shot_frame_image_prompt_hint">${window.t ? window.t('shot_frame_image_prompt_hint') : '点击编辑 | 按 / 选择角色'}</span>
                 </div>
                 <textarea class="shot-frame-image-prompt" rows="3" readonly style="width: 100%; flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; resize: none; cursor: pointer; background: #fafafa; line-height: 1.4;">${escapeHtml(node.data.imagePrompt)}</textarea>
               </div>
               <div class="field field-always-visible" style="flex: 1; display: flex; flex-direction: column;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                  <div class="label" style="margin: 0;">视频提示词</div>
-                  <button class="mini-btn secondary reduce-violation-btn" type="button" style="font-size: 11px; padding: 4px 8px;">视频生成失败，请点此次按钮</button>
+                  <div class="label" style="margin: 0;" data-i18n="shot_frame_video_prompt_label">${window.t ? window.t('shot_frame_video_prompt_label') : '视频提示词'}</div>
+                  <button class="mini-btn secondary reduce-violation-btn" type="button" style="font-size: 11px; padding: 4px 8px;" data-i18n="shot_frame_video_generation_failed_btn">${window.t ? window.t('shot_frame_video_generation_failed_btn') : '视频生成失败，请点此按钮'}</button>
                 </div>
                 <textarea class="shot-frame-video-prompt" rows="3" readonly style="width: 100%; flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; resize: none; cursor: pointer; background: #fafafa; line-height: 1.4;">${escapeHtml(node.data.videoPromptText || node.data.videoPrompt)}</textarea>
               </div>
@@ -9085,16 +9083,16 @@
             <div class="script-section" style="background: #f9fafb;">
               <div class="script-section-header">
                 <div class="script-section-number">3</div>
-                <div class="script-section-title">模型与生成</div>
+                <div class="script-section-title" data-i18n="shot_frame_model_generation_section">${window.t ? window.t('shot_frame_model_generation_section') : '模型与生成'}</div>
               </div>
               <div class="field field-always-visible">
-                <div class="label">分镜模型</div>
+                <div class="label" data-i18n="shot_frame_model_label">${window.t ? window.t('shot_frame_model_label') : '分镜模型'}</div>
                 <select class="shot-frame-model"></select>
               </div>
               <div class="field field-always-visible" style="margin-bottom: 4px; margin-top: 12px;">
                 <div class="gen-container" style="width: 100%;">
-                  <button class="gen-btn gen-btn-main shot-frame-generate-btn" type="button" style="flex: 1; padding: 10px;">生成分镜图</button>
-                  <button class="gen-btn gen-btn-caret shot-frame-caret" type="button" aria-label="选择抽卡次数">▾</button>
+                  <button class="gen-btn gen-btn-main shot-frame-generate-btn" type="button" style="flex: 1; padding: 10px;" data-i18n="shot_frame_generate_btn">${window.t ? window.t('shot_frame_generate_btn') : '生成分镜图'}</button>
+                  <button class="gen-btn gen-btn-caret shot-frame-caret" type="button" aria-label="${window.t ? window.t('shot_frame_select_draw_count') : '选择抽卡次数'}">▾</button>
                   <div class="gen-menu shot-frame-menu">
                     <div class="gen-item" data-count="1">X1</div>
                     <div class="gen-item" data-count="2">X2</div>
@@ -9105,30 +9103,30 @@
                 <div class="gen-meta shot-frame-draw-count-label"></div>
               </div>
               <div class="field field-always-visible" style="margin-top: 8px;">
-                <div class="label">视频模型</div>
+                <div class="label" data-i18n="shot_group_video_model_label">${window.t ? window.t('shot_group_video_model_label') : '视频模型'}</div>
                 <select class="shot-frame-video-model"></select>
               </div>
               <div class="field field-always-visible">
-                <div class="label">视频时长</div>
+                <div class="label" data-i18n="shot_frame_video_duration_label">${window.t ? window.t('shot_frame_video_duration_label') : '视频时长'}</div>
                 <select class="shot-frame-video-duration">
-                  <option value="5" selected>5秒</option>
-                  <option value="10">10秒</option>
+                  <option value="5" selected data-i18n="shot_frame_video_duration_5s">${window.t ? window.t('shot_frame_video_duration_5s') : '5秒'}</option>
+                  <option value="10" data-i18n="shot_frame_video_duration_10s">${window.t ? window.t('shot_frame_video_duration_10s') : '10秒'}</option>
                 </select>
               </div>
               <div class="shot-ref-audio-field field field-always-visible" style="margin-top: 8px; display: none;">
-                <div class="label">参考音频（可选）</div>
+                <div class="label" data-i18n="shot_frame_reference_audio_label">${window.t ? window.t('shot_frame_reference_audio_label') : '参考音频（可选）'}</div>
                 <input type="file" class="shot-ref-audio-input" accept="audio/*" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" />
                 <div class="shot-ref-audio-name" style="margin-top: 4px; font-size: 11px; color: #666;"></div>
               </div>
               <div class="shot-ref-video-field field field-always-visible" style="margin-top: 8px; display: none;">
-                <div class="label">参考视频（可选）</div>
+                <div class="label" data-i18n="shot_frame_reference_video_label">${window.t ? window.t('shot_frame_reference_video_label') : '参考视频（可选）'}</div>
                 <input type="file" class="shot-ref-video-input" accept="video/*" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" />
                 <div class="shot-ref-video-name" style="margin-top: 4px; font-size: 11px; color: #666;"></div>
               </div>
               <div class="field field-always-visible" style="margin-top: 12px;">
                 <div class="gen-container" style="width: 100%;">
-                  <button class="gen-btn gen-btn-main shot-frame-generate-video-btn" type="button" style="background: #22c55e; color: white; flex: 1; padding: 10px;">生成视频</button>
-                  <button class="gen-btn gen-btn-caret shot-frame-video-caret" type="button" aria-label="选择抽卡次数">▾</button>
+                  <button class="gen-btn gen-btn-main shot-frame-generate-video-btn" type="button" style="background: #22c55e; color: white; flex: 1; padding: 10px;" data-i18n="shot_frame_generate_video_btn">${window.t ? window.t('shot_frame_generate_video_btn') : '生成视频'}</button>
+                  <button class="gen-btn gen-btn-caret shot-frame-video-caret" type="button" aria-label="${window.t ? window.t('shot_frame_select_draw_count') : '选择抽卡次数'}">▾</button>
                   <div class="gen-menu shot-frame-video-menu">
                     <div class="gen-item" data-count="1">X1</div>
                     <div class="gen-item" data-count="2">X2</div>
@@ -9142,12 +9140,10 @@
               <div style="margin-top: auto; padding-top: 12px; border-top: 1px dashed #e5e7eb;">
                 <div class="shot-frame-computing-power" style="padding: 6px; border-radius: 6px;">
                   <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="color: #9ca3af; font-size: 11px;">算力消耗：</span>
-                    <span class="shot-frame-computing-power-value" style="color: #3b82f6; font-weight: bold; font-size: 12px;">0 算力</span>
+                    <span style="color: #9ca3af; font-size: 11px;" data-i18n="shot_frame_computing_power">${window.t ? window.t('shot_frame_computing_power') : '算力消耗：'}</span>
+                    <span class="shot-frame-computing-power-value" style="color: #3b82f6; font-weight: bold; font-size: 12px;" data-i18n="shot_frame_computing_power_value">${window.t ? window.t('shot_frame_computing_power_value', { power: 0 }) : '0 算力'}</span>
                   </div>
-                  <div class="shot-frame-computing-power-detail" style="margin-top: 2px; font-size: 10px; color: #6b7280; text-align: right;">
-                    单个 0 算力 × 1 个 = 0 算力
-                  </div>
+                  <div class="shot-frame-computing-power-detail" style="margin-top: 2px; font-size: 10px; color: #6b7280; text-align: right;" data-i18n="shot_frame_computing_power_detail">${window.t ? window.t('shot_frame_computing_power_detail', { individual: 0, count: 1, total: 0 }) : '单个 0 算力 × 1 个 = 0 算力'}</div>
                 </div>
               </div>
             </div>
