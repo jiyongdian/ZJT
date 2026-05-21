@@ -141,47 +141,6 @@ class AsyncTasksModel:
             raise
 
     @staticmethod
-    def get_by_implementation(
-        implementation: int,
-        status: Optional[int] = None,
-        limit: int = 50
-    ) -> List[AsyncTask]:
-        """
-        根据实现 ID 获取任务列表
-
-        Args:
-            implementation: 实现 ID
-            status: 状态筛选（可选）
-            limit: 最大返回数量
-
-        Returns:
-            AsyncTask 对象列表
-        """
-        if status is not None:
-            sql = """
-                SELECT * FROM async_tasks
-                WHERE implementation = %s AND status = %s
-                ORDER BY created_at ASC
-                LIMIT %s
-            """
-            params = (implementation, status, limit)
-        else:
-            sql = """
-                SELECT * FROM async_tasks
-                WHERE implementation = %s
-                ORDER BY created_at ASC
-                LIMIT %s
-            """
-            params = (implementation, limit)
-
-        try:
-            results = execute_query(sql, params, fetch_all=True)
-            return [AsyncTask(**row) for row in results] if results else []
-        except Exception as e:
-            logger.error(f"Failed to get async tasks by implementation {implementation}: {e}")
-            raise
-
-    @staticmethod
     def get_pending_tasks(implementation: Optional[int] = None, limit: int = 50) -> List[AsyncTask]:
         """
         获取待处理的任务（状态为 QUEUED 或 PROCESSING）
@@ -215,43 +174,6 @@ class AsyncTasksModel:
             return [AsyncTask(**row) for row in results] if results else []
         except Exception as e:
             logger.error(f"Failed to get pending async tasks: {e}")
-            raise
-
-    @staticmethod
-    def get_user_tasks(user_id: int, implementation: Optional[int] = None, limit: int = 50) -> List[AsyncTask]:
-        """
-        获取用户的任务列表
-
-        Args:
-            user_id: 用户 ID
-            implementation: 实现 ID 筛选（可选）
-            limit: 最大返回数量
-
-        Returns:
-            AsyncTask 对象列表
-        """
-        if implementation:
-            sql = """
-                SELECT * FROM async_tasks
-                WHERE user_id = %s AND implementation = %s
-                ORDER BY created_at DESC
-                LIMIT %s
-            """
-            params = (user_id, implementation, limit)
-        else:
-            sql = """
-                SELECT * FROM async_tasks
-                WHERE user_id = %s
-                ORDER BY created_at DESC
-                LIMIT %s
-            """
-            params = (user_id, limit)
-
-        try:
-            results = execute_query(sql, params, fetch_all=True)
-            return [AsyncTask(**row) for row in results] if results else []
-        except Exception as e:
-            logger.error(f"Failed to get user async tasks: {e}")
             raise
 
     @staticmethod
@@ -305,18 +227,6 @@ class AsyncTasksModel:
             return affected
         except Exception as e:
             logger.error(f"Failed to update async task {record_id}: {e}")
-            raise
-
-    @staticmethod
-    def update_external_task_id(record_id: int, external_task_id: str) -> int:
-        """更新外部任务 ID（用于任务提交后回填）"""
-        sql = "UPDATE async_tasks SET external_task_id = %s WHERE id = %s"
-        try:
-            affected = execute_update(sql, (external_task_id, record_id))
-            logger.info(f"Updated external_task_id for id={record_id}: {external_task_id}")
-            return affected
-        except Exception as e:
-            logger.error(f"Failed to update external_task_id for id={record_id}: {e}")
             raise
 
     @staticmethod
