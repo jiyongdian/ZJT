@@ -390,8 +390,8 @@
       el.style.top = node.y + 'px';
 
       el.innerHTML = `
-        <div class="port input" title="${window.t ? window.t('node_input_port') : '输入（连接图生视频节点或角色节点）'}"></div>
-        <div class="port output" title="${window.t ? window.t('node_output_port_dialogue') : '输出（连接到对话组节点作为情感参考）'}"></div>
+        <div class="port input" data-i18n="node_input_port:title"></div>
+        <div class="port output" data-i18n="node_output_port_dialogue:title"></div>
         <div class="node-header">
           <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M10 9.5V14.5L14.5 12L10 9.5Z" fill="currentColor"/></svg>${node.title}</div>
           <button class="icon-btn" title="${window.t ? window.t('node_delete_btn') : '删除'}">×</button>
