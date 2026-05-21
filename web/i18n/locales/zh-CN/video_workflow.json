@@ -570,6 +570,20 @@
   "dialogue_output_port_title": "输出",
   "runninghub_not_configured": "该功能依赖runninghub接口，请配置密钥",
   "ref_audio_deleted_msg": "已删除参考音频",
-  "camera_input_error": "相机控制节点只能接收图片节点"
+  "camera_input_error": "相机控制节点只能接收图片节点",
+  "style_name_label": "画风名称",
+  "style_guide_link": "查看画风说明",
+  "style_guide_intro": "如果您不知道如何描述画风，可以在其他网站寻找画风。例如：",
+  "style_placeholder": "选择或输入画风",
+  "style_sync_banner": "世界的画风与当前工作流不一致",
+  "sync_world_style": "同步世界画风",
+  "add_image": "添加",
+  "save": "保存",
+  "delete": "删除",
+  "video_prompt_suffix_placeholder": "输入视频提示词后缀，生成视频时会自动添加到提示词末尾...",
+  "video_prompt_suffix_hint": "此后缀将在通过镜头节点生成视频时自动添加到提示词末尾",
+  "coloring_undo": "撤销",
+  "coloring_clear": "清空",
+  "coloring_confirm": "确认"
 }
 

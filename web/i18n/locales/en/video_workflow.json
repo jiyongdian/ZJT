@@ -570,6 +570,20 @@
   "dialogue_output_port_title": "Output",
   "runninghub_not_configured": "This feature depends on the runninghub interface. Please configure the key.",
   "ref_audio_deleted_msg": "Reference audio has been deleted",
-  "camera_input_error": "Camera control node can only receive image node input"
+  "camera_input_error": "Camera control node can only receive image node input",
+  "style_name_label": "Style Name",
+  "style_guide_link": "View Style Guide",
+  "style_guide_intro": "If you don't know how to describe a style, you can find style references on other websites. For example:",
+  "style_placeholder": "Select or enter style",
+  "style_sync_banner": "World style is inconsistent with current workflow",
+  "sync_world_style": "Sync World Style",
+  "add_image": "Add",
+  "save": "Save",
+  "delete": "Delete",
+  "video_prompt_suffix_placeholder": "Enter video prompt suffix, which will be automatically added to the prompt when generating videos...",
+  "video_prompt_suffix_hint": "This suffix will be automatically added to the prompt when generating videos through shot nodes",
+  "coloring_undo": "Undo",
+  "coloring_clear": "Clear",
+  "coloring_confirm": "Confirm"
 }
 

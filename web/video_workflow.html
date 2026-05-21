@@ -300,18 +300,18 @@
   <div class="modal" id="styleModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 600px; background: #ffffff; color: #111827; border: 1px solid #e5e7eb;">
       <div class="modal-header" style="background: #f8fafc; border-bottom: 1px solid #e5e7eb;">
-        <div class="modal-title" style="color: #0f172a;" data-i18n="style_settings">画风设置</div>
-        <button class="modal-close" id="styleModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
+        <div class="modal-title" style="color: #0f172a;" data-i18n="style_settings">${window.t ? window.t('style_settings') : '画风设置'}</div>
+        <button class="modal-close" id="styleModalClose" type="button" aria-label="${window.t ? window.t('close') : '关闭'}" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
         <div style="display: flex; flex-direction: column; gap: 16px;">
           <div class="field">
-            <label class="label" style="color: #0f172a;">
-              画风名称
-              <a href="/image-style-guide" target="_blank" style="margin-left: 8px; font-size: 12px; color: #3b82f6; text-decoration: none; font-weight: normal; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'" title="查看画风说明">查看画风说明</a>
-              <span style="margin-left: 8px; font-size: 12px; color: #6b7280; font-weight: normal;">如果您不知道如何描述画风，可以在其他网站寻找画风。例如：<a href="https://bq3mlz1jiae.feishu.cn/wiki/LBw5w7zZaiuQhuk4sT7c42zcn0e#share-NKbIdQfDdouM8xx3LxIcZrPHn7c" target="_blank" style="color: #3b82f6; text-decoration: none; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'">即梦</a>。</span>
+            <label class="label" style="color: #0f172a;" data-i18n="style_name_label">
+              ${window.t ? window.t('style_name_label') : '画风名称'}
+              <a href="/image-style-guide" target="_blank" style="margin-left: 8px; font-size: 12px; color: #3b82f6; text-decoration: none; font-weight: normal; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'" title="${window.t ? window.t('style_guide_link') : '查看画风说明'}" data-i18n="style_guide_link">${window.t ? window.t('style_guide_link') : '查看画风说明'}</a>
+              <span style="margin-left: 8px; font-size: 12px; color: #6b7280; font-weight: normal;" data-i18n="style_guide_intro">${window.t ? window.t('style_guide_intro') : '如果您不知道如何描述画风，可以在其他网站寻找画风。例如：'}<a href="https://bq3mlz1jiae.feishu.cn/wiki/LBw5w7zZaiuQhuk4sT7c42zcn0e#share-NKbIdQfDdouM8xx3LxIcZrPHn7c" target="_blank" style="color: #3b82f6; text-decoration: none; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'">即梦</a>。</span>
             </label>
-            <input type="text" id="styleNameInput" list="stylePresets" placeholder="选择或输入画风" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" />
+            <input type="text" id="styleNameInput" list="stylePresets" placeholder="${window.t ? window.t('style_placeholder') : '选择或输入画风'}" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" data-i18n="style_placeholder" />
             <datalist id="stylePresets">
               <option value="漫画风格">
               <option value="写实风格">
@@ -331,9 +331,9 @@
           <!-- 同步世界画风提示条 -->
           <div id="styleSyncBanner" style="display: none; padding: 10px 14px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; gap: 10px; align-items: center;">
             <div style="flex: 1; font-size: 13px; color: #1e40af;">
-              <span id="styleSyncBannerText">世界的画风与当前工作流不一致</span>
+              <span id="styleSyncBannerText" data-i18n="style_sync_banner">${window.t ? window.t('style_sync_banner') : '世界的画风与当前工作流不一致'}</span>
             </div>
-            <button type="button" id="styleSyncBtn" style="padding: 6px 14px; background: #3b82f6; color: #ffffff; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; white-space: nowrap; font-weight: 500;">同步世界画风</button>
+            <button type="button" id="styleSyncBtn" style="padding: 6px 14px; background: #3b82f6; color: #ffffff; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; white-space: nowrap; font-weight: 500;" data-i18n="sync_world_style">${window.t ? window.t('sync_world_style') : '同步世界画风'}</button>
           </div>
           <div class="field">
             <label class="label" style="color: #0f172a;">参考图</label>
@@ -490,7 +490,7 @@
               <div style="display: flex; gap: 8px; align-items: center;">
                 <input type="file" id="createCharacterMultiImageFile" accept="image/*" style="flex: 1; background: #f9fafb; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 6px; font-size: 12px;" />
                 <input type="text" id="createCharacterMultiImageLabel" placeholder="标签，如：晚礼服" style="width: 120px; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 6px 10px; font-size: 12px; outline: none;" />
-                <button type="button" id="createCharacterMultiImageAddBtn" style="background: #3b82f6; color: white; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;">添加</button>
+                <button type="button" id="createCharacterMultiImageAddBtn" style="background: #3b82f6; color: white; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;" data-i18n="add_image">${window.t ? window.t('add_image') : '添加'}</button>
               </div>
             </div>
           </div>
@@ -551,7 +551,7 @@
                   <option value="custom">自定义</option>
                 </select>
                 <input type="text" id="createLocationMultiImageLabel" placeholder="标签" style="width: 80px; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 6px 10px; font-size: 12px; outline: none;" />
-                <button type="button" id="createLocationMultiImageAddBtn" style="background: #3b82f6; color: white; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;">添加</button>
+                <button type="button" id="createLocationMultiImageAddBtn" style="background: #3b82f6; color: white; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;" data-i18n="add_image">${window.t ? window.t('add_image') : '添加'}</button>
               </div>
             </div>
           </div>
@@ -613,17 +613,17 @@
                   <option value="custom">自定义</option>
                 </select>
                 <input type="text" id="editLocationMultiImageLabel" placeholder="标签" style="width: 80px; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 6px 10px; font-size: 12px; outline: none;" />
-                <button type="button" id="editLocationMultiImageAddBtn" style="background: #3b82f6; color: white; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;">添加</button>
+                <button type="button" id="editLocationMultiImageAddBtn" style="background: #3b82f6; color: white; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;" data-i18n="add_image">${window.t ? window.t('add_image') : '添加'}</button>
               </div>
             </div>
           </div>
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: space-between; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
-        <button class="mini-btn danger" id="editLocationDeleteBtn" type="button" style="background: #ef4444; color: #ffffff;">删除</button>
+        <button class="mini-btn danger" id="editLocationDeleteBtn" type="button" style="background: #ef4444; color: #ffffff;" data-i18n="delete">${window.t ? window.t('delete') : '删除'}</button>
         <div style="display: flex; gap: 10px;">
           <button class="mini-btn secondary" id="editLocationCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
-          <button class="mini-btn" id="editLocationSaveBtn" type="button">保存</button>
+          <button class="mini-btn" id="editLocationSaveBtn" type="button" data-i18n="save">${window.t ? window.t('save') : '保存'}</button>
         </div>
       </div>
     </div>
@@ -733,7 +733,7 @@
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: space-between; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
-        <button class="mini-btn danger" id="editPropsDeleteBtn" type="button" style="background: #ef4444; color: #ffffff;">删除</button>
+        <button class="mini-btn danger" id="editPropsDeleteBtn" type="button" style="background: #ef4444; color: #ffffff;" data-i18n="delete">${window.t ? window.t('delete') : '删除'}</button>
         <div style="display: flex; gap: 10px;">
           <button class="mini-btn secondary" id="editPropsCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
           <button class="mini-btn" id="editPropsSaveBtn" type="button">保存</button>
@@ -861,14 +861,14 @@
               <div style="display: flex; gap: 8px; align-items: center; margin-top: 8px;">
                 <input type="file" id="editCharacterMultiImageFile" accept="image/*" style="flex: 1; background: #f9fafb; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 6px; font-size: 12px;" />
                 <input type="text" id="editCharacterMultiImageLabel" placeholder="标签，如：晚礼服" style="width: 120px; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 6px 10px; font-size: 12px; outline: none;" />
-                <button type="button" id="editCharacterMultiImageAddBtn" style="background: #3b82f6; color: white; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;">添加</button>
+                <button type="button" id="editCharacterMultiImageAddBtn" style="background: #3b82f6; color: white; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;" data-i18n="add_image">${window.t ? window.t('add_image') : '添加'}</button>
               </div>
             </div>
           </div>
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: space-between; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
-        <button class="mini-btn danger" id="editCharacterDeleteBtn" type="button" style="background: #ef4444; color: #ffffff;">删除</button>
+        <button class="mini-btn danger" id="editCharacterDeleteBtn" type="button" style="background: #ef4444; color: #ffffff;" data-i18n="delete">${window.t ? window.t('delete') : '删除'}</button>
         <div style="display: flex; gap: 10px;">
           <button class="mini-btn secondary" id="editCharacterCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
           <button class="mini-btn" id="editCharacterSaveBtn" type="button">保存</button>
@@ -888,16 +888,16 @@
         <div style="display: flex; flex-direction: column; gap: 16px;">
           <div class="field">
             <label class="label" style="color: #0f172a;">提示词后缀</label>
-            <textarea id="videoPromptSuffixInput" placeholder="输入视频提示词后缀，生成视频时会自动添加到提示词末尾..." rows="6" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;"></textarea>
-            <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">
-              此后缀将在通过镜头节点生成视频时自动添加到提示词末尾
+            <textarea id="videoPromptSuffixInput" placeholder="${window.t ? window.t('video_prompt_suffix_placeholder') : '输入视频提示词后缀，生成视频时会自动添加到提示词末尾...'}" rows="6" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;" data-i18n="video_prompt_suffix_placeholder"></textarea>
+            <div style="margin-top: 8px; font-size: 12px; color: #6b7280;" data-i18n="video_prompt_suffix_hint">
+              ${window.t ? window.t('video_prompt_suffix_hint') : '此后缀将在通过镜头节点生成视频时自动添加到提示词末尾'}
             </div>
           </div>
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
         <button class="mini-btn secondary" id="videoPromptSuffixCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
-        <button class="mini-btn" id="videoPromptSuffixSaveBtn" type="button">保存</button>
+        <button class="mini-btn" id="videoPromptSuffixSaveBtn" type="button" data-i18n="save">${window.t ? window.t('save') : '保存'}</button>
       </div>
     </div>
   </div>
@@ -935,14 +935,14 @@
             </div>
           </div>
           <div style="display: flex; gap: 8px; justify-content: center;">
-            <button class="mini-btn secondary" id="coloringUndoBtn" type="button">撤销</button>
-            <button class="mini-btn secondary" id="coloringClearBtn" type="button">清空</button>
+            <button class="mini-btn secondary" id="coloringUndoBtn" type="button" data-i18n="coloring_undo">${window.t ? window.t('coloring_undo') : '撤销'}</button>
+            <button class="mini-btn secondary" id="coloringClearBtn" type="button" data-i18n="coloring_clear">${window.t ? window.t('coloring_clear') : '清空'}</button>
           </div>
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
         <button class="mini-btn secondary" id="coloringCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
-        <button class="mini-btn" id="coloringConfirmBtn" type="button">确认</button>
+        <button class="mini-btn" id="coloringConfirmBtn" type="button" data-i18n="coloring_confirm">${window.t ? window.t('coloring_confirm') : '确认'}</button>
       </div>
     </div>
   </div>
