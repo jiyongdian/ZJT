@@ -481,6 +481,15 @@
   "world_description_placeholder": "Please enter world description...",
   "video_prompt_suffix_placeholder": "Enter video prompt suffix, it will be automatically added to the end of the prompt when generating videos...",
   "node_input_port": "Input (Connect Image to Video or Character node)",
-  "node_output_port_dialogue": "Output (Connect to Dialogue Group node as emotion reference)"
+  "node_output_port_dialogue": "Output (Connect to Dialogue Group node as emotion reference)",
+  "timeline_label": "Timeline",
+  "timeline_total_duration": "Total Duration: %{duration}",
+  "timeline_export_draft": "Export Draft",
+  "timeline_clear": "Clear",
+  "timeline_collapse": "Collapse",
+  "timeline_expand": "Expand",
+  "timeline_track_video": "Video",
+  "timeline_track_audio": "Audio",
+  "timeline_drag_hint": "Tip: Drag to reorder | Hold Shift to replace"
 }
 

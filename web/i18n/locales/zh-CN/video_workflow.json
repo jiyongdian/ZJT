@@ -481,6 +481,15 @@
   "world_description_placeholder": "请输入世界描述...",
   "video_prompt_suffix_placeholder": "输入视频提示词后缀，生成视频时会自动添加到提示词末尾...",
   "node_input_port": "输入（连接图生视频节点或角色节点）",
-  "node_output_port_dialogue": "输出（连接到对话组节点作为情感参考）"
+  "node_output_port_dialogue": "输出（连接到对话组节点作为情感参考）",
+  "timeline_label": "时间轴",
+  "timeline_total_duration": "总时长: %{duration}",
+  "timeline_export_draft": "导出剪影草稿",
+  "timeline_clear": "清空",
+  "timeline_collapse": "收起",
+  "timeline_expand": "展开",
+  "timeline_track_video": "视频",
+  "timeline_track_audio": "音频",
+  "timeline_drag_hint": "提示: 拖拽调整顺序 | 按住Shift拖拽可替换"
 }
 

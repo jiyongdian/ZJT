@@ -372,14 +372,14 @@
               <select id="characterWorldSelect" style="flex: 1; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;">
                 <option value="">请先选择世界...</option>
               </select>
-              <a id="characterCreateWorldBtn" href="javascript:void(0)" style="padding: 10px 16px; color: #22c55e; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#22c55e'" onmouseout="this.style.borderColor='transparent'">创建世界</a>
+              <a id="characterCreateWorldBtn" href="javascript:void(0)" style="padding: 10px 16px; color: #22c55e; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#22c55e'" onmouseout="this.style.borderColor='transparent'" data-i18n="create_world">${window.t ? window.t('create_world') : '创建世界'}</a>
             </div>
           </div>
           <div class="field">
             <label class="label" for="characterSearchInput" style="color: #0f172a;" data-i18n="search_character_label">${window.t ? window.t('search_character_label') : '搜索角色'}</label>
             <div style="display: flex; gap: 8px; align-items: center;">
               <input type="text" id="characterSearchInput" placeholder="${window.t ? window.t('search_character_placeholder') : '输入角色名称搜索...'}" style="flex: 1; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" data-i18n="search_character_placeholder:placeholder" />
-              <button type="button" id="createCharacterBtn" style="padding: 10px 16px; background: transparent; color: #3b82f6; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border: none; border-bottom: 1px solid transparent; transition: border-color 0.2s; cursor: pointer;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'">创建角色</button>
+              <button type="button" id="createCharacterBtn" style="padding: 10px 16px; background: transparent; color: #3b82f6; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border: none; border-bottom: 1px solid transparent; transition: border-color 0.2s; cursor: pointer;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'" data-i18n="create_character">${window.t ? window.t('create_character') : '创建角色'}</button>
             </div>
           </div>
           <div id="characterList" style="max-height: 400px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px;">
@@ -414,7 +414,7 @@
             <label class="label" style="color: #0f172a;" data-i18n="search_location_label">${window.t ? window.t('search_location_label') : '搜索场景'}</label>
             <div style="display: flex; gap: 8px; align-items: center;">
               <input type="text" id="locationSearchInput" placeholder="${window.t ? window.t('search_location_placeholder') : '输入场景名称搜索...'}" style="flex: 1; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" data-i18n="search_location_placeholder:placeholder" />
-              <a id="createLocationBtn" href="javascript:void(0)" style="padding: 10px 16px; color: #3b82f6; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'">创建场景</a>
+              <a id="createLocationBtn" href="javascript:void(0)" style="padding: 10px 16px; color: #3b82f6; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'" data-i18n="create_location">${window.t ? window.t('create_location') : '创建场景'}</a>
             </div>
           </div>
           <div id="locationList" style="max-height: 400px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px;">
@@ -644,14 +644,14 @@
               <select id="propsWorldSelect" style="flex: 1; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;">
                 <option value="">请先选择世界...</option>
               </select>
-              <a id="propsCreateWorldBtn" href="javascript:void(0)" style="padding: 10px 16px; color: #22c55e; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#22c55e'" onmouseout="this.style.borderColor='transparent'">创建世界</a>
+              <a id="propsCreateWorldBtn" href="javascript:void(0)" style="padding: 10px 16px; color: #22c55e; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#22c55e'" onmouseout="this.style.borderColor='transparent'" data-i18n="create_world">${window.t ? window.t('create_world') : '创建世界'}</a>
             </div>
           </div>
           <div class="field">
             <label class="label" style="color: #0f172a;">搜索道具</label>
             <div style="display: flex; gap: 8px; align-items: center;">
               <input type="text" id="propsSearchInput" placeholder="输入道具名称搜索..." style="flex: 1; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" />
-              <a id="createPropsBtn" href="javascript:void(0)" style="padding: 10px 16px; color: #3b82f6; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'">创建道具</a>
+              <a id="createPropsBtn" href="javascript:void(0)" style="padding: 10px 16px; color: #3b82f6; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'" data-i18n="create_props">${window.t ? window.t('create_props') : '创建道具'}</a>
             </div>
           </div>
           <div id="propsList" style="max-height: 400px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px;">
@@ -951,26 +951,26 @@
   <div class="timeline-container" id="timelineContainer" style="display:none;">
     <div class="timeline-header">
       <div class="timeline-header-left">
-        <span class="timeline-title">时间轴</span>
-        <span class="timeline-total-duration" id="timelineTotalDuration">总时长: 0:00</span>
-        <span style="color:var(--muted);font-size:11px;margin-left:8px;">提示: 拖拽调整顺序 | 按住Shift拖拽可替换</span>
+        <span class="timeline-title" data-i18n="timeline_label">${window.t ? window.t('timeline_label') : '时间轴'}</span>
+        <span class="timeline-total-duration" id="timelineTotalDuration" data-i18n="timeline_total_duration">${window.t ? window.t('timeline_total_duration', { duration: '0:00' }) : '总时长: 0:00'}</span>
+        <span style="color:var(--muted);font-size:11px;margin-left:8px;" data-i18n="timeline_drag_hint">${window.t ? window.t('timeline_drag_hint') : '提示: 拖拽调整顺序 | 按住Shift拖拽可替换'}</span>
       </div>
       <div class="timeline-header-right">
-        <button class="mini-btn btn-success" id="timelineExportDraftBtn">导出剪影草稿</button>
-        <button class="mini-btn btn-danger" id="timelineClearBtn">清空</button>
-        <button class="mini-btn" id="timelineToggleBtn">收起</button>
+        <button class="mini-btn btn-success" id="timelineExportDraftBtn" data-i18n="timeline_export_draft">${window.t ? window.t('timeline_export_draft') : '导出剪影草稿'}</button>
+        <button class="mini-btn btn-danger" id="timelineClearBtn" data-i18n="timeline_clear">${window.t ? window.t('timeline_clear') : '清空'}</button>
+        <button class="mini-btn" id="timelineToggleBtn" data-i18n="timeline_collapse">${window.t ? window.t('timeline_collapse') : '收起'}</button>
       </div>
     </div>
     <div class="timeline-ruler" id="timelineRuler"></div>
     <div class="timeline-tracks" id="timelineTracks">
       <div class="timeline-track-container timeline-track-container-video">
-        <div class="timeline-track-label">视频</div>
+        <div class="timeline-track-label" data-i18n="timeline_track_video">${window.t ? window.t('timeline_track_video') : '视频'}</div>
         <div class="timeline-track" id="videoTrack">
           <!-- 视频片段将动态添加到这里 -->
         </div>
       </div>
       <div class="timeline-track-container timeline-track-container-audio">
-        <div class="timeline-track-label">音频</div>
+        <div class="timeline-track-label" data-i18n="timeline_track_audio">${window.t ? window.t('timeline_track_audio') : '音频'}</div>
         <div class="timeline-track" id="audioTrack">
           <!-- 音频片段将动态添加到这里 -->
         </div>
@@ -984,7 +984,7 @@
       <rect x="3" y="3" width="18" height="18" rx="2"/>
       <line x1="3" y1="15" x2="21" y2="15"/>
     </svg>
-    时间轴
+    <span data-i18n="timeline_expand">${window.t ? window.t('timeline_expand') : '展开'}</span>
   </button>
 
   <div id="workflowTourPortal" aria-hidden="true"></div>
