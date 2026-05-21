@@ -600,6 +600,7 @@
   "style_composition_hint": "Composition tendency will be added to the prompt when generating images",
   "style_image_label": "Select file",
   "style_image_not_selected": "No file selected",
-  "style_remove_image": "Remove image"
+  "style_remove_image": "Remove image",
+  "workflow_tutorial": "Workflow Tutorial"
 }
 

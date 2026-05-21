@@ -600,6 +600,7 @@
   "style_composition_hint": "构图倾向将附加到图片生成的提示词中",
   "style_image_label": "选择文件",
   "style_image_not_selected": "未选择文件",
-  "style_remove_image": "移除图片"
+  "style_remove_image": "移除图片",
+  "workflow_tutorial": "工作流教程"
 }
 
