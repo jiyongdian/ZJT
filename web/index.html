@@ -379,7 +379,7 @@
             <div class="row">
               <input class="input" type="text" v-model="registerForm.code" :placeholder="$t('enter_verification_code')" maxlength="6" />
               <button class="code-btn" @click="sendVerificationCode" :disabled="codeSending || codeCountdown > 0">
-                {{ codeCountdown > 0 ? `${codeCountdown}s` : (codeSending ? $t('sending') : $t('send_code')) }}
+                {{ codeCountdown > 0 ? codeCountdown + 's' : (codeSending ? $t('sending') : $t('send_code')) }}
               </button>
             </div>
           </div>
@@ -429,7 +429,7 @@
             <div class="row">
               <input class="input" type="text" v-model="resetForm.code" :placeholder="$t('enter_verification_code')" maxlength="6" />
               <button class="code-btn" @click="sendResetCode" :disabled="resetCodeSending || resetCodeCountdown > 0">
-                {{ resetCodeCountdown > 0 ? `${resetCodeCountdown}$t('seconds_retry')` : (resetCodeSending ? $t('sending') : $t('send_code')) }}
+                {{ resetCodeCountdown > 0 ? resetCodeCountdown + $t('seconds_retry') : (resetCodeSending ? $t('sending') : $t('send_code')) }}
               </button>
             </div>
           </div>
@@ -5026,7 +5026,7 @@
             <label class="label">{{ $t('video_model_label') || '视频模型' }}</label>
             <select class="input" v-model="videoModel">
               <option v-for="opt in videoModelOptions" :key="opt.value" :value="opt.value" :disabled="opt.disabled">
-                {{ opt.label }}{{ !opt.supportsMode ? ` (${$t('unsupported_mode') || '不支持当前模式'})` : '' }}
+                {{ opt.label }}{{ !opt.supportsMode ? ' (' + ($t('unsupported_mode') || '不支持当前模式') + ')' : '' }}
               </option>
             </select>
             <div class="muted" v-if="videoModelOptions.filter(o => o.supportsMode).length === 0" style="margin-top:6px; color: #fca5a5;">
