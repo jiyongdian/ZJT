@@ -324,6 +324,10 @@ class PMAgent(BaseAgent, AskUserMixin):
                 })
                 return f"任务执行停止: {e.message}"
             except Exception as e:
+                # 截断历史，移除可能不完整的 tool_calls/tool 消息（防止重试时 LLM 报错）
+                if len(self.conversation_history) > history_len:
+                    logger.info(f"{self.agent_id}: 截断不完整的历史，从 {len(self.conversation_history)} 恢复到 {history_len}")
+                    self.conversation_history = self.conversation_history[:history_len]
                 logger.error(f"{self.agent_id}: Error in PM loop - {e}", exc_info=True)
                 self.total_failures += 1
                 self.consecutive_failures += 1
@@ -814,8 +818,11 @@ class PMAgent(BaseAgent, AskUserMixin):
         system_msgs = [msg for msg in history if msg.get("role") == "system"]
         other_msgs = [msg for msg in history if msg.get("role") != "system"]
         keep_count = SessionHistoryConstants.MIN_HISTORY_MESSAGES
-        preserved = other_msgs[-keep_count:]
-        compressible = other_msgs[:-keep_count]
+        # 找到安全的保留起始索引，避免拆分 tool_calls/tool 消息组
+        desired_start = len(other_msgs) - keep_count
+        safe_start = self._find_safe_preserve_start(other_msgs, desired_start)
+        preserved = other_msgs[safe_start:]
+        compressible = other_msgs[:safe_start]
 
         if not compressible:
             return ""
@@ -868,10 +875,45 @@ class PMAgent(BaseAgent, AskUserMixin):
             logger.error(f"{self.agent_id}: summarizer 压缩失败，回退到滑动窗口截断: {e}")
             # 兜底策略：滑动窗口截断，只保留最近的 MAX_HISTORY_MESSAGES 条
             max_msgs = SessionHistoryConstants.MAX_HISTORY_MESSAGES
-            kept = history[-max_msgs:] if len(history) > max_msgs else history
+            if len(history) > max_msgs:
+                # 找到安全的截断起始索引，避免拆分 tool_calls/tool 消息组
+                desired_start = len(history) - max_msgs
+                safe_start = self._find_safe_preserve_start(history, desired_start)
+                kept = history[safe_start:]
+            else:
+                kept = history
             self.conversation_history = kept
             logger.info(f"{self.agent_id}: 滑动窗口截断后，历史消息降至 {len(self.conversation_history)}")
             return f"[滑动窗口截断] 保留最近 {len(self.conversation_history)} 条消息"
+
+    @staticmethod
+    def _find_safe_preserve_start(msgs: List[Dict[str, Any]], desired_start: int) -> int:
+        """找到安全的保留起始索引，确保不会将 tool 消息与其前置的 assistant(tool_calls) 拆分。
+
+        从 desired_start 向前搜索，如果 desired_start 指向的是 tool 消息，
+        则继续向前直到找到对应的 assistant(tool_calls) 消息。
+
+        Args:
+            msgs: 消息列表（不含 system 消息）
+            desired_start: 期望的起始索引
+
+        Returns:
+            安全的起始索引（<= desired_start）
+        """
+        start = desired_start
+        while start > 0:
+            msg = msgs[start]
+            role = msg.get("role")
+            content = msg.get("content")
+            # 如果当前位置是 tool 消息，说明前面还有对应的 assistant(tool_calls)，继续向前
+            if role == "tool":
+                start -= 1
+            # 如果是 verification 消息（ask_user 产生的），也继续向前
+            elif role == "verification":
+                start -= 1
+            else:
+                break
+        return start
 
     def _is_deepseek_model(self) -> bool:
         """判断当前模型是否为 DeepSeek 模型"""
@@ -961,7 +1003,24 @@ class PMAgent(BaseAgent, AskUserMixin):
                     "content": content if isinstance(content, str) else str(content)
                 })
 
-        return messages
+        # 3. 防御性清理：移除没有前置 assistant(tool_calls) 的孤立 tool 消息
+        sanitized = []
+        for i, msg in enumerate(messages):
+            if msg.get("role") == "tool":
+                # 向前查找最近的非 tool 消息，确认是 assistant(tool_calls)
+                has_preceding_tool_calls = False
+                for j in range(len(sanitized) - 1, -1, -1):
+                    if sanitized[j].get("role") == "tool":
+                        continue
+                    if sanitized[j].get("role") == "assistant" and sanitized[j].get("tool_calls"):
+                        has_preceding_tool_calls = True
+                    break
+                if not has_preceding_tool_calls:
+                    logger.warning(f"{self.agent_id}: 移除孤立的 tool 消息（缺少前置 tool_calls）: name={msg.get('name')}")
+                    continue
+            sanitized.append(msg)
+
+        return sanitized
 
     def _get_tool_definitions(self) -> List[Dict[str, Any]]:
         """获取工具定义"""
