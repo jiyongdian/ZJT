@@ -521,7 +521,8 @@ class PMAgent(BaseAgent, AskUserMixin):
             enable_thinking=task.enable_thinking,
             thinking_effort=task.thinking_effort,
             task_manager=self.task_manager,
-            task_id=task.task_id
+            task_id=task.task_id,
+            max_iterations=expert_config.get("max_iterations", 10)
         )
 
         # 合并 LLM 提供的 conversation_history 和 PM 已有的 ask_user 交互

@@ -20,6 +20,7 @@ from .location_multi_angle_tasks import LocationMultiAngleTasksModel, LocationMu
 from .media_file_mapping import MediaFileMappingModel, MediaFileMapping
 from .skill_definitions import SkillDefinitionsModel, SkillDefinition
 from .notifications import NotificationsModel, NotificationEntity
+from .async_tasks import AsyncTasksModel, AsyncTask, AsyncTaskStatus
 
 __all__ = [
     'AIToolsModel',
@@ -64,4 +65,7 @@ __all__ = [
     'SkillDefinition',
     'NotificationsModel',
     'NotificationEntity',
+    'AsyncTasksModel',
+    'AsyncTask',
+    'AsyncTaskStatus',
 ]

@@ -862,16 +862,15 @@ def create_character_json(user_id: str, world_id: str, auth_token: str, name: st
         }
 
 
-def create_script_json(user_id: str, world_id: str, auth_token: str, title: str, episode_number: int = None, content: str = None, **additional_fields) -> Dict[str, Any]:
+def create_script_json(user_id: str, world_id: str, auth_token: str, title: str, episode_number: int, content: str = None, **additional_fields) -> Dict[str, Any]:
     """
     创建标准格式的剧本JSON文件 - MCP工具函数
-    
+
     Args:
         user_id: 用户ID（必填）
         world_id: 世界ID（必填）
         auth_token: 认证令牌（必填）
         title: 剧本标题（必填，只能包含中文、英文、数字）
-               ⚠️ 重要：为避免文件名重复，建议将集数信息包含在title中
                推荐格式："剧本名_第N集"  
                例如："神话擂台_第1集" 或 "神话擂台_诸仙听令"
         episode_number: 计划第几集（可选）
@@ -889,7 +888,14 @@ def create_script_json(user_id: str, world_id: str, auth_token: str, title: str,
                 'success': False,
                 'error': '剧本标题不能为空且必须是字符串'
             }
-        
+
+        # 验证 episode_number 为必填正整数
+        if episode_number is None or not isinstance(episode_number, int) or episode_number < 1:
+            return {
+                'success': False,
+                'error': '集数(episode_number)为必填字段，且必须为正整数'
+            }
+
         # 验证名称
         validation_result = validate_name_for_filename(title, "剧本标题")
         if not validation_result['valid']:
@@ -898,7 +904,35 @@ def create_script_json(user_id: str, world_id: str, auth_token: str, title: str,
                 'error': validation_result['error']
             }
         validated_title = validation_result['cleaned_name']
-        
+
+        # 生成文件名：使用 episode_number
+        filename = f"{episode_number}.json"
+
+        # 使用FileManager统一路径管理
+        file_manager = get_file_manager()
+
+        # 检查集数是否已存在（检查 {episode_number}.json 文件）
+        file_path = file_manager.get_content_file_path(user_id, world_id, "scripts", filename)
+        if os.path.exists(file_path):
+            # 读取已有文件获取标题信息
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    existing_script = json.load(f)
+                    existing_title = existing_script.get('title', '未知')
+                return {
+                    'success': False,
+                    'error': f'集数冲突：第 {episode_number} 集已存在（标题："{existing_title}"）。同一世界下不允许创建相同集数的剧本。',
+                    'existing_file': file_path,
+                    'existing_title': existing_title,
+                    'conflicting_episode_number': episode_number
+                }
+            except Exception:
+                return {
+                    'success': False,
+                    'error': f'集数冲突：第 {episode_number} 集已存在。',
+                    'conflicting_episode_number': episode_number
+                }
+
         # 构建剧本数据结构（匹配数据库表结构）
         script_data = {
             'title': validated_title,
@@ -909,61 +943,14 @@ def create_script_json(user_id: str, world_id: str, auth_token: str, title: str,
             'create_time': datetime.now().isoformat(),
             'update_time': datetime.now().isoformat()
         }
-        
+
         # 添加额外字段
         for key, value in additional_fields.items():
             if key not in script_data and value is not None:
                 script_data[key] = value
-        
-        # 生成安全的文件名
-        filename = f"script_{validated_title}.json"
-        
-        # 使用FileManager统一路径管理
-        file_manager = get_file_manager()
-        
-        # 如果提供了 episode_number，检查是否存在冲突
-        if episode_number is not None:
-            scripts_dir = file_manager.get_content_dir_path(user_id, world_id, "scripts")
-            import os
-            import glob
-            
-            if os.path.exists(scripts_dir):
-                # 遍历所有剧本文件，检查 episode_number 是否冲突
-                script_files = glob.glob(os.path.join(scripts_dir, "script_*.json"))
-                for script_file in script_files:
-                    try:
-                        with open(script_file, 'r', encoding='utf-8') as f:
-                            existing_script = json.load(f)
-                            existing_episode = existing_script.get('episode_number')
-                            
-                            # 检查 episode_number 是否冲突
-                            if existing_episode == episode_number:
-                                existing_title = existing_script.get('title', '未知')
-                                return {
-                                    'success': False,
-                                    'error': f'集数冲突：第 {episode_number} 集已存在（标题："{existing_title}"）。同一世界下不允许创建相同集数的剧本。',
-                                    'existing_file': script_file,
-                                    'existing_title': existing_title,
-                                    'conflicting_episode_number': episode_number
-                                }
-                    except Exception as e:
-                        # 如果读取某个文件失败，记录日志但继续检查其他文件
-                        logging.warning(f"读取剧本文件 {script_file} 失败: {str(e)}")
-                        continue
-        
-        # 检查文件是否已存在
-        file_path = file_manager.get_content_file_path(user_id, world_id, "scripts", filename)
-        import os
-        if os.path.exists(file_path):
-            return {
-                'success': False,
-                'error': f'文件名冲突：剧本文件 "{filename}" 已存在。请在title中添加集数以区分不同剧本。例如："{validated_title}_第{episode_number}集"',
-                'existing_file': file_path,
-                'suggestion': f'建议使用："{validated_title}_第{episode_number}集"' if episode_number else f'建议在title中添加集数或场景信息'
-            }
-        
+
         success = file_manager.save_json_content(user_id, world_id, "scripts", filename, script_data)
-        
+
         if not success:
             return {
                 'success': False,
@@ -975,9 +962,9 @@ def create_script_json(user_id: str, world_id: str, auth_token: str, title: str,
             'filename': filename,
             'file_path': file_path,
             'script_data': script_data,
-            'message': f'剧本 "{title}" 的JSON文件已创建: {filename}'
+            'message': f'剧本第{episode_number}集 "{title}" 已创建: {filename}'
         }
-            
+
     except Exception as e:
         return {
             'success': False,
@@ -1490,11 +1477,15 @@ def read_script_json(user_id: str, world_id: str, auth_token: str, title: str, l
                 'error': '剧本标题不能为空且必须是字符串'
             }
         
-        safe_title = _sanitize_filename(title)
-        
-        # 使用FileManager读取文件
+        # 使用FileManager读取文件（支持按集数或标题查找）
         file_manager = get_file_manager()
-        script_data = file_manager.get_script(safe_title, user_id, world_id)
+
+        # 如果 title 是数字，优先按集数查找
+        if title.strip().isdigit():
+            script_data = file_manager.get_script(title.strip(), user_id, world_id)
+        else:
+            safe_title = _sanitize_filename(title)
+            script_data = file_manager.get_script(safe_title, user_id, world_id)
         
         if script_data is None:
             return {
@@ -1848,13 +1839,22 @@ def update_character_json(user_id: str, world_id: str, auth_token: str, name: st
         
         # 保存更新后的数据
         success = file_manager.save_json_content(user_id, world_id, "characters", filename, existing_data)
-        
+
         if not success:
             return {
                 'success': False,
                 'error': '保存角色JSON文件失败'
             }
-        
+
+        # 保存成功后，确保主图 CDN mapping
+        try:
+            ref_img = existing_data.get('reference_image')
+            if ref_img:
+                from utils.media_mapping_util import ensure_character_image_mapping
+                ensure_character_image_mapping(user_id, world_id, name, ref_img)
+        except Exception as e:
+            logger.warning(f"CDN mapping for character {name} failed (non-blocking): {e}")
+
         return {
             'success': True,
             'filename': filename,
@@ -1942,13 +1942,22 @@ def update_location_json(user_id: str, world_id: str, auth_token: str, name: str
         
         # 保存更新后的数据
         success = file_manager.save_json_content(user_id, world_id, "locations", filename, existing_data)
-        
+
         if not success:
             return {
                 'success': False,
                 'error': '保存地点JSON文件失败'
             }
-        
+
+        # 保存成功后，确保 CDN mapping
+        try:
+            ref_img = existing_data.get('reference_image')
+            if ref_img:
+                from utils.media_mapping_util import ensure_location_image_mapping
+                ensure_location_image_mapping(user_id, world_id, name, ref_img)
+        except Exception as e:
+            logger.warning(f"CDN mapping for location {name} failed (non-blocking): {e}")
+
         return {
             'success': True,
             'filename': filename,
@@ -2036,13 +2045,22 @@ def update_prop_json(user_id: str, world_id: str, auth_token: str, name: str, pr
         
         # 保存更新后的数据
         success = file_manager.save_json_content(user_id, world_id, "props", filename, existing_data)
-        
+
         if not success:
             return {
                 'success': False,
                 'error': '保存道具JSON文件失败'
             }
-        
+
+        # 保存成功后，确保主图 CDN mapping
+        try:
+            ref_img = existing_data.get('reference_image')
+            if ref_img:
+                from utils.media_mapping_util import ensure_prop_image_mapping
+                ensure_prop_image_mapping(user_id, world_id, name, ref_img)
+        except Exception as e:
+            logger.warning(f"CDN mapping for prop {name} failed (non-blocking): {e}")
+
         return {
             'success': True,
             'filename': filename,
@@ -2081,57 +2099,86 @@ def update_script_json(user_id: str, world_id: str, auth_token: str, title: str,
                 'success': False,
                 'error': '剧本标题不能为空且必须是字符串'
             }
-        
-        # 生成安全的文件名
-        safe_title = _sanitize_filename(title)
-        filename = f"script_{safe_title}.json"
-        
-        # 使用FileManager统一路径管理
+
+        # 使用FileManager查找现有文件（支持新旧文件名格式）
         file_manager = get_file_manager()
-        file_path = file_manager.get_content_file_path(user_id, world_id, "scripts", filename)
-        
-        # 检查文件是否存在
-        if not os.path.exists(file_path):
+        existing_data = file_manager.get_script(title, user_id, world_id)
+
+        if existing_data is None:
             return {
                 'success': False,
                 'error': f'剧本 "{title}" 不存在，无法更新'
             }
-        
-        # 读取现有数据
-        with open(file_path, 'r', encoding='utf-8') as f:
-            existing_data = json.load(f)
-        
+
+        # 确定文件名：使用已有的或新的 episode_number
+        current_episode = existing_data.get('episode_number')
+        target_episode = episode_number if episode_number is not None else current_episode
+
+        if target_episode is not None:
+            filename = f"{target_episode}.json"
+        else:
+            safe_title = _sanitize_filename(title)
+            filename = f"script_{safe_title}.json"
+
+        file_path = file_manager.get_content_file_path(user_id, world_id, "scripts", filename)
+
+        # 如果集数变更，需要重命名文件（删除旧文件）
+        if episode_number is not None and current_episode is not None and episode_number != current_episode:
+            old_filename = f"{current_episode}.json"
+            old_file_path = file_manager.get_content_file_path(user_id, world_id, "scripts", old_filename)
+            if os.path.exists(old_file_path) and old_file_path != file_path:
+                # 检查新集数文件是否已存在
+                if os.path.exists(file_path):
+                    return {
+                        'success': False,
+                        'error': f'集数冲突：第 {episode_number} 集已存在，无法重命名'
+                    }
+                try:
+                    os.remove(old_file_path)
+                    logger.info(f"集数变更，删除旧文件: {old_file_path}")
+                except Exception as e:
+                    logger.warning(f"删除旧文件失败: {e}")
+
+            # 同时清理旧格式文件
+            safe_title = _sanitize_filename(title)
+            old_script_file = file_manager.get_content_file_path(user_id, world_id, "scripts", f"script_{safe_title}.json")
+            if os.path.exists(old_script_file) and old_script_file != file_path:
+                try:
+                    os.remove(old_script_file)
+                except Exception:
+                    pass
+
         # 更新字段（只更新提供的非None字段）
         if episode_number is not None:
             existing_data['episode_number'] = episode_number
         if content is not None:
             existing_data['content'] = content
-        
+
         # 添加额外字段
         for key, value in additional_fields.items():
             if key not in ['title', 'user_id', 'world_id', 'create_time']:  # 保护核心字段
                 existing_data[key] = value
-        
+
         # 更新修改时间
         existing_data['update_time'] = datetime.now().isoformat()
-        
+
         # 保存更新后的数据
         success = file_manager.save_json_content(user_id, world_id, "scripts", filename, existing_data)
-        
+
         if not success:
             return {
                 'success': False,
                 'error': '保存剧本JSON文件失败'
             }
-        
+
         return {
             'success': True,
             'filename': filename,
             'file_path': file_path,
             'script_data': existing_data,
-            'message': f'剧本 "{title}" 已成功更新'
+            'message': f'剧本第{target_episode}集 "{title}" 已成功更新'
         }
-        
+
     except Exception as e:
         return {
             'success': False,
@@ -2996,6 +3043,46 @@ MCP_TOOLS = [
             },
             "required": ["image_url"]
         }
+    },
+    {
+        "name": "generate_character_reference_audio",
+        "description": "为角色生成参考音频（异步非阻塞）。根据角色设定自动构建提示词，提交音频生成任务。返回 runninghub_task_id，可通过 check_reference_audio_status 查询生成状态。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "character_name": {
+                    "type": "string",
+                    "description": "角色名称（必填）"
+                },
+                "style_prompt": {
+                    "type": "string",
+                    "description": "自定义风格提示词（可选），不填则根据角色设定自动生成，强调平静、自然的语气"
+                },
+                "text": {
+                    "type": "string",
+                    "description": "自定义文本内容（可选），不填则根据角色设定自动生成自我介绍"
+                }
+            },
+            "required": ["character_name"]
+        }
+    },
+    {
+        "name": "check_reference_audio_status",
+        "description": "查询角色参考音频生成任务状态。如果任务成功且提供了角色名称，会自动更新角色的 default_voice 字段。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "runninghub_task_id": {
+                    "type": "string",
+                    "description": "RunningHub 任务ID（必填），由 generate_character_reference_audio 返回"
+                },
+                "character_name": {
+                    "type": "string",
+                    "description": "角色名称（可选），如果提供且任务成功，会自动更新角色的 default_voice 字段"
+                }
+            },
+            "required": ["runninghub_task_id"]
+        }
     }
 ]
 
@@ -3039,12 +3126,35 @@ def list_script_jsons(user_id: str, world_id: str, auth_token: str) -> Dict[str,
         
         files = []
         for filename in os.listdir(scripts_dir):
-            if filename.startswith("script_") and filename.endswith(".json"):
-                files.append(filename)
-        
+            if filename.endswith(".json"):
+                # 读取文件获取结构化数据
+                try:
+                    file_path = os.path.join(scripts_dir, filename)
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        script_data = json.load(f)
+                    ep = script_data.get('episode_number')
+                    title = script_data.get('title', filename.replace('.json', ''))
+                    display_name = f"第{ep}集：{title}" if ep is not None else title
+                    files.append({
+                        'filename': filename,
+                        'title': title,
+                        'episode_number': ep,
+                        'display_name': display_name
+                    })
+                except Exception:
+                    files.append({
+                        'filename': filename,
+                        'title': filename.replace('.json', ''),
+                        'episode_number': None,
+                        'display_name': filename.replace('.json', '')
+                    })
+
+        # 按集数排序
+        files.sort(key=lambda x: (x['episode_number'] is None, x['episode_number'] or 0))
+
         return {
             'success': True,
-            'data': sorted(files),
+            'data': files,
             'message': f'成功获取 {len(files)} 个剧本文件'
         }
         
@@ -3139,6 +3249,179 @@ def skill(SkillName: str) -> Dict[str, Any]:
             'error': error_msg,
             'content': ''
         }
+
+
+# ============ 音色相关 MCP 工具函数 ============
+
+def generate_character_reference_audio(user_id: str, world_id: str, auth_token: str,
+                                       character_name: str,
+                                       style_prompt: Optional[str] = None,
+                                       text: Optional[str] = None) -> Dict[str, Any]:
+    """
+    为角色生成参考音频 - MCP工具函数（同步非阻塞）
+
+    同步提交任务到 RunningHub，写入异步任务表，由 scheduler 后台轮询结果。
+
+    Args:
+        user_id: 用户ID（必填）
+        world_id: 世界ID（必填）
+        auth_token: 认证令牌（必填）
+        character_name: 角色名称（必填）
+        style_prompt: 自定义风格提示词（可选），不填则根据角色设定自动生成
+        text: 自定义文本内容（可选），不填则根据角色设定自动生成
+
+    Returns:
+        dict: 包含 runninghub_task_id 的结果，可用于 check_reference_audio_status 查询
+    """
+    try:
+        # 验证必填字段
+        if not character_name or not isinstance(character_name, str):
+            return {
+                'success': False,
+                'error': '角色名称不能为空且必须是字符串'
+            }
+
+        # 从角色JSON中获取角色数据
+        file_manager = get_file_manager()
+        character_data = file_manager.get_character_json(character_name, user_id, world_id)
+
+        if not character_data:
+            return {
+                'success': False,
+                'error': f'角色 "{character_name}" 不存在'
+            }
+
+        # 构建提示词（复用 task/audio_task.py 中的函数）
+        from task.audio_task import build_character_audio_text
+        final_text = build_character_audio_text(character_data, text)
+
+        # style_prompt 直接使用用户提供的，如果没提供则使用默认
+        final_style_prompt = style_prompt.strip() if style_prompt and style_prompt.strip() else \
+            "请生成平静、自然、清晰、有辨识度的参考音频，语气平和，不带明显情感"
+
+        # 通过驱动同步提交任务
+        from task.async_drivers.runninghub_audio_driver import RunningHubAudioDriver
+        driver = RunningHubAudioDriver()
+        result = driver.submit_task_sync(
+            style_prompt=final_style_prompt,
+            text=final_text
+        )
+
+        if not result['success']:
+            return result
+
+        runninghub_task_id = result['project_id']
+
+        # 写入异步任务表，由 scheduler 后台轮询
+        from model import AsyncTasksModel
+        from config.unified_config import AsyncTaskImplementationId
+
+        params = {
+            'character_name': character_name,
+            'style_prompt': final_style_prompt,
+            'text': final_text,
+            'world_id': world_id
+        }
+
+        try:
+            int(user_id)
+        except (ValueError, TypeError):
+            return {
+                'success': False,
+                'error': f'无效的 user_id: {user_id}'
+            }
+
+        AsyncTasksModel.create(
+            implementation=AsyncTaskImplementationId.RUNNINGHUB_AUDIO,
+            user_id=int(user_id),
+            external_task_id=runninghub_task_id,
+            params=params,
+            max_attempts=25
+        )
+
+        return {
+            'success': True,
+            'runninghub_task_id': runninghub_task_id,
+            'character_name': character_name,
+            'style_prompt': final_style_prompt,
+            'text': final_text,
+            'status': 'submitted',
+            'message': f'已为角色 "{character_name}" 提交参考音频生成任务 (task_id={runninghub_task_id})，请使用 check_reference_audio_status 查询生成状态'
+        }
+
+    except Exception as e:
+        logger.error(f"generate_character_reference_audio error: {e}", exc_info=True)
+        return {
+            'success': False,
+            'error': f'生成参考音频失败: {str(e)}'
+        }
+
+
+def check_reference_audio_status(user_id: str, world_id: str, auth_token: str,
+                                   runninghub_task_id: str,
+                                   character_name: Optional[str] = None) -> Dict[str, Any]:
+    """
+    查询角色参考音频生成任务状态 - MCP工具函数（同步，直接查数据库）
+
+    后台 scheduler 会自动轮询 RunningHub 状态并更新数据库，本函数直接读取数据库中的任务状态。
+
+    Args:
+        user_id: 用户ID（必填）
+        world_id: 世界ID（必填）
+        auth_token: 认证令牌（必填）
+        runninghub_task_id: RunningHub 任务ID（必填）
+        character_name: 角色名称（可选，仅用于返回信息，角色更新由 scheduler 自动完成）
+
+    Returns:
+        dict: 包含任务状态和结果URL的结果
+    """
+    try:
+        from model import AsyncTasksModel, AsyncTaskStatus
+
+        task = AsyncTasksModel.get_by_external_task_id(runninghub_task_id)
+        if not task:
+            return {
+                'success': True,
+                'status': 'not_found',
+                'runninghub_task_id': runninghub_task_id,
+                'message': f'未找到 runninghub_task_id={runninghub_task_id} 对应的任务记录'
+            }
+
+        # 状态映射
+        status_map = {
+            AsyncTaskStatus.QUEUED: 'queued',
+            AsyncTaskStatus.PROCESSING: 'processing',
+            AsyncTaskStatus.COMPLETED: 'completed',
+            AsyncTaskStatus.FAILED: 'failed',
+            AsyncTaskStatus.TIMEOUT: 'timeout',
+        }
+        readable_status = status_map.get(task.status, 'unknown')
+
+        result = {
+            'success': True,
+            'status': readable_status,
+            'runninghub_task_id': runninghub_task_id,
+            'message': f'任务状态: {readable_status}'
+        }
+
+        if task.status == AsyncTaskStatus.COMPLETED and task.result_url:
+            result['audio_url'] = task.result_url
+            result['message'] = f'音频生成完成，音频URL: {task.result_url}'
+
+        if task.status in (AsyncTaskStatus.FAILED, AsyncTaskStatus.TIMEOUT):
+            result['success'] = False
+            result['error'] = task.error_message or '音频生成失败'
+            result['message'] = f'音频生成失败: {result["error"]}'
+
+        return result
+
+    except Exception as e:
+        logger.error(f"check_reference_audio_status error: {e}", exc_info=True)
+        return {
+            'success': False,
+            'error': f'查询音频状态失败: {str(e)}'
+        }
+
 
 def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt: str,
                           aspect_ratio: str = "16:9", count: int = 1,

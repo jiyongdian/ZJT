@@ -328,6 +328,7 @@ class AIAudioStatus:
     COMPLETED = 2     # 处理完成
 
 
+
 # 向后兼容别名 - AI Tools 状态
 AI_TOOL_STATUS_PENDING = AIToolStatus.PENDING
 AI_TOOL_STATUS_PROCESSING = AIToolStatus.PROCESSING
@@ -440,6 +441,7 @@ class UploadPathConstants:
     # 子目录名
     TEMP_DIR = "temp"           # 临时目录（每天定时清理，由 media_cache.cleanup_temp_dir 执行）
     DRAFT_DIR = "draft"         # 草稿目录
+    CHARACTER_VOICE_DIR = "character/voice"
 
     # 文件名前缀
     MEDIA_PREFIX = "media"      # 媒体文件前缀（图生视频上传）

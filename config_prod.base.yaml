@@ -110,7 +110,7 @@ llm:
 
 tts:
   api_url: "http://47.98.190.124"
-  upload_url: "http://ailive.perseids.cn:11442/upload/tts/result_audio/"
+  upload_url: "http://47.98.190.124/result_audio/"
 
 test_mode:
   enabled: false

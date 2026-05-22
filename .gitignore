@@ -23,3 +23,4 @@ dist/*
 enterprise/
 .claude/settings.local.json
 *.spec
+scripts/build_enterprise.py

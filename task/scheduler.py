@@ -420,6 +420,19 @@ def init_scheduler(app):
         coalesce=True
     )
 
+    # RunningHub 异步任务轮询（音频生成等）
+    logger.info('启用RunningHub异步任务轮询，每10秒执行一次')
+    from task.runninghub_async_task import process_runninghub_async_tasks
+    scheduler.add_job(
+        func=process_runninghub_async_tasks,
+        trigger=IntervalTrigger(seconds=10),
+        id='process_runninghub_async_tasks',
+        name='Process RunningHub async tasks every 10 seconds',
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True
+    )
+
     # 启动调度器
     scheduler.start()
     logger.info("定时任务启动成功")
