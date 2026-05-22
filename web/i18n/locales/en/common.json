@@ -46,5 +46,21 @@
   "server_error": "Server error",
   "please_wait": "Please wait...",
   "please_select": "Please select",
-  "no_results": "No results found"
+  "no_results": "No results found",
+  "computing_power_logs": "Computing Power Logs",
+  "all": "All",
+  "increase": "Increase",
+  "deduct": "Deduct",
+  "loading_dots": "Loading...",
+  "no_logs": "No computing power logs",
+  "no_description": "No description",
+  "power_change": "Power Change:",
+  "previous_page": "Previous",
+  "next_page": "Next",
+  "page_info": "Page {current} / {total}",
+  "missing_auth": "Missing authentication info, please open from main page",
+  "fetch_logs_failed": "Failed to get logs",
+  "network_error_retry": "Network error, please try again later",
+  "log_increase": "➕ Increase",
+  "log_deduct": "➖ Deduct"
 }

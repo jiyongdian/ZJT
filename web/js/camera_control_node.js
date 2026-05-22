@@ -96,73 +96,73 @@ function createCameraControlNode(opts){
   el.style.top = node.y + 'px';
 
   el.innerHTML = `
-    <div class="port input" title="${window.t ? window.t('camera_input_port_title') : '输入（连接图片节点）'}"></div>
+    <div class="port input" title="输入（连接图片节点）" data-i18n="camera_input_port_title:title"></div>
     <div class="node-header">
       <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>${node.title}</div>
-      <button class="icon-btn" title="${window.t ? window.t('dialogue_delete_btn') : '删除'}">×</button>
+      <button class="icon-btn" title="删除" data-i18n="dialogue_delete_btn:title">×</button>
     </div>
     <div class="node-body">
       <div class="field">
-        <div class="label" data-i18n="camera_source_label">${window.t ? window.t('camera_source_label') : '源图片'}</div>
+        <div class="label" data-i18n="camera_source_label">源图片</div>
         <div class="camera-ctrl-source-thumb" style="display:none; margin-top:4px;">
           <img class="camera-ctrl-source-img" style="max-width:100%; max-height:120px; border-radius:4px; border:1px solid #e5e7eb;" />
         </div>
-        <div class="camera-ctrl-source-placeholder muted" style="font-size:11px; margin-top:4px;" data-i18n="camera_source_connect">${window.t ? window.t('camera_source_connect') : '请连接图片节点'}</div>
+        <div class="camera-ctrl-source-placeholder muted" style="font-size:11px; margin-top:4px;" data-i18n="camera_source_connect">请连接图片节点</div>
       </div>
       <div class="field field-collapsible camera-control-section">
-        <div class="label" style="margin-bottom: 4px;" data-i18n="camera_control_label">${window.t ? window.t('camera_control_label') : '相机控制'}</div>
+        <div class="label" style="margin-bottom: 4px;" data-i18n="camera_control_label">相机控制</div>
         <div class="camera-ctrl-content" style="display: flex; flex-direction: column; gap: 12px; padding: 12px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; margin-top: 4px;">
           <div class="camera-param-row" data-param="horizontal_angle">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <label style="font-size: 11px; font-weight: 600; color: #374151;" data-i18n="camera_h_angle_label">${window.t ? window.t('camera_h_angle_label') : '水平角度 (0~360°)'}</label>
+              <label style="font-size: 11px; font-weight: 600; color: #374151;" data-i18n="camera_h_angle_label">水平角度 (0~360°)</label>
               <div style="display: flex; align-items: center; gap: 6px;">
                 <input type="number" class="camera-input camera-ctrl-horizontal-angle" value="0" min="0" max="360" step="1" style="width: 60px; padding: 4px 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px; text-align: center;" />
                 <span style="font-size: 11px; color: #6b7280;">°</span>
-                <button type="button" class="camera-reset-btn camera-ctrl-reset-horizontal-angle" style="padding: 4px 8px; font-size: 10px; border: 1px solid #d1d5db; border-radius: 4px; background: #fff; color: #6b7280; cursor: pointer;" data-i18n="camera_h_angle_reset">${window.t ? window.t('camera_h_angle_reset') : '重置'}</button>
+                <button type="button" class="camera-reset-btn camera-ctrl-reset-horizontal-angle" style="padding: 4px 8px; font-size: 10px; border: 1px solid #d1d5db; border-radius: 4px; background: #fff; color: #6b7280; cursor: pointer;" data-i18n="camera_h_angle_reset">重置</button>
               </div>
             </div>
             <input type="range" class="camera-slider camera-ctrl-horizontal-angle-slider" min="0" max="360" step="1" value="0" style="width: 100%;" />
             <div style="display: flex; justify-content: space-between; font-size: 10px; color: #9ca3af; margin-top: 2px;">
-              <span data-i18n="camera_h_angle_front">${window.t ? window.t('camera_h_angle_front') : '0° (正面)'}</span>
-              <span data-i18n="camera_h_angle_90">${window.t ? window.t('camera_h_angle_90') : '90°'}</span>
-              <span data-i18n="camera_h_angle_back">${window.t ? window.t('camera_h_angle_back') : '180° (背面)'}</span>
-              <span data-i18n="camera_h_angle_270">${window.t ? window.t('camera_h_angle_270') : '270°'}</span>
-              <span data-i18n="camera_h_angle_360">${window.t ? window.t('camera_h_angle_360') : '360°'}</span>
+              <span data-i18n="camera_h_angle_front">0° (正面)</span>
+              <span data-i18n="camera_h_angle_90">90°</span>
+              <span data-i18n="camera_h_angle_back">180° (背面)</span>
+              <span data-i18n="camera_h_angle_270">270°</span>
+              <span data-i18n="camera_h_angle_360">360°</span>
             </div>
           </div>
           <div class="camera-param-row" data-param="vertical_angle">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <label style="font-size: 11px; font-weight: 600; color: #374151;" data-i18n="camera_v_angle_label">${window.t ? window.t('camera_v_angle_label') : '垂直角度 (-30°~60°)'}</label>
+              <label style="font-size: 11px; font-weight: 600; color: #374151;" data-i18n="camera_v_angle_label">垂直角度 (-30°~60°)</label>
               <div style="display: flex; align-items: center; gap: 6px;">
                 <input type="number" class="camera-input camera-ctrl-vertical-angle" value="0" min="-30" max="60" step="1" style="width: 60px; padding: 4px 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px; text-align: center;" />
                 <span style="font-size: 11px; color: #6b7280;">°</span>
-                <button type="button" class="camera-reset-btn camera-ctrl-reset-vertical-angle" style="padding: 4px 8px; font-size: 10px; border: 1px solid #d1d5db; border-radius: 4px; background: #fff; color: #6b7280; cursor: pointer;" data-i18n="camera_h_angle_reset">${window.t ? window.t('camera_h_angle_reset') : '重置'}</button>
+                <button type="button" class="camera-reset-btn camera-ctrl-reset-vertical-angle" style="padding: 4px 8px; font-size: 10px; border: 1px solid #d1d5db; border-radius: 4px; background: #fff; color: #6b7280; cursor: pointer;" data-i18n="camera_h_angle_reset">重置</button>
               </div>
             </div>
             <input type="range" class="camera-slider camera-ctrl-vertical-angle-slider" min="-30" max="60" step="1" value="0" style="width: 100%;" />
             <div style="display: flex; justify-content: space-between; font-size: 10px; color: #9ca3af; margin-top: 2px;">
-              <span data-i18n="camera_v_angle_low">${window.t ? window.t('camera_v_angle_low') : '-30° (仰视)'}</span>
-              <span data-i18n="camera_v_angle_eye">${window.t ? window.t('camera_v_angle_eye') : '0° (平视)'}</span>
-              <span data-i18n="camera_v_angle_high">${window.t ? window.t('camera_v_angle_high') : '+60° (俯视)'}</span>
+              <span data-i18n="camera_v_angle_low">-30° (仰视)</span>
+              <span data-i18n="camera_v_angle_eye">0° (平视)</span>
+              <span data-i18n="camera_v_angle_high">+60° (俯视)</span>
             </div>
           </div>
           <div class="camera-param-row" data-param="zoom">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <label style="font-size: 11px; font-weight: 600; color: #374151;" data-i18n="camera_zoom_label">${window.t ? window.t('camera_zoom_label') : '缩放距离 (0~10)'}</label>
+              <label style="font-size: 11px; font-weight: 600; color: #374151;" data-i18n="camera_zoom_label">缩放距离 (0~10)</label>
               <div style="display: flex; align-items: center; gap: 6px;">
                 <input type="number" class="camera-input camera-ctrl-zoom" value="5.0" min="0" max="10" step="0.1" style="width: 60px; padding: 4px 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px; text-align: center;" />
-                <button type="button" class="camera-reset-btn camera-ctrl-reset-zoom" style="padding: 4px 8px; font-size: 10px; border: 1px solid #d1d5db; border-radius: 4px; background: #fff; color: #6b7280; cursor: pointer;" data-i18n="camera_h_angle_reset">${window.t ? window.t('camera_h_angle_reset') : '重置'}</button>
+                <button type="button" class="camera-reset-btn camera-ctrl-reset-zoom" style="padding: 4px 8px; font-size: 10px; border: 1px solid #d1d5db; border-radius: 4px; background: #fff; color: #6b7280; cursor: pointer;" data-i18n="camera_h_angle_reset">重置</button>
               </div>
             </div>
             <input type="range" class="camera-slider camera-ctrl-zoom-slider" min="0" max="10" step="0.1" value="5.0" style="width: 100%;" />
             <div style="display: flex; justify-content: space-between; font-size: 10px; color: #9ca3af; margin-top: 2px;">
-              <span data-i18n="camera_zoom_wide">${window.t ? window.t('camera_zoom_wide') : '0 (远景)'}</span>
-              <span data-i18n="camera_zoom_medium">${window.t ? window.t('camera_zoom_medium') : '5 (中景)'}</span>
-              <span data-i18n="camera_zoom_close">${window.t ? window.t('camera_zoom_close') : '10 (特写)'}</span>
+              <span data-i18n="camera_zoom_wide">0 (远景)</span>
+              <span data-i18n="camera_zoom_medium">5 (中景)</span>
+              <span data-i18n="camera_zoom_close">10 (特写)</span>
             </div>
           </div>
           <div style="margin-top: 8px;">
-            <label style="display: block; font-size: 11px; font-weight: 600; color: #374151; margin-bottom: 6px;" data-i18n="camera_preview_label">${window.t ? window.t('camera_preview_label') : '3D 预览'}</label>
+            <label style="display: block; font-size: 11px; font-weight: 600; color: #374151; margin-bottom: 6px;" data-i18n="camera_preview_label">3D 预览</label>
             <canvas class="camera-preview-canvas camera-ctrl-canvas" width="200" height="150" style="width: 100%; max-width: 200px; height: 150px; border: 1px solid #e5e7eb; border-radius: 4px; background: #ffffff;"></canvas>
           </div>
         </div>
@@ -170,12 +170,12 @@ function createCameraControlNode(opts){
       <div class="field">
         <div class="btn-row" style="display: flex; gap: 8px;">
           <div class="gen-container">
-            <button class="gen-btn gen-btn-main camera-ctrl-generate-btn" type="button" data-i18n="camera_generate_btn">${window.t ? window.t('camera_generate_btn') : '生成图片'}</button>
-            <button class="gen-btn gen-btn-caret camera-ctrl-generate-caret" type="button" aria-label="${window.t ? window.t('camera_generate_x1') : 'X1'}">▾</button>
+            <button class="gen-btn gen-btn-main camera-ctrl-generate-btn" type="button" data-i18n="camera_generate_btn">生成图片</button>
+            <button class="gen-btn gen-btn-caret camera-ctrl-generate-caret" type="button" aria-label="X1" data-i18n="camera_generate_x1:aria-label">▾</button>
             <div class="gen-menu camera-ctrl-gen-menu">
-              <div class="gen-item" data-count="1" data-i18n="camera_generate_x1">${window.t ? window.t('camera_generate_x1') : 'X1'}</div>
-              <div class="gen-item" data-count="2" data-i18n="camera_generate_x2">${window.t ? window.t('camera_generate_x2') : 'X2'}</div>
-              <div class="gen-item" data-count="3" data-i18n="camera_generate_x3">${window.t ? window.t('camera_generate_x3') : 'X3'}</div>
+              <div class="gen-item" data-count="1" data-i18n="camera_generate_x1">X1</div>
+              <div class="gen-item" data-count="2" data-i18n="camera_generate_x2">X2</div>
+              <div class="gen-item" data-count="3" data-i18n="camera_generate_x3">X3</div>
             </div>
           </div>
         </div>
@@ -184,6 +184,11 @@ function createCameraControlNode(opts){
       </div>
     </div>
   `;
+
+  // 在节点插入DOM后立即扫描i18n属性
+  if (typeof window.ZJTi18nDOM !== 'undefined') {
+    setTimeout(() => window.ZJTi18nDOM.scanDOM(el), 0);
+  }
 
   const headerEl = el.querySelector('.node-header');
   const deleteBtn = el.querySelector('.icon-btn');

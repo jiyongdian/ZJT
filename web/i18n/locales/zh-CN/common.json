@@ -46,5 +46,21 @@
   "server_error": "服务器错误",
   "please_wait": "请稍候...",
   "please_select": "请选择",
-  "no_results": "未找到结果"
+  "no_results": "未找到结果",
+  "computing_power_logs": "算力日志",
+  "all": "全部",
+  "increase": "增加",
+  "deduct": "扣除",
+  "loading_dots": "加载中...",
+  "no_logs": "暂无算力日志",
+  "no_description": "无描述",
+  "power_change": "算力变化：",
+  "previous_page": "上一页",
+  "next_page": "下一页",
+  "page_info": "第 {current} / {total} 页",
+  "missing_auth": "缺少认证信息，请从主页面打开",
+  "fetch_logs_failed": "获取日志失败",
+  "network_error_retry": "网络错误，请稍后重试",
+  "log_increase": "➕ 增加",
+  "log_deduct": "➖ 扣除"
 }
