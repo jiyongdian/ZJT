@@ -141,6 +141,17 @@ class AsyncTasksModel:
             raise
 
     @staticmethod
+    def get_by_external_task_id(external_task_id: str) -> Optional[AsyncTask]:
+        """根据外部任务 ID 获取任务"""
+        sql = "SELECT * FROM async_tasks WHERE external_task_id = %s"
+        try:
+            result = execute_query(sql, (external_task_id,), fetch_one=True)
+            return AsyncTask(**result) if result else None
+        except Exception as e:
+            logger.error(f"Failed to get async task by external_task_id {external_task_id}: {e}")
+            raise
+
+    @staticmethod
     def get_pending_tasks(implementation: Optional[int] = None, limit: int = 50) -> List[AsyncTask]:
         """
         获取待处理的任务（状态为 QUEUED 或 PROCESSING）

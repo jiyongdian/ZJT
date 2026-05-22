@@ -43,16 +43,7 @@ class RunningHubAudioDriver(BaseAsyncDriver):
         text: str,
     ) -> Dict[str, Any]:
         """
-        提交音频生成任务到 RunningHub
-
-        Args:
-            style_prompt: 音色风格提示词
-            text: 要朗读的文本内容
-
-        Returns:
-            Dict[str, Any]: 结果字典
-                成功: {"success": True, "project_id": "taskId"}
-                失败: {"success": False, "error": "...", "error_type": "USER"|"SYSTEM", "retry": bool}
+        提交音频生成任务到 RunningHub (async，供 scheduler 使用)
         """
         try:
             node_info_list = [
@@ -77,23 +68,70 @@ class RunningHubAudioDriver(BaseAsyncDriver):
                 use_personal_queue='false'
             )
 
-            runninghub_task_id = submit_response.get('taskId')
-            if not runninghub_task_id:
-                error_message = submit_response.get('errorMessage') or 'RunningHub 未返回任务 ID'
-                return {
-                    'success': False,
-                    'error': error_message,
-                    'error_type': 'SYSTEM',
-                    'error_detail': f"RunningHub response: {submit_response}",
-                    'retry': False
-                }
+            return self._parse_submit_response(submit_response)
 
+        except (ConnectionError, TimeoutError, Exception) as e:
+            return self._handle_submit_error(e)
+
+    def submit_task_sync(
+        self,
+        style_prompt: str,
+        text: str,
+    ) -> Dict[str, Any]:
+        """
+        提交音频生成任务到 RunningHub (sync，供 MCP 工具直接调用)
+        """
+        try:
+            node_info_list = [
+                {
+                    'nodeId': RunningHubAudioConfig.STYLE_NODE_ID,
+                    'fieldName': 'prompt',
+                    'fieldValue': style_prompt,
+                    'description': 'prompt'
+                },
+                {
+                    'nodeId': RunningHubAudioConfig.TEXT_NODE_ID,
+                    'fieldName': 'prompt',
+                    'fieldValue': text,
+                    'description': 'prompt'
+                }
+            ]
+
+            submit_response = self._client.run_ai_app_v2_sync(
+                app_id=RunningHubAudioConfig.APP_ID,
+                node_info_list=node_info_list,
+                instance_type='default',
+                use_personal_queue='false'
+            )
+
+            return self._parse_submit_response(submit_response)
+
+        except (ConnectionError, TimeoutError, Exception) as e:
+            return self._handle_submit_error(e)
+
+    @staticmethod
+    def _parse_submit_response(submit_response: Dict[str, Any]) -> Dict[str, Any]:
+        """解析提交响应"""
+        runninghub_task_id = submit_response.get('taskId')
+        if not runninghub_task_id:
+            error_message = submit_response.get('errorMessage') or 'RunningHub 未返回任务 ID'
             return {
-                'success': True,
-                'project_id': runninghub_task_id
+                'success': False,
+                'error': error_message,
+                'error_type': 'SYSTEM',
+                'error_detail': f"RunningHub response: {submit_response}",
+                'retry': False
             }
 
-        except ConnectionError as e:
+        return {
+            'success': True,
+            'project_id': runninghub_task_id
+        }
+
+    @staticmethod
+    def _handle_submit_error(e: Exception) -> Dict[str, Any]:
+        """处理提交异常"""
+        if isinstance(e, ConnectionError):
             logger.error(f"RunningHub audio submit connection error: {e}")
             return {
                 'success': False,
@@ -101,7 +139,7 @@ class RunningHubAudioDriver(BaseAsyncDriver):
                 'error_type': 'USER',
                 'retry': True
             }
-        except TimeoutError as e:
+        if isinstance(e, TimeoutError):
             logger.error(f"RunningHub audio submit timeout: {e}")
             return {
                 'success': False,
@@ -109,15 +147,14 @@ class RunningHubAudioDriver(BaseAsyncDriver):
                 'error_type': 'USER',
                 'retry': True
             }
-        except Exception as e:
-            logger.error(f"RunningHub audio submit error: {e}\n{traceback.format_exc()}")
-            return {
-                'success': False,
-                'error': f'提交音频生成任务失败: {str(e)}',
-                'error_type': 'SYSTEM',
-                'error_detail': traceback.format_exc(),
-                'retry': False
-            }
+        logger.error(f"RunningHub audio submit error: {e}\n{traceback.format_exc()}")
+        return {
+            'success': False,
+            'error': f'提交音频生成任务失败: {str(e)}',
+            'error_type': 'SYSTEM',
+            'error_detail': traceback.format_exc(),
+            'retry': False
+        }
 
     async def check_status(self, project_id: str) -> Dict[str, Any]:
         """

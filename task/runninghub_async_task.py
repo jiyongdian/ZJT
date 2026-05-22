@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 def _setup_cdn_mapping(task: Any, local_path: str, original_url: str, character_id: int):
     """
     创建或替换 CDN mapping 记录，触发异步上传
+    复用 ensure_entity_image_mapping，传入 label="voice"
 
     Args:
         task: AsyncTask 对象
@@ -25,50 +26,16 @@ def _setup_cdn_mapping(task: Any, local_path: str, original_url: str, character_
         original_url: 原始远程 URL
         character_id: 角色 ID
     """
-    from model.media_file_mapping import MediaFileMappingModel, MediaFileEntity
-    from config.media_file_policy import MediaFilePolicy
-    from utils.cdn_util import CDNUtil
-    from utils.mime_type import get_mime_type_from_extension
-    from utils.project_path import get_project_root
+    from utils.media_mapping_util import ensure_entity_image_mapping
+    from model.media_file_mapping import MediaFileEntity
 
-    # 删除旧的 mapping（处理 UNIQUE KEY 约束）
-    existing_mappings = MediaFileMappingModel.get_by_entity(MediaFileEntity.CHARACTER, character_id)
-    for old in existing_mappings:
-        try:
-            MediaFileMappingModel.delete_by_local_path(old.local_path)
-            logger.info(f"Deleted old CDN mapping for character {character_id}: {old.local_path}")
-        except Exception as e:
-            logger.warning(f"Failed to delete old mapping: {e}")
-
-    # 确定 MIME 类型
-    ext = os.path.splitext(local_path)[1].lower()
-    media_type = get_mime_type_from_extension(ext)
-
-    # 获取文件大小
-    file_size = None
-    try:
-        abs_path = os.path.join(get_project_root(), local_path)
-        if os.path.exists(abs_path):
-            file_size = os.path.getsize(abs_path)
-    except Exception:
-        pass
-
-    # 创建新的 mapping 记录
-    mapping_id = MediaFileMappingModel.create(
+    ensure_entity_image_mapping(
         user_id=task.user_id,
-        local_path=local_path,
-        cloud_path=None,
-        policy_code=MediaFilePolicy.NEVER_EXPIRE,
+        image_url=f"/{local_path}",
         entity_type=MediaFileEntity.CHARACTER,
-        source_id=character_id,
-        media_type=media_type,
-        original_url=original_url,
-        file_size=file_size
+        entity_id=character_id,
+        label="voice"
     )
-
-    # 触发异步 CDN 上传
-    CDNUtil.trigger_cdn_upload(mapping_id, local_path)
-    logger.info(f"Created CDN mapping {mapping_id} for character {character_id}, triggered upload")
 
 
 def _handle_audio_task_success(task: Any, result_url: str):

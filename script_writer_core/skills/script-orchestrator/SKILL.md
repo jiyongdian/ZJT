@@ -1402,3 +1402,8 @@ location-prop-image-designer（生成选定场景道具形象）
    - 避免长时间无反馈
    - 定期更新进度
    - 提供清晰的下一步指引
+
+5. **忽略 project_ids**：
+   - 当调用 `character-image-designer`、`location-prop-image-designer` 等专家生成图片后，PM 智能体会收集并推送 `project_ids` 到前端用于轮询图片生成状态
+   - **当前 script_writer 前端页面不处理 `project_ids`**，因此你不需要关注、引用或展示任何与 `project_ids` 相关的信息
+   - 图片生成状态由专家智能体自行处理，你只需关注最终结果即可
