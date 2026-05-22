@@ -1,10 +1,11 @@
 """
-媒体文件映射工具 - 为角色/场景/道具主图自动创建 CDN mapping
+媒体文件映射工具 - 为角色/场景/道具的图片和音频自动创建 CDN mapping
 
 策略：
-- 只对 reference_image（主图）创建 mapping，reference_images（多角度图）不处理
-- 使用 (CHARACTER/LOCATION/PROPS, entity_db_id) 实体关联
-- 替换主图时：删旧 mapping → 建新 mapping
+- 只对 reference_image（主图）和 default_voice（音频）创建 mapping
+- 使用 (CHARACTER/LOCATION/PROPS, entity_db_id, label) 实体关联
+- label 区分媒体类型："image"（主图）、"voice"（音频）
+- 同 label 同 local_path → 跳过；同 label 不同 local_path → 删旧建新
 """
 import logging
 import os
@@ -44,16 +45,18 @@ def ensure_entity_image_mapping(
     user_id,
     image_url: str,
     entity_type: int,
-    entity_id: int
+    entity_id: int,
+    label: str = "image"
 ) -> Optional[int]:
     """
-    为实体的主图创建 CDN mapping（删旧建新）
+    为实体的媒体文件创建 CDN mapping
 
     Args:
         user_id: 用户 ID（str 或 int）
-        image_url: 主图 URL
+        image_url: 媒体文件 URL（图片或音频）
         entity_type: MediaFileEntity.CHARACTER / LOCATION / PROPS
         entity_id: 实体数据库 ID
+        label: 媒体标签（"image" 主图 / "voice" 音频），默认 "image"
 
     Returns:
         mapping_id，跳过或失败返回 None
@@ -73,13 +76,20 @@ def ensure_entity_image_mapping(
     if not local_path:
         return None
 
-    # 删除旧的 mapping（处理 UNIQUE 约束）
-    existing_mappings = MediaFileMappingModel.get_by_entity(entity_type, entity_id)
-    for old in existing_mappings:
+    # 按 (entity_type, source_id, label) 查找已有 mapping
+    existing = MediaFileMappingModel.get_by_entity_and_label(entity_type, entity_id, label)
+
+    # 如果已有 mapping 且 local_path 相同 → 跳过
+    if existing and existing.local_path == local_path:
+        logger.info(f"CDN mapping already exists for entity ({entity_type}, {entity_id}, label={label}) with same path: {local_path}, skip")
+        return existing.id
+
+    # local_path 不同（文件换了）→ 删旧建新
+    if existing:
         try:
-            MediaFileMappingModel.delete_by_local_path(old.local_path)
+            MediaFileMappingModel.delete_by_local_path(existing.local_path)
         except Exception as e:
-            logger.warning(f"Failed to delete old mapping {old.local_path}: {e}")
+            logger.warning(f"Failed to delete old mapping {existing.local_path}: {e}")
 
     # 确定用户 ID
     try:
@@ -110,12 +120,13 @@ def ensure_entity_image_mapping(
         source_id=entity_id,
         media_type=media_type,
         original_url=image_url,
-        file_size=file_size
+        file_size=file_size,
+        label=label
     )
 
     # 触发异步 CDN 上传
     CDNUtil.trigger_cdn_upload(mapping_id, local_path)
-    logger.info(f"Created CDN mapping {mapping_id} for entity ({entity_type}, {entity_id}): {local_path}")
+    logger.info(f"Created CDN mapping {mapping_id} for entity ({entity_type}, {entity_id}, label={label}): {local_path}")
 
     return mapping_id
 

@@ -1844,16 +1844,25 @@ async def submit_to_database(request: SubmitDatabaseRequest):
                             reference_images=reference_images,
                             default_voice=default_voice
                         )
-                        # 确保 CDN mapping
+                        # 确保 CDN mapping（图片 + 音频）
                         try:
+                            from utils.media_mapping_util import ensure_entity_image_mapping
+                            from model.media_file_mapping import MediaFileEntity
                             if reference_image:
-                                from utils.media_mapping_util import ensure_entity_image_mapping
-                                from model.media_file_mapping import MediaFileEntity
                                 ensure_entity_image_mapping(
                                     user_id=user_id,
                                     image_url=reference_image,
                                     entity_type=MediaFileEntity.CHARACTER,
-                                    entity_id=char_id
+                                    entity_id=char_id,
+                                    label="image"
+                                )
+                            if default_voice:
+                                ensure_entity_image_mapping(
+                                    user_id=user_id,
+                                    image_url=default_voice,
+                                    entity_type=MediaFileEntity.CHARACTER,
+                                    entity_id=char_id,
+                                    label="voice"
                                 )
                         except Exception as e:
                             logger.warning(f"CDN mapping for character {name} failed: {e}")
@@ -1948,7 +1957,8 @@ async def submit_to_database(request: SubmitDatabaseRequest):
                                     user_id=user_id,
                                     image_url=reference_image,
                                     entity_type=MediaFileEntity.LOCATION,
-                                    entity_id=loc_id
+                                    entity_id=loc_id,
+                                    label="image"
                                 )
                         except Exception as e:
                             logger.warning(f"CDN mapping for location {name} failed: {e}")
@@ -1987,7 +1997,8 @@ async def submit_to_database(request: SubmitDatabaseRequest):
                                     user_id=user_id,
                                     image_url=reference_image,
                                     entity_type=MediaFileEntity.PROPS,
-                                    entity_id=prop_id
+                                    entity_id=prop_id,
+                                    label="image"
                                 )
                         except Exception as e:
                             logger.warning(f"CDN mapping for prop {name} failed: {e}")
