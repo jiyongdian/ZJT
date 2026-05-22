@@ -384,18 +384,26 @@ class FileManager:
         if not scripts_dir.exists():
             return scripts
         
-        for file_path in scripts_dir.glob("script_*.json"):
+        for file_path in scripts_dir.glob("*.json"):
             try:
                 content = file_path.read_text(encoding='utf-8')
                 script_data = json.loads(content)
-                
+
                 # 从JSON数据中获取信息
                 title = script_data.get('title', file_path.stem)
                 episode_number = script_data.get('episode_number', None)
                 script_content = script_data.get('content', '')
-                
+
+                # 生成展示名称：第x集：title
+                if episode_number is not None:
+                    display_name = f"第{episode_number}集：{title}"
+                else:
+                    display_name = title
+
                 scripts.append({
                     'name': title,
+                    'file_name': file_path.stem,  # 磁盘文件名（不含扩展名）
+                    'display_name': display_name,
                     'file_path': str(file_path),
                     'content': script_content,
                     'size': len(script_content),
@@ -431,7 +439,7 @@ class FileManager:
             scripts_dir / f"script_{script_name}.json",
             scripts_dir / script_name if script_name.endswith('.json') else None
         ]
-        
+
         for file_path in possible_files:
             if file_path and file_path.exists():
                 try:
@@ -440,26 +448,63 @@ class FileManager:
                 except Exception as e:
                     print(f"读取剧本失败 {file_path}: {e}")
                     continue
-        
+
+        # 回退：遍历所有 json 文件，按 title 或 episode_number 匹配
+        if scripts_dir.exists():
+            for fp in scripts_dir.glob("*.json"):
+                try:
+                    data = json.loads(fp.read_text(encoding='utf-8'))
+                    if data.get('title') == script_name or str(data.get('episode_number')) == script_name:
+                        return data
+                except Exception:
+                    continue
+
         return None
     
     def save_script(self, script_name: str, content: str, user_id: str = "0", world_id: str = "0") -> bool:
         """
         保存剧本
-        
+
         Args:
-            script_name: 剧本名称
+            script_name: 剧本名称或集数
             content: 剧本内容（JSON格式字符串）
             user_id: 用户ID，默认为 "0"
             world_id: 世界ID，默认为 "0"
-            
+
         Returns:
             是否保存成功
         """
         self._ensure_directories(user_id, world_id)
         scripts_dir = self._get_user_world_path(user_id, world_id) / "scripts"
-        file_path = scripts_dir / f"script_{script_name}.json"
-        
+
+        # 解析 content 获取 episode_number
+        episode_number = None
+        title = script_name
+        try:
+            content_data = json.loads(content)
+            episode_number = content_data.get('episode_number')
+            title = content_data.get('title', script_name)
+        except (json.JSONDecodeError, AttributeError):
+            pass
+
+        # 确定文件名：优先使用 episode_number
+        if episode_number is not None:
+            filename = f"{episode_number}.json"
+        else:
+            filename = f"script_{script_name}.json"
+
+        file_path = scripts_dir / filename
+
+        # 清理旧格式文件：如果旧 script_{title}.json 存在且与新文件名不同，删除旧文件
+        if episode_number is not None:
+            old_file = scripts_dir / f"script_{title}.json"
+            if old_file.exists() and old_file != file_path:
+                try:
+                    old_file.unlink()
+                    print(f"✓ 已清理旧格式文件: {old_file}")
+                except Exception as e:
+                    print(f"⚠ 清理旧文件失败: {e}")
+
         try:
             file_path.write_text(content, encoding='utf-8')
             print(f"✓ 剧本已保存: {file_path}")
@@ -471,25 +516,25 @@ class FileManager:
     def delete_script(self, script_name: str, user_id: str = "0", world_id: str = "0") -> bool:
         """
         删除剧本
-        
+
         Args:
-            script_name: 剧本名称
+            script_name: 剧本名称或集数
             user_id: 用户ID，默认为 "0"
             world_id: 世界ID，默认为 "0"
-            
+
         Returns:
             是否删除成功
         """
         self._ensure_directories(user_id, world_id)
         scripts_dir = self._get_user_world_path(user_id, world_id) / "scripts"
-        
+
         # 尝试不同的文件名格式
         possible_files = [
             scripts_dir / f"{script_name}.json",
             scripts_dir / f"script_{script_name}.json",
             scripts_dir / script_name if script_name.endswith('.json') else None
         ]
-        
+
         for file_path in possible_files:
             if file_path and file_path.exists():
                 try:
@@ -499,7 +544,19 @@ class FileManager:
                 except Exception as e:
                     print(f"✗ 删除剧本失败 {script_name}: {e}")
                     continue
-        
+
+        # 回退：遍历所有 json 文件，按 title 或 episode_number 匹配
+        if scripts_dir.exists():
+            for fp in scripts_dir.glob("*.json"):
+                try:
+                    data = json.loads(fp.read_text(encoding='utf-8'))
+                    if data.get('title') == script_name or str(data.get('episode_number')) == script_name:
+                        fp.unlink()
+                        print(f"✓ 剧本已删除: {fp}")
+                        return True
+                except Exception:
+                    continue
+
         return False
     
     # ==================== 场景管理 ====================
@@ -905,7 +962,9 @@ class FileManager:
         
         if scripts:
             for script in scripts:
-                script_data = self.get_script(script['name'], user_id, world_id)
+                # 优先使用 file_name（集数）查找，回退到 title
+                lookup_key = script.get('file_name', script['name'])
+                script_data = self.get_script(lookup_key, user_id, world_id)
                 if script_data:
                     content_str = script_data.get('content', '') if isinstance(script_data, dict) else str(script_data)
                     context += f"### {script['name']}\n\n"

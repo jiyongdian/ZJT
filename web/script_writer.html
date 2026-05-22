@@ -3991,18 +3991,23 @@
                             `;
                         }
                         
+                        // 剧本使用 display_name 展示，其他类型使用 name
+                        const displayName = (fileType === 'scripts' && file.display_name) ? file.display_name : file.name;
+                        // 剧本使用 file_name 作为 API 键，其他类型使用 name
+                        const fileKey = (fileType === 'scripts' && file.file_name) ? file.file_name : file.name;
+
                         fileItem.innerHTML = `
-                            <div class="file-name">${file.name}</div>
+                            <div class="file-name">${displayName}</div>
                             <div class="file-actions">
                                 ${imageIconHtml}
                                 ${deleteButtonHtml}
-                                <button class="file-btn view-btn" onclick="viewFile('${fileType}', '${file.name}')" title="查看">
+                                <button class="file-btn view-btn" onclick="viewFile('${fileType}', '${fileKey}')" title="查看">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
                                         <circle cx="12" cy="12" r="3"/>
                                     </svg>
                                 </button>
-                                <button class="file-btn edit-btn" onclick="editFile('${fileType}', '${file.name}')" title="编辑">
+                                <button class="file-btn edit-btn" onclick="editFile('${fileType}', '${fileKey}')" title="编辑">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -4134,7 +4139,8 @@
         }
 
         function showScriptViewer(fileName, data) {
-            document.getElementById('view-modal-title').textContent = `📜 查看剧本 - ${fileName}`;
+            const epLabel = data.episode_number ? `第${data.episode_number}集：` : '';
+            document.getElementById('view-modal-title').textContent = `📜 查看剧本 - ${epLabel}${data.title || fileName}`;
             document.getElementById('script-view-form').style.display = 'block';
             document.getElementById('view-script-title').textContent = data.title || '未设置';
             document.getElementById('view-script-episode').textContent = data.episode_number || '未设置';
@@ -4479,7 +4485,8 @@
         }
 
         function showScriptEditor(fileName, data) {
-            document.getElementById('edit-modal-title').textContent = `✏️ 编辑剧本 - ${fileName}`;
+            const epLabel = data.episode_number ? `第${data.episode_number}集：` : '';
+            document.getElementById('edit-modal-title').textContent = `✏️ 编辑剧本 - ${epLabel}${data.title || fileName}`;
             document.getElementById('script-edit-form').style.display = 'block';
             document.getElementById('script-title').value = data.title || '';
             document.getElementById('script-episode').value = data.episode_number || '';
@@ -5967,7 +5974,7 @@
                     update_time: now
                 }, null, 2);
 
-                const response = await fetch(`/api/scripts-files/${encodeURIComponent(title)}?user_id=${USER_ID}&world_id=${WORLD_ID}&auth_token=${AUTH_TOKEN}`, {
+                const response = await fetch(`/api/scripts-files/${encodeURIComponent(episode)}?user_id=${USER_ID}&world_id=${WORLD_ID}&auth_token=${AUTH_TOKEN}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
