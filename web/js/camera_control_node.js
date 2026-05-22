@@ -256,7 +256,7 @@ function createCameraControlNode(opts){
           try{ autoSaveWorkflow(); } catch(err){}
         }
       } else {
-        showToast(window.t ? window.t('camera_input_error') : '相机控制节点只能接收图片节点', 'warning');
+        showToast(window.t ? window.t('camera_control_input_error') : '相机控制节点只能接收图片节点', 'warning');
       }
     }
   });
@@ -459,24 +459,24 @@ function createCameraControlNode(opts){
 
     // 0. 检查 runninghub 配置
     if(window.TaskConfig && !window.TaskConfig.isRunningHubConfigured()) {
-      showToast('该功能依赖runninghub接口，请配置密钥', 'error');
+      showToast(window.t ? window.t('camera_control_not_configured') : '该功能依赖runninghub接口，请配置密钥', 'error');
       return;
     }
 
     // 1. 验证源图片
     const conn = state.connections.find(c => c.to === id);
     if(!conn){
-      showToast('请先连接图片节点', 'warning');
+      showToast(window.t ? window.t('camera_control_connect_image') : '请先连接图片节点', 'warning');
       return;
     }
     const sourceNode = state.nodes.find(n => n.id === conn.from);
     if(!sourceNode || sourceNode.type !== 'image'){
-      showToast('请连接图片节点', 'warning');
+      showToast(window.t ? window.t('camera_control_connect_image') : '请连接图片节点', 'warning');
       return;
     }
     const sourceImageUrl = sourceNode.data.url;
     if(!sourceImageUrl){
-      showToast('源图片节点没有图片', 'warning');
+      showToast(window.t ? window.t('camera_control_no_image') : '源图片节点没有图片', 'warning');
       return;
     }
 
@@ -484,14 +484,14 @@ function createCameraControlNode(opts){
     const hasModifications = node.data.camera && node.data.camera.modified &&
       (node.data.camera.modified.horizontal_angle || node.data.camera.modified.vertical_angle || node.data.camera.modified.zoom);
     if(!hasModifications){
-      showToast('请先调整相机参数', 'warning');
+      showToast(window.t ? window.t('camera_control_adjust_params') : '请先调整相机参数', 'warning');
       return;
     }
 
     // 3. 获取多角度 task_id 和算力
     const multiAngleTaskId = window.TaskConfig && window.TaskConfig.getTaskIdByKey('qwen-multi-angle', 'image_edit');
     if(!multiAngleTaskId){
-      showToast('未找到多角度任务配置', 'error');
+      showToast(window.t ? window.t('camera_control_task_config_not_found') : '未找到多角度任务配置', 'error');
       return;
     }
 
@@ -511,7 +511,7 @@ function createCameraControlNode(opts){
         if(checkData.success && checkData.data){
           const userPower = checkData.data.computing_power ?? 0;
           if(userPower < totalPower){
-            showToast(`算力不足（需要 ${totalPower}，当前 ${userPower}）`, 'error');
+            showToast(window.t ? window.t('camera_control_insufficient_power', { need: totalPower, current: userPower }) : `算力不足（需要 ${totalPower}，当前 ${userPower}）`, 'error');
             return;
           }
         }
@@ -522,10 +522,10 @@ function createCameraControlNode(opts){
 
     // 5. 提交任务
     generateBtn.disabled = true;
-    generateBtn.textContent = '生成中...';
+    generateBtn.textContent = window.t ? window.t('camera_control_generating', { progress: '0%' }) : '生成中...';
     statusEl.style.display = 'block';
     statusEl.style.color = '#666';
-    statusEl.textContent = `正在提交任务（${node.data.drawCount}张，预计消耗 ${totalPower} 算力）...`;
+    statusEl.textContent = window.t ? window.t('camera_control_submitting', { count: node.data.drawCount, power: totalPower }) : `正在提交任务（${node.data.drawCount}张，预计消耗 ${totalPower} 算力）...`;
 
     try {
       const cameraParams = convertCameraToQwenMultiAngleParams(node.data.camera);
@@ -555,8 +555,8 @@ function createCameraControlNode(opts){
         throw new Error(data.detail || data.message || '提交任务失败');
       }
 
-      showToast('任务已提交，正在生成图片...', 'info');
-      statusEl.textContent = '任务已提交，等待结果...';
+      showToast(window.t ? window.t('camera_control_submitted') : '任务已提交，正在生成图片...', 'info');
+      statusEl.textContent = window.t ? window.t('camera_control_submitted') : '任务已提交，等待结果...';
 
       // 6. 创建图片节点
       const createdImageNodeIds = [];
@@ -621,7 +621,7 @@ function createCameraControlNode(opts){
           }
 
           if(imageUrls.length === 0){
-            showToast('生成成功，但未获取到图片地址', 'error');
+            showToast(window.t ? window.t('camera_control_no_image_result') : '生成成功，但未获取到图片地址', 'error');
             generateBtn.disabled = false;
             generateBtn.textContent = '生成图片';
             statusEl.textContent = '生成完成（未获取图片）';
@@ -658,12 +658,12 @@ function createCameraControlNode(opts){
           generateBtn.textContent = '生成图片';
           statusEl.style.color = '#22c55e';
           statusEl.textContent = `生成成功！已创建 ${imageUrls.length} 个图片节点`;
-          showToast(`相机控制生成成功！已创建 ${imageUrls.length} 个图片节点`, 'success');
+          showToast(window.t ? window.t('camera_control_success', { count: imageUrls.length }) : `相机控制生成成功！已创建 ${imageUrls.length} 个图片节点`, 'success');
 
           try{ autoSaveWorkflow(); } catch(err){}
         },
         (error) => {
-          showToast(`生成失败: ${error}`, 'error');
+          showToast(window.t ? window.t('camera_control_generation_failed', { error: error }) : `生成失败: ${error}`, 'error');
           generateBtn.disabled = false;
           generateBtn.textContent = '生成图片';
           statusEl.style.color = '#dc2626';

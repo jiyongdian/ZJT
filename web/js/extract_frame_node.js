@@ -9,7 +9,7 @@
       const node = {
         id,
         type: 'extract_frame',
-        title: '提取帧',
+        title: window.t ? window.t('extract_frame_title') : '提取帧',
         x,
         y,
         data: {
@@ -148,7 +148,7 @@
         if(!file) return;
 
         if(!file.type.startsWith('video/')){
-          showToast('请选择视频文件', 'error');
+          showToast(window.t ? window.t('extract_frame_select_video') : '请选择视频文件', 'error');
           return;
         }
 
@@ -164,13 +164,13 @@
 
           // 清除之前的提取结果
           clearResult();
-          showToast('视频已加载，点击"提取帧"按钮提取', 'success');
+          showToast(window.t ? window.t('extract_frame_loaded') : '视频已加载，点击"提取帧"按钮提取', 'success');
 
           // 自动保存工作流
           try{ autoSaveWorkflow(); } catch(e){}
         } catch(error){
           console.error('视频处理失败:', error);
-          showToast('视频处理失败', 'error');
+          showToast(window.t ? window.t('extract_frame_failed') : '视频处理失败', 'error');
         }
       });
 
@@ -223,7 +223,7 @@
         const hasVideoUrl = node.data.videoUrl && node.data.videoUrl.length > 0;
 
         if(!hasVideoFile && !hasVideoUrl){
-          showToast('请先上传视频或连接视频节点', 'error');
+          showToast(window.t ? window.t('extract_frame_no_video') : '请先上传视频或连接视频节点', 'error');
           return;
         }
 

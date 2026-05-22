@@ -342,7 +342,7 @@
           // 迁移成功后重新查找柱子
           pillar = getPillarForNode(nodeId);
           if (pillar) {
-            showToast('已自动迁移历史数据到新时间轴结构', 'success');
+            showToast(window.t ? window.t('timeline_auto_migrated') : '已自动迁移历史数据到新时间轴结构', 'success');
           }
         }
       }
@@ -373,7 +373,7 @@
 
       renderTimeline();
       if (!state.timeline.visible) flashExpandButton();
-      showToast(`已添加到时间轴 - 镜头${pillar.shotNumber}`, 'success');
+      showToast(window.t ? window.t('timeline_added', { shot: pillar.shotNumber }) : `已添加到时间轴 - 镜头${pillar.shotNumber}`, 'success');
       try{ autoSaveWorkflow(); } catch(e){}
     }
     
@@ -405,11 +405,11 @@
     function removeFromTimeline(clipId) {
       // 从柱子中移除
       removeClipFromPillar(clipId, 'video');
-      
+
       state.timeline.clips = state.timeline.clips.filter(c => c.id !== clipId);
       state.timeline.clips.forEach((c, i) => c.order = i);
       renderTimeline();
-      showToast('已从时间轴移除', 'success');
+      showToast(window.t ? window.t('timeline_removed') : '已从时间轴移除', 'success');
       try{ autoSaveWorkflow(); } catch(e){}
     }
     
@@ -849,7 +849,7 @@
       });
       
       renderTimeline();
-      showToast('已替换视频片段', 'success');
+      showToast(window.t ? window.t('timeline_replaced') : '已替换视频片段', 'success');
       try{ autoSaveWorkflow(); } catch(e){}
     }
     
@@ -1506,9 +1506,9 @@
         // 更新片段的剪切时间
         clip.startTime = currentStart;
         clip.endTime = currentEnd;
-        
+
         renderTimeline();
-        showToast('剪切成功', 'success');
+        showToast(window.t ? window.t('timeline_trim_success') : '剪切成功', 'success');
         try{ autoSaveWorkflow(); } catch(e){}
         
         closeDialog();
@@ -1783,7 +1783,7 @@
           // 迁移成功后重新查找柱子
           pillar = getPillarForNode(nodeId);
           if (pillar) {
-            showToast('已自动迁移历史数据到新时间轴结构', 'success');
+            showToast(window.t ? window.t('timeline_auto_migrated') : '已自动迁移历史数据到新时间轴结构', 'success');
           }
         }
       }
@@ -1815,7 +1815,7 @@
 
       renderTimeline();
       if (!state.timeline.visible) flashExpandButton();
-      showToast(`已添加音频到时间轴 - 镜头${pillar.shotNumber}`, 'success');
+      showToast(window.t ? window.t('timeline_audio_added', { shot: pillar.shotNumber }) : `已添加音频到时间轴 - 镜头${pillar.shotNumber}`, 'success');
       try{ autoSaveWorkflow(); } catch(e){}
     }
     
@@ -1823,11 +1823,11 @@
     function removeAudioFromTimeline(clipId) {
       // 从柱子中移除
       removeClipFromPillar(clipId, 'audio');
-      
+
       state.timeline.audioClips = state.timeline.audioClips.filter(c => c.id !== clipId);
       state.timeline.audioClips.forEach((c, i) => c.order = i);
       renderTimeline();
-      showToast('已从时间轴移除音频', 'success');
+      showToast(window.t ? window.t('timeline_audio_removed') : '已从时间轴移除音频', 'success');
       try{ autoSaveWorkflow(); } catch(e){}
     }
     
