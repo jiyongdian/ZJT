@@ -3253,14 +3253,14 @@ def skill(SkillName: str) -> Dict[str, Any]:
 
 # ============ 音色相关 MCP 工具函数 ============
 
-async def generate_character_reference_audio(user_id: str, world_id: str, auth_token: str,
+def generate_character_reference_audio(user_id: str, world_id: str, auth_token: str,
                                        character_name: str,
                                        style_prompt: Optional[str] = None,
                                        text: Optional[str] = None) -> Dict[str, Any]:
     """
-    为角色生成参考音频 - MCP工具函数（异步非阻塞）
+    为角色生成参考音频 - MCP工具函数（同步非阻塞）
 
-    使用 RunningHub API 生成平静、自然的参考音频，存储到角色的 default_voice 字段。
+    同步提交任务到 RunningHub，写入异步任务表，由 scheduler 后台轮询结果。
 
     Args:
         user_id: 用户ID（必填）
@@ -3271,7 +3271,7 @@ async def generate_character_reference_audio(user_id: str, world_id: str, auth_t
         text: 自定义文本内容（可选），不填则根据角色设定自动生成
 
     Returns:
-        dict: 包含 runninghub_task_id 的结果，可用于 check_runninghub_audio_status 查询
+        dict: 包含 runninghub_task_id 的结果，可用于 check_reference_audio_status 查询
     """
     try:
         # 验证必填字段
@@ -3299,10 +3299,10 @@ async def generate_character_reference_audio(user_id: str, world_id: str, auth_t
         final_style_prompt = style_prompt.strip() if style_prompt and style_prompt.strip() else \
             "请生成平静、自然、清晰、有辨识度的参考音频，语气平和，不带明显情感"
 
-        # 通过驱动提交任务
+        # 通过驱动同步提交任务
         from task.async_drivers.runninghub_audio_driver import RunningHubAudioDriver
         driver = RunningHubAudioDriver()
-        result = await driver.submit_task(
+        result = driver.submit_task_sync(
             style_prompt=final_style_prompt,
             text=final_text
         )
@@ -3357,71 +3357,66 @@ async def generate_character_reference_audio(user_id: str, world_id: str, auth_t
         }
 
 
-async def check_reference_audio_status(user_id: str, world_id: str, auth_token: str,
+def check_reference_audio_status(user_id: str, world_id: str, auth_token: str,
                                    runninghub_task_id: str,
                                    character_name: Optional[str] = None) -> Dict[str, Any]:
     """
-    查询 RunningHub 音频生成任务状态 - MCP工具函数
+    查询角色参考音频生成任务状态 - MCP工具函数（同步，直接查数据库）
+
+    后台 scheduler 会自动轮询 RunningHub 状态并更新数据库，本函数直接读取数据库中的任务状态。
 
     Args:
         user_id: 用户ID（必填）
         world_id: 世界ID（必填）
         auth_token: 认证令牌（必填）
         runninghub_task_id: RunningHub 任务ID（必填）
-        character_name: 角色名称（可选），如果提供且任务成功，会自动更新角色的 default_voice 字段
+        character_name: 角色名称（可选，仅用于返回信息，角色更新由 scheduler 自动完成）
 
     Returns:
         dict: 包含任务状态和结果URL的结果
     """
     try:
-        from task.async_drivers.runninghub_audio_driver import RunningHubAudioDriver
+        from model import AsyncTasksModel, AsyncTaskStatus
 
-        driver = RunningHubAudioDriver()
-        status_result = await driver.check_status(runninghub_task_id)
+        task = AsyncTasksModel.get_by_external_task_id(runninghub_task_id)
+        if not task:
+            return {
+                'success': True,
+                'status': 'not_found',
+                'runninghub_task_id': runninghub_task_id,
+                'message': f'未找到 runninghub_task_id={runninghub_task_id} 对应的任务记录'
+            }
+
+        # 状态映射
+        status_map = {
+            AsyncTaskStatus.QUEUED: 'queued',
+            AsyncTaskStatus.PROCESSING: 'processing',
+            AsyncTaskStatus.COMPLETED: 'completed',
+            AsyncTaskStatus.FAILED: 'failed',
+            AsyncTaskStatus.TIMEOUT: 'timeout',
+        }
+        readable_status = status_map.get(task.status, 'unknown')
 
         result = {
             'success': True,
+            'status': readable_status,
             'runninghub_task_id': runninghub_task_id,
-            'status': status_result.get('status'),
-            'message': f"任务状态: {status_result.get('status')}"
+            'message': f'任务状态: {readable_status}'
         }
 
-        if status_result.get('status') == 'SUCCESS':
-            result_url = status_result.get('result_url')
-            if result_url:
-                result['audio_url'] = result_url
-                result['message'] = f'音频生成完成，URL: {result_url}'
+        if task.status == AsyncTaskStatus.COMPLETED and task.result_url:
+            result['audio_url'] = task.result_url
+            result['message'] = f'音频生成完成，音频URL: {task.result_url}'
 
-                # 如果提供了角色名称，自动更新角色的 default_voice 字段
-                if character_name:
-                    file_manager = get_file_manager()
-                    character_data = file_manager.get_character_json(character_name, user_id, world_id)
-
-                    if character_data:
-                        character_data['default_voice'] = result_url
-                        character_data['updated_at'] = datetime.now().isoformat()
-
-                        filename = f"character_{_sanitize_filename(character_name)}.json"
-                        save_success = file_manager.save_json_content(user_id, world_id, "characters", filename, character_data)
-
-                        if save_success:
-                            result['character_updated'] = True
-                            result['message'] = f'音频生成完成并已更新角色 "{character_name}" 的 default_voice 字段'
-                        else:
-                            result['character_updated'] = False
-                            result['warning'] = '音频生成完成但更新角色失败'
-            else:
-                result['warning'] = '任务成功但未返回结果 URL'
-
-        elif status_result.get('status') == 'FAILED':
+        if task.status in (AsyncTaskStatus.FAILED, AsyncTaskStatus.TIMEOUT):
             result['success'] = False
-            result['error'] = status_result.get('error', '音频生成失败')
-            result['message'] = f"音频生成失败: {result['error']}"
+            result['error'] = task.error_message or '音频生成失败'
+            result['message'] = f'音频生成失败: {result["error"]}'
 
         return result
 
     except Exception as e:
-        logger.error(f"check_runninghub_audio_status error: {e}", exc_info=True)
+        logger.error(f"check_reference_audio_status error: {e}", exc_info=True)
         return {
             'success': False,
             'error': f'查询音频状态失败: {str(e)}'

@@ -133,7 +133,7 @@ class RunningHubClient:
         use_personal_queue: str = "false"
     ) -> Dict[str, Any]:
         """
-        Submit a RunningHub OpenAPI v2 AI app task
+        Submit a RunningHub OpenAPI v2 AI app task (async)
         """
         endpoint = f"/openapi/v2/run/ai-app/{app_id}"
         payload = {
@@ -141,11 +141,44 @@ class RunningHubClient:
             "instanceType": instance_type,
             "usePersonalQueue": use_personal_queue
         }
-        
+
         logger.info(f"[RunningHub OpenAPI v2] Request URL: {self.host}{endpoint}")
         logger.info(f"[RunningHub OpenAPI v2] Request Payload: {json.dumps(payload, ensure_ascii=False, indent=2)}")
         result = await self._make_v2_request(endpoint, payload)
         logger.info(f"[RunningHub OpenAPI v2] Response: {json.dumps(result, ensure_ascii=False, indent=2)}")
+        return result
+
+    def run_ai_app_v2_sync(
+        self,
+        app_id: str,
+        node_info_list: List[Dict[str, str]],
+        instance_type: str = "default",
+        use_personal_queue: str = "false"
+    ) -> Dict[str, Any]:
+        """
+        Submit a RunningHub OpenAPI v2 AI app task (sync)
+        """
+        endpoint = f"/openapi/v2/run/ai-app/{app_id}"
+        url = f"{self.host}{endpoint}"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}"
+        }
+        payload = {
+            "nodeInfoList": node_info_list,
+            "instanceType": instance_type,
+            "usePersonalQueue": use_personal_queue
+        }
+
+        logger.info(f"[RunningHub OpenAPI v2 sync] Request URL: {url}")
+        logger.info(f"[RunningHub OpenAPI v2 sync] Request Payload: {json.dumps(payload, ensure_ascii=False, indent=2)}")
+
+        with httpx.Client(timeout=self.request_timeout) as client:
+            response = client.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            result = response.json()
+
+        logger.info(f"[RunningHub OpenAPI v2 sync] Response: {json.dumps(result, ensure_ascii=False, indent=2)}")
         return result
     
     async def query_v2_task(self, task_id: str) -> Dict[str, Any]:
