@@ -5,6 +5,7 @@ RunningHub 异步任务处理
 使用通用 async_tasks 表，通过 implementation = AsyncTaskImplementationId.RUNNINGHUB_AUDIO 区分任务。
 """
 import logging
+import os
 from typing import Any
 
 from model import AsyncTasksModel, AsyncTaskStatus
@@ -14,26 +15,141 @@ from task.async_drivers.runninghub_audio_driver import RunningHubAudioDriver
 logger = logging.getLogger(__name__)
 
 
-def _handle_audio_task_success(task: Any, result_url: str):
+def _setup_cdn_mapping(task: Any, local_path: str, original_url: str, character_id: int):
     """
-    处理音频任务成功的情况：更新角色的 default_voice
+    创建或替换 CDN mapping 记录，触发异步上传
 
     Args:
         task: AsyncTask 对象
-        result_url: 生成的音频 URL
+        local_path: 本地相对路径（如 "upload/character/voice/rh_voice_xxx.wav"）
+        original_url: 原始远程 URL
+        character_id: 角色 ID
     """
+    from model.media_file_mapping import MediaFileMappingModel, MediaFileEntity
+    from config.media_file_policy import MediaFilePolicy
+    from utils.cdn_util import CDNUtil
+    from utils.mime_type import get_mime_type_from_extension
+    from utils.project_path import get_project_root
+
+    # 删除旧的 mapping（处理 UNIQUE KEY 约束）
+    existing_mappings = MediaFileMappingModel.get_by_entity(MediaFileEntity.CHARACTER, character_id)
+    for old in existing_mappings:
+        try:
+            MediaFileMappingModel.delete_by_local_path(old.local_path)
+            logger.info(f"Deleted old CDN mapping for character {character_id}: {old.local_path}")
+        except Exception as e:
+            logger.warning(f"Failed to delete old mapping: {e}")
+
+    # 确定 MIME 类型
+    ext = os.path.splitext(local_path)[1].lower()
+    media_type = get_mime_type_from_extension(ext)
+
+    # 获取文件大小
+    file_size = None
+    try:
+        abs_path = os.path.join(get_project_root(), local_path)
+        if os.path.exists(abs_path):
+            file_size = os.path.getsize(abs_path)
+    except Exception:
+        pass
+
+    # 创建新的 mapping 记录
+    mapping_id = MediaFileMappingModel.create(
+        user_id=task.user_id,
+        local_path=local_path,
+        cloud_path=None,
+        policy_code=MediaFilePolicy.NEVER_EXPIRE,
+        entity_type=MediaFileEntity.CHARACTER,
+        source_id=character_id,
+        media_type=media_type,
+        original_url=original_url,
+        file_size=file_size
+    )
+
+    # 触发异步 CDN 上传
+    CDNUtil.trigger_cdn_upload(mapping_id, local_path)
+    logger.info(f"Created CDN mapping {mapping_id} for character {character_id}, triggered upload")
+
+
+def _handle_audio_task_success(task: Any, result_url: str):
+    """
+    处理音频任务成功的情况：
+    1. 下载音频到本地 upload/character/voice/
+    2. 如果开启图床，创建 CDN mapping 并触发上传
+    3. 更新角色的 default_voice 为本地路径
+
+    Args:
+        task: AsyncTask 对象
+        result_url: RunningHub 远程音频 URL
+    """
+    from datetime import datetime
+
     params = task.get_params_dict()
     character_id = params.get('character_id')
+    character_name = params.get('character_name')
 
-    if not character_id:
-        return
+    # Step 1: 下载音频到本地
+    voice_url = result_url  # 默认使用远程 URL（下载失败时回退）
+    local_path = None
 
     try:
-        from model.character import CharacterModel
-        CharacterModel.update(character_id, default_voice=result_url)
-        logger.info(f"Updated character {character_id} default_voice: {result_url}")
+        from utils.audio_utils import download_and_save_character_voice
+        local_path = download_and_save_character_voice(
+            remote_url=result_url,
+            filename_prefix="rh_voice"
+        )
+        if local_path:
+            voice_url = f"/{local_path}"
+            logger.info(f"Audio saved locally, voice_url: {voice_url}")
+        else:
+            logger.warning(f"Failed to download audio, using remote URL: {result_url}")
     except Exception as e:
-        logger.error(f"Failed to update character default_voice: {e}")
+        logger.error(f"Download audio failed: {e}", exc_info=True)
+
+    # Step 2: 如果开启 CDN 且有 character_id，创建 mapping 并触发上传
+    if local_path and character_id:
+        try:
+            from config.config_util import get_config
+            enable_cdn = get_config().get("server", {}).get("auto_upload_to_cdn", False)
+            if enable_cdn:
+                _setup_cdn_mapping(task, local_path, result_url, character_id)
+        except Exception as e:
+            logger.error(f"CDN mapping setup failed: {e}", exc_info=True)
+
+    # Step 3: 更新角色的 default_voice
+    # 优先通过 character_id 更新数据库
+    if character_id:
+        try:
+            from model.character import CharacterModel
+            CharacterModel.update(character_id, default_voice=voice_url)
+            logger.info(f"Updated character {character_id} default_voice: {voice_url}")
+            return
+        except Exception as e:
+            logger.error(f"Failed to update character default_voice by id: {e}")
+
+    # 通过 character_name 更新角色 JSON 文件
+    if character_name and task.user_id:
+        try:
+            from script_writer_core.file_manager import FileManager
+            file_manager = FileManager()
+            uid = str(task.user_id)
+            world_id = params.get('world_id', uid)
+            character_data = file_manager.get_character_json(character_name, uid, world_id)
+            if character_data:
+                character_data['default_voice'] = voice_url
+                character_data['updated_at'] = datetime.now().isoformat()
+                from script_writer_core.mcp_tool import _sanitize_filename
+                filename = f"character_{_sanitize_filename(character_name)}.json"
+                file_manager.save_json_content(uid, world_id, "characters", filename, character_data)
+                logger.info(f"Updated character '{character_name}' default_voice via FileManager: {voice_url}")
+            else:
+                logger.warning(f"Character '{character_name}' not found in FileManager")
+        except Exception as e:
+            logger.error(f"Failed to update character default_voice by name: {e}")
+    else:
+        logger.warning(f"No character_id or character_name in task params, skipping update")
+
+    return local_path
 
 
 def process_runninghub_async_tasks(app=None):
@@ -91,13 +207,18 @@ def process_runninghub_async_tasks(app=None):
 
                     if status_result.get('status') == 'SUCCESS':
                         result_url = status_result.get('result_url')
+
+                        # 处理音频：下载、CDN 上传、更新角色
+                        local_path = _handle_audio_task_success(task, result_url)
+
+                        # 更新 async_tasks 记录的 result_url 为本地路径
+                        async_result_url = f"/{local_path}" if local_path else result_url
                         AsyncTasksModel.update_status(
                             record_id=task.id,
                             status=AsyncTaskStatus.COMPLETED,
-                            result_url=result_url
+                            result_url=async_result_url
                         )
-                        _handle_audio_task_success(task, result_url)
-                        logger.info(f"RunningHub 异步任务完成: {task.id}, result: {result_url}")
+                        logger.info(f"RunningHub 异步任务完成: {task.id}, result: {async_result_url}")
 
                     elif status_result.get('status') == 'FAILED':
                         error_message = status_result.get('error', '任务失败')

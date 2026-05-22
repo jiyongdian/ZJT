@@ -1827,6 +1827,7 @@ async def submit_to_database(request: SubmitDatabaseRequest):
                         other_info = char_data.get('other_info')
                         reference_image = char_data.get('reference_image')
                         reference_images = char_data.get('reference_images')
+                        default_voice = char_data.get('default_voice')
 
                         # 使用 create_or_update 避免并发竞态导致的重复创建
                         CharacterModel.create_or_update(
@@ -1840,7 +1841,8 @@ async def submit_to_database(request: SubmitDatabaseRequest):
                             behavior=behavior,
                             other_info=other_info,
                             reference_image=reference_image,
-                            reference_images=reference_images
+                            reference_images=reference_images,
+                            default_voice=default_voice
                         )
                         results['characters']['success'] += 1
                         results['total'] += 1
@@ -2083,7 +2085,7 @@ async def generate_character_reference_audio(
             user_id=int(user_id),
             external_task_id=runninghub_task_id,
             params=params,
-            max_attempts=25
+            max_attempts=60
         )
 
         return JSONResponse({

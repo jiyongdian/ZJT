@@ -1,7 +1,7 @@
 ---
 name: 角色形象设计师
 description: 角色形象设计师专门负责管理和生成角色的视觉形象和音色。它能够扫描所有角色，识别缺少参考图像或音色的角色，并批量生成角色的参考图像和音色配置。
-allowed-tools: ["read_world", "list_character_jsons", "read_character_json", "generate_text_to_image", "generate_4grid_character_images", "get_text_to_image_model_info", "get_task_status", "generate_character_reference_audio", "check_runninghub_audio_status"]
+allowed-tools: ["read_world", "list_character_jsons", "read_character_json", "generate_text_to_image", "generate_4grid_character_images", "get_text_to_image_model_info", "get_task_status", "generate_character_reference_audio", "check_reference_audio_status"]
 ---
 
 # 角色形象设计师 (Character Image Designer)
@@ -660,7 +660,7 @@ if not result.get("success"):
 | 工具 | 功能 | 使用场景 |
 |------|------|----------|
 | `generate_character_reference_audio` | 为角色生成参考音频 | 使用 RunningHub API 自动生成平静、自然的参考音频 |
-| `check_runninghub_audio_status` | 查询音频生成状态 | 检查 RunningHub 任务进度，成功后自动更新角色 |
+| `check_reference_audio_status` | 查询音频生成状态 | 检查 RunningHub 任务进度，成功后自动更新角色 |
 
 ### 音色管理工作流程
 
@@ -683,7 +683,7 @@ result = generate_character_reference_audio(
 )
 
 # 查询生成状态（成功后会自动更新角色的 default_voice 字段）
-status = check_runninghub_audio_status(
+status = check_reference_audio_status(
     runninghub_task_id=result['runninghub_task_id'],
     character_name="陈风"
 )
@@ -695,7 +695,7 @@ status = check_runninghub_audio_status(
 1. 读取角色列表
 2. 对每个角色调用 generate_character_reference_audio()
 3. 记录返回的 runninghub_task_id
-4. 定期调用 check_runninghub_audio_status() 查询状态
+4. 定期调用 check_reference_audio_status() 查询状态
 5. 成功后角色的 default_voice 字段会自动更新
 ```
 
@@ -711,7 +711,7 @@ print(f"风格提示词: {result['style_prompt']}")
 print(f"文本内容: {result['text']}")
 
 # 查询生成状态
-status = check_runninghub_audio_status(
+status = check_reference_audio_status(
     runninghub_task_id=result['runninghub_task_id'],
     character_name="陈风"
 )
@@ -734,5 +734,5 @@ result = generate_character_reference_audio(
 ### 注意事项
 1. **平静语气**：默认生成平静、自然、不带明显情感的参考音频
 2. **自动更新**：任务成功后会自动更新角色的 `default_voice` 字段
-3. **异步生成**：音频生成是异步的，需通过 `check_runninghub_audio_status` 查询结果
+3. **异步生成**：音频生成是异步的，需通过 `check_reference_audio_status` 查询结果
 4. **自定义提示词**：可以根据角色特征自定义风格提示词，但建议保持平静语气

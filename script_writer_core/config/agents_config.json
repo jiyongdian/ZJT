@@ -130,6 +130,7 @@
     "character-image-designer": {
       "skills": ["character-image-designer"],
       "model": "gemini/gemini-3-flash-preview",
+      "max_iterations": 20,
       "allowed_tools": [
         "list_character_jsons",
         "read_character_json",

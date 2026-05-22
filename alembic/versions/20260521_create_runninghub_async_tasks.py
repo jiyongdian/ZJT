@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '20260521_001'
+revision = '20260522_add_sync_task'
 down_revision = '20260520_zjt_api_doubao'
 branch_labels = None
 depends_on = None
@@ -27,7 +27,7 @@ def upgrade():
           `params` json DEFAULT NULL COMMENT '任务参数（JSON 格式，implementation 特定）',
           `status` tinyint DEFAULT '0' COMMENT '状态（0-队列中, 1-处理中, 2-完成, -1-失败, -2-超时）',
           `try_count` int DEFAULT '0' COMMENT '轮询尝试次数',
-          `max_attempts` int DEFAULT '25' COMMENT '最大尝试次数',
+          `max_attempts` int DEFAULT '60' COMMENT '最大尝试次数',
           `error_message` text COMMENT '错误信息',
           `result_url` varchar(1000) DEFAULT NULL COMMENT '结果 URL',
           `result_data` json DEFAULT NULL COMMENT '额外结果数据（JSON 格式）',

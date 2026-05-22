@@ -383,7 +383,7 @@ app.add_middleware(
 
 
 # CDN 重定向中间件：当 /upload/ 下的媒体文件有 CDN 映射时，自动 302 到新鲜 CDN 签名 URL
-_MEDIA_EXTENSIONS = frozenset({'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.mp4', '.webm', '.mov', '.avi', '.mkv'})
+_MEDIA_EXTENSIONS = frozenset({'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.mp4', '.webm', '.mov', '.avi', '.mkv', '.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac'})
 
 @app.middleware("http")
 async def cdn_redirect_middleware(request: Request, call_next):

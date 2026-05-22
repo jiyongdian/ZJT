@@ -3240,14 +3240,43 @@ async def generate_character_reference_audio(user_id: str, world_id: str, auth_t
         if not result['success']:
             return result
 
+        runninghub_task_id = result['project_id']
+
+        # 写入异步任务表，由 scheduler 后台轮询
+        from model import AsyncTasksModel
+        from config.unified_config import AsyncTaskImplementationId
+
+        params = {
+            'character_name': character_name,
+            'style_prompt': final_style_prompt,
+            'text': final_text,
+            'world_id': world_id
+        }
+
+        try:
+            int(user_id)
+        except (ValueError, TypeError):
+            return {
+                'success': False,
+                'error': f'无效的 user_id: {user_id}'
+            }
+
+        AsyncTasksModel.create(
+            implementation=AsyncTaskImplementationId.RUNNINGHUB_AUDIO,
+            user_id=int(user_id),
+            external_task_id=runninghub_task_id,
+            params=params,
+            max_attempts=25
+        )
+
         return {
             'success': True,
-            'runninghub_task_id': result['project_id'],
+            'runninghub_task_id': runninghub_task_id,
             'character_name': character_name,
             'style_prompt': final_style_prompt,
             'text': final_text,
             'status': 'submitted',
-            'message': f'已为角色 "{character_name}" 提交参考音频生成任务 (task_id={result["project_id"]})，请使用 check_reference_audio_status 查询生成状态'
+            'message': f'已为角色 "{character_name}" 提交参考音频生成任务 (task_id={runninghub_task_id})，请使用 check_reference_audio_status 查询生成状态'
         }
 
     except Exception as e:
