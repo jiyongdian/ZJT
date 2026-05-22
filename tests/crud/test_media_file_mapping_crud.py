@@ -153,8 +153,8 @@ class TestMediaFileMappingCRUD(DatabaseTestCase):
 
         self.assertGreaterEqual(len(result), 3)
 
-    def test_unique_constraint_on_entity_type_source_id(self):
-        """测试 (entity_type, source_id) 唯一约束"""
+    def test_unique_constraint_on_entity_type_source_id_label(self):
+        """测试 (entity_type, source_id, label) 唯一约束"""
         self.insert_fixture('media_file_mapping', {
             'user_id': 1,
             'local_path': 'upload/unique_test_1.jpg',
@@ -163,10 +163,11 @@ class TestMediaFileMappingCRUD(DatabaseTestCase):
             'entity_type': 0,
             'source_id': 5,
             'media_type': 'image',
+            'label': 'test_label',
             'status': 'active'
         })
 
-        # 尝试插入相同 (entity_type, source_id) 的记录，应该失败
+        # 尝试插入相同 (entity_type, source_id, label) 的记录，应该失败
         with self.assertRaises(Exception):
             self.insert_fixture('media_file_mapping', {
                 'user_id': 2,
@@ -176,6 +177,7 @@ class TestMediaFileMappingCRUD(DatabaseTestCase):
                 'entity_type': 0,
                 'source_id': 5,
                 'media_type': 'image',
+                'label': 'test_label',
                 'status': 'active'
             })
 
