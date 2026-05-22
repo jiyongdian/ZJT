@@ -99,7 +99,7 @@
         </div>
       </div>
       <div class="add-btn-container" id="addBtnContainer">
-        <button class="add-btn" id="addBtn" title="添加">+</button>
+        <button class="add-btn" id="addBtn" data-i18n="add_btn_title:title">+</button>
         <div class="add-menu" id="addMenu">
           <div class="add-menu-group">
             <div class="add-menu-label" data-i18n="add_node">添加节点</div>
@@ -185,7 +185,7 @@
             </div>
           </div>
           <div class="add-menu-group">
-            <div class="add-menu-label"><span data-i18n="add_materials">添加素材</span> <a href="javascript:void(0)" id="agentBtnMaterial" style="color: #3b82f6; text-decoration: none; font-size: 12px; font-weight: 600; margin-left: 8px; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'" title="AI生成剧本，人物，场景，道具" data-i18n="one_click_generate">一键生成素材</a></div>
+            <div class="add-menu-label"><span data-i18n="add_materials">添加素材</span> <a href="javascript:void(0)" id="agentBtnMaterial" style="color: #3b82f6; text-decoration: none; font-size: 12px; font-weight: 600; margin-left: 8px; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'" data-i18n="one_click_generate:title ai_generate_materials:title">一键生成素材</a></div>
             <div class="add-menu-item" id="menuAddCharacter">
               <svg class="add-menu-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                 <circle cx="12" cy="8" r="3" stroke="currentColor" stroke-width="2"/>
@@ -307,9 +307,8 @@
         <div style="display: flex; flex-direction: column; gap: 16px;">
           <div class="field">
             <label class="label" style="color: #0f172a;" data-i18n="style_name_label">
-              ${window.t ? window.t('style_name_label') : '画风名称'}
-              <a href="/image-style-guide" target="_blank" style="margin-left: 8px; font-size: 12px; color: #3b82f6; text-decoration: none; font-weight: normal; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'" title="${window.t ? window.t('style_guide_link') : '查看画风说明'}" data-i18n="style_guide_link">${window.t ? window.t('style_guide_link') : '查看画风说明'}</a>
-              <span style="margin-left: 8px; font-size: 12px; color: #6b7280; font-weight: normal;" data-i18n="style_guide_intro">${window.t ? window.t('style_guide_intro') : '如果您不知道如何描述画风，可以在其他网站寻找画风。例如：'}<a href="https://bq3mlz1jiae.feishu.cn/wiki/LBw5w7zZaiuQhuk4sT7c42zcn0e#share-NKbIdQfDdouM8xx3LxIcZrPHn7c" target="_blank" style="color: #3b82f6; text-decoration: none; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'">即梦</a>。</span>
+              <a href="/image-style-guide" target="_blank" style="margin-left: 8px; font-size: 12px; color: #3b82f6; text-decoration: none; font-weight: normal; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'" data-i18n="style_guide_link:title style_guide_link"></a>
+              <span style="margin-left: 8px; font-size: 12px; color: #6b7280; font-weight: normal;" data-i18n="style_guide_intro"><a href="https://bq3mlz1jiae.feishu.cn/wiki/LBw5w7zZaiuQhuk4sT7c42zcn0e#share-NKbIdQfDdouM8xx3LxIcZrPHn7c" target="_blank" style="color: #3b82f6; text-decoration: none; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'">即梦</a>。</span>
             </label>
             <input type="text" id="styleNameInput" list="stylePresets" placeholder="选择或输入画风" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" data-i18n="style_placeholder:placeholder" />
             <datalist id="stylePresets">
@@ -998,22 +997,22 @@
   <script src="/js/canvas.js"></script>
   <!-- 意见反馈按钮 -->
   <div class="feedback-btn-wrapper" id="feedbackBtnWrapper">
-    <button class="feedback-btn" id="feedbackBtn" type="button" onclick="handleFeedbackBtnClick(event)" data-i18n="feedback_modal">${window.t ? window.t('feedback_modal') : '意见反馈'}</button>
-    <button class="feedback-btn-delete" id="feedbackMinimizeBtn" type="button" onclick="minimizeFeedbackBtn(); event.stopPropagation(); event.preventDefault();" title="最小化">×</button>
+    <button class="feedback-btn" id="feedbackBtn" type="button" onclick="handleFeedbackBtnClick(event)" data-i18n="feedback_modal"></button>
+    <button class="feedback-btn-delete" id="feedbackMinimizeBtn" type="button" onclick="minimizeFeedbackBtn(); event.stopPropagation(); event.preventDefault();" data-i18n="feedback_minimize_title:title">×</button>
   </div>
 
   <!-- 意见反馈弹窗 -->
   <div class="modal-overlay" id="feedbackModal" aria-hidden="true" onclick="if(event.target === this){ this.classList.remove('active'); }">
     <div class="feedback-modal-card" role="dialog" aria-modal="true" aria-labelledby="feedbackModalTitle">
-      <button type="button" class="feedback-modal-close" aria-label="关闭" data-i18n="close:aria-label" onclick="document.getElementById('feedbackModal').classList.remove('active')">×</button>
-      <h2 class="modal-title" id="feedbackModalTitle" data-i18n="feedback_modal">${window.t ? window.t('feedback_modal') : '意见反馈'}</h2>
+      <button type="button" class="feedback-modal-close" data-i18n="close:aria-label" onclick="document.getElementById('feedbackModal').classList.remove('active')">×</button>
+      <h2 class="modal-title" id="feedbackModalTitle" data-i18n="feedback_modal"></h2>
       <div class="feedback-modal-content">
-        <p style="color: var(--muted); margin-bottom: 16px;">扫描二维码添加微信，提交您的宝贵意见</p>
-        <img src="/files/二维码.jpg" alt="微信二维码" class="feedback-qr-code">
-        <p class="feedback-tip">我们会认真听取每一条反馈，持续改进产品体验</p>
+        <p style="color: var(--muted); margin-bottom: 16px;" data-i18n="feedback_scan_tip"></p>
+        <img src="/files/二维码.jpg" class="feedback-qr-code" data-i18n="feedback_qr_code_alt:alt">
+        <p class="feedback-tip" data-i18n="feedback_message"></p>
       </div>
       <div class="modal-actions">
-        <button type="button" class="btn" onclick="document.getElementById('feedbackModal').classList.remove('active')">关闭</button>
+        <button type="button" class="btn" data-i18n="feedback_close_btn" onclick="document.getElementById('feedbackModal').classList.remove('active')"></button>
       </div>
     </div>
   </div>

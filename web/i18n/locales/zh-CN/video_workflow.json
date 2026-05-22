@@ -643,6 +643,14 @@
   "recharge_return_packages": "返回选择套餐",
   "recharge_order_failed": "创建支付订单失败",
   "computing_power": "算力",
-  "computing_power_per_hundred": "元/百算力"
+  "computing_power_per_hundred": "元/百算力",
+  "feedback_scan_tip": "扫描二维码添加微信，提交您的宝贵意见",
+  "feedback_qr_code_alt": "微信二维码",
+  "feedback_message": "我们会认真听取每一条反馈，持续改进产品体验",
+  "feedback_minimize_title": "最小化",
+  "feedback_close_btn": "关闭",
+  "add_btn_title": "添加",
+  "ai_generate_materials": "AI生成剧本，人物，场景，道具",
+  "style_guide_link": "查看画风说明"
 }
 

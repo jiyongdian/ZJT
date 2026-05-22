@@ -643,6 +643,13 @@
   "recharge_return_packages": "Return to select packages",
   "recharge_order_failed": "Create payment order failed",
   "computing_power": "Computing Power",
-  "computing_power_per_hundred": "¥/100 computing power"
+  "computing_power_per_hundred": "¥/100 computing power",
+  "feedback_scan_tip": "Scan the QR code to add WeChat and submit your valuable feedback",
+  "feedback_qr_code_alt": "WeChat QR Code",
+  "feedback_message": "We listen carefully to every piece of feedback and continuously improve the product experience",
+  "feedback_minimize_title": "Minimize",
+  "feedback_close_btn": "Close",
+  "add_btn_title": "Add",
+  "ai_generate_materials": "AI-generate scripts, characters, scenes, props"
 }
 
