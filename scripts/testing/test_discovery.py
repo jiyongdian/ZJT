@@ -30,6 +30,8 @@ CATEGORY_PATTERNS: Dict[str, List[str]] = {
     'services': ['services'],
     'script_writer_core': ['script_writer_core'],
     'enterprise': ['enterprise'],
+    'model': ['model'],
+    'task': ['task'],
     # 特殊：db_connection 不使用目录遍历
     'db_connection': [],
 }
@@ -93,6 +95,8 @@ def get_category_display_name(category: str) -> str:
         'agents': 'Agents',
         'services': 'Services',
         'script_writer_core': 'Script Writer Core',
+        'model': 'Model',
+        'task': 'Task',
         'db_connection': 'DB Connection',
     }
     return display_names.get(category, category)
