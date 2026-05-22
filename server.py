@@ -483,6 +483,17 @@ async def get_config_by_key(
     })
 
 
+def _extract_filename_from_url(url: str) -> Optional[str]:
+    """从 URL 路径中提取文件名，若无法提取则返回 None（由调用方决定降级逻辑）"""
+    url_path = urlparse(url).path
+    name = url_path.rstrip('/').rsplit('/', 1)[-1] if '/' in url_path else url_path
+
+    if name and '.' in name:
+        return name
+
+    return None
+
+
 @app.get("/api/download")
 @require_permission("file:download")
 async def download_image(
@@ -491,8 +502,10 @@ async def download_image(
     filename: str = Query(None, description="Custom filename")
 ):
     """
-    Proxy download for media files (images/videos) to handle CORS and provide proper download headers
-    优先使用本地缓存文件，如果不存在则从远程下载
+    媒体文件下载接口，支持三种模式：
+    1. 本地路径 /upload/cache/ → FileResponse 直接返回
+    2. CDN 域名匹配 → 302 重定向（不占服务器带宽）
+    3. 其他外部 URL → 代理下载 StreamingResponse
     """
     try:
         # 检查是否为本地缓存文件路径
@@ -531,8 +544,25 @@ async def download_image(
                 )
             else:
                 raise HTTPException(status_code=404, detail="本地缓存文件不存在")
-        
-        # 远程文件，使用代理下载
+
+        # ========== 模式2: CDN 域名匹配 → 重新签名并 302 重定向 ==========
+        from utils.cdn_util import CDNUtil
+        is_cdn = CDNUtil.is_cdn_url(url)
+        logger.info(f"[download] CDN检测: url={url[:100]}, is_cdn={is_cdn}, filename={filename}")
+        if is_cdn:
+            if not filename:
+                filename = _extract_filename_from_url(url)
+            if filename:
+                signed_url = CDNUtil.get_signed_download_url(url, attname=filename)
+                if signed_url:
+                    logger.info(f"[download] CDN 签名重定向: filename={filename}, signed_url={signed_url[:150]}")
+                    return RedirectResponse(url=signed_url, status_code=302)
+                else:
+                    logger.warning(f"[download] CDN 签名URL生成失败，降级到代理下载: url={url[:100]}")
+            else:
+                logger.warning(f"[download] CDN URL但无法提取文件名，降级到代理下载: url={url[:100]}")
+
+        # ========== 模式3: 其他远程 URL → 代理下载 ==========
         async with httpx.AsyncClient(timeout=300.0) as client:
             response = await client.get(url)
             response.raise_for_status()
@@ -583,25 +613,45 @@ async def download_image(
 @require_permission("file:proxy_image")
 async def proxy_image(request: Request, url: str = Query(..., description="Image URL to proxy")):
     """
-    Proxy image requests to avoid CORS issues in Electron.
-    如果 cloud_path 在 media_file_mapping 中存在，会自动重新授权（刷新签名 URL）。
+    图片代理接口，支持三种模式：
+    1. 本地路径 /upload/cache/ → FileResponse 直接返回
+    2. CDN 域名匹配 → 重新签名后 302 重定向（不占带宽）
+    3. 其他外部 URL → 代理请求 StreamingResponse
     """
-    # 检查是否需要刷新签名
-    from utils.cdn_util import CDNUtil
-    new_url = CDNUtil.refresh_url_if_needed(url)
-    if new_url:
-        return RedirectResponse(url=new_url, status_code=302)
-
-    # 回退：直接代理请求
     try:
+        # ========== 模式1: 本地缓存文件 ==========
+        if url.startswith('/upload/cache/'):
+            from pathlib import Path
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            file_path = Path(current_dir) / url.lstrip('/')
+
+            if file_path.exists() and file_path.is_file():
+                ext = file_path.suffix.lower()
+                content_type = f'image/{ext[1:]}' if ext in ['.png', '.jpg', '.jpeg', '.gif', '.webp'] else 'application/octet-stream'
+                return FileResponse(
+                    path=str(file_path),
+                    media_type=content_type,
+                    headers={"Cache-Control": "public, max-age=31536000, immutable"}
+                )
+            else:
+                raise HTTPException(status_code=404, detail="本地缓存文件不存在")
+
+        # ========== 模式2: CDN 域名匹配 → 重新签名后 302 重定向 ==========
+        from utils.cdn_util import CDNUtil
+        if CDNUtil.is_cdn_url(url):
+            signed_url = CDNUtil.get_signed_download_url(url, attname=None)
+            if signed_url:
+                logger.info(f"[proxy-image] CDN 签名重定向: signed_url={signed_url[:150]}")
+                return RedirectResponse(url=signed_url, status_code=302)
+            else:
+                logger.warning(f"[proxy-image] CDN 签名URL生成失败，降级到代理: url={url[:100]}")
+
+        # ========== 模式3: 其他远程 URL → 代理请求 ==========
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.get(url)
             response.raise_for_status()
 
-            # Get content type
             content_type = response.headers.get('content-type', 'image/png')
-
-            # Return content as streaming response
             content_stream = BytesIO(response.content)
 
             return StreamingResponse(

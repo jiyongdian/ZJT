@@ -228,7 +228,8 @@ class QiniuFileStorage(BaseFileStorage):
     def get_download_url(
         self,
         key: str,
-        expires: int = 7200
+        expires: int = 7200,
+        attname: Optional[str] = None
     ) -> str:
         """
         获取私有下载URL（带签名）
@@ -236,11 +237,14 @@ class QiniuFileStorage(BaseFileStorage):
         Args:
             key: 文件在存储中的唯一标识
             expires: URL有效期（秒），默认1小时
+            attname: 下载时的自定义文件名（参与签名，触发 Content-Disposition: attachment）
 
         Returns:
             str: 带签名的下载URL
         """
         base_url = self.get_public_url(key)
+        if attname:
+            base_url = f"{base_url}?attname={attname}"
         return self._auth.private_download_url(base_url, expires=expires)
 
     def get_public_url(self, key: str) -> str:
