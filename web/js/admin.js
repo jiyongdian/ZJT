@@ -32,7 +32,7 @@ const PROVIDER_DEFINITIONS = [
         icon: '🔥',
         docUrl: 'https://console.volcengine.com/ark',
         lazyRecommended: false,
-        displayOrder: 3,
+        displayOrder: 4,
         baseName: 'huoshan',
         isOfficialAPI: false,
         impacts: ['剧本创作', 'AI对话'],
@@ -50,7 +50,7 @@ const PROVIDER_DEFINITIONS = [
         icon: '☁️',
         docUrl: 'https://yw.perseids.cn/register?aff=hE0h',
         lazyRecommended: true,
-        displayOrder: 2,
+        displayOrder: 1,
         baseName: 'ywapi',
         isOfficialAPI: true,
         showInCategories: ['llm', 'image', 'video'],  // 在所有三个分类中显示
@@ -108,8 +108,8 @@ const PROVIDER_DEFINITIONS = [
         category: 'llm',
         icon: '🧠',
         docUrl: 'https://dashscope.console.aliyun.com/apiKey',
-        lazyRecommended: true,
-        displayOrder: 1,
+        lazyRecommended: false,
+        displayOrder: 3,
         baseName: 'qwen',
         isOfficialAPI: false,
         impacts: ['剧本创作', 'AI对话', '剧本拆分'],
@@ -127,8 +127,8 @@ const PROVIDER_DEFINITIONS = [
         category: 'llm',
         icon: '🔍',
         docUrl: 'https://platform.deepseek.com/api_keys',
-        lazyRecommended: false,
-        displayOrder: 7,
+        lazyRecommended: true,
+        displayOrder: 2,
         baseName: 'deepseek',
         isOfficialAPI: false,
         impacts: ['剧本创作', 'AI对话', '剧本拆分'],
@@ -1791,6 +1791,7 @@ const AdminApp = {
             this.quickConfigModal.testResults = {};
             this.quickConfigModal.saveLoading = {};
             this.quickConfigModal.leftPanelOpen = true;
+            this.quickConfigModal.quickSelected = false;
 
             // 从后端加载现有配置值
             try {
@@ -1824,9 +1825,14 @@ const AdminApp = {
                                     this.quickConfigModal.providerFormData[providerId][fieldId] = value;
                                     this.quickConfigModal.originalValues[providerId][fieldId] = value;
 
-                                    // 自动选中已有配置的服务商
-                                    if (value && !this.quickConfigModal.selectedProviderIds.includes(providerId)) {
-                                        this.quickConfigModal.selectedProviderIds.push(providerId);
+                                    // 自动选中已有配置的服务商（仅当必填字段有值时才选中）
+                                    if (value && !this.quickConfigModal.selectedProviderIds.includes(providerId) && !this.quickConfigModal.quickSelected) {
+                                        const provider = PROVIDER_DEFINITIONS.find(p => p.id === providerId);
+                                        const field = provider && provider.fields.find(f => f.id === fieldId);
+                                        // 只有必填字段（如 api_key）有值才自动选中，忽略 base_url 等可选字段
+                                        if (field && field.required) {
+                                            this.quickConfigModal.selectedProviderIds.push(providerId);
+                                        }
                                     }
                                 }
                             }
@@ -1889,6 +1895,7 @@ const AdminApp = {
 
         // 快速设置：只选择智剧通API
         handleQuickSetup() {
+            this.quickConfigModal.quickSelected = true;
             this.quickConfigModal.selectedProviderIds = ['ywapi'];
             this.quickConfigModal.originalValues = this.quickConfigModal.originalValues || {};
             if (!this.quickConfigModal.providerFormData['ywapi']) {
