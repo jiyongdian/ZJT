@@ -57,17 +57,6 @@ class TaskProvider:
     ZJT = 'zjt'
 
 
-# ============ 异步任务实现 ID 常量 ============
-class AsyncTaskImplementationId:
-    """异步任务实现 ID 常量（用于 async_tasks 表的 implementation 字段）"""
-    UNKNOWN = 0
-    RUNNINGHUB_AUDIO = 1  # RunningHub 音频生成
-    # 后续可添加其他异步任务实现：
-    # RUNNINGHUB_VIDEO = 2
-    # CUSTOM_LLM_TASK = 3
-    # etc.
-
-
 @dataclass
 class PowerModifier:
     """
@@ -157,7 +146,10 @@ class ImplementationConfig:
 
     def is_enabled(self, driver_key: Optional[str] = None) -> bool:
         """
-        检查实现方是否启用（优先从数据库读取）
+        检查实现方是否启用
+
+        优先级：代码 enabled=False 为硬禁用（不可被数据库覆盖）
+        代码 enabled=True 时，再从数据库读取启用状态
 
         Args:
             driver_key: 业务驱动名称，用于数据库查询。如果不传则回退到代码默认值
@@ -165,6 +157,10 @@ class ImplementationConfig:
         Returns:
             True 如果启用，False 如果禁用
         """
+        # 代码级硬禁用：enabled=False 时强制禁止，不可被数据库覆盖
+        if not self.enabled:
+            return False
+
         if driver_key:
             try:
                 from model.implementation_power import ImplementationPowerModel
@@ -173,8 +169,7 @@ class ImplementationConfig:
                 pass
             except Exception:
                 pass
-        # 回退到代码默认值
-        return self.enabled
+        return True
 
     def get_display_name(self) -> str:
         """
@@ -380,14 +375,14 @@ class UnifiedTaskConfig:
         获取实现方列表及其算力信息
 
         对于支持 API 聚合器的任务，动态添加所有可用的聚合器实现方
-        只返回 enabled=True 的实现方
+        过滤条件：已注册 + 已启用（数据库） + 依赖配置键有值（运行时）
         按 sort_order 排序（排序值小的在前）
         """
         result = []
         impl_names = self.implementations if self.implementations else ([self.implementation] if self.implementation else [])
 
         for impl_name in impl_names:
-            # 检查驱动是否已注册（未注册的驱动不可用，如站点配置缺失的情况）
+            # 检查驱动是否已注册
             from task.visual_drivers import VideoDriverFactory
             if not VideoDriverFactory.is_driver_registered(impl_name):
                 continue
@@ -397,6 +392,15 @@ class UnifiedTaskConfig:
                 # 检查实现方是否启用（从数据库读取）
                 if not impl_config.is_enabled(self.driver_name):
                     continue
+
+                # 检查依赖的配置键是否都有值（运行时动态检查，支持热更新）
+                if impl_config.required_config_keys:
+                    try:
+                        from utils.config_checker import check_implementation_config_exists
+                        if not check_implementation_config_exists(impl_name):
+                            continue
+                    except Exception:
+                        pass
 
                 # 获取排序值（从数据库读取，如果没有则使用默认值）
                 try:
