@@ -93,7 +93,7 @@
                         <div class="history-menu-item" @click="startRename(session)">
                             <span>✏️</span> 重命名
                         </div>
-                        <div class="history-menu-item danger" @click="deleteSession(session.id)">
+                        <div class="history-menu-item danger" :class="{ disabled: sessions.length <= 1 }" @click="sessions.length <= 1 ? null : deleteSession(session.id)">
                             <span>🗑️</span> 删除
                         </div>
                     </div>
@@ -3116,6 +3116,10 @@
 
             async function deleteSession(sessionId) {
                 activeMenuId.value = null;
+                if (sessions.value.length <= 1) {
+                    showError('至少保留一个对话');
+                    return;
+                }
                 if (!confirm('确定要删除这个对话吗？')) return;
                 try {
                     const response = await fetch(`/api/session/${sessionId}`, {
@@ -3244,6 +3248,9 @@
                         messages.value = history.filter(filterHistoryMessage).map(parseHistoryMessage);
                         await recoverPendingTasks();
                     }
+                } else {
+                    // 没有历史会话，自动新建一个
+                    await createSession();
                 }
 
                 // 页面已就绪，先解除 loading 状态
