@@ -4454,8 +4454,12 @@
       
       const workflowId = getWorkflowIdFromUrl();
       if(workflowId){
-        await loadWorkflow(workflowId);
-        startAutoSave();
+        const loadSuccess = await loadWorkflow(workflowId);
+        if(loadSuccess){
+          startAutoSave();
+          await fetchWorkflowConfig();
+          startPolling();
+        }
       }
     })();
 

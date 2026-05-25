@@ -5606,9 +5606,29 @@ async def update_video_workflow(
         if update_request.workflow_ratio is not None:
             update_fields['workflow_ratio'] = update_request.workflow_ratio
         
+        # 安全防线：防止空节点覆盖有效数据
+        if 'workflow_data' in update_fields:
+            new_wd = update_fields['workflow_data']
+            new_nodes = new_wd.get('nodes', []) if isinstance(new_wd, dict) else None
+            if new_nodes is not None and len(new_nodes) == 0:
+                existing_wd = workflow.workflow_data
+                if isinstance(existing_wd, str):
+                    try:
+                        existing_wd = json.loads(existing_wd)
+                    except Exception:
+                        existing_wd = None
+                if existing_wd and isinstance(existing_wd, dict):
+                    existing_nodes = existing_wd.get('nodes', [])
+                    if existing_nodes and len(existing_nodes) > 0:
+                        logger.warning(
+                            f"[安全防线] 拒绝空节点覆盖工作流 {workflow_id}，"
+                            f"现有节点数: {len(existing_nodes)}"
+                        )
+                        del update_fields['workflow_data']
+
         if update_fields:
             VideoWorkflowModel.update(workflow_id, **update_fields)
-        
+
         return JSONResponse({
             "code": 0,
             "message": "更新成功"
