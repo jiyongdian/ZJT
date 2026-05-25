@@ -3274,6 +3274,15 @@ def generate_character_reference_audio(user_id: str, world_id: str, auth_token: 
         dict: 包含 runninghub_task_id 的结果，可用于 check_reference_audio_status 查询
     """
     try:
+        # 检查 RunningHub API Key 是否已配置
+        from config.config_util import get_dynamic_config_value
+        runninghub_api_key = get_dynamic_config_value("runninghub", "api_key", default="")
+        if not runninghub_api_key:
+            return {
+                'success': False,
+                'error': '参考音频生成功能依赖 RunningHub 服务，但尚未配置 RunningHub API Key。请在系统设置的快速配置中填写 runninghub.api_key 后重试。'
+            }
+
         # 验证必填字段
         if not character_name or not isinstance(character_name, str):
             return {
