@@ -1251,7 +1251,14 @@ async def set_session_model(request: Request, session_id: str, model_request: Mo
         # 持久化到数据库 - 同时更新过期时间以延长 session 有效期
         from datetime import datetime, timedelta
         from model.chat_sessions import ChatSessionsModel
-        expires_at = datetime.now() + timedelta(hours=24)
+        from config.constant import SessionHistoryConstants
+        session_entity = ChatSessionsModel.get_by_session_id(session_id)
+        expire_hours = SessionHistoryConstants.SESSION_EXPIRE_HOURS_MARKETING
+        if session_entity and session_entity.session_type == 2:
+            expire_hours = SessionHistoryConstants.SESSION_EXPIRE_HOURS_MARKETING
+        else:
+            expire_hours = SessionHistoryConstants.SESSION_EXPIRE_HOURS_SCRIPT
+        expires_at = datetime.now() + timedelta(hours=expire_hours)
         ChatSessionsModel.update_model(
             session_id=session_id,
             model=model_request.model,
