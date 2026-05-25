@@ -3117,7 +3117,7 @@
                     }
                 });
 
-                // 设置默认选中模型：deepseek-v4-flash (deepseek) → deepseek-v4-flash (zjt_api) → qwen3.5-plus → 第一个启用的模型
+                // 设置默认选中模型：deepseek-v4-flash (deepseek) → qwen3.5-plus (zjt_api) → qwen3.5-plus (其他) → 第一个启用的模型
                 let defaultModel = null;
 
                 const allOptions = selector.querySelectorAll('option');
@@ -3131,37 +3131,25 @@
                         break;
                     }
                 }
-                // 第二轮：查找 zjt_api 供应商下的 deepseek-v4-flash
-                if (!defaultModel) {
-                    for (let i = 0; i < allOptions.length; i++) {
-                        const option = allOptions[i];
-                        if (!option.disabled && option.value && option.value.includes('deepseek-v4-flash')
-                            && option.dataset.vendorName === LLMVendor.ZJT_API) {
-                            defaultModel = option;
-                            console.log('[模型选择] 选择默认模型: deepseek-v4-flash (zjt_api)');
-                            break;
-                        }
-                    }
-                }
-                // 第三轮：查找 aliyun 供应商下的 qwen3.5-plus
+                // 第二轮：查找 zjt_api 供应商下的 qwen3.5-plus
                 if (!defaultModel) {
                     for (let i = 0; i < allOptions.length; i++) {
                         const option = allOptions[i];
                         if (!option.disabled && option.value && option.value.includes('qwen3.5-plus')
-                            && option.dataset.vendorName === LLMVendor.ALIYUN) {
+                            && option.dataset.vendorName === LLMVendor.ZJT_API) {
                             defaultModel = option;
-                            console.log('[模型选择] 选择默认模型: qwen3.5-plus (aliyun)');
+                            console.log('[模型选择] 选择默认模型: qwen3.5-plus (zjt_api)');
                             break;
                         }
                     }
                 }
-                // 第四轮：查找其他供应商的 qwen3.5-plus
+                // 第三轮：查找其他供应商的 qwen3.5-plus
                 if (!defaultModel) {
                     for (let i = 0; i < allOptions.length; i++) {
                         const option = allOptions[i];
                         if (!option.disabled && option.value && option.value.includes('qwen3.5-plus')) {
                             defaultModel = option;
-                            console.log(`[模型选择] 未找到 aliyun 的 qwen3.5-plus，选择其他供应商: ${option.dataset.vendorName}`);
+                            console.log(`[模型选择] 未找到 zjt_api 的 qwen3.5-plus，选择其他供应商: ${option.dataset.vendorName}`);
                             break;
                         }
                     }
