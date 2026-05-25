@@ -412,6 +412,12 @@
         return;
       }
 
+      // 工作流未就绪，不允许保存（新建空工作流 workflowReady=true，允许保存画风等元数据）
+      if(!state.workflowReady){
+        showToast('工作流尚未加载完成，无法保存', 'warning');
+        return;
+      }
+
       saveBtn.disabled = true;
       saveBtnText.textContent = '保存中...';
 
@@ -457,8 +463,8 @@
       const workflowId = getWorkflowIdFromUrl();
       if(!workflowId) return;
       
-      // 如果没有节点，不自动保存
-      if(state.nodes.length === 0) return;
+      // 工作流未就绪或没有节点，不自动保存
+      if(!state.workflowReady || state.nodes.length === 0) return;
 
       try {
         const workflowData = serializeWorkflow();
@@ -571,7 +577,8 @@
 
     // 加载工作流
     async function loadWorkflow(workflowId){
-      if(!workflowId) return;
+      if(!workflowId) return false;
+      let success = false;
 
       try {
         const response = await fetch(`/api/video-workflow/${workflowId}`, {
@@ -642,8 +649,11 @@
           if(workflow.workflow_data){
             console.log('[加载工作流] workflow_data.defaultWorldId:', workflow.workflow_data.defaultWorldId);
             restoreWorkflow(workflow.workflow_data);
+            state.workflowReady = true;  // 恢复成功才标记就绪
             console.log('[加载工作流] 恢复后 state.defaultWorldId:', state.defaultWorldId);
           } else {
+            // 新建工作流，直接就绪
+            state.workflowReady = true;
             // 新建工作流时，workflow_data为空，需要应用主表的workflow_ratio
             if(window.__loadedWorkflowRatio){
               state.ratio = window.__loadedWorkflowRatio;
@@ -692,6 +702,7 @@
               }
             }
           }
+          success = true;
         } else {
           showToast(result.message || '加载工作流失败', 'error');
         }
@@ -709,6 +720,8 @@
           await checkAndAutoCreateScriptNode();
         }, 100);
       }
+
+      return success;
     }
 
     // ========== 自动创建剧本节点 ==========
@@ -1095,6 +1108,27 @@
             }
           });
         }, 100);
+      } catch(error) {
+        console.error('[恢复工作流] 恢复失败:', error);
+        // workflowReady 保持 false，所有保存路径都不会写入
+        // 清理已创建的不完整 DOM 节点
+        try {
+          for(const node of [...state.nodes]){
+            const el = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
+            if(el) el.remove();
+          }
+        } catch(cleanupError) {
+          console.error('[恢复工作流] 清理DOM失败:', cleanupError);
+        }
+        state.nodes = [];
+        state.connections = [];
+        state.imageConnections = [];
+        state.firstFrameConnections = [];
+        state.videoConnections = [];
+        state.referenceConnections = [];
+        state.audioConnections = [];
+        showToast('工作流恢复失败，请刷新页面重试', 'error');
+        throw error;  // 重新抛出，让 loadWorkflow 感知恢复失败
       } finally {
         state.isRestoringHistory = wasRestoring;
         if(!wasRestoring){
@@ -2466,21 +2500,9 @@
       }
     }
     
-    // 页面加载完成后启动轮询
+    // 轮询不再自动启动，改为 loadWorkflow 成功后由 events.js 调用 startPolling()
+    // 页面卸载时停止轮询
     if(typeof window !== 'undefined'){
-      // 等待页面完全加载后，先获取配置再启动轮询
-      async function initPolling(){
-        await fetchWorkflowConfig();
-        startPolling();
-      }
-      
-      if(document.readyState === 'complete'){
-        initPolling();
-      } else {
-        window.addEventListener('load', initPolling);
-      }
-      
-      // 页面卸载时停止轮询
       window.addEventListener('beforeunload', stopPolling);
     }
 
