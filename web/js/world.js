@@ -130,6 +130,11 @@ async function saveDefaultWorld(workflowId, worldId) {
 
 // 将世界的画风和构图倾向保存到工作流
 async function _saveWorldStyleToWorkflow(workflowId) {
+  // 工作流未就绪或没有节点，跳过画风同步
+  if(!state.workflowReady || state.nodes.length === 0){
+    console.warn('[世界画风] 工作流未就绪，跳过画风同步');
+    return;
+  }
   try {
     const response = await fetch(`/api/video-workflow/${workflowId}`, {
       method: 'PUT',

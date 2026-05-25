@@ -50,6 +50,7 @@ logger = logging.getLogger(__name__)
 mysql_process = None
 app_process = None
 is_shutting_down = False
+_app_config = None  # 存储应用配置，供 signal_handler 使用
 
 # 是否由托盘启动器启动（托盘启动器会自行处理浏览器打开）
 # 支持命令行参数 --tray 或环境变量 TRAY_MODE=1
@@ -306,35 +307,48 @@ def check_mysql_data_dir():
         return True
 
 
-def get_mysql_port():
+def get_mysql_port(config=None):
     """
-    从 MySQL 配置文件中获取端口号
+    获取 MySQL 端口号
+    优先级：config 配置文件 > my.ini > 默认 3306
+
+    Args:
+        config: 应用配置字典（可选）
+
     Returns:
-        int: MySQL 端口号，默认为 3306
+        int: MySQL 端口号
     """
+    # 优先从 config 读取
+    if config and isinstance(config, dict):
+        db_config = config.get('database', {})
+        if isinstance(db_config, dict):
+            port = db_config.get('port')
+            if port is not None:
+                try:
+                    return int(port)
+                except (TypeError, ValueError):
+                    logger.warning(f"config 中 database.port 值无效: {port}")
+
+    # 从 my.ini 读取
     try:
         current_dir = get_current_dir()
         mysql_ini = os.path.join(current_dir, 'bin', 'mysql', 'my.ini')
 
-        if not os.path.exists(mysql_ini):
-            logger.warning(f"MySQL配置文件不存在: {mysql_ini}，使用默认端口3306")
-            return 3306
+        if os.path.exists(mysql_ini):
+            with open(mysql_ini, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith('port='):
+                        try:
+                            return int(line.split('=')[1])
+                        except (IndexError, ValueError):
+                            logger.warning(f"解析端口号失败: {line}")
 
-        with open(mysql_ini, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith('port='):
-                    try:
-                        return int(line.split('=')[1])
-                    except (IndexError, ValueError):
-                        logger.warning(f"解析端口号失败: {line}")
-                        return 3306
-
-        logger.info("未在配置文件中找到端口配置，使用默认端口3306")
-        return 3306
+        logger.info("未找到端口配置，使用默认端口3306")
     except Exception as e:
         logger.error(f"读取MySQL端口配置时出错: {e}")
-        return 3306
+
+    return 3306
 
 
 def check_port_in_use(port):
@@ -351,9 +365,14 @@ def check_port_in_use(port):
         return False
 
 
-def update_mysql_ini_paths():
+def update_mysql_ini_paths(config=None):
     """
-    更新 my.ini 中的路径为当前项目路径
+    更新 my.ini 中的路径和端口为当前项目配置
+    端口优先从 config 的 database.port 读取，未配置时默认 3306
+
+    Args:
+        config: 应用配置字典（可选）
+
     Returns:
         tuple: (bool, str) - (是否成功, 消息)
     """
@@ -362,61 +381,92 @@ def update_mysql_ini_paths():
         mysql_dir = os.path.join(current_dir, 'bin', 'mysql')
         mysql_ini = os.path.join(mysql_dir, 'my.ini')
         mysql_ini_template = os.path.join(mysql_dir, 'my.ini.template')
-        
+
         # 将Windows路径转换为正斜杠格式（MySQL配置文件要求）
         basedir = mysql_dir.replace('\\', '/')
         datadir = os.path.join(current_dir, 'data', 'mysql').replace('\\', '/')
-        
+
+        # 从 config 获取端口，未配置时默认 3306
+        port = get_mysql_port(config)
+
         # 如果存在模板文件，使用模板
         if os.path.exists(mysql_ini_template):
             logger.info(f"使用模板文件更新MySQL配置: {mysql_ini_template}")
             with open(mysql_ini_template, 'r', encoding='utf-8') as f:
                 template_content = f.read()
-            
+
             # 替换占位符
             ini_content = template_content.replace('{BASEDIR}', basedir)
             ini_content = ini_content.replace('{DATADIR}', datadir)
-            
+            ini_content = ini_content.replace('{PORT}', str(port))
+
+            # 兜底：兼容旧模板中没有 {PORT} 占位符的情况（如 port=3306）
+            updated_lines = []
+            for line in ini_content.split('\n'):
+                if line.strip().startswith('port='):
+                    updated_lines.append(f'port={port}')
+                else:
+                    updated_lines.append(line)
+            ini_content = '\n'.join(updated_lines)
+
             # 写入 my.ini
             with open(mysql_ini, 'w', encoding='utf-8') as f:
                 f.write(ini_content)
-            
-            logger.info(f"MySQL配置文件已更新: basedir={basedir}, datadir={datadir}")
+
+            logger.info(f"MySQL配置文件已更新: basedir={basedir}, datadir={datadir}, port={port}")
             return True, "MySQL配置文件路径更新成功"
-        
+
         # 如果没有模板文件，直接修改现有的 my.ini
         if not os.path.exists(mysql_ini):
             return False, f"MySQL配置文件不存在: {mysql_ini}"
-        
+
         logger.info(f"直接修改MySQL配置文件: {mysql_ini}")
         with open(mysql_ini, 'r', encoding='utf-8') as f:
             lines = f.readlines()
-        
-        # 更新路径
+
+        # 更新路径和端口
         updated_lines = []
+        port_updated = False
         for line in lines:
-            if line.strip().startswith('basedir='):
+            stripped = line.strip()
+            if stripped.startswith('basedir='):
                 updated_lines.append(f'basedir={basedir}\n')
-            elif line.strip().startswith('datadir='):
+            elif stripped.startswith('datadir='):
                 updated_lines.append(f'datadir={datadir}\n')
+            elif stripped.startswith('port='):
+                updated_lines.append(f'port={port}\n')
+                port_updated = True
             else:
                 updated_lines.append(line)
-        
+
+        # 如果 my.ini 中没有 port 行，在 [mysqld] 段后添加
+        if not port_updated:
+            new_lines = []
+            for line in updated_lines:
+                new_lines.append(line)
+                if line.strip() == '[mysqld]':
+                    new_lines.append(f'port={port}\n')
+            updated_lines = new_lines
+
         # 写回文件
         with open(mysql_ini, 'w', encoding='utf-8') as f:
             f.writelines(updated_lines)
-        
-        logger.info(f"MySQL配置文件已更新: basedir={basedir}, datadir={datadir}")
+
+        logger.info(f"MySQL配置文件已更新: basedir={basedir}, datadir={datadir}, port={port}")
         return True, "MySQL配置文件路径更新成功"
-        
+
     except Exception as e:
         logger.error(f"更新MySQL配置文件时出错: {e}")
         return False, f"更新MySQL配置文件失败: {e}"
 
 
-def start_mysql_service():
+def start_mysql_service(config=None):
     """
     启动 MySQL 服务
+
+    Args:
+        config: 应用配置字典（可选，用于读取端口配置）
+
     Returns:
         tuple: (bool, str, bool) - (是否成功启动, 消息, 是否是首次初始化)
     """
@@ -427,18 +477,18 @@ def start_mysql_service():
         if not mysql_exists:
             return False, mysql_paths, False
 
-        # 更新 my.ini 中的路径为当前项目路径
-        logger.info("正在更新MySQL配置文件路径...")
-        success, message = update_mysql_ini_paths()
+        # 更新 my.ini 中的路径和端口为当前项目配置
+        logger.info("正在更新MySQL配置文件...")
+        success, message = update_mysql_ini_paths(config)
         if not success:
-            logger.warning(f"更新MySQL配置文件路径失败: {message}，继续尝试启动")
+            logger.warning(f"更新MySQL配置文件失败: {message}，继续尝试启动")
         else:
             logger.info(message)
 
         mysqld_exe = mysql_paths['mysqld_exe']
         mysql_ini = mysql_paths['mysql_ini']
 
-        port = get_mysql_port()
+        port = get_mysql_port(config)
         is_first_init = check_mysql_data_dir()
 
         if check_port_in_use(port):
@@ -512,7 +562,7 @@ def init_database(config):
     - 导入 baseline_with_db.sql
     """
     try:
-        mysql_port = get_mysql_port()
+        mysql_port = get_mysql_port(config)
         target_password = config['database']['password']
 
         logger.info("开始尝试连接MySQL...")
@@ -658,13 +708,13 @@ def init_database(config):
         return False, f"初始化数据库时发生错误: {e}"
 
 
-def check_mysql_status():
+def check_mysql_status(config=None):
     """
     检查 MySQL 是否正在运行
     """
     global mysql_process
 
-    port = get_mysql_port()
+    port = get_mysql_port(config)
 
     if not check_port_in_use(port):
         return False
@@ -761,9 +811,12 @@ def start_app_service():
         return False, f"启动应用服务时发生错误: {e}"
 
 
-def monitor_services():
+def monitor_services(config=None):
     """
     监控 MySQL 和应用服务，异常退出时自动重启
+
+    Args:
+        config: 应用配置字典（可选，传递给子函数）
     """
     global is_shutting_down
 
@@ -774,7 +827,7 @@ def monitor_services():
 
     while not is_shutting_down:
         try:
-            if not check_mysql_status():
+            if not check_mysql_status(config):
                 if is_shutting_down:
                     break
 
@@ -784,7 +837,7 @@ def monitor_services():
                     break
 
                 logger.warning(f"检测到MySQL服务异常，尝试重启... (第{mysql_restart_count}次)")
-                success, message, _ = start_mysql_service()
+                success, message, _ = start_mysql_service(config)
                 if success:
                     logger.info(f"MySQL服务重启成功: {message}")
                 else:
@@ -819,9 +872,12 @@ def monitor_services():
             time.sleep(5)
 
 
-def stop_mysql_gracefully():
+def stop_mysql_gracefully(config=None):
     """
     使用 mysqladmin shutdown 优雅停止 MySQL
+
+    Args:
+        config: 应用配置字典（可选，用于读取端口配置）
     """
     try:
         mysql_exists, mysql_paths = check_mysql_path()
@@ -836,9 +892,10 @@ def stop_mysql_gracefully():
             logger.warning(f"mysqladmin 不存在: {mysqladmin}")
             return False
 
-        config, _ = load_config()
+        if config is None:
+            config, _ = load_config()
         password = config['database']['password'] if config and 'database' in config else ""
-        port = get_mysql_port()
+        port = get_mysql_port(config)
 
         cmd = [mysqladmin, '-uroot', f'-P{port}', 'shutdown']
         if password:
@@ -869,9 +926,12 @@ def stop_mysql_gracefully():
         return False
 
 
-def cleanup():
+def cleanup(config=None):
     """
     清理函数，停止所有服务
+
+    Args:
+        config: 应用配置字典（可选，传递给 stop_mysql_gracefully）
     """
     global mysql_process, app_process, is_shutting_down
 
@@ -892,7 +952,7 @@ def cleanup():
 
     if mysql_process is not None:
         logger.info("正在停止MySQL服务...")
-        if not stop_mysql_gracefully():
+        if not stop_mysql_gracefully(config):
             try:
                 logger.info("尝试强制终止MySQL进程...")
                 mysql_process.terminate()
@@ -920,8 +980,9 @@ def signal_handler(signum, frame):
     """
     信号处理函数
     """
+    global _app_config
     logger.info(f"收到信号 {signum}，正在退出...")
-    cleanup()
+    cleanup(_app_config)
     sys.exit(0)
 
 
@@ -931,7 +992,6 @@ def main():
     """
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    atexit.register(cleanup)
 
     # 启动时清理残留的死亡进程 PID
     cleanup_dead_pids_on_startup()
@@ -953,6 +1013,11 @@ def main():
         logger.error("无法加载配置文件，退出")
         sys.exit(1)
 
+    # 保存到全局变量，供 signal_handler 和 atexit 使用
+    global _app_config
+    _app_config = config
+    atexit.register(lambda: cleanup(_app_config))
+
     # 检查并更新 ffmpeg/ffprobe 路径
     config = check_and_update_ffmpeg_paths(config, config_file)
 
@@ -967,7 +1032,7 @@ def main():
     logger.info("MySQL路径检查成功")
 
     logger.info("正在启动MySQL服务...")
-    success, message, is_first_init = start_mysql_service()
+    success, message, is_first_init = start_mysql_service(config)
     logger.info(message)
     if not success:
         logger.error("MySQL服务启动失败，退出")
@@ -992,16 +1057,8 @@ def main():
     # 从配置文件读取服务器 URL 和端口号
     server_config = config.get('server', {})
     server_port = server_config.get('port', 9003)
-    # 优先使用 server.host，如果没有则用 localhost + port
-    server_url = server_config.get('host')
-    if server_url:
-        # 确保 server_url 以 http:// 或 https:// 开头
-        if not server_url.startswith(('http://', 'https://')):
-            url = f"http://{server_url}"
-        else:
-            url = server_url
-    else:
-        url = f"http://localhost:{server_port}"
+    # 使用 server.port 构建浏览器 URL，避免 server.host 中端口不一致
+    url = f"http://localhost:{server_port}"
     
     # 等待服务真正可用后再打开浏览器（托盘模式由托盘启动器处理）
     if not tray_mode:
@@ -1016,11 +1073,11 @@ def main():
 
     logger.info("所有服务已就绪，开始监控...")
     try:
-        monitor_services()
+        monitor_services(config)
     except KeyboardInterrupt:
         logger.info("收到退出信号")
     finally:
-        cleanup()
+        cleanup(config)
 
     logger.info("Windows启动脚本退出")
 

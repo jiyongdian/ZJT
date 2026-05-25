@@ -93,7 +93,7 @@
                         <div class="history-menu-item" @click="startRename(session)">
                             <span>✏️</span> 重命名
                         </div>
-                        <div class="history-menu-item danger" @click="deleteSession(session.id)">
+                        <div class="history-menu-item danger" :class="{ disabled: sessions.length <= 1 }" @click="sessions.length <= 1 ? null : deleteSession(session.id)">
                             <span>🗑️</span> 删除
                         </div>
                     </div>
@@ -242,11 +242,31 @@
                         <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
                             <!-- 媒体缩略图条（统一显示所有上传的媒体） -->
                             <div v-if="mediaItems.length > 0" style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
-                                <div v-for="item in mediaItems" :key="item.id" style="position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; background: #f0f4f8; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 11px; color: #475569; flex-shrink: 0;">
-                                    <img v-if="item.thumbnailUrl" :src="item.thumbnailUrl" style="width: 24px; height: 24px; border-radius: 4px; object-fit: cover;" />
-                                    <span v-else style="font-size: 14px;">{{ item.type === 'video' ? '🎬' : '🎵' }}</span>
+                                <div v-for="item in mediaItems" :key="item.id" style="position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 8px; font-size: 11px; flex-shrink: 0;"
+                                     :style="{
+                                         background: item.uploadFailed ? '#fef2f2' : item.uploading ? '#fffbeb' : '#f0f4f8',
+                                         border: item.uploadFailed ? '1px solid #fca5a5' : item.uploading ? '1px solid #fcd34d' : '1px solid #e2e8f0',
+                                         color: item.uploadFailed ? '#dc2626' : '#475569'
+                                     }">
+                                    <div style="position: relative; width: 24px; height: 24px; flex-shrink: 0;">
+                                        <img v-if="item.thumbnailUrl" :src="item.thumbnailUrl"
+                                             style="width: 24px; height: 24px; border-radius: 4px; object-fit: cover;"
+                                             :style="{ opacity: item.uploading ? 0.5 : 1 }" />
+                                        <span v-else style="font-size: 14px;">{{ item.type === 'video' ? '🎬' : '🎵' }}</span>
+                                        <div v-if="item.uploading" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;">
+                                            <svg width="14" height="14" viewBox="0 0 24 24">
+                                                <circle cx="12" cy="12" r="10" fill="none" stroke="#f59e0b" stroke-width="3" stroke-dasharray="31.4 31.4" stroke-linecap="round">
+                                                    <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/>
+                                                </circle>
+                                            </svg>
+                                        </div>
+                                        <div v-if="item.uploadFailed" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;">
+                                            <span style="font-size: 14px; color: #dc2626; font-weight: bold;">!</span>
+                                        </div>
+                                    </div>
                                     <span>{{ item.displayName }}</span>
-                                    <span v-if="item.uploading" style="color: #94a3b8;">...</span>
+                                    <span v-if="item.uploading" style="color: #d97706; font-size: 10px;">上传中</span>
+                                    <span v-if="item.uploadFailed" style="color: #dc2626; font-size: 10px;">失败</span>
                                     <div style="cursor: pointer; color: #94a3b8; margin-left: 2px; font-size: 13px;" @click.stop="removeMediaItem(item.id)">×</div>
                                 </div>
                             </div>
@@ -1206,6 +1226,76 @@
                 return hasUploadedImage.value && uploadedImageFile.value && !uploadedImageServerUrl.value && !uploadedImageUrl.value?.startsWith('http');
             });
 
+            // ===== 图片 URL 校验与等待公共函数 =====
+            function isHttpUrl(url) {
+                return typeof url === 'string' && url.startsWith('http');
+            }
+
+            function getCurrentImageServerUrl() {
+                const candidates = [
+                    uploadedImageServerUrl.value,
+                    agentImageFiles.value.length > 0 ? agentImageFiles.value[0].serverUrl : null,
+                    uploadedImageUrl.value
+                ];
+                return candidates.find(isHttpUrl) || null;
+            }
+
+            /**
+             * 等待 Agent 多图全部上传完成（uploading → false）
+             * 返回 true=全部完成 / false=超时
+             */
+            async function waitForAgentImagesUploaded(timeoutMs = 10000) {
+                if (agentImageFiles.value.every(img => !img.uploading)) return true;
+                return new Promise(resolve => {
+                    let resolved = false;
+                    let unwatch = null;
+                    let timer = null;
+
+                    const done = (result) => {
+                        if (resolved) return;
+                        resolved = true;
+                        if (unwatch) unwatch();
+                        if (timer) clearTimeout(timer);
+                        resolve(result);
+                    };
+
+                    unwatch = Vue.watch(
+                        () => agentImageFiles.value.every(img => !img.uploading),
+                        (ready) => { if (ready) done(true); }
+                    );
+                    timer = setTimeout(() => done(false), timeoutMs);
+                });
+            }
+
+            /**
+             * 等待单图服务器 HTTP URL 就绪
+             * 返回 HTTP URL 或 null（不会返回 blob: / 空 / 非字符串）
+             */
+            async function waitForImageServerUrl(timeoutMs = 10000) {
+                const url = getCurrentImageServerUrl();
+                if (url) return url;
+
+                return new Promise(resolve => {
+                    let resolved = false;
+                    let unwatch = null;
+                    let timer = null;
+
+                    const done = (result) => {
+                        if (resolved) return;
+                        resolved = true;
+                        if (unwatch) unwatch();
+                        if (timer) clearTimeout(timer);
+                        resolve(result);
+                    };
+
+                    unwatch = Vue.watch(
+                        () => getCurrentImageServerUrl(),
+                        (url) => { if (url) done(url); }
+                    );
+                    timer = setTimeout(() => done(null), timeoutMs);
+                });
+            }
+
             const filteredMentionItems = Vue.computed(() => {
                 if (!mentionDropdown.value.query) return mentionableItems.value;
                 const q = mentionDropdown.value.query.toLowerCase();
@@ -1528,9 +1618,45 @@
                 const text = inputText.value.trim();
                 if (!text || isLoading.value) return;
 
-                if (hasPendingAgentImages.value) {
-                    showError('图片正在上传中或上传失败，请稍候或重新上传');
-                    return;
+                // ===== 发送前：统一等待图片上传完成 =====
+                if (selectedType.value === 'Agent 模式') {
+                    if (mediaType.value !== 'video') {
+                        // Agent 对话/音频模式：检查多图上传状态
+                        const failedImages = agentImageFiles.value.filter(img => img.uploadFailed);
+                        if (failedImages.length > 0) {
+                            showError('图片上传失败，请删除失败的图片后重新上传');
+                            return;
+                        }
+                        if (agentImageFiles.value.some(img => img.uploading)) {
+                            const ok = await waitForAgentImagesUploaded(10000);
+                            if (!ok) {
+                                showError('图片上传超时，请稍后重试');
+                                return;
+                            }
+                        }
+                        // 等待后二次校验
+                        const invalidAfterWait = agentImageFiles.value.filter(img => img.uploadFailed || !img.serverUrl);
+                        if (invalidAfterWait.length > 0) {
+                            showError('图片上传失败，请删除失败的图片后重新上传');
+                            return;
+                        }
+                    } else {
+                        // Agent 视频模式：等待服务器 HTTP URL 就绪
+                        const existingServerUrl = getCurrentImageServerUrl();
+                        if (hasUploadedImage.value && uploadedImageFile.value && !existingServerUrl) {
+                            // 检查是否有明确的失败标记
+                            const failedImage = agentImageFiles.value.some(img => img.uploadFailed);
+                            if (failedImage) {
+                                showError('图片上传失败，请删除失败的图片后重新上传');
+                                return;
+                            }
+                            const serverUrl = await waitForImageServerUrl(10000);
+                            if (!serverUrl) {
+                                showError('图片上传超时，请重试');
+                                return;
+                            }
+                        }
+                    }
                 }
 
                 // 如果有待回答的 verification，提交自定义回答
@@ -1605,14 +1731,12 @@
                         const displayUrl = img.serverUrl;
                         userContent += `\n\n[图片${i + 1}] <img src="${displayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${displayUrl}'" alt="图片${i + 1}">`;
                     });
-                } else if (isAgentChatPreview && mediaType.value === 'video' && hasUploadedImage.value && (uploadedImageServerUrl.value || (agentImageFiles.value.length > 0 && agentImageFiles.value[0].serverUrl) || uploadedImageUrl.value)) {
+                } else if (isAgentChatPreview && mediaType.value === 'video' && hasUploadedImage.value) {
                     // Agent 视频模式参考图预览，优先使用服务器 URL 避免 blob URL 失效
-                    const videoDisplayUrl = uploadedImageServerUrl.value || (agentImageFiles.value.length > 0 && agentImageFiles.value[0].serverUrl) || (uploadedImageUrl.value?.startsWith('http') ? uploadedImageUrl.value : '');
-                    if (!videoDisplayUrl) {
-                        showError('图片正在上传中或上传失败，请稍候或重新上传');
-                        return;
+                    const videoDisplayUrl = getCurrentImageServerUrl();
+                    if (videoDisplayUrl) {
+                        userContent += `\n\n<img src="${videoDisplayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${videoDisplayUrl}'" alt="参考图">`;
                     }
-                    userContent += `\n\n<img src="${videoDisplayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${videoDisplayUrl}'" alt="参考图">`;
                 } else if (hasUploadedImage.value && uploadedImageUrl.value) {
                     userContent += `\n\n<img src="${uploadedImageUrl.value}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${uploadedImageUrl.value}'" alt="参考图">`;
                 }
@@ -2147,62 +2271,39 @@
                     // 收集图片 URL（统一使用 HTTP URL）
                     const imageUrls = [];
                     if (isAgentChat && agentImageFiles.value.length > 0) {
-                        // Agent 对话模式：收集 HTTP URL
-                        const allUploaded = agentImageFiles.value.every(img => !img.uploading && img.serverUrl);
-                        if (!allUploaded) {
-                            showError('图片正在上传中，请稍候');
+                        // Agent 对话模式：防御校验 + 收集 HTTP URL
+                        const invalidImages = agentImageFiles.value.filter(img => !isHttpUrl(img.serverUrl));
+                        if (invalidImages.length > 0) {
+                            showError('图片上传未完成，请稍后重试');
                             isLoading.value = false;
                             return;
                         }
                         agentImageFiles.value.forEach(img => {
-                            if (img.serverUrl) {
-                                imageUrls.push(img.serverUrl);
-                            }
+                            imageUrls.push(img.serverUrl);
                         });
                         console.log('[Agent] 发送图片 URL:', imageUrls.length, '张', imageUrls);
                     } else if (isAgentVideo && hasUploadedImage.value) {
-                        // Agent 视频模式：等待服务器上传完成获取 HTTP URL
-                        const existingServerUrl = uploadedImageServerUrl.value || (agentImageFiles.value.length > 0 && agentImageFiles.value[0].serverUrl) || null;
-                        if (uploadedImageFile.value && !existingServerUrl && !uploadedImageUrl.value?.startsWith('http')) {
-                            const uploadOk = await new Promise(resolve => {
-                                let waited = 0;
-                                const check = setInterval(() => {
-                                    if (uploadedImageServerUrl.value || (agentImageFiles.value.length > 0 && agentImageFiles.value[0].serverUrl)) { clearInterval(check); resolve(true); }
-                                    waited += 200;
-                                    if (waited >= 10000) { clearInterval(check); resolve(false); }
-                                }, 200);
-                            });
-                            if (!uploadOk) {
-                                showError('图片上传超时，请重试');
-                                isLoading.value = false;
-                                return;
-                            }
-                        }
-                        const finalServerUrl = uploadedImageServerUrl.value || (agentImageFiles.value.length > 0 && agentImageFiles.value[0].serverUrl) || null;
+                        // Agent 视频模式：handleSend() 已等待 URL 就绪，这里做防御校验
+                        const finalServerUrl = getCurrentImageServerUrl();
                         if (finalServerUrl) {
                             imageUrls.push(finalServerUrl);
-                        } else if (uploadedImageUrl.value && uploadedImageUrl.value.startsWith('http')) {
-                            imageUrls.push(uploadedImageUrl.value);
+                        } else if (uploadedImageFile.value) {
+                            showError('图片上传未完成，请稍后重试');
+                            isLoading.value = false;
+                            return;
                         }
                     } else if (hasUploadedImage.value) {
                         // VL 模式：等待服务器上传完成获取 HTTP URL
                         const serverUrl = uploadedImageServerUrl.value;
-                        if (serverUrl) {
+                        if (isHttpUrl(serverUrl)) {
                             imageUrls.push(serverUrl);
-                        } else if (uploadedImageUrl.value && uploadedImageUrl.value.startsWith('http')) {
+                        } else if (isHttpUrl(uploadedImageUrl.value)) {
                             imageUrls.push(uploadedImageUrl.value);
                         } else {
-                            // 等待上传完成（最多 10 秒）
-                            const uploadOk = await new Promise(resolve => {
-                                let waited = 0;
-                                const check = setInterval(() => {
-                                    if (uploadedImageServerUrl.value) { clearInterval(check); resolve(true); }
-                                    waited += 200;
-                                    if (waited >= 10000) { clearInterval(check); resolve(false); }
-                                }, 200);
-                            });
-                            if (uploadOk && uploadedImageServerUrl.value) {
-                                imageUrls.push(uploadedImageServerUrl.value);
+                            // 兜底等待（非 Agent 模式 handleSend 未等待）
+                            const serverUrl = await waitForImageServerUrl(10000);
+                            if (serverUrl) {
+                                imageUrls.push(serverUrl);
                             } else {
                                 showError('图片上传超时，请重试');
                                 isLoading.value = false;
@@ -2213,6 +2314,12 @@
 
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 300000);
+
+                    // 安全校验：只允许 HTTP URL，过滤 blob: / 空 / 非字符串
+                    const validImageUrls = imageUrls.filter(isHttpUrl);
+                    if (imageUrls.length > 0 && validImageUrls.length < imageUrls.length) {
+                        console.warn('[安全] 过滤掉非 HTTP 图片 URL:', imageUrls.filter(u => !isHttpUrl(u)));
+                    }
 
                     // 1. 创建任务
                     // 构建图片偏好（auto 分辨率不传）
@@ -2231,7 +2338,7 @@
                         body: JSON.stringify({
                             message: text,
                             auth_token: authToken.value,
-                            image_urls: imageUrls.length > 0 ? imageUrls : undefined,
+                            image_urls: validImageUrls.length > 0 ? validImageUrls : undefined,
                             model: selectedLLMModel.value ? selectedLLMModel.value.name : '',
                             model_id: selectedLLMModel.value ? selectedLLMModel.value.id : undefined,
                             vendor_id: selectedLLMModel.value ? (selectedLLMModel.value.vendor_id || 1) : 1,
@@ -3009,6 +3116,10 @@
 
             async function deleteSession(sessionId) {
                 activeMenuId.value = null;
+                if (sessions.value.length <= 1) {
+                    showError('至少保留一个对话');
+                    return;
+                }
                 if (!confirm('确定要删除这个对话吗？')) return;
                 try {
                     const response = await fetch(`/api/session/${sessionId}`, {
@@ -3137,6 +3248,9 @@
                         messages.value = history.filter(filterHistoryMessage).map(parseHistoryMessage);
                         await recoverPendingTasks();
                     }
+                } else {
+                    // 没有历史会话，自动新建一个
+                    await createSession();
                 }
 
                 // 页面已就绪，先解除 loading 状态
@@ -3598,24 +3712,18 @@
                         }
                         console.log('图片上传成功:', data.url);
                     } else {
-                        const item = mediaItems.value.find(m => m.fileUrl === previewUrl);
-                        if (item) {
-                            item.uploading = false;
-                            item.uploadFailed = true;
-                            mediaItems.value = [...mediaItems.value];
-                        }
                         console.error('图片上传失败:', data.error);
-                        showError('图片上传失败: ' + (data.error || '未知错误'));
+                        if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+                        removeMediaItemByFileUrl(previewUrl);
+                        clearSingleImageState(previewUrl);
+                        showError('图片上传失败，请重新上传');
                     }
                 }).catch(err => {
-                    const item = mediaItems.value.find(m => m.fileUrl === previewUrl);
-                    if (item) {
-                        item.uploading = false;
-                        item.uploadFailed = true;
-                        mediaItems.value = [...mediaItems.value];
-                    }
                     console.error('图片上传异常:', err);
-                    showError('图片上传异常，请重试');
+                    if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+                    removeMediaItemByFileUrl(previewUrl);
+                    clearSingleImageState(previewUrl);
+                    showError('图片上传异常，请重新上传');
                 });
             }
 
@@ -3639,17 +3747,25 @@
                         console.log('[Agent] 图片上传成功:', data.url);
                     } else {
                         imgItem.uploading = false;
-                        imgItem.uploadFailed = true;
-                        syncMediaItemUploadState(imgItem, null, false, true);
                         console.error('[Agent] 图片上传失败:', data.error);
-                        showError('图片上传失败: ' + (data.error || '未知错误'));
+                        if (imgItem.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(imgItem.previewUrl);
+                        const idx = agentImageFiles.value.indexOf(imgItem);
+                        if (idx >= 0) agentImageFiles.value.splice(idx, 1);
+                        const mediaItem = mediaItems.value.find(m => m.agentImageItem === imgItem || m.fileUrl === imgItem.previewUrl);
+                        if (mediaItem) removeMediaItem(mediaItem.id);
+                        updateAgentImageState();
+                        showError('图片上传失败，请重新上传');
                     }
                 } catch (err) {
                     imgItem.uploading = false;
-                    imgItem.uploadFailed = true;
-                    syncMediaItemUploadState(imgItem, null, false, true);
                     console.error('[Agent] 图片上传异常:', err);
-                    showError('图片上传异常');
+                    if (imgItem.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(imgItem.previewUrl);
+                    const idx = agentImageFiles.value.indexOf(imgItem);
+                    if (idx >= 0) agentImageFiles.value.splice(idx, 1);
+                    const mediaItem = mediaItems.value.find(m => m.agentImageItem === imgItem || m.fileUrl === imgItem.previewUrl);
+                    if (mediaItem) removeMediaItem(mediaItem.id);
+                    updateAgentImageState();
+                    showError('图片上传异常，请重新上传');
                 }
             }
 
@@ -3663,6 +3779,34 @@
                 item.uploading = uploading;
                 item.uploadFailed = uploadFailed;
                 mediaItems.value = [...mediaItems.value];
+            }
+
+            // 上传失败自动清理辅助函数
+            function removeMediaItemByFileUrl(fileUrl) {
+                const item = mediaItems.value.find(m => m.fileUrl === fileUrl);
+                if (item) removeMediaItem(item.id);
+            }
+
+            function clearSingleImageState(previewUrl) {
+                if (uploadedImageUrl.value === previewUrl) {
+                    uploadedImageUrl.value = '';
+                    uploadedImageFile.value = null;
+                    uploadedImageServerUrl.value = '';
+                    hasUploadedImage.value = false;
+                }
+            }
+
+            function updateAgentImageState() {
+                if (agentImageFiles.value.length > 0) {
+                    const last = agentImageFiles.value[agentImageFiles.value.length - 1];
+                    uploadedImageUrl.value = last.previewUrl;
+                    uploadedImageFile.value = last.file;
+                    hasUploadedImage.value = true;
+                } else {
+                    hasUploadedImage.value = false;
+                    uploadedImageUrl.value = '';
+                    uploadedImageFile.value = null;
+                }
             }
 
             // Agent 模式：删除单张图片
@@ -4084,22 +4228,18 @@
                         }
                         console.log('图片上传成功:', data.url);
                     } else {
-                        const item = mediaItems.value.find(m => m.fileUrl === previewUrl);
-                        if (item) {
-                            item.uploading = false;
-                            item.uploadFailed = true;
-                            mediaItems.value = [...mediaItems.value];
-                        }
                         console.error('图片上传失败:', data.error);
+                        if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+                        removeMediaItemByFileUrl(previewUrl);
+                        clearSingleImageState(previewUrl);
+                        showError('图片上传失败，请重新上传');
                     }
                 }).catch(err => {
-                    const item = mediaItems.value.find(m => m.fileUrl === previewUrl);
-                    if (item) {
-                        item.uploading = false;
-                        item.uploadFailed = true;
-                        mediaItems.value = [...mediaItems.value];
-                    }
                     console.error('图片上传异常:', err);
+                    if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+                    removeMediaItemByFileUrl(previewUrl);
+                    clearSingleImageState(previewUrl);
+                    showError('图片上传异常，请重新上传');
                 });
             }
             function selectType(type) {

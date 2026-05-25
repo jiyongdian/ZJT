@@ -112,6 +112,93 @@ class CDNUtil:
             return local_url, CDNStatus.ERROR
 
     @staticmethod
+    def is_cdn_url(url: str) -> bool:
+        """
+        判断 URL 是否属于已配置的 CDN 域名
+
+        Args:
+            url: 待检测的完整 URL
+
+        Returns:
+            True 如果 URL 的 host 匹配任一已配置的 CDN 域名
+        """
+        from urllib.parse import urlparse
+        from config.config_util import get_dynamic_config_value
+
+        if not url:
+            return False
+
+        try:
+            parsed = urlparse(url)
+            if not parsed.netloc:
+                return False
+
+            cdn_domain = get_dynamic_config_value("file_storage", "qiniu_long_term", "cdn_domain", default="")
+            qiniu_domain = get_dynamic_config_value("file_storage", "qiniu", "cdn_domain", default="")
+            valid_hosts = {cdn_domain, qiniu_domain} - {""}
+
+            return parsed.netloc in valid_hosts
+        except Exception:
+            return False
+
+    @staticmethod
+    def get_signed_download_url(url: str, attname: str) -> Optional[str]:
+        """
+        根据 CDN URL 重新生成带 attname 的签名下载链接
+        attname 参与签名，使 CDN 返回 Content-Disposition: attachment
+
+        Args:
+            url: 原始 CDN URL
+            attname: 下载时的自定义文件名
+
+        Returns:
+            带 attname 签名的下载 URL，失败返回 None
+        """
+        from urllib.parse import urlparse
+        from config.config_util import get_dynamic_config_value
+        from utils.file_storage.qiniu_storage import QiniuFileStorage
+
+        try:
+            parsed = urlparse(url)
+            host = parsed.netloc
+            # 提取文件 key（路径部分，去掉前导 /）
+            key = parsed.path.lstrip('/')
+
+            # 根据域名匹配对应的存储配置
+            qiniu_long_term_domain = get_dynamic_config_value("file_storage", "qiniu_long_term", "cdn_domain", default="")
+            qiniu_domain = get_dynamic_config_value("file_storage", "qiniu", "cdn_domain", default="")
+
+            if host == qiniu_long_term_domain and qiniu_long_term_domain:
+                access_key = get_dynamic_config_value("file_storage", "qiniu_long_term", "access_key")
+                secret_key = get_dynamic_config_value("file_storage", "qiniu_long_term", "secret_key")
+                bucket_name = get_dynamic_config_value("file_storage", "qiniu_long_term", "bucket_name")
+                cdn_dom = qiniu_long_term_domain
+            elif host == qiniu_domain and qiniu_domain:
+                access_key = get_dynamic_config_value("file_storage", "qiniu", "access_key")
+                secret_key = get_dynamic_config_value("file_storage", "qiniu", "secret_key")
+                bucket_name = get_dynamic_config_value("file_storage", "qiniu", "bucket_name")
+                cdn_dom = qiniu_domain
+            else:
+                logger.warning(f"[get_signed_download_url] 未匹配到 CDN 配置: host={host}")
+                return None
+
+            if not (access_key and secret_key and bucket_name and cdn_dom):
+                logger.warning(f"[get_signed_download_url] CDN 存储配置不完整: host={host}")
+                return None
+
+            storage = QiniuFileStorage(
+                access_key=access_key,
+                secret_key=secret_key,
+                bucket_name=bucket_name,
+                cdn_domain=cdn_dom
+            )
+            # attname 参与签名，有效期 28 小时
+            return storage.get_download_url(key, expires=100800, attname=attname)
+        except Exception as e:
+            logger.error(f"[get_signed_download_url] 生成签名下载 URL 失败: {e}")
+            return None
+
+    @staticmethod
     def refresh_url_if_needed(url: str) -> Optional[str]:
         """
         检查 URL 是否需要刷新签名，如果是则返回新签名的 URL

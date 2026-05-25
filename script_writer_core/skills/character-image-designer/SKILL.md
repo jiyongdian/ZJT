@@ -1,7 +1,7 @@
 ---
 name: 角色形象设计师
-description: 角色形象设计师专门负责管理和生成角色的视觉形象。它能够扫描所有角色，识别缺少参考图像的角色，并批量生成角色的参考图像。
-allowed-tools: ["read_world", "list_character_jsons", "read_character_json", "generate_text_to_image", "generate_4grid_character_images", "get_text_to_image_model_info", "get_task_status"]
+description: 角色形象设计师专门负责管理和生成角色的视觉形象和音色。它能够扫描所有角色，识别缺少参考图像或音色的角色，并批量生成角色的参考图像和音色配置。
+allowed-tools: ["read_world", "list_character_jsons", "read_character_json", "generate_text_to_image", "generate_4grid_character_images", "get_text_to_image_model_info", "get_task_status", "generate_character_reference_audio", "check_reference_audio_status"]
 ---
 
 # 角色形象设计师 (Character Image Designer)
@@ -645,4 +645,94 @@ if not result.get("success"):
 - 角色信息读取状态
 - 任务冲突检查结果
 - 图像生成任务提交状态
+- 音色配置状态
 - 预计完成时间（如果可用）
+
+---
+
+## 🎙️ 角色音色管理
+
+### 功能概述
+除了视觉形象，角色形象设计师还负责为角色生成参考音频（音色）。使用 RunningHub API 生成平静、自然的参考音频，存储到角色的 `default_voice` 字段。参考音频用于后续的语音合成（TTS），使角色具有独特的声音特征。
+
+### 音色管理工具
+
+| 工具 | 功能 | 使用场景 |
+|------|------|----------|
+| `generate_character_reference_audio` | 为角色生成参考音频 | 使用 RunningHub API 自动生成平静、自然的参考音频 |
+| `check_reference_audio_status` | 查询音频生成状态 | 检查 RunningHub 任务进度，成功后自动更新角色 |
+
+### 音色管理工作流程
+
+#### 1. 扫描角色音色状态
+```
+步骤1: 调用 list_character_jsons() 获取所有角色列表
+步骤2: 对每个角色调用 read_character_json() 读取详细信息
+步骤3: 检查每个角色的 default_voice 字段
+步骤4: 分类：
+  - ✅ 已有音色：default_voice 字段不为空
+  - ❌ 缺少音色：default_voice 字段为空或不存在
+```
+
+#### 2. 为角色生成参考音频
+
+```python
+# 自动生成参考音频（根据角色设定构建提示词）
+result = generate_character_reference_audio(
+    character_name="陈风"
+)
+
+# 查询生成状态（成功后会自动更新角色的 default_voice 字段）
+status = check_reference_audio_status(
+    runninghub_task_id=result['runninghub_task_id'],
+    character_name="陈风"
+)
+```
+
+#### 3. 批量音色生成
+```
+对于缺少音色的角色：
+1. 读取角色列表
+2. 对每个角色调用 generate_character_reference_audio()
+3. 记录返回的 runninghub_task_id
+4. 定期调用 check_reference_audio_status() 查询状态
+5. 成功后角色的 default_voice 字段会自动更新
+```
+
+### 参考音频生成示例
+
+```python
+# 为角色生成参考音频（使用默认提示词，强调平静、自然的语气）
+result = generate_character_reference_audio(
+    character_name="陈风"
+)
+print(f"任务已提交: {result['runninghub_task_id']}")
+print(f"风格提示词: {result['style_prompt']}")
+print(f"文本内容: {result['text']}")
+
+# 查询生成状态
+status = check_reference_audio_status(
+    runninghub_task_id=result['runninghub_task_id'],
+    character_name="陈风"
+)
+if status['status'] == 'SUCCESS':
+    print(f"参考音频已生成: {status['audio_url']}")
+    print(f"角色已更新: {status['character_updated']}")
+```
+
+### 自定义提示词示例
+
+```python
+# 使用自定义风格提示词
+result = generate_character_reference_audio(
+    character_name="陈风",
+    style_prompt="请生成沉稳、有力、略带沧桑感的男性声音，语速适中",
+    text="各位英雄好汉，今日齐聚一堂，实乃幸事。"
+)
+```
+
+### 注意事项
+1. **平静语气**：默认生成平静、自然、不带明显情感的参考音频
+2. **自动更新**：任务成功后会自动更新角色的 `default_voice` 字段
+3. **异步生成**：音频生成是异步的，需通过 `check_reference_audio_status` 查询结果
+4. **自定义提示词**：可以根据角色特征自定义风格提示词，但建议保持平静语气

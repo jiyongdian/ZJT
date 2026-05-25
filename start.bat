@@ -8,9 +8,22 @@ REM 设置 UTF-8 编码，解决中文路径和文件编码问题
 set PYTHONUTF8=1
 chcp 65001 >nul 2>&1
 
-REM 设置 uv 镜像源，加速大陆地区下载
-set UV_PYTHON_INSTALL_MIRROR=https://ghfast.top/https://github.com/indygreg/python-build-standalone/releases/download
-set UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
+REM 镜像源配置
+REM   UV_MIRROR     - Python install mirror: auto/ghfast/ghproxy/direct
+REM   UV_PIP_MIRROR - PyPI mirror: aliyun/tsinghua/tencent/official
+if "%UV_MIRROR%"=="" set UV_MIRROR=auto
+if "%UV_PIP_MIRROR%"=="" set UV_PIP_MIRROR=aliyun
+
+REM PyPI 镜像
+if "%UV_PIP_MIRROR%"=="aliyun" (
+    set "UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/"
+) else if "%UV_PIP_MIRROR%"=="tsinghua" (
+    set "UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple/"
+) else if "%UV_PIP_MIRROR%"=="tencent" (
+    set "UV_INDEX_URL=https://mirrors.cloud.tencent.com/pypi/simple/"
+) else if "%UV_PIP_MIRROR%"=="official" (
+    set "UV_INDEX_URL=https://pypi.org/simple/"
+)
 
 if "%comfyui_env%"=="" (
     set comfyui_env=prod
@@ -46,6 +59,62 @@ if not exist "!UV_CMD!" (
 ) else (
     echo [OK] uv found
 )
+
+REM === 预下载 Python，支持多镜像自动回退（每个镜像 180 秒超时） ===
+echo [1.2/4] Ensuring Python 3.10 is available...
+set "PYTHON_READY=0"
+set "MIRROR_IDX=0"
+set "AUTO_RETRY=1"
+set "SUCCESS_FLAG=%TEMP%\comfyui_python_ok.flag"
+
+if not "%UV_MIRROR%"=="auto" (
+    if "%UV_MIRROR%"=="ghfast" set "MIRROR_IDX=0"
+    if "%UV_MIRROR%"=="ghproxy" set "MIRROR_IDX=1"
+    if "%UV_MIRROR%"=="direct" set "MIRROR_IDX=2"
+    set "AUTO_RETRY=0"
+)
+
+:try_mirror
+if "!MIRROR_IDX!"=="0" set "MIRROR_NAME=ghfast"
+if "!MIRROR_IDX!"=="0" set "MIRROR_URL=https://ghfast.top/https://github.com/indygreg/python-build-standalone/releases/download"
+if "!MIRROR_IDX!"=="1" set "MIRROR_NAME=ghproxy"
+if "!MIRROR_IDX!"=="1" set "MIRROR_URL=https://ghproxy.cn/https://github.com/indygreg/python-build-standalone/releases/download"
+if "!MIRROR_IDX!"=="2" set "MIRROR_NAME=direct"
+if "!MIRROR_IDX!"=="2" set "MIRROR_URL="
+if "!MIRROR_IDX!"=="3" goto :mirror_all_failed
+
+del "!SUCCESS_FLAG!" 2>nul
+echo   Trying !MIRROR_NAME! mirror (180s timeout)...
+
+if not "!MIRROR_URL!"=="" goto :mirror_has_url
+powershell -ExecutionPolicy ByPass -Command "$p = New-Object System.Diagnostics.Process; $p.StartInfo.FileName = '!UV_CMD!'; $p.StartInfo.Arguments = 'python install cpython-3.10-windows-x86_64-none'; $p.StartInfo.UseShellExecute = $false; $null = $p.Start(); if (-not $p.WaitForExit(180000)) { $p.Kill() } else { if ($p.ExitCode -eq 0) { '' | Set-Content -Path '!SUCCESS_FLAG!' } }"
+goto :mirror_check
+
+:mirror_has_url
+powershell -ExecutionPolicy ByPass -Command "$p = New-Object System.Diagnostics.Process; $p.StartInfo.FileName = '!UV_CMD!'; $p.StartInfo.Arguments = 'python install cpython-3.10-windows-x86_64-none --mirror !MIRROR_URL!'; $p.StartInfo.UseShellExecute = $false; $null = $p.Start(); if (-not $p.WaitForExit(180000)) { $p.Kill() } else { if ($p.ExitCode -eq 0) { '' | Set-Content -Path '!SUCCESS_FLAG!' } }"
+
+:mirror_check
+if exist "!SUCCESS_FLAG!" (
+    set "PYTHON_READY=1"
+    del "!SUCCESS_FLAG!" 2>nul
+    echo   [OK] Python ready via !MIRROR_NAME!
+    goto :mirror_done
+)
+
+echo   [WARN] !MIRROR_NAME! failed, trying next...
+if "!AUTO_RETRY!"=="0" goto :mirror_all_failed
+set /a "MIRROR_IDX+=1"
+goto :try_mirror
+
+:mirror_all_failed
+echo [ERROR] All mirrors failed to download Python 3.10
+echo   You can set UV_MIRROR=direct and try again with a VPN
+pause
+exit /b 1
+
+:mirror_done
+echo.
+REM ==========================================
 
 REM === 启动前检查更新 ===
 echo [1.5/4] Checking for updates...

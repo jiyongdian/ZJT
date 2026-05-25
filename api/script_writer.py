@@ -17,7 +17,8 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from perseids_server.utils.permission import require_permission
 from config.config_util import get_dynamic_config_value, get_config
-from model.vendor_model import VendorModelModel
+from task.audio_task import build_character_audio_text, build_character_audio_style_prompt
+from llm.llm_client_factory import get_llm_client
 
 # ==================== 加载 API 配置 ====================
 def _load_api_config():
@@ -816,6 +817,18 @@ class SubmitDatabaseRequest(BaseModel):
 class CharacterSaveRequest(BaseModel):
     content: Dict[str, Any]
 
+class CharacterReferenceAudioRequest(BaseModel):
+    world_id: int
+    character_id: Optional[int] = None
+    character_name: Optional[str] = None
+    character_data: Optional[Dict[str, Any]] = None
+    style_prompt: Optional[str] = None
+    text: Optional[str] = None
+    # LLM 模型信息（从前端 model-selector 获取）
+    model: Optional[str] = None
+    model_id: Optional[int] = None
+    vendor_id: Optional[int] = None
+
 class ScriptSaveRequest(BaseModel):
     content: Dict[str, Any]
 
@@ -1238,7 +1251,14 @@ async def set_session_model(request: Request, session_id: str, model_request: Mo
         # 持久化到数据库 - 同时更新过期时间以延长 session 有效期
         from datetime import datetime, timedelta
         from model.chat_sessions import ChatSessionsModel
-        expires_at = datetime.now() + timedelta(hours=24)
+        from config.constant import SessionHistoryConstants
+        session_entity = ChatSessionsModel.get_by_session_id(session_id)
+        expire_hours = SessionHistoryConstants.SESSION_EXPIRE_HOURS_MARKETING
+        if session_entity and session_entity.session_type == 2:
+            expire_hours = SessionHistoryConstants.SESSION_EXPIRE_HOURS_MARKETING
+        else:
+            expire_hours = SessionHistoryConstants.SESSION_EXPIRE_HOURS_SCRIPT
+        expires_at = datetime.now() + timedelta(hours=expire_hours)
         ChatSessionsModel.update_model(
             session_id=session_id,
             model=model_request.model,
@@ -1814,9 +1834,10 @@ async def submit_to_database(request: SubmitDatabaseRequest):
                         other_info = char_data.get('other_info')
                         reference_image = char_data.get('reference_image')
                         reference_images = char_data.get('reference_images')
+                        default_voice = char_data.get('default_voice')
 
                         # 使用 create_or_update 避免并发竞态导致的重复创建
-                        CharacterModel.create_or_update(
+                        char_id = CharacterModel.create_or_update(
                             world_id=world_id,
                             name=name,
                             user_id=user_id,
@@ -1827,8 +1848,31 @@ async def submit_to_database(request: SubmitDatabaseRequest):
                             behavior=behavior,
                             other_info=other_info,
                             reference_image=reference_image,
-                            reference_images=reference_images
+                            reference_images=reference_images,
+                            default_voice=default_voice
                         )
+                        # 确保 CDN mapping（图片 + 音频）
+                        try:
+                            from utils.media_mapping_util import ensure_entity_image_mapping
+                            from model.media_file_mapping import MediaFileEntity
+                            if reference_image:
+                                ensure_entity_image_mapping(
+                                    user_id=user_id,
+                                    image_url=reference_image,
+                                    entity_type=MediaFileEntity.CHARACTER,
+                                    entity_id=char_id,
+                                    label="image"
+                                )
+                            if default_voice:
+                                ensure_entity_image_mapping(
+                                    user_id=user_id,
+                                    image_url=default_voice,
+                                    entity_type=MediaFileEntity.CHARACTER,
+                                    entity_id=char_id,
+                                    label="voice"
+                                )
+                        except Exception as e:
+                            logger.warning(f"CDN mapping for character {name} failed: {e}")
                         results['characters']['success'] += 1
                         results['total'] += 1
                     else:
@@ -1902,7 +1946,7 @@ async def submit_to_database(request: SubmitDatabaseRequest):
                                 parent_id = None
 
                         # 使用 create_or_update 避免并发竞态导致的重复创建
-                        LocationModel.create_or_update(
+                        loc_id = LocationModel.create_or_update(
                             world_id=world_id,
                             name=name,
                             user_id=user_id,
@@ -1911,6 +1955,20 @@ async def submit_to_database(request: SubmitDatabaseRequest):
                             reference_images=reference_images,
                             description=description
                         )
+                        # 确保 CDN mapping
+                        try:
+                            if reference_image:
+                                from utils.media_mapping_util import ensure_entity_image_mapping
+                                from model.media_file_mapping import MediaFileEntity
+                                ensure_entity_image_mapping(
+                                    user_id=user_id,
+                                    image_url=reference_image,
+                                    entity_type=MediaFileEntity.LOCATION,
+                                    entity_id=loc_id,
+                                    label="image"
+                                )
+                        except Exception as e:
+                            logger.warning(f"CDN mapping for location {name} failed: {e}")
                         results['locations']['success'] += 1
                         results['total'] += 1
                     else:
@@ -1930,13 +1988,27 @@ async def submit_to_database(request: SubmitDatabaseRequest):
                         reference_image = prop_data.get('reference_image')
                         
                         # 使用 create_or_update 避免并发竞态导致的重复创建
-                        PropsModel.create_or_update(
+                        prop_id = PropsModel.create_or_update(
                             world_id=world_id,
                             name=name,
                             user_id=user_id,
                             content=description,
                             reference_image=reference_image
                         )
+                        # 确保 CDN mapping
+                        try:
+                            if reference_image:
+                                from utils.media_mapping_util import ensure_entity_image_mapping
+                                from model.media_file_mapping import MediaFileEntity
+                                ensure_entity_image_mapping(
+                                    user_id=user_id,
+                                    image_url=reference_image,
+                                    entity_type=MediaFileEntity.PROPS,
+                                    entity_id=prop_id,
+                                    label="image"
+                                )
+                        except Exception as e:
+                            logger.warning(f"CDN mapping for prop {name} failed: {e}")
                         results['props']['success'] += 1
                         results['total'] += 1
                     else:
@@ -2003,6 +2075,128 @@ async def submit_to_database(request: SubmitDatabaseRequest):
 # 注意: 场景管理接口 /locations 已在 server.py 中实现，此处不再重复
 # 注意: 道具管理接口 /props 已在 server.py 中实现，此处不再重复
 # 注意: 世界管理接口 /worlds 已在 server.py 中实现，此处不再重复
+
+@router.post('/script-writer/characters/reference-audio')
+@require_permission("character:edit")
+async def generate_character_reference_audio(
+    request: Request,
+    audio_request: CharacterReferenceAudioRequest,
+    auth_token: Optional[str] = Header(None, alias="Authorization"),
+    user_id: Optional[int] = Header(None, alias="X-User-Id")
+):
+    """
+    提交角色参考音频生成任务（异步非阻塞）
+
+    提交后立即返回任务 ID，前端通过 GET /script-writer/characters/reference-audio-status/{task_id} 轮询结果
+    """
+    try:
+        if not user_id:
+            body = await request.json()
+            user_id = body.get('user_id')
+        if not user_id:
+            return JSONResponse({'success': False, 'error': '缺少用户ID'}, status_code=400)
+        character = None
+        if audio_request.character_id:
+            character = await asyncio.to_thread(CharacterModel.get_by_id, audio_request.character_id)
+        elif audio_request.character_name:
+            character = await asyncio.to_thread(CharacterModel.get_by_name, audio_request.world_id, audio_request.character_name)
+        if character and (character.world_id != audio_request.world_id or character.user_id != int(user_id)):
+            return JSONResponse({'success': False, 'error': '无权限访问该角色'}, status_code=403)
+        character_data = character.to_dict() if character else (audio_request.character_data or {})
+        if not character_data:
+            return JSONResponse({'success': False, 'error': '缺少角色数据'}, status_code=400)
+        if audio_request.character_name and not character_data.get('name'):
+            character_data['name'] = audio_request.character_name
+
+        # 构建参数
+        style_prompt = await build_character_audio_style_prompt(
+            character_data, audio_request.style_prompt,
+            model=audio_request.model, vendor_id=audio_request.vendor_id
+        )
+        text = build_character_audio_text(character_data, audio_request.text)
+
+        # 通过驱动提交任务到 RunningHub
+        from task.async_drivers.runninghub_audio_driver import RunningHubAudioDriver
+        driver = RunningHubAudioDriver()
+        submit_result = await driver.submit_task(style_prompt=style_prompt, text=text)
+
+        if not submit_result['success']:
+            return JSONResponse(submit_result, status_code=502)
+
+        runninghub_task_id = submit_result['project_id']
+
+        # 写入异步任务表，由 scheduler 后台轮询
+        from model import AsyncTasksModel
+        from config.unified_config import AsyncTaskImplementationId
+
+        # 构建任务参数（JSON 格式）
+        params = {
+            'character_id': character.id if character else None,
+            'character_name': character_data.get('name'),
+            'style_prompt': style_prompt,
+            'text': text
+        }
+
+        task_id = AsyncTasksModel.create(
+            implementation=AsyncTaskImplementationId.RUNNINGHUB_AUDIO,
+            user_id=int(user_id),
+            external_task_id=runninghub_task_id,
+            params=params,
+            max_attempts=60
+        )
+
+        return JSONResponse({
+            'success': True,
+            'task_id': task_id,
+            'runninghub_task_id': runninghub_task_id,
+            'message': '音频生成任务已提交，请通过 task_id 查询状态'
+        })
+    except Exception as e:
+        logger.error(f'生成角色参考音频失败: {str(e)}', exc_info=True)
+        return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
+
+
+@router.get('/script-writer/characters/reference-audio-status/{task_id}')
+@require_permission("character:view")
+async def get_reference_audio_status(request: Request, task_id: int):
+    """查询角色参考音频生成任务状态"""
+    try:
+        from model import AsyncTasksModel, AsyncTaskStatus
+        task = AsyncTasksModel.get_by_id(task_id)
+        if not task:
+            return JSONResponse({'success': False, 'error': '任务不存在'}, status_code=404)
+
+        if task.status == AsyncTaskStatus.COMPLETED:
+            return JSONResponse({
+                'success': True,
+                'status': 'SUCCESS',
+                'task_id': task_id,
+                'result_url': task.result_url,
+                'character_id': task.get_params_dict().get('character_id')
+            })
+        elif task.status == AsyncTaskStatus.FAILED:
+            return JSONResponse({
+                'success': True,
+                'status': 'FAILED',
+                'task_id': task_id,
+                'error': task.error_message or '音频生成失败'
+            })
+        elif task.status == AsyncTaskStatus.TIMEOUT:
+            return JSONResponse({
+                'success': True,
+                'status': 'TIMEOUT',
+                'task_id': task_id,
+                'error': '任务超时'
+            })
+        else:
+            return JSONResponse({
+                'success': True,
+                'status': 'RUNNING',
+                'task_id': task_id
+            })
+    except Exception as e:
+        logger.error(f'查询音频任务状态失败: {str(e)}')
+        return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
 
 @router.get('/world-files')
 @require_permission("world:view_files")

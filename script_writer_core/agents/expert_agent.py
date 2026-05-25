@@ -33,7 +33,8 @@ class ExpertAgent(BaseAgent, AskUserMixin):
         enable_thinking: bool = False,
         thinking_effort: str = "medium",
         task_manager: Optional[Any] = None,
-        task_id: Optional[str] = None
+        task_id: Optional[str] = None,
+        max_iterations: int = 10
     ):
         # 使用第一个技能名称作为主要标识
         primary_skill = skill_names[0] if skill_names else "unknown"
@@ -65,6 +66,7 @@ class ExpertAgent(BaseAgent, AskUserMixin):
         self.thinking_effort = thinking_effort
         self.task_manager = task_manager
         self.task_id = task_id
+        self.max_iterations = max_iterations
         
         self.history_manager = ExpertHistoryManager(
             file_manager=file_manager,
@@ -175,8 +177,10 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                 "project_ids": self.pending_project_ids
             }
     
-    def _run_task_loop(self, task_description: str, max_iterations: int = 10) -> str:
+    def _run_task_loop(self, task_description: str, max_iterations: int = None) -> str:
         """运行任务循环"""
+        if max_iterations is None:
+            max_iterations = self.max_iterations
         iteration = 0
         
         while iteration < max_iterations:

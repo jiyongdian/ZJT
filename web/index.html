@@ -707,6 +707,17 @@
   <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
   <script src="/js/task_config.js"></script>
   <script>
+  /**
+   * 构建下载 URL：CDN 地址直接下载（七牛 attname 参数指定文件名），本地路径走 /api/download 代理
+   */
+  function buildDownloadUrl(url, filename) {
+    if (url && url.startsWith('http')) {
+      const separator = url.includes('?') ? '&' : '?';
+      return `${url}${separator}attname=${encodeURIComponent(filename)}`;
+    }
+    return `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
+  }
+
   const ListPage = {
     name: 'ListPage',
     data() {
@@ -1098,10 +1109,10 @@
         const timeStr = now.getHours().toString().padStart(2, '0') + 
                        now.getMinutes().toString().padStart(2, '0');
         const filename = `digital_human_${dateStr}_${timeStr}_${index + 1}.mp4`;
-        const downloadUrl = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
+        const downloadUrl = buildDownloadUrl(url, filename);
         window.open(downloadUrl, '_blank');
       },
-      
+
       async fetchHistory(reset = true) {
         if (reset) {
           this.historyPage = 1;
@@ -1204,7 +1215,7 @@
         const timeStr = now.getHours().toString().padStart(2, '0') + 
                        now.getMinutes().toString().padStart(2, '0');
         const filename = `digital_human_history_${dateStr}_${timeStr}_${index + 1}.mp4`;
-        const downloadUrl = `/api/download?url=${encodeURIComponent(item.result_url)}&filename=${encodeURIComponent(filename)}`;
+        const downloadUrl = buildDownloadUrl(item.result_url, filename);
         window.open(downloadUrl, '_blank');
       }
     },
@@ -1559,7 +1570,7 @@
           link.click();
           document.body.removeChild(link);
         } else {
-          const downloadUrl = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
+          const downloadUrl = buildDownloadUrl(url, filename);
           window.open(downloadUrl, '_blank');
         }
       }
@@ -1849,23 +1860,23 @@
         const timeStr = now.getHours().toString().padStart(2, '0') + 
                        now.getMinutes().toString().padStart(2, '0');
         const filename = `remix_video_${dateStr}_${timeStr}_${index + 1}.mp4`;
-        const downloadUrl = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
+        const downloadUrl = buildDownloadUrl(url, filename);
         window.open(downloadUrl, '_blank');
       },
-      
+
       async fetchHistory(reset = true) {
         if (reset) {
           this.historyPage = 1;
           this.historyList = [];
         }
-        
+
         const userId = localStorage.getItem('user_id');
         if (!userId) {
           this.error = '请先登录';
           this.showHistory = true;
           return;
         }
-        
+
         this.historyLoading = true;
         try {
           const authToken = localStorage.getItem('auth_token');
@@ -1952,7 +1963,7 @@
         const timeStr = now.getHours().toString().padStart(2, '0') + 
                        now.getMinutes().toString().padStart(2, '0');
         const filename = `remix_history_${dateStr}_${timeStr}_${index + 1}.mp4`;
-        const downloadUrl = `/api/download?url=${encodeURIComponent(item.result_url)}&filename=${encodeURIComponent(filename)}`;
+        const downloadUrl = buildDownloadUrl(item.result_url, filename);
         window.open(downloadUrl, '_blank');
       }
     },
@@ -2188,10 +2199,10 @@
         const timeStr = now.getHours().toString().padStart(2, '0') + 
                        now.getMinutes().toString().padStart(2, '0');
         const filename = `enhanced_${dateStr}_${timeStr}_${index + 1}.mp4`;
-        const downloadUrl = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
+        const downloadUrl = buildDownloadUrl(url, filename);
         window.open(downloadUrl, '_blank');
       },
-      
+
       downloadHistoryVideo(item, index) {
         if (!item || !item.result_url) {
           alert('下载链接不可用');
@@ -2211,7 +2222,7 @@
         const timeStr = now.getHours().toString().padStart(2, '0') + 
                        now.getMinutes().toString().padStart(2, '0');
         const filename = `enhanced_history_${dateStr}_${timeStr}_${index + 1}.mp4`;
-        const downloadUrl = `/api/download?url=${encodeURIComponent(item.result_url)}&filename=${encodeURIComponent(filename)}`;
+        const downloadUrl = buildDownloadUrl(item.result_url, filename);
         window.open(downloadUrl, '_blank');
       },
       
@@ -2780,13 +2791,13 @@
       
       downloadImage(url, index) {
         const now = new Date();
-        const dateStr = now.getFullYear().toString() + 
-                       (now.getMonth() + 1).toString().padStart(2, '0') + 
+        const dateStr = now.getFullYear().toString() +
+                       (now.getMonth() + 1).toString().padStart(2, '0') +
                        now.getDate().toString().padStart(2, '0');
-        const timeStr = now.getHours().toString().padStart(2, '0') + 
+        const timeStr = now.getHours().toString().padStart(2, '0') +
                        now.getMinutes().toString().padStart(2, '0');
         const filename = `image_${dateStr}_${timeStr}_${index + 1}.png`;
-        const downloadUrl = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
+        const downloadUrl = buildDownloadUrl(url, filename);
         
         // 微信浏览器中直接打开图片，用户可以长按保存
         if (this.isWechatBrowser()) {
@@ -3526,13 +3537,13 @@
       
       downloadImage(url, index) {
         const now = new Date();
-        const dateStr = now.getFullYear().toString() + 
-                       (now.getMonth() + 1).toString().padStart(2, '0') + 
+        const dateStr = now.getFullYear().toString() +
+                       (now.getMonth() + 1).toString().padStart(2, '0') +
                        now.getDate().toString().padStart(2, '0');
-        const timeStr = now.getHours().toString().padStart(2, '0') + 
+        const timeStr = now.getHours().toString().padStart(2, '0') +
                        now.getMinutes().toString().padStart(2, '0');
         const filename = `text_to_image_${dateStr}_${timeStr}_${index + 1}.png`;
-        const downloadUrl = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
+        const downloadUrl = buildDownloadUrl(url, filename);
         
         if (this.isWechatBrowser()) {
           window.open(downloadUrl, '_blank');
@@ -4739,7 +4750,7 @@
                        now.getMinutes().toString().padStart(2, '0');
         const prefix = isEnhanced ? 'image_to_video_enhanced' : 'image_to_video';
         const filename = `${prefix}_${dateStr}_${timeStr}_${index + 1}.mp4`;
-        const downloadUrl = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
+        const downloadUrl = buildDownloadUrl(url, filename);
   
         const link = document.createElement('a');
         link.href = downloadUrl;
@@ -5489,7 +5500,7 @@
         const timeStr = now.getHours().toString().padStart(2, '0') + 
                        now.getMinutes().toString().padStart(2, '0');
         const filename = `ai_video_gen_${dateStr}_${timeStr}_${index + 1}.mp4`;
-        const downloadUrl = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
+        const downloadUrl = buildDownloadUrl(url, filename);
         const link = document.createElement('a');
         link.href = downloadUrl;
         link.download = filename;
@@ -5518,7 +5529,7 @@
                         now.getMinutes().toString().padStart(2, '0');
         const prefix = item.type === 5 ? 'ai_video_enhance' : 'ai_video_gen';
         const filename = `${prefix}_${dateStr}_${timeStr}.mp4`;
-        const downloadUrl = `/api/download?url=${encodeURIComponent(item.result_url)}&filename=${encodeURIComponent(filename)}`;
+        const downloadUrl = buildDownloadUrl(item.result_url, filename);
         const link = document.createElement('a');
         link.href = downloadUrl;
         link.download = filename;
@@ -6564,7 +6575,7 @@
                         now.getMinutes().toString().padStart(2, '0');
           const prefix = isEnhanced ? 'ai_script_video_enhanced' : 'ai_script_video';
           const filename = `${prefix}_${dateStr}_${timeStr}_${index + 1}.mp4`;
-          const downloadUrl = '/api/download?url=' + encodeURIComponent(url) + '&filename=' + encodeURIComponent(filename);
+          const downloadUrl = buildDownloadUrl(url, filename);
 
           const link = document.createElement('a');
           link.href = downloadUrl;
