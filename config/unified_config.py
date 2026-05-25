@@ -258,6 +258,7 @@ class UnifiedTaskConfig:
     categories: List[str] = field(default_factory=list)  # 额外分类列表
     supported_image_modes: List[str] = field(default_factory=lambda: ['first_last_frame'])  # 支持的图片模式（图生视频任务）
     default_image_mode: str = 'first_last_frame'  # 默认图片模式
+    short_key: str = ''  # 前端使用的短标识符（如 'wan22'），必须全局唯一
     supports_grid_merge: bool = False  # 是否支持宫格合并生成视频
     supports_grid_image: bool = False  # 是否支持宫格生图（一次生成多张图片）
     supports_last_frame: bool = True  # 是否支持尾帧（某些模型虽然支持首尾帧模式，但只使用首帧，忽略尾帧）
@@ -327,6 +328,7 @@ class UnifiedTaskConfig:
         result = {
             'id': self.id,
             'key': self.key,
+            'short_key': self.short_key or self.key,
             'name': self.name,
             'category': self.category,
             'categories': all_categories,  # 包含主分类和额外分类
@@ -1090,6 +1092,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.GEMINI_2_5_FLASH_IMAGE,
         key='gemini-2.5-flash-image-preview',
+        short_key='gemini-2.5-flash',
         name='nano-banana',
         category=TaskCategory.IMAGE_EDIT,
         categories=[TaskCategory.TEXT_TO_IMAGE],  # 同时支持文生图
@@ -1111,11 +1114,12 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         default_ratio='9:16',
         default_size='1K',
         sort_order=10,
-        supports_grid_image=False, 
+        supports_grid_image=False,
     ),
     UnifiedTaskConfig(
         id=TaskTypeId.GEMINI_3_PRO_IMAGE,
         key='gemini-3-pro-image-preview',
+        short_key='gemini-3-pro',
         name='nano-banana-Pro',
         category=TaskCategory.IMAGE_EDIT,
         categories=[TaskCategory.TEXT_TO_IMAGE],  # 同时支持文生图
@@ -1142,6 +1146,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.GEMINI_3_1_FLASH_IMAGE,
         key='gemini-3.1-flash-image-preview',
+        short_key='gemini-3.1-flash',
         name='nano-banana-2',
         category=TaskCategory.IMAGE_EDIT,
         categories=[TaskCategory.TEXT_TO_IMAGE],  # 同时支持文生图
@@ -1168,6 +1173,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.SEEDREAM_TEXT_TO_IMAGE,
         key='seedream-5.0',
+        short_key='seedream-5.0',
         name='Seedream 5.0',
         category=TaskCategory.IMAGE_EDIT,
         categories=[TaskCategory.TEXT_TO_IMAGE],  # 同时支持文生图
@@ -1185,6 +1191,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.SEEDREAM_4_5_IMAGE,
         key='seedream-4.5',
+        short_key='seedream-4.5',
         name='Seedream 4.5',
         category=TaskCategory.IMAGE_EDIT,
         categories=[TaskCategory.TEXT_TO_IMAGE],  # 同时支持文生图
@@ -1202,6 +1209,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.QWEN_MULTI_ANGLE_IMAGE,
         key='qwen-multi-angle',
+        short_key='qwen-multi-angle',
         name='多角度图片编辑',
         category=TaskCategory.IMAGE_EDIT,
         provider=TaskProvider.RUNNINGHUB,
@@ -1220,6 +1228,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.GPT_IMAGE_2_EDIT,
         key='gpt-image-2-edit',
+        short_key='gpt-image-2',
         name='GPT Image 2 图片编辑',
         category=TaskCategory.IMAGE_EDIT,
         categories=[TaskCategory.TEXT_TO_IMAGE],  # 同时支持文生图
@@ -1249,6 +1258,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.SORA2_TEXT_TO_VIDEO,
         key='sora2_text_to_video',
+        short_key='sora2-t2v',
         name='Sora2',
         category=TaskCategory.TEXT_TO_VIDEO,
         provider=TaskProvider.DUOMI,
@@ -1267,6 +1277,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.WAN22_IMAGE_TO_VIDEO,
         key='wan22_image_to_video',
+        short_key='wan22',
         name='Wan2.2',
         category=TaskCategory.IMAGE_TO_VIDEO,
         provider=TaskProvider.RUNNINGHUB,
@@ -1284,6 +1295,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.SORA2_IMAGE_TO_VIDEO,
         key='sora2_image_to_video',
+        short_key='sora2',
         name='Sora2',
         category=TaskCategory.IMAGE_TO_VIDEO,
         provider=TaskProvider.DUOMI,
@@ -1302,6 +1314,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.LTX2_IMAGE_TO_VIDEO,
         key='ltx2_image_to_video',
+        short_key='ltx2',
         name='LTX2.0',
         category=TaskCategory.IMAGE_TO_VIDEO,
         provider=TaskProvider.RUNNINGHUB,
@@ -1319,6 +1332,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.LTX2_3_IMAGE_TO_VIDEO,
         key='ltx2_3_image_to_video',
+        short_key='ltx2_3',
         name='LTX2.3',
         category=TaskCategory.IMAGE_TO_VIDEO,
         provider=TaskProvider.RUNNINGHUB,
@@ -1336,6 +1350,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.KLING_IMAGE_TO_VIDEO,
         key='kling_image_to_video',
+        short_key='kling',
         name='可灵v2.5-turbo',
         category=TaskCategory.IMAGE_TO_VIDEO,
         provider=TaskProvider.DUOMI,
@@ -1372,6 +1387,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.VIDU_IMAGE_TO_VIDEO,
         key='vidu_image_to_video',
+        short_key='vidu',
         name='Vidu-q2-pro-fast',
         category=TaskCategory.IMAGE_TO_VIDEO,
         provider=TaskProvider.VIDU,
@@ -1388,6 +1404,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.VIDU_Q2_IMAGE_TO_VIDEO,
         key='vidu_q2_image_to_video',
+        short_key='vidu_q2',
         name='Vidu-Q2',
         category=TaskCategory.IMAGE_TO_VIDEO,
         provider=TaskProvider.VIDU,
@@ -1404,6 +1421,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.VEO3_IMAGE_TO_VIDEO,
         key='veo3_image_to_video',
+        short_key='veo3',
         name='VEO3.1-fast',
         category=TaskCategory.IMAGE_TO_VIDEO,
         categories=[TaskCategory.TEXT_TO_VIDEO],  # 支持文生视频
@@ -1431,6 +1449,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.GROK_IMAGE_TO_VIDEO,
         key='grok_image_to_video',
+        short_key='grok',
         name='Grok',
         category=TaskCategory.IMAGE_TO_VIDEO,
         categories=[TaskCategory.TEXT_TO_VIDEO],  # 支持文生视频
@@ -1458,6 +1477,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.SEEDANCE_1_5_PRO_IMAGE_TO_VIDEO,
         key='seedance_1_5_pro_image_to_video',
+        short_key='seedance_1_5_pro',
         name='Seedance 1.5 Pro',
         category=TaskCategory.IMAGE_TO_VIDEO,
         categories=[TaskCategory.TEXT_TO_VIDEO],  # 支持文生视频
@@ -1476,6 +1496,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.SEEDANCE_2_0_FAST_IMAGE_TO_VIDEO,
         key='seedance_2_0_fast_image_to_video',
+        short_key='seedance_2_0_fast',
         name='Seedance 2.0 Fast',
         category=TaskCategory.IMAGE_TO_VIDEO,
         categories=[TaskCategory.TEXT_TO_VIDEO],  # 支持文生视频
@@ -1495,6 +1516,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.SEEDANCE_2_0_IMAGE_TO_VIDEO,
         key='seedance_2_0_image_to_video',
+        short_key='seedance_2_0',
         name='Seedance 2.0',
         category=TaskCategory.IMAGE_TO_VIDEO,
         categories=[TaskCategory.TEXT_TO_VIDEO],  # 支持文生视频
@@ -1514,6 +1536,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.HAPPY_HORSE_IMAGE_TO_VIDEO,
         key='happy_horse_image_to_video',
+        short_key='happy_horse',
         name='Happy Horse (首帧)',
         category=TaskCategory.IMAGE_TO_VIDEO,
         provider=TaskProvider.DUOMI,
@@ -1531,6 +1554,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.HAPPY_HORSE_REFERENCE_TO_VIDEO,
         key='happy_horse_reference_to_video',
+        short_key='happy_horse_r2v',
         name='Happy Horse (多参考)',
         category=TaskCategory.IMAGE_TO_VIDEO,
         provider=TaskProvider.DUOMI,
@@ -1549,6 +1573,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.HAPPY_HORSE_TEXT_TO_VIDEO,
         key='happy_horse_text_to_video',
+        short_key='happy_horse_t2v',
         name='Happy Horse',
         category=TaskCategory.TEXT_TO_VIDEO,
         provider=TaskProvider.DUOMI,
@@ -1565,6 +1590,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.DIGITAL_HUMAN,
         key='digital_human',
+        short_key='digital_human',
         name='wan2.2 数字人',
         category=TaskCategory.DIGITAL_HUMAN,
         provider=TaskProvider.RUNNINGHUB,
@@ -1574,11 +1600,12 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         default_ratio='9:16',
         sort_order=40,
     ),
-    
+
     # ==================== 图片/视频增强 ====================
     UnifiedTaskConfig(
         id=TaskTypeId.IMAGE_ENHANCE,
         key='image_enhance',
+        short_key='image_enhance',
         name='图片高清放大',
         category=TaskCategory.VISUAL_ENHANCE,
         provider=TaskProvider.LOCAL,
@@ -1588,6 +1615,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.VIDEO_ENHANCE,
         key='video_enhance',
+        short_key='video_enhance',
         name='AI视频高清修复',
         category=TaskCategory.VISUAL_ENHANCE,
         provider=TaskProvider.LOCAL,
@@ -1599,6 +1627,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.CHARACTER_CARD,
         key='character_card',
+        short_key='character_card',
         name='创建角色卡',
         category=TaskCategory.OTHER,
         provider=TaskProvider.LOCAL,
@@ -1610,6 +1639,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
     UnifiedTaskConfig(
         id=TaskTypeId.AUDIO_GENERATE,
         key='audio_generate',
+        short_key='audio_generate',
         name='AI音频生成',
         category=TaskCategory.AUDIO,
         provider=TaskProvider.LOCAL,
@@ -2224,7 +2254,19 @@ def validate_configs() -> List[str]:
         错误信息列表，空列表表示验证通过
     """
     errors = []
-    
+
+    # 检查 short_key 唯一性
+    short_keys = {}
+    for config in ALL_TASK_CONFIGS:
+        sk = config.short_key
+        if not sk:
+            errors.append(f"{config.key}: 缺少 short_key 配置")
+            continue
+        if sk in short_keys:
+            errors.append(f"{config.key}: short_key '{sk}' 与 {short_keys[sk]} 重复")
+        else:
+            short_keys[sk] = config.key
+
     for config in ALL_TASK_CONFIGS:
         # 视频类任务必须有时长配置
         if config.category in [TaskCategory.IMAGE_TO_VIDEO, TaskCategory.TEXT_TO_VIDEO]:

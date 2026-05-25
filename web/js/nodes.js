@@ -5970,8 +5970,7 @@
               optGroup.label = `${icon} ${providerName}`;
 
               providerGroups[provider].forEach(task => {
-                // 复用 getModelOptionsForCategory 的 shortKey 提取逻辑
-                const shortKey = task.key.replace(/_image_to_video|_text_to_video|_text_to_image|_image_edit/g, '');
+                const shortKey = task.short_key || task.key;
                 const power = typeof task.computing_power === 'object'
                   ? Object.values(task.computing_power)[0]
                   : task.computing_power;
@@ -5987,7 +5986,7 @@
             // 获取第一个可用值
             if(providerOrder.length > 0 && providerGroups[providerOrder[0]].length > 0) {
               const firstTask = providerGroups[providerOrder[0]][0];
-              const shortKey = firstTask.key.replace(/_image_to_video|_text_to_video|_text_to_image|_image_edit/g, '');
+              const shortKey = firstTask.short_key || firstTask.key;
               firstVideoModelValue = shortKey;
             }
           } else {

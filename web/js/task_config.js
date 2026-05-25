@@ -94,10 +94,12 @@
    */
   function getTaskByKey(modelKey) {
     const tasks = getAllTasks();
-    // 支持简短key匹配（如 'sora2' 匹配 'sora2_image_to_video'）
-    // 先找精确匹配
+    // 先精确匹配 key
     const exact = tasks.find(t => t.key === modelKey);
     if (exact) return exact;
+    // 再精确匹配 short_key
+    const byShortKey = tasks.find(t => t.short_key === modelKey);
+    if (byShortKey) return byShortKey;
     // 前缀匹配时，找最精确的（key最长的），避免 'seedance_2_0' 错误匹配到 'seedance_2_0_fast_image_to_video'
     const prefixMatches = tasks.filter(t => t.key.startsWith(modelKey + '_'));
     if (prefixMatches.length === 0) return null;
@@ -124,10 +126,14 @@
     }
     // 指定了分类时，在所有任务中查找 key 匹配且分类匹配的任务
     const tasks = getAllTasks();
-    // 先精确匹配
+    // 先精确匹配 key
     const exact = tasks.find(t => t.key === modelKey &&
       (t.category === category || (t.categories && t.categories.includes(category))));
     if (exact) return exact.id;
+    // 再精确匹配 short_key
+    const byShortKey = tasks.find(t => t.short_key === modelKey &&
+      (t.category === category || (t.categories && t.categories.includes(category))));
+    if (byShortKey) return byShortKey.id;
     // 前缀匹配：找所有以 modelKey_ 开头的任务中分类匹配的
     const prefixMatches = tasks.filter(t => t.key.startsWith(modelKey + '_') &&
       (t.category === category || (t.categories && t.categories.includes(category))));
@@ -258,8 +264,7 @@
     const result = {};
     tasks.forEach(task => {
       if (task.category === 'image_to_video' || task.category === 'text_to_video') {
-        // 使用简短key（如 'sora2' 而非 'sora2_image_to_video'）
-        const shortKey = task.key.replace(/_image_to_video|_text_to_video/g, '');
+        const shortKey = task.short_key || task.key;
         result[shortKey] = task.supported_durations || [];
       }
     });
@@ -274,9 +279,8 @@
     const tasks = getAllTasks();
     const result = {};
     tasks.forEach(task => {
-      // 使用简短key（与 getModelOptionsForCategory 保持一致）
-      const shortKey = task.key.replace(/_image_to_video|_text_to_video|_text_to_image|_image_edit/g, '');
-      
+      const shortKey = task.short_key || task.key;
+
       result[shortKey] = {
         ratios: task.supported_ratios || [],
         image_sizes: task.supported_sizes || [],  // 兼容前端字段名
@@ -359,8 +363,7 @@
       (t.categories && t.categories.includes(category))
     );
     return categoryTasks.map(task => {
-      // 提取简短的模型值（去掉 _image_to_video, _text_to_image 等后缀）
-      const shortKey = task.key.replace(/_image_to_video|_text_to_video|_text_to_image|_image_edit/g, '');
+      const shortKey = task.short_key || task.key;
       const power = typeof task.computing_power === 'object'
         ? Object.values(task.computing_power)[0]
         : task.computing_power;
