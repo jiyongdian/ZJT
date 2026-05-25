@@ -5064,7 +5064,7 @@
               } else {
                 // 检查参考图数量限制
                 const currentRefCount = state.referenceConnections.filter(c => c.to === id).length;
-                const maxRefs = node.data.model === 'gemini-3-pro-image-preview' ? 13 : 5;
+                const maxRefs = node.data.model === 'gemini-2.5-flash-image-preview' ? 5 : 13;
                 if(currentRefCount >= maxRefs){
                   showToast(`最多支持${maxRefs}张参考图`, 'error');
                 } else {
@@ -5970,8 +5970,7 @@
               optGroup.label = `${icon} ${providerName}`;
 
               providerGroups[provider].forEach(task => {
-                // 复用 getModelOptionsForCategory 的 shortKey 提取逻辑
-                const shortKey = task.key.replace(/_image_to_video|_text_to_video|_text_to_image|_image_edit/g, '');
+                const shortKey = task.short_key || task.key;
                 const power = typeof task.computing_power === 'object'
                   ? Object.values(task.computing_power)[0]
                   : task.computing_power;
@@ -5987,7 +5986,7 @@
             // 获取第一个可用值
             if(providerOrder.length > 0 && providerGroups[providerOrder[0]].length > 0) {
               const firstTask = providerGroups[providerOrder[0]][0];
-              const shortKey = firstTask.key.replace(/_image_to_video|_text_to_video|_text_to_image|_image_edit/g, '');
+              const shortKey = firstTask.short_key || firstTask.key;
               firstVideoModelValue = shortKey;
             }
           } else {
@@ -6676,14 +6675,14 @@
 
               const { gridSize, gridLayout, finalModel } = resolveGridConfig(gridModel, gridLayoutPref, shotCount, forceEnhancedModel);
 
-              // 限制参考图片数量（标准版最多5张，增强版最多13张）
-              const maxRefImages = finalModel === 'gemini-3-pro-image-preview' ? 13 : 5;
+              // 限制参考图片数量（nano-banana最多5张，其他模型最多13张）
+              const maxRefImages = finalModel === 'gemini-2.5-flash-image-preview' ? 5 : 13;
               if(referenceImageUrls.length > maxRefImages) {
                 console.warn(`[宫格生图] 参考图片数量 ${referenceImageUrls.length} 超过限制 ${maxRefImages}，将只使用前 ${maxRefImages} 张`);
                 referenceImageUrls.splice(maxRefImages);
                 promptSuffix.splice(maxRefImages);
               }
-              
+
               node.data.gridModel = finalModel;
 
               const imagePower = TaskConfig.getComputingPower(finalModel) || 2;
@@ -7086,8 +7085,8 @@
 
           const { gridSize, gridLayout, finalModel } = resolveGridConfig(gridModel, gridLayoutPref, shotCount, forceEnhancedModel);
 
-          // 限制参考图片数量（标准版最多5张，增强版最多10张）
-          const maxRefImages = finalModel === 'gemini-3-pro-image-preview' ? 10 : 5;
+          // 限制参考图片数量（nano-banana最多5张，其他模型最多13张）
+          const maxRefImages = finalModel === 'gemini-2.5-flash-image-preview' ? 5 : 13;
           if(referenceImageUrls.length > maxRefImages) {
             console.warn(`[宫格生图] 参考图片数量 ${referenceImageUrls.length} 超过限制 ${maxRefImages}，将只使用前 ${maxRefImages} 张`);
             referenceImageUrls.splice(maxRefImages);
@@ -7538,8 +7537,8 @@
 
           const { gridSize, gridLayout, finalModel } = resolveGridConfig(gridModel, gridLayoutPref, shotCount, forceEnhancedModel);
 
-          // 限制参考图片数量
-          const maxRefImages = finalModel === 'gemini-3-pro-image-preview' ? 13 : 5;
+          // 限制参考图片数量（nano-banana最多5张，其他模型最多13张）
+          const maxRefImages = finalModel === 'gemini-2.5-flash-image-preview' ? 5 : 13;
           if(referenceImageUrls.length > maxRefImages) {
             referenceImageUrls.splice(maxRefImages);
             promptSuffix.splice(maxRefImages);
@@ -8418,8 +8417,8 @@
 
         const { gridSize, gridLayout, finalModel } = resolveGridConfig(gridModel, gridLayoutPref, shotCount, forceEnhancedModel);
 
-        // 限制参考图片数量（标准版最多5张，增强版最多13张）
-        const maxRefImages = finalModel === 'gemini-3-pro-image-preview' ? 13 : 5;
+        // 限制参考图片数量（nano-banana最多5张，其他模型最多13张）
+        const maxRefImages = finalModel === 'gemini-2.5-flash-image-preview' ? 5 : 13;
         if(referenceImageUrls.length > maxRefImages) {
           console.warn(`[宫格生图] 参考图片数量 ${referenceImageUrls.length} 超过限制 ${maxRefImages}，将只使用前 ${maxRefImages} 张`);
           referenceImageUrls.splice(maxRefImages);

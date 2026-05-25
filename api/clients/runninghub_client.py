@@ -1,6 +1,7 @@
 import requests
 import time
 import json
+import httpx
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from enum import Enum
@@ -96,6 +97,101 @@ class RunningHubClient:
             if "API Error" in str(e):
                 raise
             raise ValueError(f"Invalid response format: {str(e)}")
+    
+    async def _make_v2_request(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Make HTTP POST request to RunningHub OpenAPI v2
+        
+        Args:
+            endpoint: API endpoint path
+            data: Request payload
+            
+        Returns:
+            API response as dictionary
+        """
+        url = f"{self.host}{endpoint}"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}"
+        }
+        
+        try:
+            async with httpx.AsyncClient(timeout=self.request_timeout) as client:
+                response = await client.post(url, json=data, headers=headers)
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPError as e:
+            raise httpx.HTTPError(f"Request failed: {str(e)}")
+        except ValueError as e:
+            raise ValueError(f"Invalid response format: {str(e)}")
+    
+    async def run_ai_app_v2(
+        self,
+        app_id: str,
+        node_info_list: List[Dict[str, str]],
+        instance_type: str = "default",
+        use_personal_queue: str = "false"
+    ) -> Dict[str, Any]:
+        """
+        Submit a RunningHub OpenAPI v2 AI app task (async)
+        """
+        endpoint = f"/openapi/v2/run/ai-app/{app_id}"
+        payload = {
+            "nodeInfoList": node_info_list,
+            "instanceType": instance_type,
+            "usePersonalQueue": use_personal_queue
+        }
+
+        logger.info(f"[RunningHub OpenAPI v2] Request URL: {self.host}{endpoint}")
+        logger.info(f"[RunningHub OpenAPI v2] Request Payload: {json.dumps(payload, ensure_ascii=False, indent=2)}")
+        result = await self._make_v2_request(endpoint, payload)
+        logger.info(f"[RunningHub OpenAPI v2] Response: {json.dumps(result, ensure_ascii=False, indent=2)}")
+        return result
+
+    def run_ai_app_v2_sync(
+        self,
+        app_id: str,
+        node_info_list: List[Dict[str, str]],
+        instance_type: str = "default",
+        use_personal_queue: str = "false"
+    ) -> Dict[str, Any]:
+        """
+        Submit a RunningHub OpenAPI v2 AI app task (sync)
+        """
+        endpoint = f"/openapi/v2/run/ai-app/{app_id}"
+        url = f"{self.host}{endpoint}"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}"
+        }
+        payload = {
+            "nodeInfoList": node_info_list,
+            "instanceType": instance_type,
+            "usePersonalQueue": use_personal_queue
+        }
+
+        logger.info(f"[RunningHub OpenAPI v2 sync] Request URL: {url}")
+        logger.info(f"[RunningHub OpenAPI v2 sync] Request Payload: {json.dumps(payload, ensure_ascii=False, indent=2)}")
+
+        with httpx.Client(timeout=self.request_timeout) as client:
+            response = client.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            result = response.json()
+
+        logger.info(f"[RunningHub OpenAPI v2 sync] Response: {json.dumps(result, ensure_ascii=False, indent=2)}")
+        return result
+    
+    async def query_v2_task(self, task_id: str) -> Dict[str, Any]:
+        """
+        Query a RunningHub OpenAPI v2 task
+        """
+        endpoint = "/openapi/v2/query"
+        payload = {"taskId": task_id}
+        
+        logger.info(f"[RunningHub OpenAPI v2] Query task: {task_id}")
+        result = await self._make_v2_request(endpoint, payload)
+        logger.info(f"[RunningHub OpenAPI v2] Query Response: {json.dumps(result, ensure_ascii=False, indent=2)}")
+        return result
     
     def run_task(self, node_info_list: List[NodeInfo],transaction_id:str) -> Dict[str, Any]:
         """

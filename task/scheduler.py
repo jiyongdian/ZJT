@@ -171,6 +171,63 @@ def _reset_orphan_sync_tasks():
         logger.error(f"Failed to reset orphan sync tasks: {e}")
 
 
+def _reset_orphan_processing_tasks():
+    """
+    重置孤儿处理中任务
+
+    Scheduler 启动时，检查 status=1(PROCESSING) 且 project_id=NULL
+    且 update_time 超过阈值的任务，重置为 PENDING 让其重新执行。
+
+    判定条件：
+    - status = 1 (PROCESSING)
+    - project_id IS NULL（未成功提交到外部API）
+    - result_url IS NULL（未产出结果）
+    - update_time < NOW() - 20分钟（排除刚被取走正在处理的任务）
+
+    安全性：
+    - 只重置 project_id=NULL 的任务，不会导致外部 API 重复计费
+    - 20分钟阈值远大于同步超时（5分钟），不会误杀正常任务
+    """
+    ORPHAN_THRESHOLD_MINUTES = 20
+
+    try:
+        from model import AIToolsModel, TasksModel
+        from model.database import execute_update, execute_query
+        from config.constant import (
+            AI_TOOL_STATUS_PROCESSING, AI_TOOL_STATUS_PENDING,
+            TASK_STATUS_PROCESSING, TASK_STATUS_QUEUED,
+        )
+
+        # 1. 查找符合条件的孤儿任务 ID
+        find_sql = """
+            SELECT id FROM ai_tools
+            WHERE status = %s
+              AND project_id IS NULL
+              AND result_url IS NULL
+              AND update_time < NOW() - INTERVAL %s MINUTE
+        """
+        orphan_rows = execute_query(find_sql, (AI_TOOL_STATUS_PROCESSING, ORPHAN_THRESHOLD_MINUTES), fetch_all=True)
+        if not orphan_rows:
+            return
+
+        orphan_ids = [row['id'] for row in orphan_rows]
+        logger.info(f"Found {len(orphan_ids)} orphan processing tasks: {orphan_ids}")
+
+        # 2. 重置 ai_tools 表
+        placeholders = ','.join(['%s'] * len(orphan_ids))
+        ai_tools_sql = f"UPDATE ai_tools SET status = %s, update_time = NOW() WHERE id IN ({placeholders})"
+        ai_tools_count = execute_update(ai_tools_sql, (AI_TOOL_STATUS_PENDING, *orphan_ids))
+
+        # 3. 重置 tasks 表（task_id 对应 ai_tools.id）
+        tasks_sql = f"UPDATE tasks SET status = %s, next_trigger = NOW() WHERE task_id IN ({placeholders}) AND status = %s"
+        tasks_count = execute_update(tasks_sql, (TASK_STATUS_QUEUED, *orphan_ids, TASK_STATUS_PROCESSING))
+
+        logger.info(f"Reset orphan processing tasks: AITools={ai_tools_count}, Tasks={tasks_count}, IDs={orphan_ids}")
+
+    except Exception as e:
+        logger.error(f"Failed to reset orphan processing tasks: {e}")
+
+
 def init_scheduler(app):
     """
     初始化定时任务调度器
@@ -184,6 +241,9 @@ def init_scheduler(app):
 
     # 重置孤儿同步任务（服务重启后进程池队列丢失）
     _reset_orphan_sync_tasks()
+
+    # 重置孤儿处理中任务（进程崩溃导致 status=1 但未提交成功的任务）
+    _reset_orphan_processing_tasks()
 
     scheduler = BackgroundScheduler()
 
@@ -360,6 +420,19 @@ def init_scheduler(app):
         coalesce=True
     )
 
+    # RunningHub 异步任务轮询（音频生成等）
+    logger.info('启用RunningHub异步任务轮询，每10秒执行一次')
+    from task.runninghub_async_task import process_runninghub_async_tasks
+    scheduler.add_job(
+        func=process_runninghub_async_tasks,
+        trigger=IntervalTrigger(seconds=10),
+        id='process_runninghub_async_tasks',
+        name='Process RunningHub async tasks every 10 seconds',
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True
+    )
+
     # 启动调度器
     scheduler.start()
     logger.info("定时任务启动成功")
@@ -381,5 +454,8 @@ def shutdown_scheduler():
         logger.error(f"关闭同步任务执行器失败: {e}")
 
     if scheduler:
-        scheduler.shutdown()
+        try:
+            scheduler.shutdown()
+        except Exception as e:
+            logger.warning(f"Scheduler shutdown error (ignored): {e}")
     _release_scheduler_lock()

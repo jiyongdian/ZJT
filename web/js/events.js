@@ -2073,6 +2073,12 @@
           ${character.personality ? `<div class="field field-always-visible"><div class="label">性格</div><div style="font-size: 12px; line-height: 1.4;">${escapeHtml(character.personality.slice(0, 100))}${character.personality.length > 100 ? '...' : ''}</div></div>` : ''}
           ${character.behavior ? `<div class="field field-always-visible"><div class="label">行为习惯</div><div style="font-size: 12px; line-height: 1.4;">${escapeHtml(character.behavior.slice(0, 100))}${character.behavior.length > 100 ? '...' : ''}</div></div>` : ''}
           ${character.other_info ? `<div class="field field-always-visible"><div class="label">其他信息</div><div style="font-size: 12px; line-height: 1.4;">${escapeHtml(character.other_info.slice(0, 100))}${character.other_info.length > 100 ? '...' : ''}</div></div>` : ''}
+          ${character.default_voice ? `
+            <div class="field field-always-visible">
+              <div class="label">参考音频</div>
+              <audio controls style="width: 100%; height: 32px; border-radius: 4px;" src="${character.default_voice}" preload="none"></audio>
+            </div>
+          ` : ''}
           <div class="field field-collapsible">
             <button class="mini-btn character-download-btn" type="button" data-img-url="${character.reference_image}" style="width: 100%;">下载图片</button>
           </div>

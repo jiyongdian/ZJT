@@ -338,6 +338,13 @@ body {
 .history-menu-item.danger:hover {
   background: #fef2f2;
 }
+.history-menu-item.danger.disabled {
+  color: #ccc;
+  cursor: not-allowed;
+}
+.history-menu-item.danger.disabled:hover {
+  background: transparent;
+}
 
 /* 重命名输入框 */
 .history-rename-input {

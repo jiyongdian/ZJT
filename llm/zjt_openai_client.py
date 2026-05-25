@@ -33,7 +33,7 @@ class ZJTOpenAIClient(OpenAIBaseClient):
 
         self.base_url = base_url
         self.vendor_name = 'zjt_api'
-        self.thinking_mode = 'enable_thinking'  # ZJT API 支持 thinking 模式
+        self.thinking_mode = None  # ZJT API 不支持 enable_thinking 参数透传
 
         if self.api_key:
             logger.info(f"ZJTOpenAIClient config loaded: base_url={self.base_url}")

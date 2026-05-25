@@ -61,6 +61,7 @@ class MediaFileMapping:
         self.original_url = kwargs.get('original_url')
         self.file_size = kwargs.get('file_size')
         self.status = kwargs.get('status')
+        self.label = kwargs.get('label')
         self.created_at = kwargs.get('created_at')
         self.updated_at = kwargs.get('updated_at')
         self.local_path_hash = kwargs.get('local_path_hash')
@@ -79,6 +80,7 @@ class MediaFileMapping:
             'media_type': self.media_type,
             'original_url': self.original_url,
             'file_size': self.file_size,
+            'label': self.label,
             'status': self.status,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
@@ -105,7 +107,8 @@ class MediaFileMappingModel:
         source_id: Optional[int] = None,
         media_type: Optional[str] = None,
         original_url: Optional[str] = None,
-        file_size: Optional[int] = None
+        file_size: Optional[int] = None,
+        label: Optional[str] = None
     ) -> int:
         """
         Create a new media file mapping record
@@ -120,17 +123,18 @@ class MediaFileMappingModel:
             media_type: Media type (MIME type string)
             original_url: Original URL if any
             file_size: File size in bytes
+            label: 媒体标签，区分同一实体的不同媒体类型（如 "image"、"voice"）
 
         Returns:
             Inserted record ID
         """
         sql = """
             INSERT INTO media_file_mapping
-            (user_id, local_path, cloud_path, policy_code, entity_type, source_id, media_type, original_url, file_size, local_path_hash, status, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'active', NOW(), NOW())
+            (user_id, local_path, cloud_path, policy_code, entity_type, source_id, media_type, original_url, file_size, local_path_hash, label, status, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'active', NOW(), NOW())
         """
         local_path_hash = MediaFileMappingModel._compute_local_path_hash(local_path)
-        params = (user_id, local_path, cloud_path, policy_code, entity_type, source_id, media_type, original_url, file_size, local_path_hash)
+        params = (user_id, local_path, cloud_path, policy_code, entity_type, source_id, media_type, original_url, file_size, local_path_hash, label)
 
         try:
             record_id = execute_insert(sql, params)
@@ -416,6 +420,32 @@ class MediaFileMappingModel:
             raise
 
     @staticmethod
+    def get_by_entity_and_label(entity_type: int, source_id: int, label: str) -> Optional['MediaFileMapping']:
+        """
+        Get mapping record by entity type, ID and label
+
+        Args:
+            entity_type: Entity type (MediaFileEntity enum int)
+            source_id: Source ID (entity table primary key)
+            label: 媒体标签（如 "image"、"voice"）
+
+        Returns:
+            MediaFileMapping object or None
+        """
+        sql = """
+            SELECT * FROM media_file_mapping
+            WHERE entity_type = %s AND source_id = %s AND label = %s AND status = 'active'
+            LIMIT 1
+        """
+
+        try:
+            result = execute_query(sql, (entity_type, source_id, label), fetch_one=True)
+            return MediaFileMapping(**result) if result else None
+        except Exception as e:
+            logger.error(f"Failed to get media_file_mapping by entity_type={entity_type}, source_id={source_id}, label={label}: {e}")
+            raise
+
+    @staticmethod
     def is_referenced(mapping_id: int) -> bool:
         """
         Check if a media_file_mapping record is referenced by ai_tools table
@@ -472,11 +502,12 @@ CREATE TABLE IF NOT EXISTS `media_file_mapping` (
   `original_url` varchar(1000) DEFAULT NULL COMMENT '原始URL',
   `file_size` bigint DEFAULT NULL COMMENT '文件大小',
   `local_path_hash` varchar(64) DEFAULT NULL COMMENT 'local_path 的 SHA256 哈希，用于快速 CDN 重定向查找',
+  `label` varchar(50) DEFAULT NULL COMMENT '媒体标签，区分同一实体的不同媒体类型（image/voice）',
   `status` varchar(20) DEFAULT NULL COMMENT '状态',
   `created_at` datetime DEFAULT NULL,
   `updated_at` datetime DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `entity_type` (`entity_type`,`source_id`),
+  UNIQUE KEY `uk_entity_label` (`entity_type`,`source_id`,`label`),
   KEY `idx_user_id` (`user_id`),
   KEY `idx_cloud_path` (`cloud_path`),
   KEY `idx_entity` (`entity_type`,`source_id`),

@@ -226,19 +226,20 @@ class TestDownloadAndCompressToBase64(unittest.TestCase):
         fake_jpeg = b'\xff\xd8\xff\xe0test_data'
         mock_compress.return_value = (True, "/fake/temp.jpg", None)
 
-        with patch('utils.image_compressor.os.path.splitext', return_value=('/fake/temp', '.jpg')):
-            with patch('builtins.open', mock_open(read_data=fake_jpeg)):
-                with patch('utils.image_compressor.os.remove'):
-                    # 需要模拟 temp dir
-                    with patch('utils.media_cache.get_temp_date_dir') as mock_temp:
-                        from pathlib import Path
-                        mock_temp.return_value = Path("/fake/temp_dir")
-                        with patch('pathlib.Path.__truediv__', return_value=Path("/fake/temp_dir/vl_gen_abc12345.jpg")):
-                            with patch('pathlib.Path.mkdir', return_value=None):
-                                success, data_url, error = download_and_compress_to_base64(
-                                    "http://example.com/img.jpg",
-                                    max_pixels=0
-                                )
+        # 注入 mock 的 utils.media_cache 模块（测试环境缺少 aiohttp）
+        from pathlib import Path
+        mock_media_cache = MagicMock()
+        mock_media_cache.get_temp_date_dir = MagicMock(return_value=Path("/fake/temp_dir"))
+
+        with patch.dict('sys.modules', {'utils.media_cache': mock_media_cache}):
+            with patch('utils.image_compressor.os.path.splitext', return_value=('/fake/temp', '.jpg')):
+                with patch('builtins.open', mock_open(read_data=fake_jpeg)):
+                    with patch('utils.image_compressor.os.remove'):
+                        with patch('pathlib.Path.mkdir', return_value=None):
+                            success, data_url, error = download_and_compress_to_base64(
+                                "http://example.com/img.jpg",
+                                max_pixels=0
+                            )
 
         # 验证返回格式
         if success:
@@ -256,11 +257,7 @@ class TestDownloadAndCompressToBase64(unittest.TestCase):
         mock_client.__exit__ = MagicMock(return_value=False)
         mock_client_cls.return_value = mock_client
 
-        with patch('utils.media_cache.get_temp_date_dir') as mock_temp:
-            from pathlib import Path
-            mock_temp.return_value = Path("/fake/temp_dir")
-            with patch('pathlib.Path.mkdir', return_value=None):
-                success, data_url, error = download_and_compress_to_base64("http://example.com/empty.jpg")
+        success, data_url, error = download_and_compress_to_base64("http://example.com/empty.jpg")
 
         self.assertFalse(success)
         self.assertIn("下载图片为空", error)
