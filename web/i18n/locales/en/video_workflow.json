@@ -158,6 +158,7 @@
   "node_delete_btn": "Delete",
   "node_video_label": "Video",
   "node_shot_frame_label": "Shot Frame",
+  "shot_frame_title": "Shot Frame: {title}",
   "node_preview_label": "Preview",
   "node_audio_file_label": "Audio File",
   "node_play_btn": "Play",
@@ -376,6 +377,7 @@
   "shot_group_output_port": "Output",
   "shot_group_details_section": "Shot Details",
   "shot_group_label": "Shot Group:",
+  "shot_group_title": "Shot Group: {title}",
   "shot_group_shot_count": "Total {count} shots",
   "shot_group_shot_duration": "Duration:",
   "shot_group_detail_btn": "View/Edit",
@@ -654,6 +656,19 @@
   "feedback_minimize_title": "Minimize",
   "feedback_close_btn": "Close",
   "add_btn_title": "Add",
-  "ai_generate_materials": "AI-generate scripts, characters, scenes, props"
+  "ai_generate_materials": "AI-generate scripts, characters, scenes, props",
+  "text_node_title": "Text",
+  "text_node_output_port": "Output text",
+  "text_node_content_label": "Text Content",
+  "text_node_placeholder": "Enter text content...",
+  "text_node_chars": "characters",
+  "computing_power_value": "{power} computing power",
+  "computing_power_detail": "Individual {individual} × {count} = {total} computing power",
+  "shot_group_video_draw_count": "Draw count: X{count}",
+  "draw_count_x": "Draw count: X{count}",
+  "draw_count_simple": "Draw count: {count}",
+  "timeline_pillar_mode": "Pillar mode",
+  "shot_group_grid_overflow": "Shot count exceeds 25, grid preview not supported",
+  "shot_group_grid_suffix": "grid"
 }
 

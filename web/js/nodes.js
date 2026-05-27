@@ -1587,7 +1587,7 @@
             <div class="btn-row" style="display: flex; gap: 8px; justify-content: flex-start;">
               <div class="gen-container">
                 <button class="gen-btn gen-btn-main shot-group-generate-video-btn" type="button" style="background: #22c55e; color: white;">生成视频</button>
-                <button class="gen-btn gen-btn-caret shot-group-video-caret" type="button" aria-label="选择抽卡次数">▾</button>
+                <button class="gen-btn gen-btn-caret shot-group-video-caret" type="button" aria-label="${window.t ? window.t('draw_count_menu') : '选择抽卡次数'}">▾</button>
                 <div class="gen-menu shot-group-video-menu">
                   <div class="gen-item" data-count="1">X1</div>
                   <div class="gen-item" data-count="2">X2</div>
@@ -1765,13 +1765,15 @@
 
           if(shotGroupComputingPowerValue) {
             const displayPower = typeof totalPower === 'number' ? totalPower : 0;
-            shotGroupComputingPowerValue.textContent = `${displayPower} 算力`;
+            shotGroupComputingPowerValue.textContent = window.t ? window.t('shot_group_computing_power_value', { power: displayPower }) : `${displayPower} 算力`;
+            shotGroupComputingPowerValue.setAttribute('data-i18n-params', JSON.stringify({ power: displayPower }));
           }
           if(shotGroupComputingPowerDetail) {
             const displaySingle = typeof singlePower === 'number' ? singlePower : 0;
             const displayCount = typeof count === 'number' ? count : 1;
             const displayTotal = typeof totalPower === 'number' ? totalPower : 0;
-            shotGroupComputingPowerDetail.textContent = `单个 ${displaySingle} 算力 × ${displayCount} 个 = ${displayTotal} 算力`;
+            shotGroupComputingPowerDetail.textContent = window.t ? window.t('shot_group_computing_power_detail', { individual: displaySingle, count: displayCount, total: displayTotal }) : `单个 ${displaySingle} 算力 × ${displayCount} 个 = ${displayTotal} 算力`;
+            shotGroupComputingPowerDetail.setAttribute('data-i18n-params', JSON.stringify({ individual: displaySingle, count: displayCount, total: displayTotal }));
           }
         }
 
@@ -1787,7 +1789,7 @@
         // 抽卡次数菜单
         let videoDrawCount = node.data.videoDrawCount || 1;
         if(shotGroupGenerateVideoBtn) {
-          if(shotGroupDrawCountLabel) shotGroupDrawCountLabel.textContent = `抽卡次数: ${videoDrawCount}`;
+          if(shotGroupDrawCountLabel) shotGroupDrawCountLabel.textContent = window.t ? window.t('draw_count_simple', { count: videoDrawCount }) : `抽卡次数: ${videoDrawCount}`;
           updateVideoComputingPowerDisplay();
           shotGroupGenerateVideoBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -1806,7 +1808,7 @@
               e.stopPropagation();
               videoDrawCount = parseInt(item.dataset.count);
               node.data.videoDrawCount = videoDrawCount;
-              if(shotGroupDrawCountLabel) shotGroupDrawCountLabel.textContent = `抽卡次数: ${videoDrawCount}`;
+              if(shotGroupDrawCountLabel) shotGroupDrawCountLabel.textContent = window.t ? window.t('draw_count_simple', { count: videoDrawCount }) : `抽卡次数: ${videoDrawCount}`;
               updateVideoComputingPowerDisplay();
               shotGroupVideoMenu.style.display = 'none';
             });
@@ -1829,7 +1831,8 @@
 
       const titleEl = el.querySelector('.node-title');
       if(titleEl){
-        titleEl.textContent = node.title;
+        titleEl.setAttribute('data-i18n-params', JSON.stringify({ title: escapeHtml(node.title) }));
+        if(window.ZJTi18nDOM) window.ZJTi18nDOM.scanDOM(titleEl);
       }
     }
 
@@ -3279,10 +3282,10 @@
               <div class="field field-collapsible computing-power-field" style="padding: 6px; border-radius: 6px;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                   <span style="color: #9ca3af; font-size: 12px;" data-i18n="computing_power_label">${window.t ? window.t('computing_power_label') : '算力消耗：'}</span>
-                  <span class="computing-power-value" style="color: #60a5fa; font-weight: bold; font-size: 14px;">0 ${window.t ? window.t('computing_power_unit') : '算力'}</span>
+                  <span class="computing-power-value" style="color: #60a5fa; font-weight: bold; font-size: 14px;" data-i18n="computing_power_value" data-i18n-params='{"power":0}'>${window.t ? window.t('computing_power_value', { power: 0 }) : '0 算力'}</span>
                 </div>
-                <div class="computing-power-detail" style="margin-top: 4px; font-size: 11px; color: #6b7280;">
-                  单个 0 ${window.t ? window.t('computing_power_unit') : '算力'} × 1 个 = 0 ${window.t ? window.t('computing_power_unit') : '算力'}
+                <div class="computing-power-detail" style="margin-top: 4px; font-size: 11px; color: #6b7280;" data-i18n="computing_power_detail" data-i18n-params='{"individual":0,"count":1,"total":0}'>
+                  ${window.t ? window.t('computing_power_detail', { individual: 0, count: 1, total: 0 }) : '单个 0 算力 × 1 个 = 0 算力'}
                 </div>
               </div>
               <div class="field field-collapsible">
@@ -3841,10 +3844,12 @@
         const totalPower = singlePower * count;
 
         if(computingPowerValue) {
-          computingPowerValue.textContent = `${totalPower} 算力`;
+          computingPowerValue.textContent = window.t ? window.t('computing_power_value', { power: totalPower }) : `${totalPower} 算力`;
+          computingPowerValue.setAttribute('data-i18n-params', JSON.stringify({ power: totalPower }));
         }
         if(computingPowerDetail) {
-          computingPowerDetail.textContent = `单个 ${singlePower} 算力 × ${count} 个 = ${totalPower} 算力`;
+          computingPowerDetail.textContent = window.t ? window.t('computing_power_detail', { individual: singlePower, count: count, total: totalPower }) : `单个 ${singlePower} 算力 × ${count} 个 = ${totalPower} 算力`;
+          computingPowerDetail.setAttribute('data-i18n-params', JSON.stringify({ individual: singlePower, count: count, total: totalPower }));
         }
       }
 
@@ -4101,7 +4106,7 @@
       */
 
       function updateGenMeta(){
-        genCountLabel.textContent = `抽卡次数：X${node.data.drawCount}`;
+        { const _t = window.t ? window.t('draw_count_x', { count: node.data.drawCount }) : null; genCountLabel.textContent = (_t && _t !== 'draw_count_x') ? _t : `抽卡次数：X${node.data.drawCount}`; }
         // 同时更新算力显示
         updateComputingPowerDisplay();
       }
@@ -4819,8 +4824,14 @@
 
       // 添加调试按钮
       addDebugButtonToNode(el, node);
-      
+
       canvasEl.appendChild(el);
+
+      // i18n: 翻译节点内 DOM
+      if (typeof window.ZJTi18nDOM !== 'undefined') {
+        setTimeout(() => window.ZJTi18nDOM.scanDOM(el), 0);
+      }
+
       setSelected(id);
       return id;
     }
@@ -4877,7 +4888,7 @@
         <div class="port input" title="${window.t ? window.t('image_node_input_port') : '输入（连接分镜节点）'}"></div>
         <div class="port output" title="${window.t ? window.t('image_node_output_port') : '输出（连接到图生视频节点）'}"></div>
         <div class="node-header">
-          <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M7 15L10 12L13 15L16 11L20 17H4L7 15Z" fill="currentColor" opacity="0.35"/></svg>${node.title}</div>
+          <div class="node-title" data-i18n="image"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M7 15L10 12L13 15L16 11L20 17H4L7 15Z" fill="currentColor" opacity="0.35"/></svg>${window.t ? window.t('image') : '图片'}</div>
           <button class="icon-btn" title="${window.t ? window.t('node_delete_btn') : '删除'}">×</button>
         </div>
         <div class="node-body">
@@ -5348,7 +5359,7 @@
       updateConfirmButtonVisibility();
 
       function updateDrawCountLabel(){
-        drawCountLabel.textContent = `抽卡次数：X${node.data.drawCount}`;
+        { const _t = window.t ? window.t('draw_count_x', { count: node.data.drawCount }) : null; drawCountLabel.textContent = (_t && _t !== 'draw_count_x') ? _t : `抽卡次数：X${node.data.drawCount}`; }
       }
       updateDrawCountLabel();
 
@@ -7814,21 +7825,28 @@
       const shotCount = shotFrameNodes.length;
 
       if(shotCount === 0) {
-        container.innerHTML = '<div style="padding: 16px; text-align: center; color: #666; font-size: 11px; grid-column: 1/-1;">暂无分镜节点</div>';
-        if(labelEl) labelEl.textContent = '分镜预览（0个分镜）';
+        container.innerHTML = `<div style="padding: 16px; text-align: center; color: #666; font-size: 11px; grid-column: 1/-1;">${window.t ? window.t('shot_group_no_shot_node') : '暂无分镜节点'}</div>`;
+        if(labelEl) {
+          labelEl.textContent = window.t ? window.t('shot_group_preview_label', { count: 0 }) : '分镜预览（0个分镜）';
+          labelEl.setAttribute('data-i18n-params', JSON.stringify({ count: 0 }));
+        }
         return;
       }
 
       const gridSize = calculateGridSize(shotCount);
       if(!gridSize) {
-        container.innerHTML = '<div style="padding: 16px; text-align: center; color: #f59e0b; font-size: 11px; grid-column: 1/-1;">分镜数量超过25，不支持宫格预览</div>';
+        container.innerHTML = `<div style="padding: 16px; text-align: center; color: #f59e0b; font-size: 11px; grid-column: 1/-1;">${window.t ? window.t('shot_group_grid_overflow') : '分镜数量超过25，不支持宫格预览'}</div>`;
         return;
       }
 
       const n = Math.sqrt(gridSize);
       container.className = `shot-grid-preview-container grid-${n}x${n}`;
 
-      if(labelEl) labelEl.textContent = `分镜预览（${shotCount}个分镜 → ${gridSize}宫格）`;
+      if(labelEl) {
+        const previewText = window.t ? window.t('shot_group_preview_label', { count: shotCount }) : `分镜预览（${shotCount}个分镜）`;
+        labelEl.textContent = `${previewText} → ${gridSize}${window.t ? window.t('shot_group_grid_suffix') : '宫格'}`;
+        labelEl.setAttribute('data-i18n-params', JSON.stringify({ count: shotCount }));
+      }
 
       // 更新节点数据
       shotGroupNode.data.gridPreview = shotGroupNode.data.gridPreview || {};
@@ -7919,7 +7937,7 @@
         <div class="port input" data-i18n="shot_group_input_port:title"></div>
         <div class="port output" data-i18n="shot_group_output_port:title"></div>
         <div class="node-header">
-          <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M6 9H18M6 12H14M6 15H12" stroke="currentColor" stroke-linecap="round"/></svg>${window.t ? window.t('shot_group_label') : '分镜组:'} ${escapeHtml(node.title)}</div>
+          <div class="node-title" data-i18n="shot_group_title" data-i18n-params='${JSON.stringify({ title: escapeHtml(node.title) })}'><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M6 9H18M6 12H14M6 15H12" stroke="currentColor" stroke-linecap="round"/></svg>${window.t ? window.t('shot_group_title', { title: escapeHtml(node.title) }) : `分镜组: ${escapeHtml(node.title)}`}</div>
           <button class="icon-btn" data-i18n="node_delete_btn:title" title="${window.t ? window.t('node_delete_btn') : '删除'}">×</button>
         </div>
         <div class="node-body">
@@ -7932,7 +7950,7 @@
               </div>
               <div class="field field-always-visible">
                 <div class="label" data-i18n="shot_group_label">${window.t ? window.t('shot_group_label') : '分镜组:'} ${escapeHtml(node.data.groupId || node.data.group_id)}</div>
-                <div class="gen-meta" data-i18n="shot_group_shot_count">${window.t ? window.t('shot_group_shot_count', { count: node.data.shots.length }) : `共 ${node.data.shots.length} 个分镜`}</div>
+                <div class="gen-meta" data-i18n="shot_group_shot_count" data-i18n-params='${JSON.stringify({ count: node.data.shots.length })}'>${window.t ? window.t('shot_group_shot_count', { count: node.data.shots.length }) : `共 ${node.data.shots.length} 个分镜`}</div>
               </div>
               <div class="field field-always-visible" style="flex: 1; max-height: 300px; overflow-y: auto;">
                 ${shotsHtml}
@@ -7949,7 +7967,7 @@
                 <div class="script-section-title" data-i18n="shot_group_preview_section">${window.t ? window.t('shot_group_preview_section') : '分镜预览与生成'}</div>
               </div>
               <div class="field field-always-visible">
-                <div class="shot-grid-preview-label" style="font-size: 11px; color: #666; margin-bottom: 4px;" data-i18n="shot_group_preview_label">${window.t ? window.t('shot_group_preview_label', { count: 0 }) : '分镜预览（0个分镜）'}</div>
+                <div class="shot-grid-preview-label" style="font-size: 11px; color: #666; margin-bottom: 4px;" data-i18n="shot_group_preview_label" data-i18n-params='{"count":0}'>${window.t ? window.t('shot_group_preview_label', { count: 0 }) : '分镜预览（0个分镜）'}</div>
                 <div class="shot-grid-preview-container grid-2x2">
                   <div style="padding: 16px; text-align: center; color: #666; font-size: 11px; grid-column: 1/-1;" data-i18n="shot_group_no_shot_node">${window.t ? window.t('shot_group_no_shot_node') : '暂无分镜节点'}</div>
                 </div>
@@ -7992,8 +8010,8 @@
               <div class="field field-always-visible" style="margin-top: 10px;">
                 <div style="display: flex; flex-direction: column; gap: 8px;">
                   <div class="gen-container shot-group-merge-container" style="width: 100%;">
-                    <button class="gen-btn gen-btn-main shot-group-generate-video-btn" type="button" style="background: #22c55e; color: white; padding: 10px; flex: 1;" data-i18n="shot_group_merge_generate_tooltip:title">${window.t ? window.t('shot_group_merge_generate_video_btn') : '合并生成视频'}</button>
-                    <button class="gen-btn gen-btn-caret shot-group-video-caret" type="button" aria-label="选择抽卡次数">▾</button>
+                    <button class="gen-btn gen-btn-main shot-group-generate-video-btn" type="button" style="background: #22c55e; color: white; padding: 10px; flex: 1;" data-i18n="shot_group_merge_generate_video_btn">${window.t ? window.t('shot_group_merge_generate_video_btn') : '合并生成视频'}</button>
+                    <button class="gen-btn gen-btn-caret shot-group-video-caret" type="button" aria-label="${window.t ? window.t('draw_count_menu') : '选择抽卡次数'}">▾</button>
                     <div class="gen-menu shot-group-video-menu">
                       <div class="gen-item" data-count="1">X1</div>
                       <div class="gen-item" data-count="2">X2</div>
@@ -8001,7 +8019,7 @@
                       <div class="gen-item" data-count="4">X4</div>
                     </div>
                   </div>
-                  <button class="gen-btn gen-btn-main shot-group-batch-generate-btn" type="button" style="background: #3b82f6; color: white; padding: 10px;" data-i18n="shot_group_batch_generate_tooltip:title">${window.t ? window.t('shot_group_batch_generate_video_btn') : '逐个生成视频'}</button>
+                  <button class="gen-btn gen-btn-main shot-group-batch-generate-btn" type="button" style="background: #3b82f6; color: white; padding: 10px;" data-i18n="shot_group_batch_generate_video_btn">${window.t ? window.t('shot_group_batch_generate_video_btn') : '逐个生成视频'}</button>
                 </div>
               </div>
               <div style="font-size: 10px; color: #9ca3af; line-height: 1.4; margin-top: 4px;">
@@ -8013,9 +8031,9 @@
                 <div class="shot-group-computing-power" style="padding: 6px; border-radius: 6px;">
                   <div style="display: flex; justify-content: space-between; align-items: center;">
                     <span style="color: #9ca3af; font-size: 11px;" data-i18n="shot_group_computing_power">${window.t ? window.t('shot_group_computing_power') : '算力消耗：'}</span>
-                    <span class="shot-group-computing-power-value" style="color: #3b82f6; font-weight: bold; font-size: 12px;" data-i18n="shot_group_computing_power_value">${window.t ? window.t('shot_group_computing_power_value', { power: 0 }) : '0 算力'}</span>
+                    <span class="shot-group-computing-power-value" style="color: #3b82f6; font-weight: bold; font-size: 12px;" data-i18n="shot_group_computing_power_value" data-i18n-params='{"power":0}'>${window.t ? window.t('shot_group_computing_power_value', { power: 0 }) : '0 算力'}</span>
                   </div>
-                  <div class="shot-group-computing-power-detail" style="margin-top: 2px; font-size: 10px; color: #6b7280; text-align: right;" data-i18n="shot_group_computing_power_detail">${window.t ? window.t('shot_group_computing_power_detail', { individual: 0, count: 1, total: 0 }) : '单个 0 算力 × 1 个 = 0 算力'}</div>
+                  <div class="shot-group-computing-power-detail" style="margin-top: 2px; font-size: 10px; color: #6b7280; text-align: right;" data-i18n="shot_group_computing_power_detail" data-i18n-params='{"individual":0,"count":1,"total":0}'>${window.t ? window.t('shot_group_computing_power_detail', { individual: 0, count: 1, total: 0 }) : '单个 0 算力 × 1 个 = 0 算力'}</div>
                 </div>
               </div>
             </div>
@@ -8248,7 +8266,7 @@
         // 使用 TaskConfig API 动态获取算力（自动支持所有模型）
         return TaskConfig.getComputingPower(videoModel, duration);
       }
-      
+
       // 更新视频算力显示
       function updateVideoComputingPowerDisplay() {
         const singlePower = calculateVideoComputingPower();
@@ -8257,19 +8275,21 @@
 
         if(computingPowerValue) {
           const displayPower = typeof totalPower === 'number' ? totalPower : 0;
-          computingPowerValue.textContent = `${displayPower} 算力`;
+          computingPowerValue.textContent = window.t ? window.t('shot_group_computing_power_value', { power: displayPower }) : `${displayPower} 算力`;
+          computingPowerValue.setAttribute('data-i18n-params', JSON.stringify({ power: displayPower }));
         }
         if(computingPowerDetail) {
           const displaySingle = typeof singlePower === 'number' ? singlePower : 0;
           const displayCount = typeof count === 'number' ? count : 1;
           const displayTotal = typeof totalPower === 'number' ? totalPower : 0;
-          computingPowerDetail.textContent = `单个 ${displaySingle} 算力 × ${displayCount} 个 = ${displayTotal} 算力`;
+          computingPowerDetail.textContent = window.t ? window.t('shot_group_computing_power_detail', { individual: displaySingle, count: displayCount, total: displayTotal }) : `单个 ${displaySingle} 算力 × ${displayCount} 个 = ${displayTotal} 算力`;
+          computingPowerDetail.setAttribute('data-i18n-params', JSON.stringify({ individual: displaySingle, count: displayCount, total: displayTotal }));
         }
       }
 
       // 初始化抽卡次数显示
       function updateVideoDrawCountLabel(){
-        videoDrawCountLabel.textContent = `抽卡次数：X${node.data.videoDrawCount}`;
+        { const _t = window.t ? window.t('draw_count_x', { count: node.data.videoDrawCount }) : null; videoDrawCountLabel.textContent = (_t && _t !== 'draw_count_x') ? _t : `抽卡次数：X${node.data.videoDrawCount}`; }
         updateVideoComputingPowerDisplay();
       }
       updateVideoDrawCountLabel();
@@ -8354,6 +8374,11 @@
       addDebugButtonToNode(el, node);
       
       canvasEl.appendChild(el);
+
+      // i18n: 翻译节点内 DOM
+      if (typeof window.ZJTi18nDOM !== 'undefined') {
+        setTimeout(() => window.ZJTi18nDOM.scanDOM(el), 0);
+      }
 
       // 初始化宫格预览（延迟执行，确保连接已建立）
       setTimeout(() => { updateGridPreviewUI(el, node); }, 100);
@@ -9016,7 +9041,7 @@
         <div class="port input" data-i18n="shot_frame_input_port:title"></div>
         <div class="port output" data-i18n="shot_frame_output_port:title"></div>
         <div class="node-header">
-          <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>${window.t ? window.t('node_shot_frame_label') : '分镜'}: ${node.title}</div>
+          <div class="node-title" data-i18n="shot_frame_title" data-i18n-params='${JSON.stringify({ title: escapeHtml(node.title) })}'><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>${window.t ? window.t('shot_frame_title', { title: escapeHtml(node.title) }) : `分镜: ${escapeHtml(node.title)}`}</div>
           <button class="icon-btn" data-i18n="node_delete_btn:title" title="${window.t ? window.t('node_delete_btn') : '删除'}">×</button>
         </div>
         <div class="node-body">
@@ -9149,9 +9174,9 @@
                 <div class="shot-frame-computing-power" style="padding: 6px; border-radius: 6px;">
                   <div style="display: flex; justify-content: space-between; align-items: center;">
                     <span style="color: #9ca3af; font-size: 11px;" data-i18n="shot_frame_computing_power">${window.t ? window.t('shot_frame_computing_power') : '算力消耗：'}</span>
-                    <span class="shot-frame-computing-power-value" style="color: #3b82f6; font-weight: bold; font-size: 12px;" data-i18n="shot_frame_computing_power_value">${window.t ? window.t('shot_frame_computing_power_value', { power: 0 }) : '0 算力'}</span>
+                    <span class="shot-frame-computing-power-value" style="color: #3b82f6; font-weight: bold; font-size: 12px;" data-i18n="shot_frame_computing_power_value" data-i18n-params='{"power":0}'>${window.t ? window.t('shot_frame_computing_power_value', { power: 0 }) : '0 算力'}</span>
                   </div>
-                  <div class="shot-frame-computing-power-detail" style="margin-top: 2px; font-size: 10px; color: #6b7280; text-align: right;" data-i18n="shot_frame_computing_power_detail">${window.t ? window.t('shot_frame_computing_power_detail', { individual: 0, count: 1, total: 0 }) : '单个 0 算力 × 1 个 = 0 算力'}</div>
+                  <div class="shot-frame-computing-power-detail" style="margin-top: 2px; font-size: 10px; color: #6b7280; text-align: right;" data-i18n="shot_frame_computing_power_detail" data-i18n-params='{"individual":0,"count":1,"total":0}'>${window.t ? window.t('shot_frame_computing_power_detail', { individual: 0, count: 1, total: 0 }) : '单个 0 算力 × 1 个 = 0 算力'}</div>
                 </div>
               </div>
             </div>
@@ -9825,7 +9850,7 @@
         // 使用 TaskConfig API 动态获取算力（自动支持所有模型）
         return TaskConfig.getComputingPower(videoModel, duration);
       }
-      
+
       // 更新视频算力显示
       function updateVideoComputingPowerDisplay() {
         const singlePower = calculateVideoComputingPower();
@@ -9834,13 +9859,15 @@
 
         if(computingPowerValue) {
           const displayPower = typeof totalPower === 'number' ? totalPower : 0;
-          computingPowerValue.textContent = `${displayPower} 算力`;
+          computingPowerValue.textContent = window.t ? window.t('shot_frame_computing_power_value', { power: displayPower }) : `${displayPower} 算力`;
+          computingPowerValue.setAttribute('data-i18n-params', JSON.stringify({ power: displayPower }));
         }
         if(computingPowerDetail) {
           const displaySingle = typeof singlePower === 'number' ? singlePower : 0;
           const displayCount = typeof count === 'number' ? count : 1;
           const displayTotal = typeof totalPower === 'number' ? totalPower : 0;
-          computingPowerDetail.textContent = `单个 ${displaySingle} 算力 × ${displayCount} 个 = ${displayTotal} 算力`;
+          computingPowerDetail.textContent = window.t ? window.t('shot_frame_computing_power_detail', { individual: displaySingle, count: displayCount, total: displayTotal }) : `单个 ${displaySingle} 算力 × ${displayCount} 个 = ${displayTotal} 算力`;
+          computingPowerDetail.setAttribute('data-i18n-params', JSON.stringify({ individual: displaySingle, count: displayCount, total: displayTotal }));
         }
       }
 
@@ -9853,12 +9880,16 @@
       }
 
       function updateDrawCountLabel(){
-        drawCountLabel.textContent = `抽卡次数：X${node.data.drawCount}`;
+        const count = node.data.drawCount;
+        const translated = window.t ? window.t('draw_count_x', { count }) : null;
+        drawCountLabel.textContent = (translated && translated !== 'draw_count_x') ? translated : `抽卡次数：X${count}`;
       }
       updateDrawCountLabel();
 
       function updateVideoDrawCountLabel(){
-        videoDrawCountLabel.textContent = `抽卡次数：X${node.data.videoDrawCount}`;
+        const count = node.data.videoDrawCount;
+        const translated = window.t ? window.t('draw_count_x', { count }) : null;
+        videoDrawCountLabel.textContent = (translated && translated !== 'draw_count_x') ? translated : `抽卡次数：X${count}`;
         // 同时更新算力显示
         updateVideoComputingPowerDisplay();
       }
@@ -10376,6 +10407,12 @@
       addDebugButtonToNode(el, node);
       
       canvasEl.appendChild(el);
+
+      // i18n: 翻译节点内 DOM
+      if (typeof window.ZJTi18nDOM !== 'undefined') {
+        setTimeout(() => window.ZJTi18nDOM.scanDOM(el), 0);
+      }
+
       setSelected(id);
       return id;
     }

@@ -71,7 +71,7 @@
         <div class="port video-input-port" title="${window.t ? window.t('dialogue_video_input_port_title') : '视频输入（连接视频节点作为情感参考）'}"></div>
         <div class="port output" title="${window.t ? window.t('dialogue_output_port_title') : '输出'}"></div>
         <div class="node-header">
-          <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><path d="M8 12H8.01M12 12H12.01M16 12H16.01" stroke-linecap="round"/><path d="M3 7C3 5.89543 3.89543 5 5 5H19C20.1046 5 21 5.89543 21 7V15C21 16.1046 20.1046 17 19 17H13L9 21V17H5C3.89543 17 3 16.1046 3 15V7Z"/></svg>${node.title}</div>
+          <div class="node-title" data-i18n="dialogue_group_title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><path d="M8 12H8.01M12 12H12.01M16 12H16.01" stroke-linecap="round"/><path d="M3 7C3 5.89543 3.89543 5 5 5H19C20.1046 5 21 5.89543 21 7V15C21 16.1046 20.1046 17 19 17H13L9 21V17H5C3.89543 17 3 16.1046 3 15V7Z"/></svg>${window.t ? window.t('dialogue_group_title') : '对话组'}</div>
           <button class="icon-btn" title="${window.t ? window.t('dialogue_delete_btn') : '删除'}">×</button>
         </div>
         <div class="node-body">
@@ -1103,8 +1103,14 @@
       
       // 添加调试按钮
       addDebugButtonToNode(el, node);
-      
+
       canvasEl.appendChild(el);
+
+      // i18n: 翻译节点内 DOM
+      if (typeof window.ZJTi18nDOM !== 'undefined') {
+        setTimeout(() => window.ZJTi18nDOM.scanDOM(el), 0);
+      }
+
       setSelected(id);
       return id;
     }
@@ -1125,7 +1131,7 @@
       const node = state.nodes.find(n => n.id === nodeData.id);
       if(!node) return;
       
-      node.title = nodeData.title || '对话组';
+      node.title = nodeData.title || (window.t ? window.t('dialogue_group_title') : '对话组');
       Object.assign(node.data, nodeData.data);
       
       const el = canvasEl.querySelector(`.node[data-node-id="${nodeData.id}"]`);

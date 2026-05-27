@@ -158,6 +158,7 @@
   "node_delete_btn": "删除",
   "node_video_label": "视频",
   "node_shot_frame_label": "分镜",
+  "shot_frame_title": "分镜: {title}",
   "node_preview_label": "预览",
   "node_audio_file_label": "音频文件",
   "node_play_btn": "播放",
@@ -376,6 +377,7 @@
   "shot_group_output_port": "输出",
   "shot_group_details_section": "分镜详情",
   "shot_group_label": "分镜组:",
+  "shot_group_title": "分镜组: {title}",
   "shot_group_shot_count": "共 {count} 个分镜",
   "shot_group_shot_duration": "时长:",
   "shot_group_detail_btn": "查看/编辑",
@@ -655,6 +657,19 @@
   "feedback_close_btn": "关闭",
   "add_btn_title": "添加",
   "ai_generate_materials": "AI生成剧本，人物，场景，道具",
-  "style_guide_link": "查看画风说明"
+  "style_guide_link": "查看画风说明",
+  "text_node_title": "文本",
+  "text_node_output_port": "输出文本",
+  "text_node_content_label": "文本内容",
+  "text_node_placeholder": "输入文本内容...",
+  "text_node_chars": "字符",
+  "computing_power_value": "{power} 算力",
+  "computing_power_detail": "单个 {individual} 算力 × {count} 个 = {total} 算力",
+  "shot_group_video_draw_count": "抽卡次数：X{count}",
+  "draw_count_x": "抽卡次数：X{count}",
+  "draw_count_simple": "抽卡次数: {count}",
+  "timeline_pillar_mode": "柱子模式",
+  "shot_group_grid_overflow": "分镜数量超过25，不支持宫格预览",
+  "shot_group_grid_suffix": "宫格"
 }
 

@@ -951,7 +951,7 @@
     <div class="timeline-header">
       <div class="timeline-header-left">
         <span class="timeline-title" data-i18n="timeline_label">${window.t ? window.t('timeline_label') : '时间轴'}</span>
-        <span class="timeline-total-duration" id="timelineTotalDuration" data-i18n="timeline_total_duration">${window.t ? window.t('timeline_total_duration', { duration: '0:00' }) : '总时长: 0:00'}</span>
+        <span class="timeline-total-duration" id="timelineTotalDuration" data-i18n="timeline_total_duration" data-i18n-params='{"duration":"0:00"}'>${window.t ? window.t('timeline_total_duration', { duration: '0:00' }) : '总时长: 0:00'}</span>
         <span style="color:var(--muted);font-size:11px;margin-left:8px;" data-i18n="timeline_drag_hint">${window.t ? window.t('timeline_drag_hint') : '提示: 拖拽调整顺序 | 按住Shift拖拽可替换'}</span>
       </div>
       <div class="timeline-header-right">

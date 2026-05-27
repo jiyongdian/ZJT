@@ -682,23 +682,23 @@
     <div class="modal-overlay" v-if="showModeSelectModal" @click.self="creationMode ? showModeSelectModal = false : null">
       <div class="modal" style="position: relative; max-width: 500px;">
         <button class="modal-close" v-if="creationMode" @click="showModeSelectModal = false">×</button>
-        <div class="modal-title" style="text-align: center;">选择创作模式</div>
+        <div class="modal-title" style="text-align: center;">{{ $t('select_creation_mode') }}</div>
         <div style="padding: 20px;">
-          <p style="text-align: center; color: var(--muted); margin-bottom: 24px;">请选择您的创作模式</p>
+          <p style="text-align: center; color: var(--muted); margin-bottom: 24px;">{{ $t('select_creation_mode_desc') }}</p>
           <div class="mode-select-list">
             <div class="mode-select-item" :class="{active: creationMode === 'short_drama'}" @click="selectCreationMode('short_drama')">
               <div class="mode-select-icon">🎬</div>
               <div class="mode-select-content">
-                <div class="mode-select-title" data-i18n="mode_short_drama"></div>
-                <div class="mode-select-desc">适用于AI短剧创作，包含剧本、角色、场景、视频生成全流程</div>
+                <div class="mode-select-title">{{ $t('mode_short_drama') }}</div>
+                <div class="mode-select-desc">{{ $t('mode_short_drama_desc') }}</div>
               </div>
               <div class="mode-select-check" v-if="creationMode === 'short_drama'">✓</div>
             </div>
             <div class="mode-select-item" :class="{active: creationMode === 'marketing'}" @click="selectCreationMode('marketing')">
               <div class="mode-select-icon">🎯</div>
               <div class="mode-select-content">
-                <div class="mode-select-title">营销模式 <span class="beta-tag">Beta</span></div>
-                <div class="mode-select-desc">适用于营销内容创作，包含带货脚本、广告创意、产品文案等全流程</div>
+                <div class="mode-select-title">{{ $t('mode_marketing') }} <span class="beta-tag">Beta</span></div>
+                <div class="mode-select-desc">{{ $t('mode_marketing_desc') }}</div>
               </div>
               <div class="mode-select-check" v-if="creationMode === 'marketing'">✓</div>
             </div>
@@ -737,10 +737,10 @@
         <!-- 短剧模式内容 -->
         <!-- 当前模式显示 -->
           <div class="current-mode-bar">
-            <span class="current-mode-label" data-i18n="current_mode"></span>
-            <span class="current-mode-value" v-if="$root.creationMode === 'marketing'">🎯 营销模式</span>
+            <span class="current-mode-label">{{ $t('current_mode') }}</span>
+            <span class="current-mode-value" v-if="$root.creationMode === 'marketing'">🎯 {{ $t('mode_marketing') }}</span>
             <span class="current-mode-value" v-else>🎬 {{ $t('mode_short_drama') }}</span>
-            <button class="mode-switch-btn" @click.stop="$root.showModeSelectModal = true" data-i18n="switch_mode"></button>
+            <button class="mode-switch-btn" @click.stop="$root.showModeSelectModal = true">{{ $t('switch_mode') }}</button>
           </div>
 
           <!-- 开始创作大横幅 -->
@@ -8624,6 +8624,11 @@
     // 注册 Vue i18n 插件
     app.use(window.ZJTi18nVue);
     app.mount('#app');
+
+    // 扫描 DOM 中的 data-i18n 属性并翻译
+    if (window.ZJTi18nDOM) {
+      ZJTi18nDOM.scanDOM();
+    }
 
     // 初始化语言切换器到页面头部
     if (window.ZJTi18nSwitcher) {

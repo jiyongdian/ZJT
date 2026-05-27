@@ -33,14 +33,37 @@ window.ZJTi18nDOM = (() => {
         targets = t;
       }
 
-      const translated = i18n.t(translationKey);
+      // 支持带参数的翻译：data-i18n-params='{"power":0}'
+      let params = {};
+      const paramsAttr = el.getAttribute('data-i18n-params');
+      if (paramsAttr) {
+        try { params = JSON.parse(paramsAttr); } catch (e) { /* ignore */ }
+      }
+      const translated = i18n.t(translationKey, params);
 
       // 处理多个目标属性
       targets.split(',').forEach((target) => {
         target = target.trim();
 
         if (target === 'text') {
-          el.textContent = translated;
+          // 保留子元素（如 SVG 图标），只替换文本部分
+          if (el.childElementCount > 0) {
+            // 有子元素：找到并替换最后一个文本节点，或追加新文本节点
+            let lastTextNode = null;
+            for (let i = el.childNodes.length - 1; i >= 0; i--) {
+              if (el.childNodes[i].nodeType === Node.TEXT_NODE && el.childNodes[i].textContent.trim()) {
+                lastTextNode = el.childNodes[i];
+                break;
+              }
+            }
+            if (lastTextNode) {
+              lastTextNode.textContent = translated;
+            } else {
+              el.appendChild(document.createTextNode(translated));
+            }
+          } else {
+            el.textContent = translated;
+          }
         } else if (target === 'html') {
           el.innerHTML = translated;
         } else if (target === 'placeholder') {

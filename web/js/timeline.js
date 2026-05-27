@@ -486,7 +486,8 @@
         track.innerHTML = '';
         audioTrack.innerHTML = '';
         ruler.innerHTML = '';
-        totalDurationEl.textContent = '总时长: 0:00';
+        totalDurationEl.textContent = window.t ? window.t('timeline_total_duration', { duration: '0:00' }) : '总时长: 0:00';
+        totalDurationEl.setAttribute('data-i18n-params', JSON.stringify({ duration: '0:00' }));
         return;
       }
       
@@ -520,7 +521,9 @@
       const totalDuration = Math.max(videoTotalDuration, audioTotalDuration);
       const minutes = Math.floor(totalDuration / 60);
       const seconds = (totalDuration % 60).toFixed(2);
-      totalDurationEl.textContent = `总时长: ${minutes}:${seconds.padStart(5, '0')}`;
+      const durationStr = `${minutes}:${seconds.padStart(5, '0')}`;
+      totalDurationEl.textContent = window.t ? window.t('timeline_total_duration', { duration: durationStr }) : `总时长: ${durationStr}`;
+      totalDurationEl.setAttribute('data-i18n-params', JSON.stringify({ duration: durationStr }));
       
       renderTimelineRuler(ruler, totalDuration);
       
@@ -588,7 +591,9 @@
       const totalDuration = accumulatedTime;
       const minutes = Math.floor(totalDuration / 60);
       const seconds = (totalDuration % 60).toFixed(2);
-      totalDurationEl.textContent = `总时长: ${minutes}:${seconds.padStart(5, '0')} (柱子模式)`;
+      const durationStr = `${minutes}:${seconds.padStart(5, '0')}`;
+      totalDurationEl.textContent = (window.t ? window.t('timeline_total_duration', { duration: durationStr }) : `总时长: ${durationStr}`) + ` (${window.t ? window.t('timeline_pillar_mode') : '柱子模式'})`;
+      totalDurationEl.setAttribute('data-i18n-params', JSON.stringify({ duration: durationStr }));
       
       renderTimelineRuler(ruler, totalDuration);
       
