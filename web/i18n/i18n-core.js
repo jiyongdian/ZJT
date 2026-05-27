@@ -102,21 +102,22 @@ window.ZJTi18n = (() => {
    * @param {Array<string>} namespaces - 需要加载的命名空间（可选，默认使用已加载的）
    */
   async function setLocale(locale, namespaces = null) {
-    if (state.locale === locale) return;
-
+    const localeChanged = state.locale !== locale;
     state.locale = locale;
     localStorage.setItem('zjt_locale', locale);
 
     // 使用已加载的命名空间，或使用传入的命名空间
     const namespacesToLoad = namespaces || state.loadedNamespaces || ['common'];
 
-    // 加载相应语言的翻译文件
+    // 加载相应语言的翻译文件（包括新传入的命名空间）
     for (const ns of namespacesToLoad) {
       await loadMessages(locale, ns);
     }
 
-    // 通知所有监听器
-    emit('locale-changed', { locale, namespaces: namespacesToLoad });
+    // 语言变化时通知所有监听器
+    if (localeChanged) {
+      emit('locale-changed', { locale, namespaces: namespacesToLoad });
+    }
   }
 
   /**

@@ -61,6 +61,16 @@ body {
     color: var(--admin-sidebar-text);
 }
 
+.admin-logo-actions {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+.admin-i18n-switcher {
+    display: inline-block;
+}
+
 .admin-nav {
     list-style: none;
 }
@@ -2191,4 +2201,47 @@ body {
 
 .empty-state p {
     font-size: 14px;
+}
+
+/* i18n 语言切换器 - 管理后台侧边栏样式 */
+.admin-i18n-switcher .language-switcher {
+  display: inline-flex;
+}
+
+.admin-i18n-switcher .language-switcher-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #cbd5e1;
+  padding: 6px 10px;
+  font-size: 12px;
+  justify-content: center;
+}
+
+.admin-i18n-switcher .language-switcher-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+}
+
+.admin-i18n-switcher .language-dropdown {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 120px;
+}
+
+.admin-i18n-switcher .language-dropdown .language-option {
+  color: #475569;
+  font-size: 12px;
+  padding: 8px 12px;
+}
+
+.admin-i18n-switcher .language-dropdown .language-option:hover {
+  background-color: #f1f5f9;
+  color: #1e293b;
+}
+
+.admin-i18n-switcher .language-dropdown .language-option.active {
+  background-color: #e0e7ff;
+  color: #4f46e5;
 }

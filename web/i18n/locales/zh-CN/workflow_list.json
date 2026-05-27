@@ -20,7 +20,7 @@
   "network_error": "网络错误",
   "network_error_desc": "请检查网络连接",
   "no_workflows": "暂无工作流",
-  "no_workflows_desc": "点击"新建工作流"按钮创建您的第一个工作流",
+  "no_workflows_desc": "点击「新建工作流」按钮创建您的第一个工作流",
   "page_info": "第 {current} 页 / 共 {total} 页 (共 {count} 条)",
   "previous_page": "上一页",
   "next_page": "下一页",

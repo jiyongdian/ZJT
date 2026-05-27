@@ -1764,10 +1764,14 @@
           const totalPower = singlePower * count;
 
           if(shotGroupComputingPowerValue) {
-            shotGroupComputingPowerValue.textContent = `${totalPower} 算力`;
+            const displayPower = typeof totalPower === 'number' ? totalPower : 0;
+            shotGroupComputingPowerValue.textContent = `${displayPower} 算力`;
           }
           if(shotGroupComputingPowerDetail) {
-            shotGroupComputingPowerDetail.textContent = `单个 ${singlePower} 算力 × ${count} 个 = ${totalPower} 算力`;
+            const displaySingle = typeof singlePower === 'number' ? singlePower : 0;
+            const displayCount = typeof count === 'number' ? count : 1;
+            const displayTotal = typeof totalPower === 'number' ? totalPower : 0;
+            shotGroupComputingPowerDetail.textContent = `单个 ${displaySingle} 算力 × ${displayCount} 个 = ${displayTotal} 算力`;
           }
         }
 
@@ -8250,12 +8254,16 @@
         const singlePower = calculateVideoComputingPower();
         const count = node.data.videoDrawCount || 1;
         const totalPower = singlePower * count;
-        
+
         if(computingPowerValue) {
-          computingPowerValue.textContent = `${totalPower} 算力`;
+          const displayPower = typeof totalPower === 'number' ? totalPower : 0;
+          computingPowerValue.textContent = `${displayPower} 算力`;
         }
         if(computingPowerDetail) {
-          computingPowerDetail.textContent = `单个 ${singlePower} 算力 × ${count} 个 = ${totalPower} 算力`;
+          const displaySingle = typeof singlePower === 'number' ? singlePower : 0;
+          const displayCount = typeof count === 'number' ? count : 1;
+          const displayTotal = typeof totalPower === 'number' ? totalPower : 0;
+          computingPowerDetail.textContent = `单个 ${displaySingle} 算力 × ${displayCount} 个 = ${displayTotal} 算力`;
         }
       }
 
@@ -9823,12 +9831,16 @@
         const singlePower = calculateVideoComputingPower();
         const count = node.data.videoDrawCount || 1;
         const totalPower = singlePower * count;
-        
+
         if(computingPowerValue) {
-          computingPowerValue.textContent = `${totalPower} 算力`;
+          const displayPower = typeof totalPower === 'number' ? totalPower : 0;
+          computingPowerValue.textContent = `${displayPower} 算力`;
         }
         if(computingPowerDetail) {
-          computingPowerDetail.textContent = `单个 ${singlePower} 算力 × ${count} 个 = ${totalPower} 算力`;
+          const displaySingle = typeof singlePower === 'number' ? singlePower : 0;
+          const displayCount = typeof count === 'number' ? count : 1;
+          const displayTotal = typeof totalPower === 'number' ? totalPower : 0;
+          computingPowerDetail.textContent = `单个 ${displaySingle} 算力 × ${displayCount} 个 = ${displayTotal} 算力`;
         }
       }
 

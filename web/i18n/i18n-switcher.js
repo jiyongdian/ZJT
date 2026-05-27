@@ -94,7 +94,7 @@ window.ZJTi18nSwitcher = (() => {
     const dropdown = container.querySelector('.language-dropdown');
     dropdown.classList.remove('show');
 
-    await i18n.setLocale(locale, ['common', 'video_workflow', 'index', 'marketing_agent']);
+    await i18n.setLocale(locale, ['common', 'video_workflow', 'index', 'marketing_agent', 'admin', 'workflow_list']);
 
     // 重新扫描所有 data-i18n 属性
     if (window.ZJTi18nDOM) {
@@ -112,11 +112,14 @@ window.ZJTi18nSwitcher = (() => {
   function render(target) {
     let targetEl = target;
     if (typeof target === 'string') {
-      targetEl = document.querySelector(target);
+      // 支持传入 id（不带#）或 CSS 选择器
+      targetEl = target.startsWith('#') || target.startsWith('.')
+        ? document.querySelector(target)
+        : document.getElementById(target);
     }
 
     if (!targetEl) {
-      console.warn('Language switcher target not found');
+      console.warn('Language switcher target not found:', target);
       return;
     }
 

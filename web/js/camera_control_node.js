@@ -98,7 +98,7 @@ function createCameraControlNode(opts){
   el.innerHTML = `
     <div class="port input" title="输入（连接图片节点）" data-i18n="camera_input_port_title:title"></div>
     <div class="node-header">
-      <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>${node.title}</div>
+      <div class="node-title" data-i18n="camera_control_title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>相机控制</div>
       <button class="icon-btn" title="删除" data-i18n="dialogue_delete_btn:title">×</button>
     </div>
     <div class="node-body">
@@ -691,6 +691,11 @@ function createCameraControlNode(opts){
 
   canvasEl.appendChild(el);
   setSelected(id);
+
+  // i18n 翻译
+  if (window.ZJTi18nDOM) {
+    window.ZJTi18nDOM.scanDOM(el);
+  }
 
   // 初始化 3D 预览
   setTimeout(() => updateCameraPreview(), 100);
