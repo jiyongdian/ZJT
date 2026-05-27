@@ -420,6 +420,18 @@ def init_scheduler(app):
         coalesce=True
     )
 
+    # 孤儿任务定期恢复（status=PROCESSING 但 project_id=NULL 超过20分钟的任务）
+    logger.info('启用孤儿任务定期恢复，每20分钟执行一次')
+    scheduler.add_job(
+        func=_reset_orphan_processing_tasks,
+        trigger=IntervalTrigger(minutes=20),
+        id='reset_orphan_processing_tasks',
+        name='Reset orphan processing tasks every 20 minutes',
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True
+    )
+
     # RunningHub 异步任务轮询（音频生成等）
     logger.info('启用RunningHub异步任务轮询，每10秒执行一次')
     from task.runninghub_async_task import process_runninghub_async_tasks

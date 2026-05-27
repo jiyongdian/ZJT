@@ -187,6 +187,33 @@ AND DATEDIFF(NOW(), t.created_at) >= 3
 ORDER BY t.created_at ASC;
 ```
 
+## 孤儿任务恢复机制
+
+### 问题场景
+
+当同步任务（sync_mode=True，如 Seedream 文生图）通过 `SyncTaskExecutor` 提交到进程池后，子进程会将 `ai_tools.status` 设为 `PROCESSING`（1），但此时 `project_id` 为 NULL。如果子进程完成后结果处理失败（如 DB 连接异常导致双重异常），任务会卡在 `status=1, project_id=NULL` 的状态。
+
+### 恢复策略（三层防护）
+
+1. **即时恢复（`_check_task_status`）**：当调度器检查到 `status=PROCESSING` 但 `project_id=NULL` 且任务不在同步执行器中时，立即重置为 `PENDING`（status=0），让调度器重新提交任务。
+
+2. **定时恢复（`_reset_orphan_processing_tasks`，每10分钟）**：作为兜底机制，定期扫描 `status=1, project_id=NULL, update_time` 超过20分钟的任务，重置为 `PENDING`。
+
+3. **异常保护（`SyncTaskExecutor.check_results`）**：对 `_handle_task_failure` 加了 try/except 保护，即使失败处理函数本身抛异常，也会通过兜底逻辑确保任务状态被更新为 `FAILED`。
+
+### 监控孤儿任务
+
+```sql
+-- 检查当前是否有孤儿任务（status=PROCESSING 但无 project_id）
+SELECT id, type, status, project_id, update_time,
+       TIMESTAMPDIFF(MINUTE, update_time, NOW()) as stuck_minutes
+FROM ai_tools
+WHERE status = 1
+  AND project_id IS NULL
+  AND result_url IS NULL
+ORDER BY update_time ASC;
+```
+
 ## 故障排查
 
 ### 问题：任务长时间未处理
@@ -195,11 +222,13 @@ ORDER BY t.created_at ASC;
 1. `next_trigger` 被设置到很久之后
 2. 任务重试次数过多，延迟时间很长
 3. 接口改动导致任务无法成功
+4. 同步任务子进程完成后结果处理失败，任务卡在 `status=1, project_id=NULL`
 
 **排查步骤**：
 1. 检查任务的 `try_count` 和 `next_trigger`
 2. 查看任务处理日志，确认失败原因
 3. 如果是接口改动，需要手动清理或修复旧任务
+4. 检查是否有孤儿任务（见上方监控 SQL）
 
 ### 问题：任务被意外标记为过期
 

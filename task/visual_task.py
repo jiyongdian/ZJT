@@ -389,8 +389,12 @@ async def _check_task_status(ai_tool):
         return False
     
     if not project_id:
-        logger.error(f"AI tool {task_id} has no project_id while status=AI_TOOL_STATUS_PROCESSING")
-        return False
+        # 孤儿任务：status=PROCESSING 但 project_id=NULL，且不在同步执行器中
+        # 说明同步执行器子进程已完成但结果处理失败，需要重置为 PENDING 让调度器重新提交
+        logger.warning(f"AI tool {task_id} has no project_id while status=PROCESSING and not in sync executor, resetting to PENDING")
+        AIToolsModel.update(task_id, status=AI_TOOL_STATUS_PENDING)
+        TasksModel.update_by_task_id(task_id, status=TASK_STATUS_QUEUED, try_count=0, next_trigger=datetime.now())
+        return True
     
     if _is_test_mode_enabled() and isinstance(project_id, str) and project_id.startswith("mock_task_"):
         logger.info(f"[TEST MODE] [DRIVER] Checking status for mock task {project_id}")
