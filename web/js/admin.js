@@ -26,8 +26,8 @@ const PROVIDER_DEFINITIONS = [
     // ===== 大模型服务商 =====
     {
         id: 'huoshan',
-        name: '火山引擎',
-        description: '火山引擎 Doubao 大模型，高性能、低延迟',
+        nameKey: 'provider_huoshan_name',
+        descKey: 'provider_huoshan_desc',
         category: 'llm',
         icon: '🔥',
         docUrl: 'https://console.volcengine.com/ark',
@@ -35,17 +35,17 @@ const PROVIDER_DEFINITIONS = [
         displayOrder: 4,
         baseName: 'huoshan',
         isOfficialAPI: false,
-        impacts: ['剧本创作', 'AI对话'],
+        impactsKey: 'provider_huoshan_impacts',
         fields: [
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true, helpText: '从火山引擎控制台获取' }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true, helpTextKey: 'field_api_key_help_volcengine' }
         ],
         configKeyMap: { api_key: 'volcengine.api_key' },
         testEndpoint: null
     },
     {
         id: 'ywapi',
-        name: '智剧通API',
-        description: '智剧通API 官方平台，支持多种模型和服务',
+        nameKey: 'provider_ywapi_name',
+        descKey: 'provider_ywapi_desc',
         category: 'llm',
         icon: '☁️',
         docUrl: 'https://yw.perseids.cn/register?aff=hE0h',
@@ -53,20 +53,20 @@ const PROVIDER_DEFINITIONS = [
         displayOrder: 1,
         baseName: 'ywapi',
         isOfficialAPI: true,
-        showInCategories: ['llm', 'image', 'video'],  // 在所有三个分类中显示
-        impacts: ['剧本创作', 'AI对话', 'Nano Banana图片编辑', '生视频模型'],
+        showInCategories: ['llm', 'image', 'video'],
+        impactsKey: 'provider_ywapi_impacts',
         fields: [
-            { id: 'name', label: '站点名称', type: 'text', placeholder: '智剧通API', required: false, readOnly: true, defaultValue: '智剧通API' },
+            { id: 'name', labelKey: 'field_ywapi_name_label', type: 'text', placeholderKey: 'field_ywapi_name_placeholder', required: false, readOnly: true, defaultValue: '智剧通API' },
             { id: 'base_url', label: 'Base URL', type: 'text', placeholder: 'https://yw.perseids.cn', required: true, readOnly: true, defaultValue: 'https://yw.perseids.cn' },
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true }
         ],
         configKeyMap: { name: 'api_aggregator.site_0.name', base_url: 'api_aggregator.site_0.base_url', api_key: 'api_aggregator.site_0.api_key' },
         testEndpoint: null
     },
     {
         id: 'google',
-        name: 'Google/Gemini',
-        description: 'Google Gemini 大模型，支持多种 AI 能力',
+        nameKey: 'provider_google_name',
+        descKey: 'provider_google_desc',
         category: 'llm',
         icon: '✨',
         docUrl: 'https://jiekou.ai/user/register?invited_code=119T5V',
@@ -74,18 +74,18 @@ const PROVIDER_DEFINITIONS = [
         displayOrder: 5,
         baseName: 'google',
         isOfficialAPI: false,
-        impacts: ['剧本创作', 'AI对话', '剧本拆分'],
+        impactsKey: 'provider_google_impacts',
         fields: [
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 Google API Key', required: true, helpText: '支持第三方代理服务' },
-            { id: 'base_url', label: 'Base URL (可选)', type: 'url', placeholder: 'https://api.jiekou.ai', required: false, helpText: '可使用第三方代理服务，留空使用默认值' }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder_google', required: true, helpTextKey: 'field_api_key_help_third_party' },
+            { id: 'base_url', labelKey: 'field_base_url_label_optional', type: 'url', placeholder: 'https://api.jiekou.ai', required: false, helpTextKey: 'field_base_url_placeholder' }
         ],
         configKeyMap: { api_key: 'llm.google.api_key', base_url: 'llm.google.gemini_base_url' },
         testEndpoint: 'google'
     },
     {
         id: 'claude',
-        name: 'Claude',
-        description: 'Anthropic Claude 大模型，擅长长文本推理与创作',
+        nameKey: 'provider_claude_name',
+        descKey: 'provider_claude_desc',
         category: 'llm',
         icon: '🟣',
         docUrl: 'https://jiekou.ai/user/register?invited_code=119T5V',
@@ -93,18 +93,18 @@ const PROVIDER_DEFINITIONS = [
         displayOrder: 6,
         baseName: 'claude',
         isOfficialAPI: false,
-        impacts: ['剧本创作', 'AI对话', '剧本拆分'],
+        impactsKey: 'provider_claude_impacts',
         fields: [
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 Claude API Key', required: true, helpText: '支持第三方代理服务' },
-            { id: 'base_url', label: 'Base URL (可选)', type: 'url', placeholder: 'https://api.jiekou.ai/openai', required: false, helpText: '可使用第三方代理服务，留空使用默认值' }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder_claude', required: true, helpTextKey: 'field_api_key_help_third_party' },
+            { id: 'base_url', labelKey: 'field_base_url_label_optional', type: 'url', placeholder: 'https://api.jiekou.ai/openai', required: false, helpTextKey: 'field_base_url_placeholder' }
         ],
         configKeyMap: { api_key: 'llm.claude.api_key', base_url: 'llm.claude.base_url' },
         testEndpoint: null
     },
     {
         id: 'qwen',
-        name: 'Qwen',
-        description: '通义千问大模型，阿里云百炼平台',
+        nameKey: 'provider_qwen_name',
+        descKey: 'provider_qwen_desc',
         category: 'llm',
         icon: '🧠',
         docUrl: 'https://dashscope.console.aliyun.com/apiKey',
@@ -112,18 +112,18 @@ const PROVIDER_DEFINITIONS = [
         displayOrder: 3,
         baseName: 'qwen',
         isOfficialAPI: false,
-        impacts: ['剧本创作', 'AI对话', '剧本拆分'],
+        impactsKey: 'provider_qwen_impacts',
         fields: [
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 Qwen API Key', required: true },
-            { id: 'base_url', label: 'Base URL (可选)', type: 'url', placeholder: 'https://dashscope.aliyuncs.com/compatible-mode/v1', required: false, helpText: '可使用第三方代理服务，留空使用默认值' }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder_qwen', required: true },
+            { id: 'base_url', labelKey: 'field_base_url_label_optional', type: 'url', placeholder: 'https://dashscope.aliyuncs.com/compatible-mode/v1', required: false, helpTextKey: 'field_base_url_placeholder' }
         ],
         configKeyMap: { api_key: 'llm.qwen.api_key', base_url: 'llm.qwen.base_url' },
         testEndpoint: 'qwen'
     },
     {
         id: 'deepseek',
-        name: 'DeepSeek',
-        description: 'DeepSeek 大模型，高性价比推理与创作',
+        nameKey: 'provider_deepseek_name',
+        descKey: 'provider_deepseek_desc',
         category: 'llm',
         icon: '🔍',
         docUrl: 'https://platform.deepseek.com/api_keys',
@@ -131,10 +131,10 @@ const PROVIDER_DEFINITIONS = [
         displayOrder: 2,
         baseName: 'deepseek',
         isOfficialAPI: false,
-        impacts: ['剧本创作', 'AI对话', '剧本拆分'],
+        impactsKey: 'provider_deepseek_impacts',
         fields: [
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 DeepSeek API Key', required: true },
-            { id: 'base_url', label: 'Base URL (可选)', type: 'url', placeholder: 'https://api.deepseek.com', required: false, helpText: '可使用第三方代理服务，留空使用默认值' }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder_deepseek', required: true },
+            { id: 'base_url', labelKey: 'field_base_url_label_optional', type: 'url', placeholder: 'https://api.deepseek.com', required: false, helpTextKey: 'field_base_url_placeholder' }
         ],
         configKeyMap: { api_key: 'llm.deepseek.api_key', base_url: 'llm.deepseek.base_url' },
         testEndpoint: null
@@ -143,8 +143,8 @@ const PROVIDER_DEFINITIONS = [
     // ===== 生图服务商 =====
     {
         id: 'duomi',
-        name: '多米',
-        description: '多米 AI 生图平台，高质量图像生成',
+        nameKey: 'provider_duomi_name',
+        descKey: 'provider_duomi_image_desc',
         category: 'image',
         icon: '🎨',
         docUrl: 'https://duomiapi.com/user/register?cps=U4GgW1Fx',
@@ -152,17 +152,17 @@ const PROVIDER_DEFINITIONS = [
         displayOrder: 4,
         baseName: 'duomi',
         isOfficialAPI: false,
-        impacts: ['Nano Banana图片编辑', 'Sora2/Kling/Veo3视频生成'],
+        impactsKey: 'provider_duomi_image_impacts',
         fields: [
-            { id: 'token', label: 'Token', type: 'text', placeholder: '请输入 Duomi API Token', required: true, helpText: '获取方式：快速注册' }
+            { id: 'token', label: 'Token', type: 'text', placeholderKey: 'field_token_placeholder_duomi', required: true, helpTextKey: 'field_token_help_quick_register' }
         ],
         configKeyMap: { token: 'duomi.token' },
         testEndpoint: null
     },
     {
         id: 'huoshan_image',
-        name: '火山引擎',
-        description: '火山引擎 AI 生图，支持文生图、图生图',
+        nameKey: 'provider_huoshan_name',
+        descKey: 'provider_huoshan_image_desc',
         category: 'image',
         icon: '🔥',
         docUrl: 'https://console.volcengine.com/ark',
@@ -170,9 +170,9 @@ const PROVIDER_DEFINITIONS = [
         displayOrder: 1,
         baseName: 'huoshan',
         isOfficialAPI: false,
-        impacts: ['Seedream 5.0 文生图'],
+        impactsKey: 'provider_huoshan_image_impacts',
         fields: [
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true, helpText: '从火山引擎控制台获取' }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true, helpTextKey: 'field_api_key_help_volcengine' }
         ],
         configKeyMap: { api_key: 'volcengine.api_key' },
         testEndpoint: null,
@@ -180,38 +180,42 @@ const PROVIDER_DEFINITIONS = [
     },
     {
         id: 'site_1_image',
-        name: '聚合站 1',
-        description: 'API 聚合站点 1，支持多种生图模型',
+        nameKey: 'provider_site_name',
+        nameKeyParams: { n: 1 },
+        descKey: 'provider_site_image_desc',
+        descKeyParams: { n: 1 },
         category: 'image',
         icon: '🔗',
         lazyRecommended: false,
         displayOrder: 10,
         baseName: 'site_1',
         isOfficialAPI: false,
-        impacts: ['生图模型'],
+        impactsKey: 'provider_site_image_impacts',
         fields: [
-            { id: 'name', label: '站点名称', type: 'text', placeholder: '如：聚合站1', required: false, helpText: '用于标识该聚合站点' },
+            { id: 'name', labelKey: 'field_site_name_label', type: 'text', placeholderKey: 'field_site_name_placeholder', placeholderParams: { n: 1 }, required: false, helpTextKey: 'field_site_name_help' },
             { id: 'base_url', label: 'Base URL', type: 'url', placeholder: 'https://api.example.com', required: true },
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true }
         ],
         configKeyMap: { name: 'api_aggregator.site_1.name', base_url: 'api_aggregator.site_1.base_url', api_key: 'api_aggregator.site_1.api_key' },
         testEndpoint: null
     },
     {
         id: 'site_2_image',
-        name: '聚合站 2',
-        description: 'API 聚合站点 2，支持多种生图模型',
+        nameKey: 'provider_site_name',
+        nameKeyParams: { n: 2 },
+        descKey: 'provider_site_image_desc',
+        descKeyParams: { n: 2 },
         category: 'image',
         icon: '🔗',
         lazyRecommended: false,
         displayOrder: 11,
         baseName: 'site_2',
         isOfficialAPI: false,
-        impacts: ['生图模型'],
+        impactsKey: 'provider_site_image_impacts',
         fields: [
-            { id: 'name', label: '站点名称', type: 'text', placeholder: '如：聚合站2', required: false, helpText: '用于标识该聚合站点' },
+            { id: 'name', labelKey: 'field_site_name_label', type: 'text', placeholderKey: 'field_site_name_placeholder', placeholderParams: { n: 2 }, required: false, helpTextKey: 'field_site_name_help' },
             { id: 'base_url', label: 'Base URL', type: 'url', placeholder: 'https://api.example.com', required: true },
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true }
         ],
         configKeyMap: { name: 'api_aggregator.site_2.name', base_url: 'api_aggregator.site_2.base_url', api_key: 'api_aggregator.site_2.api_key' },
         testEndpoint: null,
@@ -219,19 +223,21 @@ const PROVIDER_DEFINITIONS = [
     },
     {
         id: 'site_3_image',
-        name: '聚合站 3',
-        description: 'API 聚合站点 3，支持多种生图模型',
+        nameKey: 'provider_site_name',
+        nameKeyParams: { n: 3 },
+        descKey: 'provider_site_image_desc',
+        descKeyParams: { n: 3 },
         category: 'image',
         icon: '🔗',
         lazyRecommended: false,
         displayOrder: 12,
         baseName: 'site_3',
         isOfficialAPI: false,
-        impacts: ['生图模型'],
+        impactsKey: 'provider_site_image_impacts',
         fields: [
-            { id: 'name', label: '站点名称', type: 'text', placeholder: '如：聚合站3', required: false, helpText: '用于标识该聚合站点' },
+            { id: 'name', labelKey: 'field_site_name_label', type: 'text', placeholderKey: 'field_site_name_placeholder', placeholderParams: { n: 3 }, required: false, helpTextKey: 'field_site_name_help' },
             { id: 'base_url', label: 'Base URL', type: 'url', placeholder: 'https://api.example.com', required: true },
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true }
         ],
         configKeyMap: { name: 'api_aggregator.site_3.name', base_url: 'api_aggregator.site_3.base_url', api_key: 'api_aggregator.site_3.api_key' },
         testEndpoint: null,
@@ -239,19 +245,21 @@ const PROVIDER_DEFINITIONS = [
     },
     {
         id: 'site_4_image',
-        name: '聚合站 4',
-        description: 'API 聚合站点 4，支持多种生图模型',
+        nameKey: 'provider_site_name',
+        nameKeyParams: { n: 4 },
+        descKey: 'provider_site_image_desc',
+        descKeyParams: { n: 4 },
         category: 'image',
         icon: '🔗',
         lazyRecommended: false,
         displayOrder: 13,
         baseName: 'site_4',
         isOfficialAPI: false,
-        impacts: ['生图模型'],
+        impactsKey: 'provider_site_image_impacts',
         fields: [
-            { id: 'name', label: '站点名称', type: 'text', placeholder: '如：聚合站4', required: false, helpText: '用于标识该聚合站点' },
+            { id: 'name', labelKey: 'field_site_name_label', type: 'text', placeholderKey: 'field_site_name_placeholder', placeholderParams: { n: 4 }, required: false, helpTextKey: 'field_site_name_help' },
             { id: 'base_url', label: 'Base URL', type: 'url', placeholder: 'https://api.example.com', required: true },
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true }
         ],
         configKeyMap: { name: 'api_aggregator.site_4.name', base_url: 'api_aggregator.site_4.base_url', api_key: 'api_aggregator.site_4.api_key' },
         testEndpoint: null,
@@ -259,19 +267,21 @@ const PROVIDER_DEFINITIONS = [
     },
     {
         id: 'site_5_image',
-        name: '聚合站 5',
-        description: 'API 聚合站点 5，支持多种生图模型',
+        nameKey: 'provider_site_name',
+        nameKeyParams: { n: 5 },
+        descKey: 'provider_site_image_desc',
+        descKeyParams: { n: 5 },
         category: 'image',
         icon: '🔗',
         lazyRecommended: false,
         displayOrder: 14,
         baseName: 'site_5',
         isOfficialAPI: false,
-        impacts: ['生图模型'],
+        impactsKey: 'provider_site_image_impacts',
         fields: [
-            { id: 'name', label: '站点名称', type: 'text', placeholder: '如：聚合站5', required: false, helpText: '用于标识该聚合站点' },
+            { id: 'name', labelKey: 'field_site_name_label', type: 'text', placeholderKey: 'field_site_name_placeholder', placeholderParams: { n: 5 }, required: false, helpTextKey: 'field_site_name_help' },
             { id: 'base_url', label: 'Base URL', type: 'url', placeholder: 'https://api.example.com', required: true },
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true }
         ],
         configKeyMap: { name: 'api_aggregator.site_5.name', base_url: 'api_aggregator.site_5.base_url', api_key: 'api_aggregator.site_5.api_key' },
         testEndpoint: null,
@@ -281,8 +291,8 @@ const PROVIDER_DEFINITIONS = [
     // ===== 生视频服务商 =====
     {
         id: 'duomi_video',
-        name: '多米',
-        description: '多米 AI 生视频平台',
+        nameKey: 'provider_duomi_name',
+        descKey: 'provider_duomi_video_desc',
         category: 'video',
         icon: '🎨',
         docUrl: 'https://duomiapi.com/user/register?cps=U4GgW1Fx',
@@ -290,9 +300,9 @@ const PROVIDER_DEFINITIONS = [
         displayOrder: 1,
         baseName: 'duomi',
         isOfficialAPI: false,
-        impacts: ['Sora2/Kling/Veo3视频生成'],
+        impactsKey: 'provider_duomi_video_impacts',
         fields: [
-            { id: 'token', label: 'Token', type: 'text', placeholder: '请输入 Duomi API Token', required: true }
+            { id: 'token', label: 'Token', type: 'text', placeholderKey: 'field_token_placeholder_duomi', required: true }
         ],
         configKeyMap: { token: 'duomi.token' },
         testEndpoint: null,
@@ -300,8 +310,8 @@ const PROVIDER_DEFINITIONS = [
     },
     {
         id: 'runninghub',
-        name: 'RunningHub',
-        description: 'RunningHub AI 生视频服务',
+        nameKey: 'provider_runninghub_name',
+        descKey: 'provider_runninghub_desc',
         category: 'video',
         icon: '🚀',
         docUrl: 'https://www.runninghub.cn/?inviteCode=quacwnzc',
@@ -309,17 +319,17 @@ const PROVIDER_DEFINITIONS = [
         displayOrder: 2,
         baseName: 'runninghub',
         isOfficialAPI: false,
-        impacts: ['LTX2.0视频', 'Wan2.2视频', '数字人合成', '相机多角度控制'],
+        impactsKey: 'provider_runninghub_impacts',
         fields: [
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '请输入 RunningHub API Key', required: true, helpText: '获取方式：快速注册' }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder_runninghub', required: true, helpTextKey: 'field_token_help_quick_register' }
         ],
         configKeyMap: { api_key: 'runninghub.api_key' },
         testEndpoint: null
     },
     {
         id: 'huoshan_video',
-        name: '火山引擎',
-        description: '火山引擎 AI 生视频，支持文生视频',
+        nameKey: 'provider_huoshan_name',
+        descKey: 'provider_huoshan_video_desc',
         category: 'video',
         icon: '🔥',
         docUrl: 'https://console.volcengine.com/ark',
@@ -327,9 +337,9 @@ const PROVIDER_DEFINITIONS = [
         displayOrder: 4,
         baseName: 'huoshan',
         isOfficialAPI: false,
-        impacts: ['Seedance 1.5 2.0 视频'],
+        impactsKey: 'provider_huoshan_video_impacts',
         fields: [
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true, helpText: '从火山引擎控制台获取' }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true, helpTextKey: 'field_api_key_help_volcengine' }
         ],
         configKeyMap: { api_key: 'volcengine.api_key' },
         testEndpoint: null,
@@ -337,38 +347,42 @@ const PROVIDER_DEFINITIONS = [
     },
     {
         id: 'site_1_video',
-        name: '聚合站 1',
-        description: 'API 聚合站点 1，支持多种生视频模型',
+        nameKey: 'provider_site_name',
+        nameKeyParams: { n: 1 },
+        descKey: 'provider_site_video_desc',
+        descKeyParams: { n: 1 },
         category: 'video',
         icon: '🔗',
         lazyRecommended: false,
         displayOrder: 10,
         baseName: 'site_1',
         isOfficialAPI: false,
-        impacts: ['生视频模型'],
+        impactsKey: 'provider_site_video_impacts',
         fields: [
-            { id: 'name', label: '站点名称', type: 'text', placeholder: '如：聚合站1', required: false, helpText: '用于标识该聚合站点' },
+            { id: 'name', labelKey: 'field_site_name_label', type: 'text', placeholderKey: 'field_site_name_placeholder', placeholderParams: { n: 1 }, required: false, helpTextKey: 'field_site_name_help' },
             { id: 'base_url', label: 'Base URL', type: 'url', placeholder: 'https://api.example.com', required: true },
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true }
         ],
         configKeyMap: { name: 'api_aggregator.site_1.name', base_url: 'api_aggregator.site_1.base_url', api_key: 'api_aggregator.site_1.api_key' },
         testEndpoint: null
     },
     {
         id: 'site_2_video',
-        name: '聚合站 2',
-        description: 'API 聚合站点 2，支持多种生视频模型',
+        nameKey: 'provider_site_name',
+        nameKeyParams: { n: 2 },
+        descKey: 'provider_site_video_desc',
+        descKeyParams: { n: 2 },
         category: 'video',
         icon: '🔗',
         lazyRecommended: false,
         displayOrder: 11,
         baseName: 'site_2',
         isOfficialAPI: false,
-        impacts: ['生视频模型'],
+        impactsKey: 'provider_site_video_impacts',
         fields: [
-            { id: 'name', label: '站点名称', type: 'text', placeholder: '如：聚合站2', required: false, helpText: '用于标识该聚合站点' },
+            { id: 'name', labelKey: 'field_site_name_label', type: 'text', placeholderKey: 'field_site_name_placeholder', placeholderParams: { n: 2 }, required: false, helpTextKey: 'field_site_name_help' },
             { id: 'base_url', label: 'Base URL', type: 'url', placeholder: 'https://api.example.com', required: true },
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true }
         ],
         configKeyMap: { name: 'api_aggregator.site_2.name', base_url: 'api_aggregator.site_2.base_url', api_key: 'api_aggregator.site_2.api_key' },
         testEndpoint: null,
@@ -376,19 +390,21 @@ const PROVIDER_DEFINITIONS = [
     },
     {
         id: 'site_3_video',
-        name: '聚合站 3',
-        description: 'API 聚合站点 3，支持多种生视频模型',
+        nameKey: 'provider_site_name',
+        nameKeyParams: { n: 3 },
+        descKey: 'provider_site_video_desc',
+        descKeyParams: { n: 3 },
         category: 'video',
         icon: '🔗',
         lazyRecommended: false,
         displayOrder: 12,
         baseName: 'site_3',
         isOfficialAPI: false,
-        impacts: ['生视频模型'],
+        impactsKey: 'provider_site_video_impacts',
         fields: [
-            { id: 'name', label: '站点名称', type: 'text', placeholder: '如：聚合站3', required: false, helpText: '用于标识该聚合站点' },
+            { id: 'name', labelKey: 'field_site_name_label', type: 'text', placeholderKey: 'field_site_name_placeholder', placeholderParams: { n: 3 }, required: false, helpTextKey: 'field_site_name_help' },
             { id: 'base_url', label: 'Base URL', type: 'url', placeholder: 'https://api.example.com', required: true },
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true }
         ],
         configKeyMap: { name: 'api_aggregator.site_3.name', base_url: 'api_aggregator.site_3.base_url', api_key: 'api_aggregator.site_3.api_key' },
         testEndpoint: null,
@@ -396,19 +412,21 @@ const PROVIDER_DEFINITIONS = [
     },
     {
         id: 'site_4_video',
-        name: '聚合站 4',
-        description: 'API 聚合站点 4，支持多种生视频模型',
+        nameKey: 'provider_site_name',
+        nameKeyParams: { n: 4 },
+        descKey: 'provider_site_video_desc',
+        descKeyParams: { n: 4 },
         category: 'video',
         icon: '🔗',
         lazyRecommended: false,
         displayOrder: 13,
         baseName: 'site_4',
         isOfficialAPI: false,
-        impacts: ['生视频模型'],
+        impactsKey: 'provider_site_video_impacts',
         fields: [
-            { id: 'name', label: '站点名称', type: 'text', placeholder: '如：聚合站4', required: false, helpText: '用于标识该聚合站点' },
+            { id: 'name', labelKey: 'field_site_name_label', type: 'text', placeholderKey: 'field_site_name_placeholder', placeholderParams: { n: 4 }, required: false, helpTextKey: 'field_site_name_help' },
             { id: 'base_url', label: 'Base URL', type: 'url', placeholder: 'https://api.example.com', required: true },
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true }
         ],
         configKeyMap: { name: 'api_aggregator.site_4.name', base_url: 'api_aggregator.site_4.base_url', api_key: 'api_aggregator.site_4.api_key' },
         testEndpoint: null,
@@ -416,19 +434,21 @@ const PROVIDER_DEFINITIONS = [
     },
     {
         id: 'site_5_video',
-        name: '聚合站 5',
-        description: 'API 聚合站点 5，支持多种生视频模型',
+        nameKey: 'provider_site_name',
+        nameKeyParams: { n: 5 },
+        descKey: 'provider_site_video_desc',
+        descKeyParams: { n: 5 },
         category: 'video',
         icon: '🔗',
         lazyRecommended: false,
         displayOrder: 14,
         baseName: 'site_5',
         isOfficialAPI: false,
-        impacts: ['生视频模型'],
+        impactsKey: 'provider_site_video_impacts',
         fields: [
-            { id: 'name', label: '站点名称', type: 'text', placeholder: '如：聚合站5', required: false, helpText: '用于标识该聚合站点' },
+            { id: 'name', labelKey: 'field_site_name_label', type: 'text', placeholderKey: 'field_site_name_placeholder', placeholderParams: { n: 5 }, required: false, helpTextKey: 'field_site_name_help' },
             { id: 'base_url', label: 'Base URL', type: 'url', placeholder: 'https://api.example.com', required: true },
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true }
         ],
         configKeyMap: { name: 'api_aggregator.site_5.name', base_url: 'api_aggregator.site_5.base_url', api_key: 'api_aggregator.site_5.api_key' },
         testEndpoint: null,
@@ -438,8 +458,8 @@ const PROVIDER_DEFINITIONS = [
     // ===== 其他推荐服务 =====
     {
         id: 'vidu',
-        name: 'Vidu',
-        description: 'Vidu 视频生成平台',
+        nameKey: 'provider_vidu_name',
+        descKey: 'provider_vidu_desc',
         category: 'other',
         icon: '🎬',
         docUrl: 'https://platform.vidu.cn/api-keys',
@@ -447,14 +467,29 @@ const PROVIDER_DEFINITIONS = [
         displayOrder: 1,
         baseName: 'vidu',
         isOfficialAPI: false,
-        impacts: ['Vidu视频生成'],
+        impactsKey: 'provider_vidu_impacts',
         fields: [
-            { id: 'token', label: 'Token', type: 'text', placeholder: '请输入 Vidu API Token', required: true, helpText: '获取方式：快速注册' }
+            { id: 'token', label: 'Token', type: 'text', placeholderKey: 'field_token_placeholder_vidu', required: true, helpTextKey: 'field_token_help_quick_register' }
         ],
         configKeyMap: { token: 'vidu.token' },
         testEndpoint: null
     }
 ];
+
+// 翻译 provider 定义中的 i18n key
+function translateProvider(p, tFn) {
+    const translated = { ...p };
+    translated.name = p.nameKey ? tFn(p.nameKey, p.nameKeyParams || {}) : (p.name || '');
+    translated.description = p.descKey ? tFn(p.descKey, p.descKeyParams || {}) : (p.description || '');
+    translated.impacts = p.impactsKey ? tFn(p.impactsKey).split(',').map(s => s.trim()) : (p.impacts || []);
+    translated.fields = p.fields.map(f => ({
+        ...f,
+        label: f.labelKey ? tFn(f.labelKey) : (f.label || ''),
+        placeholder: f.placeholderKey ? tFn(f.placeholderKey, f.placeholderParams || {}) : (f.placeholder || ''),
+        helpText: f.helpTextKey ? tFn(f.helpTextKey) : (f.helpText || '')
+    }));
+    return translated;
+}
 
 // 构建 configKey -> { providerId, fieldId } 的反向映射
 const CONFIG_KEY_TO_PROVIDER_FIELD = {};
@@ -712,9 +747,9 @@ const AdminApp = {
             const result = {};
             Object.keys(CATEGORY_LABELS).forEach(cat => {
                 // 支持 showInCategories 属性，让一个 provider 可以在多个分类中显示
-                result[cat] = sortByOrder(PROVIDER_DEFINITIONS.filter(p => 
+                result[cat] = sortByOrder(PROVIDER_DEFINITIONS.filter(p =>
                     p.category === cat || (p.showInCategories && p.showInCategories.includes(cat))
-                ));
+                ).map(p => translateProvider(p, this.t.bind(this))));
             });
             return result;
         },
@@ -724,6 +759,8 @@ const AdminApp = {
         },
 
         selectedProvidersDetail() {
+            // 依赖 locale 使其在语言切换时响应式更新
+            const _ = this.locale;
             // 按 baseName 分组，合并同组的字段和配置
             const groups = {};
             const fieldIds = {};
@@ -737,7 +774,7 @@ const AdminApp = {
                 if (!groups[base]) {
                     groups[base] = { ...p, fields: [...p.fields], configKeyMap: { ...p.configKeyMap } };
                     fieldIds[base] = new Set(p.fields.map(f => f.id));
-                    impactSets[base] = new Set(p.impacts || []);
+                    impactSets[base] = new Set(p.impactsKey ? this.t(p.impactsKey).split(',').map(s => s.trim()) : (p.impacts || []));
                 } else {
                     // 合并字段（按 field.id 去重）
                     p.fields.forEach(field => {
@@ -748,12 +785,15 @@ const AdminApp = {
                         }
                     });
                     // 合并 impacts
-                    (p.impacts || []).forEach(imp => impactSets[base].add(imp));
+                    const pImpacts = p.impactsKey ? this.t(p.impactsKey).split(',').map(s => s.trim()) : (p.impacts || []);
+                    pImpacts.forEach(imp => impactSets[base].add(imp));
                     groups[base].impacts = [...impactSets[base]];
                 }
             });
 
-            return Object.values(groups).sort((a, b) =>
+            // 翻译并返回
+            const tFn = this.t.bind(this);
+            return Object.values(groups).map(g => translateProvider(g, tFn)).sort((a, b) =>
                 (a.displayOrder || 999) - (b.displayOrder || 999)
             );
         },
