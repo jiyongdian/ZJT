@@ -2270,11 +2270,28 @@
                     });
                 } finally {
                     isLoading.value = false;
+                    // 清理已发送的媒体文件
+                    agentVideoFiles.value.forEach(vid => {
+                        if (vid.previewUrl && vid.previewUrl.startsWith('blob:')) URL.revokeObjectURL(vid.previewUrl);
+                    });
+                    agentAudioFiles.value.forEach(aud => {
+                        if (aud.previewUrl && aud.previewUrl.startsWith('blob:')) URL.revokeObjectURL(aud.previewUrl);
+                    });
+                    agentImageFiles.value.forEach(img => {
+                        if (img.previewUrl && img.previewUrl.startsWith('blob:')) URL.revokeObjectURL(img.previewUrl);
+                    });
+                    agentVideoFiles.value = [];
+                    agentAudioFiles.value = [];
+                    agentImageFiles.value = [];
+                    mediaItems.value = [];
+                    hasUploadedImage.value = false;
+                    uploadedImageUrl.value = '';
+                    uploadedImageFile.value = null;
+                    uploadedImageServerUrl.value = '';
                     scrollToBottom();
                 }
             }
 
-            // 轮询视频生成状态
             async function checkVideoStatus(msgUid) {
                 if (!videoProjectIds.value || videoProjectIds.value.length === 0) return;
 
@@ -2412,6 +2429,7 @@
 
                     // 收集视频 URL（Agent 对话模式）
                     const videoUrls = [];
+                    const audioUrls = [];
                     if (isAgentChat && agentVideoFiles.value.length > 0) {
                         const invalidVideos = agentVideoFiles.value.filter(v => !isHttpUrl(v.serverUrl));
                         if (invalidVideos.length > 0) {
@@ -2423,6 +2441,17 @@
                             videoUrls.push(v.serverUrl);
                         });
                         console.log('[Agent] 发送视频 URL:', videoUrls.length, '个', videoUrls);
+                    } else if (isAgentVideo) {
+                        // 视频模式：从 mediaItems 收集已上传的视频 URL 和音频 URL
+                        mediaItems.value.forEach(m => {
+                            if (m.type === 'video' && m.fileUrl && isHttpUrl(m.fileUrl)) {
+                                videoUrls.push(m.fileUrl);
+                            } else if (m.type === 'audio' && m.fileUrl && isHttpUrl(m.fileUrl)) {
+                                audioUrls.push(m.fileUrl);
+                            }
+                        });
+                        console.log('[Agent] 视频模式发送视频 URL:', videoUrls.length, '个', videoUrls);
+                        console.log('[Agent] 视频模式发送音频 URL:', audioUrls.length, '个', audioUrls);
                     }
 
                     // 安全校验：只允许 HTTP URL，过滤 blob: / 空 / 非字符串
@@ -2431,6 +2460,7 @@
                         console.warn('[安全] 过滤掉非 HTTP 图片 URL:', imageUrls.filter(u => !isHttpUrl(u)));
                     }
                     const validVideoUrls = videoUrls.filter(isHttpUrl);
+                    const validAudioUrls = audioUrls.filter(isHttpUrl);
 
                     // 1. 创建任务
                     // 构建图片偏好（auto 分辨率不传）
@@ -2451,6 +2481,7 @@
                             auth_token: authToken.value,
                             image_urls: validImageUrls.length > 0 ? validImageUrls : undefined,
                             video_urls: validVideoUrls.length > 0 ? validVideoUrls : undefined,
+                            audio_urls: validAudioUrls.length > 0 ? validAudioUrls : undefined,
                             model: selectedLLMModel.value ? selectedLLMModel.value.name : '',
                             model_id: selectedLLMModel.value ? selectedLLMModel.value.id : undefined,
                             vendor_id: selectedLLMModel.value ? (selectedLLMModel.value.vendor_id || 1) : 1,
@@ -2486,6 +2517,27 @@
                     // 更新会话 title（首条消息摘要）
                     updateSessionTitle(text);
 
+                    // 任务创建成功后立即清理媒体预览（不等待流式响应结束）
+                    if (isAgentChat || isAgentVideo) {
+                        agentImageFiles.value.forEach(img => {
+                            if (img.previewUrl && img.previewUrl.startsWith('blob:')) URL.revokeObjectURL(img.previewUrl);
+                        });
+                        agentVideoFiles.value.forEach(vid => {
+                            if (vid.previewUrl && vid.previewUrl.startsWith('blob:')) URL.revokeObjectURL(vid.previewUrl);
+                        });
+                        agentAudioFiles.value.forEach(aud => {
+                            if (aud.previewUrl && aud.previewUrl.startsWith('blob:')) URL.revokeObjectURL(aud.previewUrl);
+                        });
+                        agentImageFiles.value = [];
+                        agentVideoFiles.value = [];
+                        agentAudioFiles.value = [];
+                        mediaItems.value = [];
+                        hasUploadedImage.value = false;
+                        uploadedImageUrl.value = '';
+                        uploadedImageFile.value = null;
+                    }
+                    uploadedImageServerUrl.value = '';
+
                     // 2. 接收流式响应
                     await handleStream(taskId);
 
@@ -2503,31 +2555,6 @@
                     });
                 } finally {
                     isLoading.value = false;
-                    // 清理已使用的图片和视频（Agent 模式清理多图+多视频，其他模式清理 base64）
-                    if (isAgentChat) {
-                        agentImageFiles.value.forEach(img => {
-                            if (img.previewUrl) {
-                                if (img.previewUrl.startsWith('blob:')) URL.revokeObjectURL(img.previewUrl);
-                                const item = mediaItems.value.find(m => m.agentImageItem === img || m.fileUrl === img.previewUrl || m.fileUrl === img.serverUrl);
-                                if (item) removeMediaItem(item.id);
-                            }
-                        });
-                        agentImageFiles.value = [];
-                        // 清理视频
-                        agentVideoFiles.value.forEach(vid => {
-                            if (vid.previewUrl) {
-                                if (vid.previewUrl.startsWith('blob:')) URL.revokeObjectURL(vid.previewUrl);
-                                const item = mediaItems.value.find(m => m.agentVideoItem === vid || m.fileUrl === vid.previewUrl || m.fileUrl === vid.serverUrl);
-                                if (item) removeMediaItem(item.id);
-                            }
-                        });
-                        agentVideoFiles.value = [];
-                        agentAudioFiles.value = [];
-                        hasUploadedImage.value = false;
-                        uploadedImageUrl.value = '';
-                        uploadedImageFile.value = null;
-                    }
-                    uploadedImageServerUrl.value = '';
                     scrollToBottom();
                 }
             }

@@ -799,6 +799,8 @@ class TaskCreateRequest(BaseModel):
     enable_thinking: bool = False
     thinking_effort: str = "medium"
     image_urls: Optional[List[str]] = None
+    video_urls: Optional[List[str]] = None
+    audio_urls: Optional[List[str]] = None
     image_preferences: Optional[Dict[str, Any]] = None
     video_preferences: Optional[Dict[str, Any]] = None
 
@@ -2505,7 +2507,9 @@ async def create_agent_task(request: Request, session_id: str, task_request: Tas
             model_id=model_id,
             enable_thinking=task_request.enable_thinking,
             thinking_effort=task_request.thinking_effort,
-            image_urls=task_request.image_urls
+            image_urls=task_request.image_urls,
+            video_urls=task_request.video_urls,
+            audio_urls=task_request.audio_urls
         )
         
         # 获取任务对象

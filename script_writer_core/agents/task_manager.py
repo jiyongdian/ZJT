@@ -155,6 +155,8 @@ class AgentTask:
     enable_thinking: bool = False
     thinking_effort: str = "medium"
     image_urls: Optional[List[str]] = None
+    video_urls: Optional[List[str]] = None
+    audio_urls: Optional[List[str]] = None
     status: TaskStatus = TaskStatus.PENDING
     created_at: datetime = field(default_factory=datetime.now)
     started_at: Optional[datetime] = None
@@ -179,6 +181,8 @@ class AgentTask:
             "enable_thinking": self.enable_thinking,
             "thinking_effort": self.thinking_effort,
             "image_urls": self.image_urls,
+            "video_urls": self.video_urls,
+            "audio_urls": self.audio_urls,
             "status": self.status.value,
             "created_at": self.created_at.isoformat(),
             "started_at": self.started_at.isoformat() if self.started_at else None,
@@ -211,6 +215,8 @@ class TaskManager:
         enable_thinking: bool = False,
         thinking_effort: str = "medium",
         image_urls: Optional[List[str]] = None,
+        video_urls: Optional[List[str]] = None,
+        audio_urls: Optional[List[str]] = None,
     ) -> str:
         """创建新任务，返回 task_id"""
         # 处理长文本输入
@@ -243,6 +249,8 @@ class TaskManager:
             enable_thinking=enable_thinking,
             thinking_effort=thinking_effort,
             image_urls=image_urls,
+            video_urls=video_urls,
+            audio_urls=audio_urls,
         )
 
         # 写入数据库（唯一数据源，跨进程共享）
@@ -259,6 +267,8 @@ class TaskManager:
                 enable_thinking=enable_thinking,
                 thinking_effort=thinking_effort,
                 image_urls=image_urls,
+                video_urls=video_urls,
+                audio_urls=audio_urls,
                 status='pending'
             )
         except Exception as e:
@@ -297,6 +307,8 @@ class TaskManager:
                     enable_thinking=str(getattr(db_task, 'enable_thinking', False)).lower() == 'true',
                     thinking_effort=getattr(db_task, 'thinking_effort', 'medium'),
                     image_urls=getattr(db_task, 'image_urls', None),
+                    video_urls=getattr(db_task, 'video_urls', None),
+                    audio_urls=getattr(db_task, 'audio_urls', None),
                     status=TaskStatus(db_task.status),
                     progress=db_task.progress,
                     current_step=db_task.current_step,

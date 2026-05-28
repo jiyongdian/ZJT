@@ -191,20 +191,22 @@ class AIToolsModel:
                 ai_tool_id = execute_insert_in_transaction(conn, sql, params)
                 logger.info(f"Created AI tool record with ID: {ai_tool_id}")
 
-                # 为每个视频路径创建 face_mask pipeline step
+                # 为每个视频路径创建 face_mask pipeline step（仅商业版）
                 if video_path:
-                    video_paths = [v.strip() for v in video_path.split(",") if v.strip()]
-                    for idx, single_video_path in enumerate(video_paths):
-                        PipelineStepModel.create_in_transaction(
-                            conn,
-                            ai_tool_id=ai_tool_id,
-                            stage=PipelineStage.PARAM_PREPARE,
-                            step_type=PipelineStepType.FACE_MASK,
-                            step_order=idx,
-                            params={'video_path': single_video_path},
-                            target=single_video_path
-                        )
-                    logger.info(f"Created {len(video_paths)} face_mask pipeline steps for ai_tool {ai_tool_id}")
+                    from config.constant import Edition
+                    if not Edition.is_community():
+                        video_paths = [v.strip() for v in video_path.split(",") if v.strip()]
+                        for idx, single_video_path in enumerate(video_paths):
+                            PipelineStepModel.create_in_transaction(
+                                conn,
+                                ai_tool_id=ai_tool_id,
+                                stage=PipelineStage.PARAM_PREPARE,
+                                step_type=PipelineStepType.FACE_MASK,
+                                step_order=idx,
+                                params={'video_path': single_video_path},
+                                target=single_video_path
+                            )
+                        logger.info(f"Created {len(video_paths)} face_mask pipeline steps for ai_tool {ai_tool_id}")
 
                 return ai_tool_id
         except Exception as e:
