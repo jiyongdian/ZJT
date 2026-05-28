@@ -40,15 +40,3 @@ playwright.config.js
 package.json
 package-lock.json
 
-# Test reports and screenshots
-EXECUTION_SUMMARY.md
-TEST_RESULTS_COMPLETE_PRODUCTION.md
-page-snapshot.md
-script_writer_page.md
-script_writer_test.png
-step1_homepage.md
-workflow-snapshot.md
-homepage.png
-video_workflow_chinese.png
-video_workflow_english.png
-video_workflow_test.png
