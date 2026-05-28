@@ -74,6 +74,12 @@ header {
   font-weight: 400;
 }
 
+.language-switcher-container {
+  display: flex;
+  align-items: center;
+  margin-left: 8px;
+}
+
 .muted { 
   color: var(--muted); 
   font-size: 13px; 

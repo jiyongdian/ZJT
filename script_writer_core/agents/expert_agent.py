@@ -131,13 +131,20 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                     if role and content:
                         self.add_to_history(role, content)
 
-            # 图片以文字标签形式注入，不需要 base64
+            # 图片、视频、音频以文字标签形式注入，不需要 base64
             # 需要看图的专家（如 image-understanding）通过 fetch_image_as_base64 工具按需获取
+            combined_parts = []
             if image_urls:
-                image_labels = []
                 for i, img_url in enumerate(image_urls, 1):
-                    image_labels.append(f"[图片{i}]（URL: {img_url}）")
-                combined = "\n".join(image_labels) + "\n\n" + task_description
+                    combined_parts.append(f"[图片{i}]（URL: {img_url}）")
+            if hasattr(task, 'video_urls') and task.video_urls:
+                for i, vid_url in enumerate(task.video_urls, 1):
+                    combined_parts.append(f"[视频{i}]（URL: {vid_url}）")
+            if hasattr(task, 'audio_urls') and task.audio_urls:
+                for i, aud_url in enumerate(task.audio_urls, 1):
+                    combined_parts.append(f"[音频{i}]（URL: {aud_url}）")
+            if combined_parts:
+                combined = "\n".join(combined_parts) + "\n\n" + task_description
                 self.add_to_history("user", combined)
             else:
                 self.add_to_history("user", task_description)

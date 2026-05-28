@@ -40,6 +40,30 @@ class AgentTaskEntity:
         else:
             self.image_urls = None
 
+        # Deserialize video_urls from JSON
+        video_urls_json = kwargs.get('video_urls')
+        if isinstance(video_urls_json, str) and video_urls_json:
+            try:
+                self.video_urls = json.loads(video_urls_json)
+            except json.JSONDecodeError:
+                self.video_urls = None
+        elif isinstance(video_urls_json, list):
+            self.video_urls = video_urls_json
+        else:
+            self.video_urls = None
+
+        # Deserialize audio_urls from JSON
+        audio_urls_json = kwargs.get('audio_urls')
+        if isinstance(audio_urls_json, str) and audio_urls_json:
+            try:
+                self.audio_urls = json.loads(audio_urls_json)
+            except json.JSONDecodeError:
+                self.audio_urls = None
+        elif isinstance(audio_urls_json, list):
+            self.audio_urls = audio_urls_json
+        else:
+            self.audio_urls = None
+
         self.status = kwargs.get('status', 'pending')
         self.progress = kwargs.get('progress', 0.0)
         self.current_step = kwargs.get('current_step', '')
@@ -74,6 +98,8 @@ class AgentTaskEntity:
             'enable_thinking': self.enable_thinking,
             'thinking_effort': self.thinking_effort,
             'image_urls': self.image_urls,
+            'video_urls': self.video_urls,
+            'audio_urls': self.audio_urls,
             'status': self.status,
             'progress': self.progress,
             'current_step': self.current_step,
@@ -101,6 +127,8 @@ class AgentTasksModel:
         enable_thinking: bool = False,
         thinking_effort: str = 'medium',
         image_urls: Optional[List[str]] = None,
+        video_urls: Optional[List[str]] = None,
+        audio_urls: Optional[List[str]] = None,
         status: str = 'pending'
     ) -> int:
         """
@@ -112,15 +140,21 @@ class AgentTasksModel:
         sql = """
             INSERT INTO agent_tasks
             (task_id, session_id, user_id, world_id, user_message,
-             auth_token, vendor_id, model_id, enable_thinking, thinking_effort, image_urls, status)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+             auth_token, vendor_id, model_id, enable_thinking, thinking_effort,
+             image_urls, video_urls, audio_urls, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         # enable_thinking: bool/str -> str（数据库存字符串，支持 true/false/auto）
         enable_thinking_str = str(enable_thinking).lower() if isinstance(enable_thinking, bool) else str(enable_thinking)
         # image_urls: list -> JSON 字符串
         image_urls_json = json.dumps(image_urls, ensure_ascii=False) if image_urls else None
+        # video_urls: list -> JSON 字符串
+        video_urls_json = json.dumps(video_urls, ensure_ascii=False) if video_urls else None
+        # audio_urls: list -> JSON 字符串
+        audio_urls_json = json.dumps(audio_urls, ensure_ascii=False) if audio_urls else None
         params = (task_id, session_id, user_id, world_id, user_message,
-                  auth_token, vendor_id, model_id, enable_thinking_str, thinking_effort, image_urls_json, status)
+                  auth_token, vendor_id, model_id, enable_thinking_str, thinking_effort,
+                  image_urls_json, video_urls_json, audio_urls_json, status)
 
         try:
             record_id = execute_insert(sql, params)
@@ -303,6 +337,8 @@ CREATE TABLE IF NOT EXISTS `agent_tasks` (
   `enable_thinking` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'false' COMMENT 'Thinking mode: true/false/auto',
   `thinking_effort` varchar(16) COLLATE utf8mb4_unicode_ci DEFAULT 'medium' COMMENT 'Thinking effort level (low/medium/high)',
   `image_urls` longtext COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '图片URL列表（JSON数组，HTTP URL格式）',
+  `video_urls` longtext COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '视频URL列表（JSON数组，不传递给LLM）',
+  `audio_urls` longtext COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '音频URL列表（JSON数组，不传递给LLM）',
   `status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending' COMMENT 'Task status: pending/running/waiting_human/completed/failed/cancelled',
   `progress` float NOT NULL DEFAULT '0' COMMENT 'Task progress 0-1',
   `current_step` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT 'Current step description',

@@ -68,6 +68,7 @@
             <button class="btn secondary" @click="handleLogout">{{ $t('logout') }}</button>
           </template>
           <button class="btn" v-else @click="showLoginModal = true">{{ $t('login') }}</button>
+          <div class="language-switcher-container"></div>
         </div>
       </header>
 
@@ -8637,9 +8638,9 @@
       ZJTi18nDOM.scanDOM();
     }
 
-    // 初始化语言切换器到页面头部
+    // 初始化语言切换器到指定容器
     if (window.ZJTi18nSwitcher) {
-      ZJTi18nSwitcher.attachToHeader();
+      ZJTi18nSwitcher.render('.language-switcher-container');
     }
   });
   </script>

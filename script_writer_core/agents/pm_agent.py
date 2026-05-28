@@ -177,12 +177,19 @@ class PMAgent(BaseAgent, AskUserMixin):
         self.total_failures = 0
 
         try:
-            # 添加用户消息到历史（图片以文字标签形式注入，不需要 base64）
+            # 添加用户消息到历史（图片、视频、音频以文字标签形式注入，不需要 base64）
+            combined_parts = []
             if task.image_urls:
-                image_labels = []
                 for i, image_url in enumerate(task.image_urls):
-                    image_labels.append(f"[图片{i + 1}]（URL: {image_url}）")
-                combined = "\n".join(image_labels) + "\n\n" + task.user_message
+                    combined_parts.append(f"[图片{i + 1}]（URL: {image_url}）")
+            if task.video_urls:
+                for i, video_url in enumerate(task.video_urls):
+                    combined_parts.append(f"[视频{i + 1}]（URL: {video_url}）")
+            if task.audio_urls:
+                for i, audio_url in enumerate(task.audio_urls):
+                    combined_parts.append(f"[音频{i + 1}]（URL: {audio_url}）")
+            if combined_parts:
+                combined = "\n".join(combined_parts) + "\n\n" + task.user_message
                 self.add_to_history("user", combined)
             else:
                 self.add_to_history("user", task.user_message)
