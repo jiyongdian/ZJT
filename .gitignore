@@ -24,3 +24,19 @@ enterprise/
 .claude/settings.local.json
 *.spec
 scripts/build_enterprise.py
+
+# Node modules
+node_modules/
+
+# Playwright
+.playwright-mcp/
+playwright-report/
+test-results/
+console-errors.txt
+
+# E2E tests
+tests/e2e/
+playwright.config.js
+package.json
+package-lock.json
+

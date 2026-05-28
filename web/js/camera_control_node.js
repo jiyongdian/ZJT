@@ -74,7 +74,7 @@ function createCameraControlNode(opts){
   const node = {
     id,
     type: 'camera_control',
-    title: '相机控制',
+    title: window.t ? window.t('camera_control_title') : '相机控制',
     x,
     y,
     data: {
@@ -96,73 +96,73 @@ function createCameraControlNode(opts){
   el.style.top = node.y + 'px';
 
   el.innerHTML = `
-    <div class="port input" title="输入（连接图片节点）"></div>
+    <div class="port input" title="输入（连接图片节点）" data-i18n="camera_input_port_title:title"></div>
     <div class="node-header">
-      <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>${node.title}</div>
-      <button class="icon-btn" title="删除">×</button>
+      <div class="node-title" data-i18n="camera_control_title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>相机控制</div>
+      <button class="icon-btn" title="删除" data-i18n="dialogue_delete_btn:title">×</button>
     </div>
     <div class="node-body">
       <div class="field">
-        <div class="label">源图片</div>
+        <div class="label" data-i18n="camera_source_label">源图片</div>
         <div class="camera-ctrl-source-thumb" style="display:none; margin-top:4px;">
           <img class="camera-ctrl-source-img" style="max-width:100%; max-height:120px; border-radius:4px; border:1px solid #e5e7eb;" />
         </div>
-        <div class="camera-ctrl-source-placeholder muted" style="font-size:11px; margin-top:4px;">请连接图片节点</div>
+        <div class="camera-ctrl-source-placeholder muted" style="font-size:11px; margin-top:4px;" data-i18n="camera_source_connect">请连接图片节点</div>
       </div>
       <div class="field field-collapsible camera-control-section">
-        <div class="label" style="margin-bottom: 4px;">相机控制</div>
+        <div class="label" style="margin-bottom: 4px;" data-i18n="camera_control_label">相机控制</div>
         <div class="camera-ctrl-content" style="display: flex; flex-direction: column; gap: 12px; padding: 12px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; margin-top: 4px;">
           <div class="camera-param-row" data-param="horizontal_angle">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <label style="font-size: 11px; font-weight: 600; color: #374151;">水平角度 (0~360°)</label>
+              <label style="font-size: 11px; font-weight: 600; color: #374151;" data-i18n="camera_h_angle_label">水平角度 (0~360°)</label>
               <div style="display: flex; align-items: center; gap: 6px;">
                 <input type="number" class="camera-input camera-ctrl-horizontal-angle" value="0" min="0" max="360" step="1" style="width: 60px; padding: 4px 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px; text-align: center;" />
                 <span style="font-size: 11px; color: #6b7280;">°</span>
-                <button type="button" class="camera-reset-btn camera-ctrl-reset-horizontal-angle" style="padding: 4px 8px; font-size: 10px; border: 1px solid #d1d5db; border-radius: 4px; background: #fff; color: #6b7280; cursor: pointer;">重置</button>
+                <button type="button" class="camera-reset-btn camera-ctrl-reset-horizontal-angle" style="padding: 4px 8px; font-size: 10px; border: 1px solid #d1d5db; border-radius: 4px; background: #fff; color: #6b7280; cursor: pointer;" data-i18n="camera_h_angle_reset">重置</button>
               </div>
             </div>
             <input type="range" class="camera-slider camera-ctrl-horizontal-angle-slider" min="0" max="360" step="1" value="0" style="width: 100%;" />
             <div style="display: flex; justify-content: space-between; font-size: 10px; color: #9ca3af; margin-top: 2px;">
-              <span>0° (正面)</span>
-              <span>90°</span>
-              <span>180° (背面)</span>
-              <span>270°</span>
-              <span>360°</span>
+              <span data-i18n="camera_h_angle_front">0° (正面)</span>
+              <span data-i18n="camera_h_angle_90">90°</span>
+              <span data-i18n="camera_h_angle_back">180° (背面)</span>
+              <span data-i18n="camera_h_angle_270">270°</span>
+              <span data-i18n="camera_h_angle_360">360°</span>
             </div>
           </div>
           <div class="camera-param-row" data-param="vertical_angle">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <label style="font-size: 11px; font-weight: 600; color: #374151;">垂直角度 (-30°~60°)</label>
+              <label style="font-size: 11px; font-weight: 600; color: #374151;" data-i18n="camera_v_angle_label">垂直角度 (-30°~60°)</label>
               <div style="display: flex; align-items: center; gap: 6px;">
                 <input type="number" class="camera-input camera-ctrl-vertical-angle" value="0" min="-30" max="60" step="1" style="width: 60px; padding: 4px 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px; text-align: center;" />
                 <span style="font-size: 11px; color: #6b7280;">°</span>
-                <button type="button" class="camera-reset-btn camera-ctrl-reset-vertical-angle" style="padding: 4px 8px; font-size: 10px; border: 1px solid #d1d5db; border-radius: 4px; background: #fff; color: #6b7280; cursor: pointer;">重置</button>
+                <button type="button" class="camera-reset-btn camera-ctrl-reset-vertical-angle" style="padding: 4px 8px; font-size: 10px; border: 1px solid #d1d5db; border-radius: 4px; background: #fff; color: #6b7280; cursor: pointer;" data-i18n="camera_h_angle_reset">重置</button>
               </div>
             </div>
             <input type="range" class="camera-slider camera-ctrl-vertical-angle-slider" min="-30" max="60" step="1" value="0" style="width: 100%;" />
             <div style="display: flex; justify-content: space-between; font-size: 10px; color: #9ca3af; margin-top: 2px;">
-              <span>-30° (仰视)</span>
-              <span>0° (平视)</span>
-              <span>+60° (俯视)</span>
+              <span data-i18n="camera_v_angle_low">-30° (仰视)</span>
+              <span data-i18n="camera_v_angle_eye">0° (平视)</span>
+              <span data-i18n="camera_v_angle_high">+60° (俯视)</span>
             </div>
           </div>
           <div class="camera-param-row" data-param="zoom">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <label style="font-size: 11px; font-weight: 600; color: #374151;">缩放距离 (0~10)</label>
+              <label style="font-size: 11px; font-weight: 600; color: #374151;" data-i18n="camera_zoom_label">缩放距离 (0~10)</label>
               <div style="display: flex; align-items: center; gap: 6px;">
                 <input type="number" class="camera-input camera-ctrl-zoom" value="5.0" min="0" max="10" step="0.1" style="width: 60px; padding: 4px 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px; text-align: center;" />
-                <button type="button" class="camera-reset-btn camera-ctrl-reset-zoom" style="padding: 4px 8px; font-size: 10px; border: 1px solid #d1d5db; border-radius: 4px; background: #fff; color: #6b7280; cursor: pointer;">重置</button>
+                <button type="button" class="camera-reset-btn camera-ctrl-reset-zoom" style="padding: 4px 8px; font-size: 10px; border: 1px solid #d1d5db; border-radius: 4px; background: #fff; color: #6b7280; cursor: pointer;" data-i18n="camera_h_angle_reset">重置</button>
               </div>
             </div>
             <input type="range" class="camera-slider camera-ctrl-zoom-slider" min="0" max="10" step="0.1" value="5.0" style="width: 100%;" />
             <div style="display: flex; justify-content: space-between; font-size: 10px; color: #9ca3af; margin-top: 2px;">
-              <span>0 (远景)</span>
-              <span>5 (中景)</span>
-              <span>10 (特写)</span>
+              <span data-i18n="camera_zoom_wide">0 (远景)</span>
+              <span data-i18n="camera_zoom_medium">5 (中景)</span>
+              <span data-i18n="camera_zoom_close">10 (特写)</span>
             </div>
           </div>
           <div style="margin-top: 8px;">
-            <label style="display: block; font-size: 11px; font-weight: 600; color: #374151; margin-bottom: 6px;">3D 预览</label>
+            <label style="display: block; font-size: 11px; font-weight: 600; color: #374151; margin-bottom: 6px;" data-i18n="camera_preview_label">3D 预览</label>
             <canvas class="camera-preview-canvas camera-ctrl-canvas" width="200" height="150" style="width: 100%; max-width: 200px; height: 150px; border: 1px solid #e5e7eb; border-radius: 4px; background: #ffffff;"></canvas>
           </div>
         </div>
@@ -170,12 +170,12 @@ function createCameraControlNode(opts){
       <div class="field">
         <div class="btn-row" style="display: flex; gap: 8px;">
           <div class="gen-container">
-            <button class="gen-btn gen-btn-main camera-ctrl-generate-btn" type="button">生成图片</button>
-            <button class="gen-btn gen-btn-caret camera-ctrl-generate-caret" type="button" aria-label="选择抽卡次数">▾</button>
+            <button class="gen-btn gen-btn-main camera-ctrl-generate-btn" type="button" data-i18n="camera_generate_btn">生成图片</button>
+            <button class="gen-btn gen-btn-caret camera-ctrl-generate-caret" type="button" aria-label="X1" data-i18n="camera_generate_x1:aria-label">▾</button>
             <div class="gen-menu camera-ctrl-gen-menu">
-              <div class="gen-item" data-count="1">X1</div>
-              <div class="gen-item" data-count="2">X2</div>
-              <div class="gen-item" data-count="3">X3</div>
+              <div class="gen-item" data-count="1" data-i18n="camera_generate_x1">X1</div>
+              <div class="gen-item" data-count="2" data-i18n="camera_generate_x2">X2</div>
+              <div class="gen-item" data-count="3" data-i18n="camera_generate_x3">X3</div>
             </div>
           </div>
         </div>
@@ -184,6 +184,11 @@ function createCameraControlNode(opts){
       </div>
     </div>
   `;
+
+  // 在节点插入DOM后立即扫描i18n属性
+  if (typeof window.ZJTi18nDOM !== 'undefined') {
+    setTimeout(() => window.ZJTi18nDOM.scanDOM(el), 0);
+  }
 
   const headerEl = el.querySelector('.node-header');
   const deleteBtn = el.querySelector('.icon-btn');
@@ -256,7 +261,7 @@ function createCameraControlNode(opts){
           try{ autoSaveWorkflow(); } catch(err){}
         }
       } else {
-        showToast('相机控制节点只能接收图片节点', 'warning');
+        showToast(window.t ? window.t('camera_control_input_error') : '相机控制节点只能接收图片节点', 'warning');
       }
     }
   });
@@ -267,14 +272,14 @@ function createCameraControlNode(opts){
     if(!conn){
       sourceThumb.style.display = 'none';
       sourcePlaceholder.style.display = 'block';
-      sourcePlaceholder.textContent = '请连接图片节点';
+      sourcePlaceholder.textContent = window.t ? window.t('camera_source_connect') : '请连接图片节点';
       return;
     }
     const sourceNode = state.nodes.find(n => n.id === conn.from);
     if(!sourceNode || sourceNode.type !== 'image' || (!sourceNode.data.url && !sourceNode.data.preview)){
       sourceThumb.style.display = 'none';
       sourcePlaceholder.style.display = 'block';
-      sourcePlaceholder.textContent = '源图片节点没有图片';
+      sourcePlaceholder.textContent = window.t ? window.t('camera_source_no_image') : '源图片节点没有图片';
       return;
     }
     const url = sourceNode.data.url || sourceNode.data.preview;
@@ -404,7 +409,7 @@ function createCameraControlNode(opts){
 
   // ========== 抽卡次数 ==========
   function updateDrawCountLabel(){
-    drawCountLabel.textContent = `抽卡次数：X${node.data.drawCount}`;
+    drawCountLabel.textContent = `${window.t ? window.t('camera_draw_count') : '抽卡次数：'}X${node.data.drawCount}`;
   }
   updateDrawCountLabel();
 
@@ -433,15 +438,15 @@ function createCameraControlNode(opts){
       const isConfigured = window.TaskConfig.isRunningHubConfigured();
       if(!isConfigured) {
         generateBtn.disabled = true;
-        generateBtn.title = '该功能依赖runninghub接口，请配置密钥';
-        generateBtn.textContent = '生成图片(未配置)';
+        generateBtn.title = window.t ? window.t('runninghub_not_configured') : '该功能依赖runninghub接口，请配置密钥';
+        generateBtn.textContent = (window.t ? window.t('camera_generate_btn') : '生成图片') + '(未配置)';
         statusEl.style.display = 'block';
         statusEl.style.color = '#ef4444';
-        statusEl.textContent = '该功能依赖runninghub接口，请配置密钥';
+        statusEl.textContent = window.t ? window.t('runninghub_not_configured') : '该功能依赖runninghub接口，请配置密钥';
       } else {
         generateBtn.disabled = false;
         generateBtn.title = '';
-        generateBtn.textContent = '生成图片';
+        generateBtn.textContent = window.t ? window.t('camera_generate_btn') : '生成图片';
         statusEl.style.display = 'none';
         statusEl.textContent = '';
       }
@@ -459,24 +464,24 @@ function createCameraControlNode(opts){
 
     // 0. 检查 runninghub 配置
     if(window.TaskConfig && !window.TaskConfig.isRunningHubConfigured()) {
-      showToast('该功能依赖runninghub接口，请配置密钥', 'error');
+      showToast(window.t ? window.t('camera_control_not_configured') : '该功能依赖runninghub接口，请配置密钥', 'error');
       return;
     }
 
     // 1. 验证源图片
     const conn = state.connections.find(c => c.to === id);
     if(!conn){
-      showToast('请先连接图片节点', 'warning');
+      showToast(window.t ? window.t('camera_control_connect_image') : '请先连接图片节点', 'warning');
       return;
     }
     const sourceNode = state.nodes.find(n => n.id === conn.from);
     if(!sourceNode || sourceNode.type !== 'image'){
-      showToast('请连接图片节点', 'warning');
+      showToast(window.t ? window.t('camera_control_connect_image') : '请连接图片节点', 'warning');
       return;
     }
     const sourceImageUrl = sourceNode.data.url;
     if(!sourceImageUrl){
-      showToast('源图片节点没有图片', 'warning');
+      showToast(window.t ? window.t('camera_control_no_image') : '源图片节点没有图片', 'warning');
       return;
     }
 
@@ -484,14 +489,14 @@ function createCameraControlNode(opts){
     const hasModifications = node.data.camera && node.data.camera.modified &&
       (node.data.camera.modified.horizontal_angle || node.data.camera.modified.vertical_angle || node.data.camera.modified.zoom);
     if(!hasModifications){
-      showToast('请先调整相机参数', 'warning');
+      showToast(window.t ? window.t('camera_control_adjust_params') : '请先调整相机参数', 'warning');
       return;
     }
 
     // 3. 获取多角度 task_id 和算力
     const multiAngleTaskId = window.TaskConfig && window.TaskConfig.getTaskIdByKey('qwen-multi-angle', 'image_edit');
     if(!multiAngleTaskId){
-      showToast('未找到多角度任务配置', 'error');
+      showToast(window.t ? window.t('camera_control_task_config_not_found') : '未找到多角度任务配置', 'error');
       return;
     }
 
@@ -511,7 +516,7 @@ function createCameraControlNode(opts){
         if(checkData.success && checkData.data){
           const userPower = checkData.data.computing_power ?? 0;
           if(userPower < totalPower){
-            showToast(`算力不足（需要 ${totalPower}，当前 ${userPower}）`, 'error');
+            showToast(window.t ? window.t('camera_control_insufficient_power', { need: totalPower, current: userPower }) : `算力不足（需要 ${totalPower}，当前 ${userPower}）`, 'error');
             return;
           }
         }
@@ -522,10 +527,10 @@ function createCameraControlNode(opts){
 
     // 5. 提交任务
     generateBtn.disabled = true;
-    generateBtn.textContent = '生成中...';
+    generateBtn.textContent = window.t ? window.t('camera_control_generating', { progress: '0%' }) : '生成中...';
     statusEl.style.display = 'block';
     statusEl.style.color = '#666';
-    statusEl.textContent = `正在提交任务（${node.data.drawCount}张，预计消耗 ${totalPower} 算力）...`;
+    statusEl.textContent = window.t ? window.t('camera_control_submitting', { count: node.data.drawCount, power: totalPower }) : `正在提交任务（${node.data.drawCount}张，预计消耗 ${totalPower} 算力）...`;
 
     try {
       const cameraParams = convertCameraToQwenMultiAngleParams(node.data.camera);
@@ -555,8 +560,8 @@ function createCameraControlNode(opts){
         throw new Error(data.detail || data.message || '提交任务失败');
       }
 
-      showToast('任务已提交，正在生成图片...', 'info');
-      statusEl.textContent = '任务已提交，等待结果...';
+      showToast(window.t ? window.t('camera_control_submitted') : '任务已提交，正在生成图片...', 'info');
+      statusEl.textContent = window.t ? window.t('camera_control_submitted') : '任务已提交，等待结果...';
 
       // 6. 创建图片节点
       const createdImageNodeIds = [];
@@ -621,7 +626,7 @@ function createCameraControlNode(opts){
           }
 
           if(imageUrls.length === 0){
-            showToast('生成成功，但未获取到图片地址', 'error');
+            showToast(window.t ? window.t('camera_control_no_image_result') : '生成成功，但未获取到图片地址', 'error');
             generateBtn.disabled = false;
             generateBtn.textContent = '生成图片';
             statusEl.textContent = '生成完成（未获取图片）';
@@ -658,12 +663,12 @@ function createCameraControlNode(opts){
           generateBtn.textContent = '生成图片';
           statusEl.style.color = '#22c55e';
           statusEl.textContent = `生成成功！已创建 ${imageUrls.length} 个图片节点`;
-          showToast(`相机控制生成成功！已创建 ${imageUrls.length} 个图片节点`, 'success');
+          showToast(window.t ? window.t('camera_control_success', { count: imageUrls.length }) : `相机控制生成成功！已创建 ${imageUrls.length} 个图片节点`, 'success');
 
           try{ autoSaveWorkflow(); } catch(err){}
         },
         (error) => {
-          showToast(`生成失败: ${error}`, 'error');
+          showToast(window.t ? window.t('camera_control_generation_failed', { error: error }) : `生成失败: ${error}`, 'error');
           generateBtn.disabled = false;
           generateBtn.textContent = '生成图片';
           statusEl.style.color = '#dc2626';
@@ -686,6 +691,11 @@ function createCameraControlNode(opts){
 
   canvasEl.appendChild(el);
   setSelected(id);
+
+  // i18n 翻译
+  if (window.ZJTi18nDOM) {
+    window.ZJTi18nDOM.scanDOM(el);
+  }
 
   // 初始化 3D 预览
   setTimeout(() => updateCameraPreview(), 100);

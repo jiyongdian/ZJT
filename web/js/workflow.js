@@ -231,8 +231,10 @@
               const singlePower = calculateVideoGenerationPower(videoModel, duration);
               const count = node.data.drawCount || 1;
               const totalPower = singlePower * count;
-              computingPowerValue.textContent = `${totalPower} 算力`;
-              computingPowerDetail.textContent = `单个 ${singlePower} 算力 × ${count} 个 = ${totalPower} 算力`;
+              computingPowerValue.textContent = window.t ? window.t('computing_power_value', { power: totalPower }) : `${totalPower} 算力`;
+              computingPowerValue.setAttribute('data-i18n-params', JSON.stringify({ power: totalPower }));
+              computingPowerDetail.textContent = window.t ? window.t('computing_power_detail', { individual: singlePower, count: count, total: totalPower }) : `单个 ${singlePower} 算力 × ${count} 个 = ${totalPower} 算力`;
+              computingPowerDetail.setAttribute('data-i18n-params', JSON.stringify({ individual: singlePower, count: count, total: totalPower }));
             }
           }
         }
@@ -255,8 +257,10 @@
               const singlePower = calculateVideoGenerationPower(videoModel, duration);
               const count = node.data.videoDrawCount || 1;
               const totalPower = singlePower * count;
-              computingPowerValue.textContent = `${totalPower} 算力`;
-              computingPowerDetail.textContent = `单个 ${singlePower} 算力 × ${count} 个 = ${totalPower} 算力`;
+              computingPowerValue.textContent = window.t ? window.t('shot_frame_computing_power_value', { power: totalPower }) : `${totalPower} 算力`;
+              computingPowerValue.setAttribute('data-i18n-params', JSON.stringify({ power: totalPower }));
+              computingPowerDetail.textContent = window.t ? window.t('shot_frame_computing_power_detail', { individual: singlePower, count: count, total: totalPower }) : `单个 ${singlePower} 算力 × ${count} 个 = ${totalPower} 算力`;
+              computingPowerDetail.setAttribute('data-i18n-params', JSON.stringify({ individual: singlePower, count: count, total: totalPower }));
             }
           }
         }
@@ -1609,7 +1613,7 @@
           
           // 更新抽卡次数标签
           const genCountLabel = el.querySelector('.gen-count-label');
-          if(genCountLabel) genCountLabel.textContent = `抽卡次数：X${node.data.drawCount}`;
+          if(genCountLabel) { const _t = window.t ? window.t('draw_count_x', { count: node.data.drawCount }) : null; genCountLabel.textContent = (_t && _t !== 'draw_count_x') ? _t : `抽卡次数：X${node.data.drawCount}`; }
           
           // 更新算力显示
           const computingPowerValue = el.querySelector('.computing-power-value');
@@ -1621,8 +1625,10 @@
             const singlePower = calculateVideoGenerationPower(videoModel, duration);
             const count = node.data.drawCount || 1;
             const totalPower = singlePower * count;
-            computingPowerValue.textContent = `${totalPower} 算力`;
-            computingPowerDetail.textContent = `单个 ${singlePower} 算力 × ${count} 个 = ${totalPower} 算力`;
+            computingPowerValue.textContent = window.t ? window.t('computing_power_value', { power: totalPower }) : `${totalPower} 算力`;
+            computingPowerValue.setAttribute('data-i18n-params', JSON.stringify({ power: totalPower }));
+            computingPowerDetail.textContent = window.t ? window.t('computing_power_detail', { individual: singlePower, count: count, total: totalPower }) : `单个 ${singlePower} 算力 × ${count} 个 = ${totalPower} 算力`;
+            computingPowerDetail.setAttribute('data-i18n-params', JSON.stringify({ individual: singlePower, count: count, total: totalPower }));
           }
           
           // 更新首帧图片
@@ -2009,7 +2015,7 @@
             }
           }
           if(ratioEl) ratioEl.value = node.data.ratio;
-          if(drawCountLabel) drawCountLabel.textContent = `抽卡次数：X${node.data.drawCount}`;
+          if(drawCountLabel) { const _t = window.t ? window.t('draw_count_x', { count: node.data.drawCount }) : null; drawCountLabel.textContent = (_t && _t !== 'draw_count_x') ? _t : `抽卡次数：X${node.data.drawCount}`; }
           if(titleEl && nodeData.title) titleEl.textContent = nodeData.title;
 
           if(node.data.url || node.data.preview){
@@ -2059,7 +2065,7 @@
 
           // 恢复抽卡次数标签
           const drawCountLabel = el.querySelector('.camera-ctrl-draw-count-label');
-          if(drawCountLabel) drawCountLabel.textContent = `抽卡次数：X${node.data.drawCount || 1}`;
+          if(drawCountLabel) { const _t = window.t ? window.t('draw_count_x', { count: node.data.drawCount || 1 }) : null; drawCountLabel.textContent = (_t && _t !== 'draw_count_x') ? _t : `抽卡次数：X${node.data.drawCount || 1}`; }
 
           // 恢复标题
           if(nodeData.title){
@@ -2559,15 +2565,15 @@
           if(nodeData.data.drawCount){
             const drawCountLabel = nodeEl.querySelector('.shot-frame-draw-count-label');
             if(drawCountLabel){
-              drawCountLabel.textContent = `抽卡次数：X${nodeData.data.drawCount}`;
+              { const _t = window.t ? window.t('draw_count_x', { count: nodeData.data.drawCount }) : null; drawCountLabel.textContent = (_t && _t !== 'draw_count_x') ? _t : `抽卡次数：X${nodeData.data.drawCount}`; }
             }
           }
-          
+
           // 恢复视频抽卡次数显示
           if(nodeData.data.videoDrawCount){
             const videoDrawCountLabel = nodeEl.querySelector('.shot-frame-video-draw-count-label');
             if(videoDrawCountLabel){
-              videoDrawCountLabel.textContent = `抽卡次数：X${nodeData.data.videoDrawCount}`;
+              { const _t = window.t ? window.t('draw_count_x', { count: nodeData.data.videoDrawCount }) : null; videoDrawCountLabel.textContent = (_t && _t !== 'draw_count_x') ? _t : `抽卡次数：X${nodeData.data.videoDrawCount}`; }
             }
           }
           

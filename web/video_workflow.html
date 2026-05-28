@@ -3,26 +3,31 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>视频工作流</title>
+  <title data-i18n="page_title">视频工作流</title>
   <link rel="icon" href="/files/logo.ico" type="image/vnd.microsoft.icon"/>
   <link rel="stylesheet" href="/css/video_workflow.css" />
+  <!-- i18n 支持 -->
+  <script src="/i18n/i18n-core.js?v=__VERSION__"></script>
+  <script src="/i18n/i18n-dom.js?v=__VERSION__"></script>
+  <link rel="stylesheet" href="/i18n/i18n-switcher.css?v=__VERSION__" />
+  <script src="/i18n/i18n-switcher.js?v=__VERSION__"></script>
 </head>
 <body>
   <!-- 左侧导览条 - 悬浮模式 -->
   <nav class="step-nav" id="step-nav">
     <div class="step-nav-content">
-      <div class="step-nav-title">创作流程</div>
+      <div class="step-nav-title" data-i18n="step_nav_title">创作流程</div>
       <div class="step-nav-list">
         <div class="step-nav-item clickable" data-step="script" onclick="goToScriptWriter()">
           <div class="step-nav-icon">📚</div>
-          <div class="step-nav-text">剧本资产</div>
+          <div class="step-nav-text" data-i18n="step_nav_script_asset">剧本资产</div>
           <div class="step-nav-arrow">←</div>
         </div>
         <div class="step-nav-connector"></div>
         <div class="step-nav-item active" data-step="canvas">
           <div class="step-nav-icon">🎬</div>
-          <div class="step-nav-text">制作工坊</div>
-          <div class="step-nav-badge current">当前</div>
+          <div class="step-nav-text" data-i18n="step_nav_studio">制作工坊</div>
+          <div class="step-nav-badge current" data-i18n="step_nav_current">当前</div>
         </div>
       </div>
     </div>
@@ -31,9 +36,9 @@
   <div class="shell">
     <div class="canvas-container" id="canvasContainer">
       <div class="brand-floating">
-        <a class="brand" href="/video-workflow-list" title="返回列表">
+        <a class="brand" href="/video-workflow-list" data-i18n="return_to_list:title">
           <img src="/files/logo.svg" alt="logo" />
-          <div class="brand-title">
+          <div class="brand-title" data-i18n="page_title">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;">
               <rect x="3" y="6" width="18" height="12" rx="2"/>
               <path d="M6 9H18M6 12H14M6 15H12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -42,45 +47,45 @@
           </div>
         </a>
         <div class="world-selector">
-          <select id="defaultWorldSelect" title="选择默认世界">
-            <option value="">选择世界...</option>
+          <select id="defaultWorldSelect" data-i18n="select_world:title">
+            <option value="" data-i18n="select_world">选择世界...</option>
           </select>
           <div class="world-selector-actions">
-            <button class="mini-btn" id="createWorldBtn" type="button" title="新建世界">+</button>
-            <button class="mini-btn secondary" id="editWorldBtn" type="button" title="编辑当前世界">✎</button>
-            <button class="mini-btn btn-danger" id="deleteWorldBtn" type="button" title="删除当前世界">−</button>
+            <button class="mini-btn" id="createWorldBtn" type="button" data-i18n="create_world:title">+</button>
+            <button class="mini-btn secondary" id="editWorldBtn" type="button" data-i18n="edit_world:title">✎</button>
+            <button class="mini-btn btn-danger" id="deleteWorldBtn" type="button" data-i18n="delete_world:title">−</button>
           </div>
-          <span id="editionBadge" style="display: none; margin-left: 8px; padding: 2px 8px; background: #22c55e; color: white; border-radius: 4px; font-size: 12px; font-weight: 500;">公共空间</span>
+          <span id="editionBadge" style="display: none; margin-left: 8px; padding: 2px 8px; background: #22c55e; color: white; border-radius: 4px; font-size: 12px; font-weight: 500;" data-i18n="public_space">公共空间</span>
         </div>
         <div style="display: flex; gap: 4px; align-items: center;">
-          <a href="https://bq3mlz1jiae.feishu.cn/wiki/LBw5w7zZaiuQhuk4sT7c42zcn0e" target="_blank" class="mini-btn secondary" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center;" title="查看工作流教程">工作流教程</a>
+          <a href="https://bq3mlz1jiae.feishu.cn/wiki/LBw5w7zZaiuQhuk4sT7c42zcn0e" target="_blank" class="mini-btn secondary" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center;" data-i18n="workflow_tutorial">工作流教程</a>
         </div>
       </div>
       <div class="ratio-floating">
-        <button class="btn save-btn" id="saveBtn" title="保存工作流">
+        <button class="btn save-btn" id="saveBtn" data-i18n="save_workflow:title">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
             <polyline points="17 21 17 13 7 13 7 21"></polyline>
             <polyline points="7 3 7 8 15 8"></polyline>
           </svg>
-          <span id="saveBtnText">保存</span>
+          <span id="saveBtnText" data-i18n="save">保存</span>
         </button>
-        <button class="btn secondary save-btn" id="styleBtn" title="画风设置">
+        <button class="btn secondary save-btn" id="styleBtn" data-i18n="style_settings:title">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
             <circle cx="8.5" cy="8.5" r="1.5"></circle>
             <polyline points="21 15 16 10 5 21"></polyline>
           </svg>
-          <span>画风</span>
+          <span data-i18n="image_style">画风</span>
         </button>
-        <button class="btn secondary save-btn" id="videoPromptSuffixBtn" type="button" title="视频提示词后缀">
+        <button class="btn secondary save-btn" id="videoPromptSuffixBtn" type="button" data-i18n="video_prompt_suffix:title">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 20h9"></path>
             <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
           </svg>
-          <span>后缀</span>
+          <span data-i18n="suffix">后缀</span>
         </button>
-        <div class="ratio-label">视频比例</div>
+        <div class="ratio-label" data-i18n="video_ratio">视频比例</div>
         <select id="ratioSelect">
           <option value="9:16">9:16</option>
           <option value="3:4">3:4</option>
@@ -88,29 +93,29 @@
           <option value="4:3">4:3</option>
           <option value="16:9" selected>16:9</option>
         </select>
-        <div class="computing-power-chip" id="computingPowerChip" title="剩余算力">
-          <span style="cursor: pointer;" onclick="openComputingPowerLogs()" title="点击查看算力日志">算力: <span class="computing-power-value" id="computingPowerValue">--</span></span>
-          <button class="mini-btn computing-power-refresh" id="computingPowerRefreshBtn" type="button" title="刷新算力">↻</button>
+        <div class="computing-power-chip" id="computingPowerChip" data-i18n="remaining_power:title">
+          <span style="cursor: pointer;" onclick="openComputingPowerLogs()" data-i18n="view_power_logs:title"><span data-i18n="power">算力</span>: <span class="computing-power-value" id="computingPowerValue">--</span></span>
+          <button class="mini-btn computing-power-refresh" id="computingPowerRefreshBtn" type="button" data-i18n="refresh_power:title">↻</button>
         </div>
       </div>
       <div class="add-btn-container" id="addBtnContainer">
-        <button class="add-btn" id="addBtn" title="添加">+</button>
+        <button class="add-btn" id="addBtn" data-i18n="add_btn_title:title">+</button>
         <div class="add-menu" id="addMenu">
           <div class="add-menu-group">
-            <div class="add-menu-label">添加节点</div>
+            <div class="add-menu-label" data-i18n="add_node">添加节点</div>
             <div class="add-menu-item" id="menuAddVideo">
               <svg class="add-menu-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                 <rect x="3" y="6" width="14" height="12" rx="2" stroke="currentColor" stroke-width="2" />
                 <path d="M17 10L21 8V16L17 14V10Z" fill="currentColor" />
               </svg>
-              <span class="add-menu-text">图生视频</span>
+              <span class="add-menu-text" data-i18n="image_to_video">图生视频</span>
             </div>
             <div class="add-menu-item" id="menuAddVideoNode">
               <svg class="add-menu-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                 <rect x="4" y="6" width="16" height="12" rx="2" stroke="currentColor" stroke-width="2" />
                 <path d="M10 9.5V14.5L14.5 12L10 9.5Z" fill="currentColor" />
               </svg>
-              <span class="add-menu-text">视频</span>
+              <span class="add-menu-text" data-i18n="video">视频</span>
             </div>
             <div class="add-menu-item" id="menuAddAudio">
               <svg class="add-menu-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -118,7 +123,7 @@
                 <circle cx="6" cy="18" r="3" stroke="currentColor" stroke-width="2" />
                 <circle cx="18" cy="16" r="3" stroke="currentColor" stroke-width="2" />
               </svg>
-              <span class="add-menu-text">音频</span>
+              <span class="add-menu-text" data-i18n="audio">音频</span>
             </div>
             <div class="add-menu-item" id="menuAddExtractFrame">
               <svg class="add-menu-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -126,14 +131,14 @@
                 <path d="M10 9.5V14.5L14.5 12L10 9.5Z" fill="currentColor" />
                 <rect x="6" y="2" width="6" height="4" rx="1" stroke="currentColor" stroke-width="2" />
               </svg>
-              <span class="add-menu-text">提取帧</span>
+              <span class="add-menu-text" data-i18n="extract_frame">提取帧</span>
             </div>
             <div class="add-menu-item" id="menuAddImage">
               <svg class="add-menu-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                 <rect x="4" y="5" width="16" height="14" rx="2" stroke="currentColor" stroke-width="2" />
                 <path d="M7 15L10 12L13 15L16 11L20 17H4L7 15Z" fill="currentColor" opacity="0.35" />
               </svg>
-              <span class="add-menu-text">图片</span>
+              <span class="add-menu-text" data-i18n="image">图片</span>
             </div>
             <div class="add-menu-item" id="menuAddCameraControl">
               <svg class="add-menu-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -141,21 +146,21 @@
                 <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="2"/>
                 <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
               </svg>
-              <span class="add-menu-text">相机控制</span>
+              <span class="add-menu-text" data-i18n="camera_control">相机控制</span>
             </div>
             <div class="add-menu-item" id="menuAddScript">
               <svg class="add-menu-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                 <path d="M9 5H7C5.89543 5 5 5.89543 5 7V19C5 20.1046 5.89543 21 7 21H17C18.1046 21 19 20.1046 19 19V7C19 5.89543 18.1046 5 17 5H15" stroke="currentColor" stroke-width="2"/>
                 <rect x="9" y="3" width="6" height="4" rx="1" stroke="currentColor" stroke-width="2"/>
               </svg>
-              <span class="add-menu-text">剧本</span>
+              <span class="add-menu-text" data-i18n="script">剧本</span>
             </div>
             <div class="add-menu-item" id="menuAddShotGroup">
               <svg class="add-menu-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                 <rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="2" />
                 <path d="M6 9H18M6 12H14M6 15H12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
               </svg>
-              <span class="add-menu-text">分镜组</span>
+              <span class="add-menu-text" data-i18n="shot_frame_group">分镜组</span>
             </div>
             <div class="add-menu-item" id="menuAddTextToSpeech">
               <svg class="add-menu-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -163,44 +168,44 @@
                 <path d="M17 10V12C17 14.7614 14.7614 17 12 17C9.23858 17 7 14.7614 7 12V10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                 <path d="M12 17V21M12 21H8M12 21H16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
               </svg>
-              <span class="add-menu-text">文字转语音</span>
+              <span class="add-menu-text" data-i18n="text_to_speech">文字转语音</span>
             </div>
             <div class="add-menu-item" id="menuAddDialogueGroup">
               <svg class="add-menu-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                 <path d="M8 12H8.01M12 12H12.01M16 12H16.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                 <path d="M3 7C3 5.89543 3.89543 5 5 5H19C20.1046 5 21 5.89543 21 7V15C21 16.1046 20.1046 17 19 17H13L9 21V17H5C3.89543 17 3 16.1046 3 15V7Z" stroke="currentColor" stroke-width="2"/>
               </svg>
-              <span class="add-menu-text">对话组</span>
+              <span class="add-menu-text" data-i18n="dialogue_group">对话组</span>
             </div>
             <div class="add-menu-item" id="menuAddText">
               <svg class="add-menu-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                 <path d="M4 6H20M4 12H20M4 18H14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
               </svg>
-              <span class="add-menu-text">文本</span>
+              <span class="add-menu-text" data-i18n="text">文本</span>
             </div>
           </div>
           <div class="add-menu-group">
-            <div class="add-menu-label">添加素材 <a href="javascript:void(0)" id="agentBtnMaterial" style="color: #3b82f6; text-decoration: none; font-size: 12px; font-weight: 600; margin-left: 8px; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'" title="AI生成剧本，人物，场景，道具">一键生成素材</a></div>
+            <div class="add-menu-label"><span data-i18n="add_materials">添加素材</span> <a href="javascript:void(0)" id="agentBtnMaterial" style="color: #3b82f6; text-decoration: none; font-size: 12px; font-weight: 600; margin-left: 8px; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'" data-i18n="one_click_generate ai_generate_materials:title">一键生成素材</a></div>
             <div class="add-menu-item" id="menuAddCharacter">
               <svg class="add-menu-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                 <circle cx="12" cy="8" r="3" stroke="currentColor" stroke-width="2"/>
                 <path d="M6 21C6 17.6863 8.68629 15 12 15C15.3137 15 18 17.6863 18 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
               </svg>
-              <span class="add-menu-text">角色</span>
+              <span class="add-menu-text" data-i18n="character">角色</span>
             </div>
             <div class="add-menu-item" id="menuAddLocation">
               <svg class="add-menu-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                 <path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2Z" stroke="currentColor" stroke-width="2"/>
                 <circle cx="12" cy="9" r="2.5" stroke="currentColor" stroke-width="2"/>
               </svg>
-              <span class="add-menu-text">场景</span>
+              <span class="add-menu-text" data-i18n="scene">场景</span>
             </div>
             <div class="add-menu-item" id="menuAddProps">
               <svg class="add-menu-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                 <rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" stroke-width="2"/>
                 <path d="M9 9L15 15M15 9L9 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
               </svg>
-              <span class="add-menu-text">道具</span>
+              <span class="add-menu-text" data-i18n="prop">道具</span>
             </div>
           </div>
         </div>
@@ -209,12 +214,12 @@
         <svg class="connections" id="connectionsSvg"></svg>
         <div class="canvas" id="canvas"></div>
       </div>
-      <button class="conn-delete-btn" id="connDeleteBtn" title="删除连接线">×</button>
+      <button class="conn-delete-btn" id="connDeleteBtn" title="删除连接线" data-i18n="delete_connection:title">×</button>
       <div class="zoom-controls">
-        <button class="zoom-btn" id="autoArrangeBtn" title="自动排列节点">排</button>
-        <button class="zoom-btn" id="zoomInBtn" title="放大">+</button>
+        <button class="zoom-btn" id="autoArrangeBtn" title="自动排列节点" data-i18n="auto_arrange_nodes:title" data-i18n-content="auto_arrange">排</button>
+        <button class="zoom-btn" id="zoomInBtn" title="放大" data-i18n="zoom_in:title">+</button>
         <div class="zoom-level" id="zoomLevel">100%</div>
-        <button class="zoom-btn" id="zoomOutBtn" title="缩小">−</button>
+        <button class="zoom-btn" id="zoomOutBtn" title="缩小" data-i18n="zoom_out:title">−</button>
       </div>
       <div class="minimap" id="minimap">
         <div class="minimap-content" id="minimapContent"></div>
@@ -228,8 +233,8 @@
   <div class="modal" id="videoModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true">
       <div class="modal-header">
-        <div class="modal-title">视频预览</div>
-        <button class="modal-close" id="videoModalClose" type="button" aria-label="关闭">×</button>
+        <div class="modal-title" data-i18n="video_preview">视频预览</div>
+        <button class="modal-close" id="videoModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body">
         <video id="videoModalPlayer" controls></video>
@@ -240,8 +245,8 @@
   <div class="modal" id="imageModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true">
       <div class="modal-header">
-        <div class="modal-title" id="imageModalTitle">图片预览</div>
-        <button class="modal-close" id="imageModalClose" type="button" aria-label="关闭">×</button>
+        <div class="modal-title" id="imageModalTitle" data-i18n="image_preview">图片预览</div>
+        <button class="modal-close" id="imageModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body">
         <img id="imageModalImg" alt="" />
@@ -252,10 +257,10 @@
   <div class="modal" id="shotGroupModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 1200px; width: 90%;">
       <div class="modal-header">
-        <div class="modal-title" id="shotGroupModalTitle">分镜组详情</div>
+        <div class="modal-title" id="shotGroupModalTitle" data-i18n="shot_group_details">分镜组详情</div>
         <div style="display: flex; gap: 8px; align-items: center;">
-          <button class="mini-btn" id="shotGroupModalEditBtn" type="button">新建分镜/ 编辑分镜</button>
-          <button class="modal-close" id="shotGroupModalClose" type="button" aria-label="关闭">×</button>
+          <button class="mini-btn" id="shotGroupModalEditBtn" type="button" data-i18n="create_edit_shot">新建分镜/ 编辑分镜</button>
+          <button class="modal-close" id="shotGroupModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
         </div>
       </div>
       <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
@@ -267,8 +272,8 @@
   <div class="modal" id="shotDetailModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 800px;">
       <div class="modal-header">
-        <div class="modal-title" id="shotDetailModalTitle">分镜详情</div>
-        <button class="modal-close" id="shotDetailModalClose" type="button" aria-label="关闭">×</button>
+        <div class="modal-title" id="shotDetailModalTitle" data-i18n="shot_detail">分镜详情</div>
+        <button class="modal-close" id="shotDetailModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
         <div id="shotDetailModalContent"></div>
@@ -279,15 +284,15 @@
   <div class="modal" id="shotGroupEditModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 1200px; width: 90%;">
       <div class="modal-header">
-        <div class="modal-title">编辑分镜组</div>
-        <button class="modal-close" id="shotGroupEditModalClose" type="button" aria-label="关闭">×</button>
+        <div class="modal-title" data-i18n="edit_shot_group">编辑分镜组</div>
+        <button class="modal-close" id="shotGroupEditModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
         <div id="shotGroupEditModalContent"></div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
-        <button class="mini-btn secondary" id="shotGroupEditCancelBtn" type="button">取消</button>
-        <button class="mini-btn" id="shotGroupEditSaveBtn" type="button">保存</button>
+        <button class="mini-btn secondary" id="shotGroupEditCancelBtn" type="button" data-i18n="cancel">取消</button>
+        <button class="mini-btn" id="shotGroupEditSaveBtn" type="button" data-i18n="save">保存</button>
       </div>
     </div>
   </div>
@@ -295,18 +300,17 @@
   <div class="modal" id="styleModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 600px; background: #ffffff; color: #111827; border: 1px solid #e5e7eb;">
       <div class="modal-header" style="background: #f8fafc; border-bottom: 1px solid #e5e7eb;">
-        <div class="modal-title" style="color: #0f172a;">画风设置</div>
-        <button class="modal-close" id="styleModalClose" type="button" aria-label="关闭">×</button>
+        <div class="modal-title" style="color: #0f172a;" data-i18n="style_settings">${window.t ? window.t('style_settings') : '画风设置'}</div>
+        <button class="modal-close" id="styleModalClose" type="button" aria-label="${window.t ? window.t('close') : '关闭'}" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
         <div style="display: flex; flex-direction: column; gap: 16px;">
           <div class="field">
-            <label class="label" style="color: #0f172a;">
-              画风名称
-              <a href="/image-style-guide" target="_blank" style="margin-left: 8px; font-size: 12px; color: #3b82f6; text-decoration: none; font-weight: normal; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'" title="查看画风说明">查看画风说明</a>
-              <span style="margin-left: 8px; font-size: 12px; color: #6b7280; font-weight: normal;">如果您不知道如何描述画风，可以在其他网站寻找画风。例如：<a href="https://bq3mlz1jiae.feishu.cn/wiki/LBw5w7zZaiuQhuk4sT7c42zcn0e#share-NKbIdQfDdouM8xx3LxIcZrPHn7c" target="_blank" style="color: #3b82f6; text-decoration: none; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'">即梦</a>。</span>
+            <label class="label" style="color: #0f172a;" data-i18n="style_name_label">
+              <a href="/image-style-guide" target="_blank" style="margin-left: 8px; font-size: 12px; color: #3b82f6; text-decoration: none; font-weight: normal; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'" data-i18n="style_guide_link style_guide_link:title">查看画风说明</a>
+              <span style="margin-left: 8px; font-size: 12px; color: #6b7280; font-weight: normal;" data-i18n="style_guide_intro"><a href="https://bq3mlz1jiae.feishu.cn/wiki/LBw5w7zZaiuQhuk4sT7c42zcn0e#share-NKbIdQfDdouM8xx3LxIcZrPHn7c" target="_blank" style="color: #3b82f6; text-decoration: none; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'">即梦</a>。</span>
             </label>
-            <input type="text" id="styleNameInput" list="stylePresets" placeholder="选择或输入画风" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" />
+            <input type="text" id="styleNameInput" list="stylePresets" placeholder="选择或输入画风" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" data-i18n="style_placeholder:placeholder" />
             <datalist id="stylePresets">
               <option value="漫画风格">
               <option value="写实风格">
@@ -326,28 +330,28 @@
           <!-- 同步世界画风提示条 -->
           <div id="styleSyncBanner" style="display: none; padding: 10px 14px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; gap: 10px; align-items: center;">
             <div style="flex: 1; font-size: 13px; color: #1e40af;">
-              <span id="styleSyncBannerText">世界的画风与当前工作流不一致</span>
+              <span id="styleSyncBannerText" data-i18n="style_sync_banner">${window.t ? window.t('style_sync_banner') : '世界的画风与当前工作流不一致'}</span>
             </div>
-            <button type="button" id="styleSyncBtn" style="padding: 6px 14px; background: #3b82f6; color: #ffffff; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; white-space: nowrap; font-weight: 500;">同步世界画风</button>
+            <button type="button" id="styleSyncBtn" style="padding: 6px 14px; background: #3b82f6; color: #ffffff; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; white-space: nowrap; font-weight: 500;" data-i18n="sync_world_style">${window.t ? window.t('sync_world_style') : '同步世界画风'}</button>
           </div>
           <div class="field">
-            <label class="label" style="color: #0f172a;">参考图</label>
+            <label class="label" style="color: #0f172a;" data-i18n="style_reference_image">${window.t ? window.t('style_reference_image') : '参考图'}</label>
             <input type="file" id="styleImageInput" accept="image/*" style="width: 100%; background: #f9fafb; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 8px; font-size: 13px;" />
             <div id="styleImagePreview" style="margin-top: 12px; display: none;">
               <img id="styleImagePreviewImg" style="max-width: 100%; max-height: 200px; border-radius: 8px; border: 1px solid #e5e7eb; object-fit: contain;" />
-              <button type="button" id="styleImageRemoveBtn" style="margin-top: 8px; padding: 6px 12px; background: #f3f4f6; color: #111827; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; cursor: pointer;">移除图片</button>
+              <button type="button" id="styleImageRemoveBtn" style="margin-top: 8px; padding: 6px 12px; background: #f3f4f6; color: #111827; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; cursor: pointer;" data-i18n="style_remove_image">${window.t ? window.t('style_remove_image') : '移除图片'}</button>
             </div>
           </div>
           <div class="field">
-            <label class="label" style="color: #0f172a;">构图倾向</label>
-            <input type="text" id="compositionInput" placeholder="如：三分法、对称构图、黄金螺旋等" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" />
-            <div style="margin-top: 4px; font-size: 12px; color: #6b7280;">构图倾向将附加到图片生成的提示词中</div>
+            <label class="label" style="color: #0f172a;" data-i18n="style_composition_label">${window.t ? window.t('style_composition_label') : '构图倾向'}</label>
+            <input type="text" id="compositionInput" placeholder="如：三分法、对称构图、黄金螺旋等" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" data-i18n="style_composition_placeholder:placeholder" />
+            <div style="margin-top: 4px; font-size: 12px; color: #6b7280;" data-i18n="style_composition_hint">${window.t ? window.t('style_composition_hint') : '构图倾向将附加到图片生成的提示词中'}</div>
           </div>
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
-        <button class="mini-btn secondary" id="styleCancelBtn" type="button">取消</button>
-        <button class="mini-btn" id="styleSaveBtn" type="button">保存</button>
+        <button class="mini-btn secondary" id="styleCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
+        <button class="mini-btn" id="styleSaveBtn" type="button" data-i18n="save">${window.t ? window.t('save') : '保存'}</button>
       </div>
     </div>
   </div>
@@ -356,30 +360,30 @@
   <div class="modal" id="characterModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 900px; background: #ffffff; color: #111827; border: 1px solid #e5e7eb;">
       <div class="modal-header" style="background: #f8fafc; border-bottom: 1px solid #e5e7eb;">
-        <div class="modal-title" style="color: #0f172a;">选择角色</div>
-        <button class="modal-close" id="characterModalClose" type="button" aria-label="关闭">×</button>
+        <div class="modal-title" style="color: #0f172a;" data-i18n="select_character">选择角色</div>
+        <button class="modal-close" id="characterModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
         <div style="display: flex; flex-direction: column; gap: 16px;">
           <div class="field">
-            <label class="label" style="color: #0f172a;">选择世界</label>
+            <label class="label" style="color: #0f172a;" data-i18n="select_world_label">${window.t ? window.t('select_world_label') : '选择世界'}</label>
             <div style="display: flex; gap: 8px; align-items: center;">
               <select id="characterWorldSelect" style="flex: 1; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;">
-                <option value="">请先选择世界...</option>
+                <option value="" data-i18n="select_world_placeholder">${window.t ? window.t('select_world_placeholder') : '请先选择世界...'}</option>
               </select>
-              <a id="characterCreateWorldBtn" href="javascript:void(0)" style="padding: 10px 16px; color: #22c55e; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#22c55e'" onmouseout="this.style.borderColor='transparent'">创建世界</a>
+              <a id="characterCreateWorldBtn" href="javascript:void(0)" style="padding: 10px 16px; color: #22c55e; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#22c55e'" onmouseout="this.style.borderColor='transparent'" data-i18n="create_world">${window.t ? window.t('create_world') : '创建世界'}</a>
             </div>
           </div>
           <div class="field">
-            <label class="label" for="characterSearchInput" style="color: #0f172a;">搜索角色</label>
+            <label class="label" for="characterSearchInput" style="color: #0f172a;" data-i18n="search_character_label">${window.t ? window.t('search_character_label') : '搜索角色'}</label>
             <div style="display: flex; gap: 8px; align-items: center;">
-              <input type="text" id="characterSearchInput" placeholder="输入角色名称搜索..." style="flex: 1; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" />
-              <button type="button" id="createCharacterBtn" style="padding: 10px 16px; background: transparent; color: #3b82f6; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border: none; border-bottom: 1px solid transparent; transition: border-color 0.2s; cursor: pointer;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'">创建角色</button>
+              <input type="text" id="characterSearchInput" placeholder="${window.t ? window.t('search_character_placeholder') : '输入角色名称搜索...'}" style="flex: 1; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" data-i18n="search_character_placeholder:placeholder" />
+              <button type="button" id="createCharacterBtn" style="padding: 10px 16px; background: transparent; color: #3b82f6; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border: none; border-bottom: 1px solid transparent; transition: border-color 0.2s; cursor: pointer;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'" data-i18n="create_character">${window.t ? window.t('create_character') : '创建角色'}</button>
             </div>
           </div>
           <div id="characterList" style="max-height: 400px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px;">
-            <div style="text-align: center; color: #9ca3af; padding: 40px 20px;">
-              请先选择世界
+            <div style="text-align: center; color: #9ca3af; padding: 40px 20px;" data-i18n="world_not_selected">
+              ${window.t ? window.t('world_not_selected') : '请先选择世界'}
             </div>
           </div>
         </div>
@@ -391,30 +395,30 @@
   <div class="modal" id="locationModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 900px; background: #ffffff; color: #111827; border: 1px solid #e5e7eb;">
       <div class="modal-header" style="background: #f8fafc; border-bottom: 1px solid #e5e7eb;">
-        <div class="modal-title" style="color: #0f172a;">选择场景</div>
-        <button class="modal-close" id="locationModalClose" type="button" aria-label="关闭">×</button>
+        <div class="modal-title" style="color: #0f172a;" data-i18n="select_location">选择场景</div>
+        <button class="modal-close" id="locationModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
         <div style="display: flex; flex-direction: column; gap: 16px;">
           <div class="field">
-            <label class="label" style="color: #0f172a;">选择世界</label>
+            <label class="label" style="color: #0f172a;" data-i18n="select_world_label">${window.t ? window.t('select_world_label') : '选择世界'}</label>
             <div style="display: flex; gap: 8px; align-items: center;">
               <select id="locationWorldSelect" style="flex: 1; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;">
-                <option value="">请先选择世界...</option>
+                <option value="" data-i18n="select_world_placeholder">${window.t ? window.t('select_world_placeholder') : '请先选择世界...'}</option>
               </select>
-              <a id="locationCreateWorldBtn" href="javascript:void(0)" style="padding: 10px 16px; color: #22c55e; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#22c55e'" onmouseout="this.style.borderColor='transparent'">创建世界</a>
+              <a id="locationCreateWorldBtn" href="javascript:void(0)" style="padding: 10px 16px; color: #22c55e; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#22c55e'" onmouseout="this.style.borderColor='transparent'" data-i18n="create_world">${window.t ? window.t('create_world') : '创建世界'}</a>
             </div>
           </div>
           <div class="field">
-            <label class="label" style="color: #0f172a;">搜索场景</label>
+            <label class="label" style="color: #0f172a;" data-i18n="search_location_label">${window.t ? window.t('search_location_label') : '搜索场景'}</label>
             <div style="display: flex; gap: 8px; align-items: center;">
-              <input type="text" id="locationSearchInput" placeholder="输入场景名称搜索..." style="flex: 1; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" />
-              <a id="createLocationBtn" href="javascript:void(0)" style="padding: 10px 16px; color: #3b82f6; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'">创建场景</a>
+              <input type="text" id="locationSearchInput" placeholder="${window.t ? window.t('search_location_placeholder') : '输入场景名称搜索...'}" style="flex: 1; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" data-i18n="search_location_placeholder:placeholder" />
+              <a id="createLocationBtn" href="javascript:void(0)" style="padding: 10px 16px; color: #3b82f6; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'" data-i18n="create_location">${window.t ? window.t('create_location') : '创建场景'}</a>
             </div>
           </div>
           <div id="locationList" style="max-height: 400px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px;">
-            <div style="text-align: center; color: #9ca3af; padding: 40px 20px;">
-              请先选择世界
+            <div style="text-align: center; color: #9ca3af; padding: 40px 20px;" data-i18n="world_not_selected">
+              ${window.t ? window.t('world_not_selected') : '请先选择世界'}
             </div>
           </div>
         </div>
@@ -426,36 +430,36 @@
   <div class="modal" id="createCharacterModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 600px; background: #ffffff; color: #111827; border: 1px solid #e5e7eb;">
       <div class="modal-header" style="background: #f8fafc; border-bottom: 1px solid #e5e7eb;">
-        <div class="modal-title" style="color: #0f172a;">创建角色</div>
-        <button class="modal-close" id="createCharacterModalClose" type="button" aria-label="关闭">×</button>
+        <div class="modal-title" style="color: #0f172a;" data-i18n="create_character_modal">创建角色</div>
+        <button class="modal-close" id="createCharacterModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
         <div style="display: flex; flex-direction: column; gap: 16px;">
           <div class="field">
-            <label class="label" style="color: #0f172a;">角色名称 <span style="color: #ef4444;">*</span></label>
-            <input type="text" id="createCharacterNameInput" placeholder="请输入角色名称..." style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" />
+            <label class="label" style="color: #0f172a;" data-i18n="character_name_label">${window.t ? window.t('character_name_label') : '角色名称'} <span style="color: #ef4444;">*</span></label>
+            <input type="text" id="createCharacterNameInput" placeholder="${window.t ? window.t('character_name_placeholder') : '请输入角色名称...'}" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" data-i18n="character_name_placeholder:placeholder" />
           </div>
           <div class="field-row">
             <div class="field">
-              <label class="label" style="color: #0f172a;">年龄</label>
-              <input type="text" id="createCharacterAgeInput" placeholder="请输入年龄..." style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" />
+              <label class="label" style="color: #0f172a;" data-i18n="character_age_label">${window.t ? window.t('character_age_label') : '年龄'}</label>
+              <input type="text" id="createCharacterAgeInput" placeholder="${window.t ? window.t('character_age_placeholder') : '请输入年龄...'}" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" data-i18n="character_age_placeholder:placeholder" />
             </div>
             <div class="field">
-              <label class="label" style="color: #0f172a;">身份/职业</label>
-              <input type="text" id="createCharacterIdentityInput" placeholder="请输入身份或职业..." style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" />
+              <label class="label" style="color: #0f172a;" data-i18n="character_identity_label">${window.t ? window.t('character_identity_label') : '身份或职业'}</label>
+              <input type="text" id="createCharacterIdentityInput" placeholder="${window.t ? window.t('character_identity_placeholder') : '请输入身份或职业...'}" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" data-i18n="character_identity_placeholder:placeholder" />
             </div>
           </div>
           <div class="field">
-            <label class="label" style="color: #0f172a;">性格</label>
-            <textarea id="createCharacterPersonalityInput" placeholder="请输入性格描述..." rows="3" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;"></textarea>
+            <label class="label" style="color: #0f172a;" data-i18n="character_personality_label">${window.t ? window.t('character_personality_label') : '性格'}</label>
+            <textarea id="createCharacterPersonalityInput" placeholder="${window.t ? window.t('character_personality_placeholder') : '请输入性格描述...'}" rows="3" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;" data-i18n="character_personality_placeholder:placeholder"></textarea>
           </div>
           <div class="field">
-            <label class="label" style="color: #0f172a;">行为习惯</label>
-            <textarea id="createCharacterBehaviorInput" placeholder="请输入行为习惯..." rows="3" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;"></textarea>
+            <label class="label" style="color: #0f172a;" data-i18n="character_behavior_label">${window.t ? window.t('character_behavior_label') : '行为习惯'}</label>
+            <textarea id="createCharacterBehaviorInput" placeholder="${window.t ? window.t('character_behavior_placeholder') : '请输入行为习惯...'}" rows="3" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;" data-i18n="character_behavior_placeholder:placeholder"></textarea>
           </div>
           <div class="field">
-            <label class="label" style="color: #0f172a;">其他信息</label>
-            <textarea id="createCharacterOtherInfoInput" class="compact-textarea" placeholder="请输入其他信息..." rows="2" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;"></textarea>
+            <label class="label" style="color: #0f172a;" data-i18n="character_other_info_label">${window.t ? window.t('character_other_info_label') : '其他信息'}</label>
+            <textarea id="createCharacterOtherInfoInput" class="compact-textarea" placeholder="${window.t ? window.t('character_other_info_placeholder') : '请输入其他信息...'}" rows="2" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;" data-i18n="character_other_info_placeholder:placeholder"></textarea>
           </div>
           <div class="field-row media-field-row">
             <div class="field">
@@ -485,15 +489,15 @@
               <div style="display: flex; gap: 8px; align-items: center;">
                 <input type="file" id="createCharacterMultiImageFile" accept="image/*" style="flex: 1; background: #f9fafb; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 6px; font-size: 12px;" />
                 <input type="text" id="createCharacterMultiImageLabel" placeholder="标签，如：晚礼服" style="width: 120px; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 6px 10px; font-size: 12px; outline: none;" />
-                <button type="button" id="createCharacterMultiImageAddBtn" style="background: #3b82f6; color: white; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;">添加</button>
+                <button type="button" id="createCharacterMultiImageAddBtn" style="background: #3b82f6; color: white; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;" data-i18n="add_image">${window.t ? window.t('add_image') : '添加'}</button>
               </div>
             </div>
           </div>
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
-        <button class="mini-btn secondary" id="createCharacterCancelBtn" type="button">取消</button>
-        <button class="mini-btn" id="createCharacterSaveBtn" type="button">创建</button>
+        <button class="mini-btn secondary" id="createCharacterCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
+        <button class="mini-btn" id="createCharacterSaveBtn" type="button" data-i18n="create_btn">${window.t ? window.t('create_btn') : '创建'}</button>
       </div>
     </div>
   </div>
@@ -502,24 +506,24 @@
   <div class="modal" id="createLocationModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 600px; background: #ffffff; color: #111827; border: 1px solid #e5e7eb;">
       <div class="modal-header" style="background: #f8fafc; border-bottom: 1px solid #e5e7eb;">
-        <div class="modal-title" style="color: #0f172a;">创建场景</div>
-        <button class="modal-close" id="createLocationModalClose" type="button" aria-label="关闭">×</button>
+        <div class="modal-title" style="color: #0f172a;" data-i18n="create_location_modal">创建场景</div>
+        <button class="modal-close" id="createLocationModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
         <div style="display: flex; flex-direction: column; gap: 16px;">
           <div class="field">
-            <label class="label" style="color: #0f172a;">场景名称 <span style="color: #ef4444;">*</span></label>
-            <input type="text" id="createLocationNameInput" placeholder="请输入场景名称..." style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" />
+            <label class="label" style="color: #0f172a;" data-i18n="location_name_label">${window.t ? window.t('location_name_label') : '场景名称'} <span style="color: #ef4444;">*</span></label>
+            <input type="text" id="createLocationNameInput" placeholder="${window.t ? window.t('location_name_placeholder') : '请输入场景名称...'}" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" data-i18n="location_name_placeholder:placeholder" />
           </div>
           <div class="field">
-            <label class="label" style="color: #0f172a;">父场景</label>
+            <label class="label" style="color: #0f172a;" data-i18n="parent_location_label">${window.t ? window.t('parent_location_label') : '父场景'}</label>
             <select id="createLocationParentSelect" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;">
-              <option value="">无（顶层场景）</option>
+              <option value="" data-i18n="parent_location_option">${window.t ? window.t('parent_location_option') : '无（顶层场景）'}</option>
             </select>
           </div>
           <div class="field">
-            <label class="label" style="color: #0f172a;">场景描述 <span style="color: #6b7280; font-size: 12px; font-weight: normal;">(最多100字)</span></label>
-            <textarea id="createLocationDescInput" placeholder="请输入场景描述..." rows="4" maxlength="100" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;"></textarea>
+            <label class="label" style="color: #0f172a;" data-i18n="location_description_label">${window.t ? window.t('location_description_label') : '场景描述'} <span style="color: #6b7280; font-size: 12px; font-weight: normal;">(最多100字)</span></label>
+            <textarea id="createLocationDescInput" placeholder="${window.t ? window.t('location_description_placeholder') : '请输入场景描述...'}" rows="4" maxlength="100" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;" data-i18n="location_description_placeholder:placeholder"></textarea>
             <div style="text-align: right; font-size: 12px; color: #6b7280; margin-top: 4px;">
               <span id="createLocationDescCount">0</span>/100
             </div>
@@ -546,15 +550,15 @@
                   <option value="custom">自定义</option>
                 </select>
                 <input type="text" id="createLocationMultiImageLabel" placeholder="标签" style="width: 80px; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 6px 10px; font-size: 12px; outline: none;" />
-                <button type="button" id="createLocationMultiImageAddBtn" style="background: #3b82f6; color: white; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;">添加</button>
+                <button type="button" id="createLocationMultiImageAddBtn" style="background: #3b82f6; color: white; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;" data-i18n="add_image">${window.t ? window.t('add_image') : '添加'}</button>
               </div>
             </div>
           </div>
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
-        <button class="mini-btn secondary" id="createLocationCancelBtn" type="button">取消</button>
-        <button class="mini-btn" id="createLocationSaveBtn" type="button">创建</button>
+        <button class="mini-btn secondary" id="createLocationCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
+        <button class="mini-btn" id="createLocationSaveBtn" type="button" data-i18n="create_btn">${window.t ? window.t('create_btn') : '创建'}</button>
       </div>
     </div>
   </div>
@@ -563,8 +567,8 @@
   <div class="modal" id="editLocationModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 600px; background: #ffffff; color: #111827; border: 1px solid #e5e7eb;">
       <div class="modal-header" style="background: #f8fafc; border-bottom: 1px solid #e5e7eb;">
-        <div class="modal-title" style="color: #0f172a;">编辑场景</div>
-        <button class="modal-close" id="editLocationModalClose" type="button" aria-label="关闭">×</button>
+        <div class="modal-title" style="color: #0f172a;" data-i18n="edit_location_modal">编辑场景</div>
+        <button class="modal-close" id="editLocationModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
         <input type="hidden" id="editLocationId" />
@@ -608,17 +612,17 @@
                   <option value="custom">自定义</option>
                 </select>
                 <input type="text" id="editLocationMultiImageLabel" placeholder="标签" style="width: 80px; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 6px 10px; font-size: 12px; outline: none;" />
-                <button type="button" id="editLocationMultiImageAddBtn" style="background: #3b82f6; color: white; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;">添加</button>
+                <button type="button" id="editLocationMultiImageAddBtn" style="background: #3b82f6; color: white; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;" data-i18n="add_image">${window.t ? window.t('add_image') : '添加'}</button>
               </div>
             </div>
           </div>
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: space-between; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
-        <button class="mini-btn danger" id="editLocationDeleteBtn" type="button" style="background: #ef4444; color: #ffffff;">删除</button>
+        <button class="mini-btn danger" id="editLocationDeleteBtn" type="button" style="background: #ef4444; color: #ffffff;" data-i18n="delete">${window.t ? window.t('delete') : '删除'}</button>
         <div style="display: flex; gap: 10px;">
-          <button class="mini-btn secondary" id="editLocationCancelBtn" type="button">取消</button>
-          <button class="mini-btn" id="editLocationSaveBtn" type="button">保存</button>
+          <button class="mini-btn secondary" id="editLocationCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
+          <button class="mini-btn" id="editLocationSaveBtn" type="button" data-i18n="save">${window.t ? window.t('save') : '保存'}</button>
         </div>
       </div>
     </div>
@@ -628,8 +632,8 @@
   <div class="modal" id="propsModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 900px; background: #ffffff; color: #111827; border: 1px solid #e5e7eb;">
       <div class="modal-header" style="background: #f8fafc; border-bottom: 1px solid #e5e7eb;">
-        <div class="modal-title" style="color: #0f172a;">选择道具</div>
-        <button class="modal-close" id="propsModalClose" type="button" aria-label="关闭">×</button>
+        <div class="modal-title" style="color: #0f172a;" data-i18n="select_props">选择道具</div>
+        <button class="modal-close" id="propsModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
         <div style="display: flex; flex-direction: column; gap: 16px;">
@@ -639,14 +643,14 @@
               <select id="propsWorldSelect" style="flex: 1; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;">
                 <option value="">请先选择世界...</option>
               </select>
-              <a id="propsCreateWorldBtn" href="javascript:void(0)" style="padding: 10px 16px; color: #22c55e; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#22c55e'" onmouseout="this.style.borderColor='transparent'">创建世界</a>
+              <a id="propsCreateWorldBtn" href="javascript:void(0)" style="padding: 10px 16px; color: #22c55e; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#22c55e'" onmouseout="this.style.borderColor='transparent'" data-i18n="create_world">${window.t ? window.t('create_world') : '创建世界'}</a>
             </div>
           </div>
           <div class="field">
             <label class="label" style="color: #0f172a;">搜索道具</label>
             <div style="display: flex; gap: 8px; align-items: center;">
               <input type="text" id="propsSearchInput" placeholder="输入道具名称搜索..." style="flex: 1; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" />
-              <a id="createPropsBtn" href="javascript:void(0)" style="padding: 10px 16px; color: #3b82f6; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'">创建道具</a>
+              <a id="createPropsBtn" href="javascript:void(0)" style="padding: 10px 16px; color: #3b82f6; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'" data-i18n="create_props">${window.t ? window.t('create_props') : '创建道具'}</a>
             </div>
           </div>
           <div id="propsList" style="max-height: 400px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px;">
@@ -663,22 +667,22 @@
   <div class="modal" id="createPropsModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 600px; background: #ffffff; color: #111827; border: 1px solid #e5e7eb;">
       <div class="modal-header" style="background: #f8fafc; border-bottom: 1px solid #e5e7eb;">
-        <div class="modal-title" style="color: #0f172a;">创建道具</div>
-        <button class="modal-close" id="createPropsModalClose" type="button" aria-label="关闭">×</button>
+        <div class="modal-title" style="color: #0f172a;" data-i18n="create_props_modal">${window.t ? window.t('create_props_modal') : '创建道具'}</div>
+        <button class="modal-close" id="createPropsModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
         <div style="display: flex; flex-direction: column; gap: 16px;">
           <div class="field">
-            <label class="label" style="color: #0f172a;">道具名称 <span style="color: #ef4444;">*</span></label>
-            <input type="text" id="createPropsNameInput" placeholder="请输入道具名称..." style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" />
+            <label class="label" style="color: #0f172a;" data-i18n="props_name_label">${window.t ? window.t('props_name_label') : '道具名称'} <span style="color: #ef4444;">*</span></label>
+            <input type="text" id="createPropsNameInput" placeholder="${window.t ? window.t('props_name_placeholder') : '请输入道具名称...'}" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" data-i18n="props_name_placeholder:placeholder" />
           </div>
           <div class="field">
-            <label class="label" style="color: #0f172a;">道具描述</label>
-            <textarea id="createPropsContentInput" placeholder="请输入道具描述（包括外观、材质、用途等）..." rows="4" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;"></textarea>
+            <label class="label" style="color: #0f172a;" data-i18n="props_description_label">${window.t ? window.t('props_description_label') : '道具描述'}</label>
+            <textarea id="createPropsContentInput" placeholder="${window.t ? window.t('props_description_placeholder') : '请输入道具描述（包括外观、材质、用途等）...'}" rows="4" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;" data-i18n="props_description_placeholder:placeholder"></textarea>
           </div>
           <div class="field">
-            <label class="label" style="color: #0f172a;">其他信息</label>
-            <textarea id="createPropsOtherInfoInput" placeholder="请输入其他信息..." rows="2" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;"></textarea>
+            <label class="label" style="color: #0f172a;" data-i18n="props_other_info_label">${window.t ? window.t('props_other_info_label') : '其他信息'}</label>
+            <textarea id="createPropsOtherInfoInput" placeholder="${window.t ? window.t('props_other_info_placeholder') : '请输入其他信息...'}" rows="2" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-rgba: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;" data-i18n="props_other_info_placeholder:placeholder"></textarea>
           </div>
           <div class="field">
             <label class="label" style="color: #0f172a;">参考图</label>
@@ -687,8 +691,8 @@
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
-        <button class="mini-btn secondary" id="createPropsCancelBtn" type="button">取消</button>
-        <button class="mini-btn" id="createPropsSaveBtn" type="button">创建</button>
+        <button class="mini-btn secondary" id="createPropsCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
+        <button class="mini-btn" id="createPropsSaveBtn" type="button" data-i18n="create_btn">${window.t ? window.t('create_btn') : '创建'}</button>
       </div>
     </div>
   </div>
@@ -697,8 +701,8 @@
   <div class="modal" id="editPropsModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 600px; background: #ffffff; color: #111827; border: 1px solid #e5e7eb;">
       <div class="modal-header" style="background: #f8fafc; border-bottom: 1px solid #e5e7eb;">
-        <div class="modal-title" style="color: #0f172a;">编辑道具</div>
-        <button class="modal-close" id="editPropsModalClose" type="button" aria-label="关闭">×</button>
+        <div class="modal-title" style="color: #0f172a;" data-i18n="edit_props_modal">${window.t ? window.t('edit_props_modal') : '编辑道具'}</div>
+        <button class="modal-close" id="editPropsModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
         <input type="hidden" id="editPropsId" />
@@ -728,9 +732,9 @@
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: space-between; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
-        <button class="mini-btn danger" id="editPropsDeleteBtn" type="button" style="background: #ef4444; color: #ffffff;">删除</button>
+        <button class="mini-btn danger" id="editPropsDeleteBtn" type="button" style="background: #ef4444; color: #ffffff;" data-i18n="delete">${window.t ? window.t('delete') : '删除'}</button>
         <div style="display: flex; gap: 10px;">
-          <button class="mini-btn secondary" id="editPropsCancelBtn" type="button">取消</button>
+          <button class="mini-btn secondary" id="editPropsCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
           <button class="mini-btn" id="editPropsSaveBtn" type="button">保存</button>
         </div>
       </div>
@@ -741,24 +745,24 @@
   <div class="modal" id="createWorldModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 500px; background: #ffffff; color: #111827; border: 1px solid #e5e7eb;">
       <div class="modal-header" style="background: #f8fafc; border-bottom: 1px solid #e5e7eb;">
-        <div class="modal-title" style="color: #0f172a;">创建世界</div>
-        <button class="modal-close" id="createWorldModalClose" type="button" aria-label="关闭">×</button>
+        <div class="modal-title" style="color: #0f172a;" data-i18n="create_world_modal">${window.t ? window.t('create_world_modal') : '创建世界'}</div>
+        <button class="modal-close" id="createWorldModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
         <div style="display: flex; flex-direction: column; gap: 16px;">
           <div class="field">
-            <label class="label" style="color: #0f172a;">世界名称 <span style="color: #ef4444;">*</span></label>
-            <input type="text" id="createWorldNameInput" placeholder="请输入世界名称..." style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" />
+            <label class="label" style="color: #0f172a;" data-i18n="world_name_label">${window.t ? window.t('world_name_label') : '世界名称'} <span style="color: #ef4444;">*</span></label>
+            <input type="text" id="createWorldNameInput" placeholder="${window.t ? window.t('world_name_placeholder') : '请输入世界名称...'}" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px;" data-i18n="world_name_placeholder:placeholder" />
           </div>
           <div class="field">
-            <label class="label" style="color: #0f172a;">世界描述</label>
-            <textarea id="createWorldDescInput" placeholder="请输入世界描述..." rows="4" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;"></textarea>
+            <label class="label" style="color: #0f172a;" data-i18n="world_description_label">${window.t ? window.t('world_description_label') : '世界描述'}</label>
+            <textarea id="createWorldDescInput" placeholder="${window.t ? window.t('world_description_placeholder') : '请输入世界描述...'}" rows="4" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;" data-i18n="world_description_placeholder:placeholder"></textarea>
           </div>
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
-        <button class="mini-btn secondary" id="createWorldCancelBtn" type="button">取消</button>
-        <button class="mini-btn" id="createWorldSaveBtn" type="button">创建</button>
+        <button class="mini-btn secondary" id="createWorldCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
+        <button class="mini-btn" id="createWorldSaveBtn" type="button" data-i18n="create_btn">${window.t ? window.t('create_btn') : '创建'}</button>
       </div>
     </div>
   </div>
@@ -767,8 +771,8 @@
   <div class="modal" id="editWorldModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 500px; background: #ffffff; color: #111827; border: 1px solid #e5e7eb;">
       <div class="modal-header" style="background: #f8fafc; border-bottom: 1px solid #e5e7eb;">
-        <div class="modal-title" style="color: #0f172a;">编辑世界</div>
-        <button class="modal-close" id="editWorldModalClose" type="button" aria-label="关闭">×</button>
+        <div class="modal-title" style="color: #0f172a;" data-i18n="edit_world_modal">${window.t ? window.t('edit_world_modal') : '编辑世界'}</div>
+        <button class="modal-close" id="editWorldModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
         <div style="display: flex; flex-direction: column; gap: 16px;">
@@ -783,7 +787,7 @@
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
-        <button class="mini-btn secondary" id="editWorldCancelBtn" type="button">取消</button>
+        <button class="mini-btn secondary" id="editWorldCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
         <button class="mini-btn" id="editWorldSaveBtn" type="button">保存</button>
       </div>
     </div>
@@ -793,8 +797,8 @@
   <div class="modal" id="editCharacterModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 800px; background: #ffffff; color: #111827; border: 1px solid #e5e7eb;">
       <div class="modal-header" style="background: #f8fafc; border-bottom: 1px solid #e5e7eb;">
-        <div class="modal-title" style="color: #0f172a;">编辑角色</div>
-        <button class="modal-close" id="editCharacterModalClose" type="button" aria-label="关闭">×</button>
+        <div class="modal-title" style="color: #0f172a;" data-i18n="edit_character_modal">${window.t ? window.t('edit_character_modal') : '编辑角色'}</div>
+        <button class="modal-close" id="editCharacterModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="background: #ffffff; padding: 20px; max-height: 65vh; overflow-y: auto;">
         <input type="hidden" id="editCharacterId" />
@@ -856,16 +860,16 @@
               <div style="display: flex; gap: 8px; align-items: center; margin-top: 8px;">
                 <input type="file" id="editCharacterMultiImageFile" accept="image/*" style="flex: 1; background: #f9fafb; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 6px; font-size: 12px;" />
                 <input type="text" id="editCharacterMultiImageLabel" placeholder="标签，如：晚礼服" style="width: 120px; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 6px 10px; font-size: 12px; outline: none;" />
-                <button type="button" id="editCharacterMultiImageAddBtn" style="background: #3b82f6; color: white; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;">添加</button>
+                <button type="button" id="editCharacterMultiImageAddBtn" style="background: #3b82f6; color: white; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;" data-i18n="add_image">${window.t ? window.t('add_image') : '添加'}</button>
               </div>
             </div>
           </div>
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: space-between; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
-        <button class="mini-btn danger" id="editCharacterDeleteBtn" type="button" style="background: #ef4444; color: #ffffff;">删除</button>
+        <button class="mini-btn danger" id="editCharacterDeleteBtn" type="button" style="background: #ef4444; color: #ffffff;" data-i18n="delete">${window.t ? window.t('delete') : '删除'}</button>
         <div style="display: flex; gap: 10px;">
-          <button class="mini-btn secondary" id="editCharacterCancelBtn" type="button">取消</button>
+          <button class="mini-btn secondary" id="editCharacterCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
           <button class="mini-btn" id="editCharacterSaveBtn" type="button">保存</button>
         </div>
       </div>
@@ -876,23 +880,23 @@
   <div class="modal" id="videoPromptSuffixModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 600px; background: #ffffff; color: #111827; border: 1px solid #e5e7eb;">
       <div class="modal-header" style="background: #f8fafc; border-bottom: 1px solid #e5e7eb;">
-        <div class="modal-title" style="color: #0f172a;">视频提示词后缀</div>
-        <button class="modal-close" id="videoPromptSuffixModalClose" type="button" aria-label="关闭">×</button>
+        <div class="modal-title" style="color: #0f172a;" data-i18n="video_prompt_suffix_modal">${window.t ? window.t('video_prompt_suffix_modal') : '视频提示词后缀'}</div>
+        <button class="modal-close" id="videoPromptSuffixModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
         <div style="display: flex; flex-direction: column; gap: 16px;">
           <div class="field">
             <label class="label" style="color: #0f172a;">提示词后缀</label>
-            <textarea id="videoPromptSuffixInput" placeholder="输入视频提示词后缀，生成视频时会自动添加到提示词末尾..." rows="6" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;"></textarea>
-            <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">
-              此后缀将在通过镜头节点生成视频时自动添加到提示词末尾
+            <textarea id="videoPromptSuffixInput" placeholder="输入视频提示词后缀，生成视频时会自动添加到提示词末尾..." rows="6" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; outline: none; font-size: 14px; resize: vertical;" data-i18n="video_prompt_suffix_placeholder:placeholder"></textarea>
+            <div style="margin-top: 8px; font-size: 12px; color: #6b7280;" data-i18n="video_prompt_suffix_hint">
+              ${window.t ? window.t('video_prompt_suffix_hint') : '此后缀将在通过镜头节点生成视频时自动添加到提示词末尾'}
             </div>
           </div>
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
-        <button class="mini-btn secondary" id="videoPromptSuffixCancelBtn" type="button">取消</button>
-        <button class="mini-btn" id="videoPromptSuffixSaveBtn" type="button">保存</button>
+        <button class="mini-btn secondary" id="videoPromptSuffixCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
+        <button class="mini-btn" id="videoPromptSuffixSaveBtn" type="button" data-i18n="save">${window.t ? window.t('save') : '保存'}</button>
       </div>
     </div>
   </div>
@@ -901,8 +905,8 @@
   <div class="modal" id="coloringEditorModal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 900px; background: #ffffff; color: #111827; border: 1px solid #e5e7eb;">
       <div class="modal-header" style="background: #f8fafc; border-bottom: 1px solid #e5e7eb;">
-        <div class="modal-title" style="color: #0f172a;">图片涂色编辑</div>
-        <button class="modal-close" id="coloringEditorModalClose" type="button" aria-label="关闭">×</button>
+        <div class="modal-title" style="color: #0f172a;" data-i18n="coloring_edit_modal">${window.t ? window.t('coloring_edit_modal') : '图片涂色编辑'}</div>
+        <button class="modal-close" id="coloringEditorModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label">×</button>
       </div>
       <div class="modal-body" style="background: #ffffff; padding: 20px;">
         <div style="display: flex; flex-direction: column; gap: 16px;">
@@ -930,14 +934,14 @@
             </div>
           </div>
           <div style="display: flex; gap: 8px; justify-content: center;">
-            <button class="mini-btn secondary" id="coloringUndoBtn" type="button">撤销</button>
-            <button class="mini-btn secondary" id="coloringClearBtn" type="button">清空</button>
+            <button class="mini-btn secondary" id="coloringUndoBtn" type="button" data-i18n="coloring_undo">${window.t ? window.t('coloring_undo') : '撤销'}</button>
+            <button class="mini-btn secondary" id="coloringClearBtn" type="button" data-i18n="coloring_clear">${window.t ? window.t('coloring_clear') : '清空'}</button>
           </div>
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 12px 16px; border-top: 1px solid #e5e7eb;">
-        <button class="mini-btn secondary" id="coloringCancelBtn" type="button">取消</button>
-        <button class="mini-btn" id="coloringConfirmBtn" type="button">确认</button>
+        <button class="mini-btn secondary" id="coloringCancelBtn" type="button" data-i18n="cancel">${window.t ? window.t('cancel') : '取消'}</button>
+        <button class="mini-btn" id="coloringConfirmBtn" type="button" data-i18n="coloring_confirm">${window.t ? window.t('coloring_confirm') : '确认'}</button>
       </div>
     </div>
   </div>
@@ -946,26 +950,26 @@
   <div class="timeline-container" id="timelineContainer" style="display:none;">
     <div class="timeline-header">
       <div class="timeline-header-left">
-        <span class="timeline-title">时间轴</span>
-        <span class="timeline-total-duration" id="timelineTotalDuration">总时长: 0:00</span>
-        <span style="color:var(--muted);font-size:11px;margin-left:8px;">提示: 拖拽调整顺序 | 按住Shift拖拽可替换</span>
+        <span class="timeline-title" data-i18n="timeline_label">${window.t ? window.t('timeline_label') : '时间轴'}</span>
+        <span class="timeline-total-duration" id="timelineTotalDuration" data-i18n="timeline_total_duration" data-i18n-params='{"duration":"0:00"}'>${window.t ? window.t('timeline_total_duration', { duration: '0:00' }) : '总时长: 0:00'}</span>
+        <span style="color:var(--muted);font-size:11px;margin-left:8px;" data-i18n="timeline_drag_hint">${window.t ? window.t('timeline_drag_hint') : '提示: 拖拽调整顺序 | 按住Shift拖拽可替换'}</span>
       </div>
       <div class="timeline-header-right">
-        <button class="mini-btn btn-success" id="timelineExportDraftBtn">导出剪影草稿</button>
-        <button class="mini-btn btn-danger" id="timelineClearBtn">清空</button>
-        <button class="mini-btn" id="timelineToggleBtn">收起</button>
+        <button class="mini-btn btn-success" id="timelineExportDraftBtn" data-i18n="timeline_export_draft">${window.t ? window.t('timeline_export_draft') : '导出剪影草稿'}</button>
+        <button class="mini-btn btn-danger" id="timelineClearBtn" data-i18n="timeline_clear">${window.t ? window.t('timeline_clear') : '清空'}</button>
+        <button class="mini-btn" id="timelineToggleBtn" data-i18n="timeline_collapse">${window.t ? window.t('timeline_collapse') : '收起'}</button>
       </div>
     </div>
     <div class="timeline-ruler" id="timelineRuler"></div>
     <div class="timeline-tracks" id="timelineTracks">
       <div class="timeline-track-container timeline-track-container-video">
-        <div class="timeline-track-label">视频</div>
+        <div class="timeline-track-label" data-i18n="timeline_track_video">${window.t ? window.t('timeline_track_video') : '视频'}</div>
         <div class="timeline-track" id="videoTrack">
           <!-- 视频片段将动态添加到这里 -->
         </div>
       </div>
       <div class="timeline-track-container timeline-track-container-audio">
-        <div class="timeline-track-label">音频</div>
+        <div class="timeline-track-label" data-i18n="timeline_track_audio">${window.t ? window.t('timeline_track_audio') : '音频'}</div>
         <div class="timeline-track" id="audioTrack">
           <!-- 音频片段将动态添加到这里 -->
         </div>
@@ -974,12 +978,12 @@
   </div>
 
   <!-- 时间轴展开按钮（收起时显示） -->
-  <button class="timeline-expand-btn" id="timelineExpandBtn" style="display:none;">
+  <button class="timeline-expand-btn" id="timelineExpandBtn" style="display:flex;">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <rect x="3" y="3" width="18" height="18" rx="2"/>
       <line x1="3" y1="15" x2="21" y2="15"/>
     </svg>
-    时间轴
+    <span data-i18n="timeline_expand">展开</span>
   </button>
 
   <div id="workflowTourPortal" aria-hidden="true"></div>
@@ -993,22 +997,22 @@
   <script src="/js/canvas.js"></script>
   <!-- 意见反馈按钮 -->
   <div class="feedback-btn-wrapper" id="feedbackBtnWrapper">
-    <button class="feedback-btn" id="feedbackBtn" type="button" onclick="handleFeedbackBtnClick(event)">意见反馈</button>
-    <button class="feedback-btn-delete" id="feedbackMinimizeBtn" type="button" onclick="minimizeFeedbackBtn(); event.stopPropagation(); event.preventDefault();" title="最小化">×</button>
+    <button class="feedback-btn" id="feedbackBtn" type="button" onclick="handleFeedbackBtnClick(event)" data-i18n="feedback_modal"></button>
+    <button class="feedback-btn-delete" id="feedbackMinimizeBtn" type="button" onclick="minimizeFeedbackBtn(); event.stopPropagation(); event.preventDefault();" data-i18n="feedback_minimize_title:title">×</button>
   </div>
 
   <!-- 意见反馈弹窗 -->
   <div class="modal-overlay" id="feedbackModal" aria-hidden="true" onclick="if(event.target === this){ this.classList.remove('active'); }">
     <div class="feedback-modal-card" role="dialog" aria-modal="true" aria-labelledby="feedbackModalTitle">
-      <button type="button" class="feedback-modal-close" aria-label="关闭" onclick="document.getElementById('feedbackModal').classList.remove('active')">×</button>
-      <h2 class="modal-title" id="feedbackModalTitle">意见反馈</h2>
+      <button type="button" class="feedback-modal-close" data-i18n="close:aria-label" onclick="document.getElementById('feedbackModal').classList.remove('active')">×</button>
+      <h2 class="modal-title" id="feedbackModalTitle" data-i18n="feedback_modal"></h2>
       <div class="feedback-modal-content">
-        <p style="color: var(--muted); margin-bottom: 16px;">扫描二维码添加微信，提交您的宝贵意见</p>
-        <img src="/files/二维码.jpg" alt="微信二维码" class="feedback-qr-code">
-        <p class="feedback-tip">我们会认真听取每一条反馈，持续改进产品体验</p>
+        <p style="color: var(--muted); margin-bottom: 16px;" data-i18n="feedback_scan_tip"></p>
+        <img src="/files/二维码.jpg" class="feedback-qr-code" data-i18n="feedback_qr_code_alt:alt">
+        <p class="feedback-tip" data-i18n="feedback_message"></p>
       </div>
       <div class="modal-actions">
-        <button type="button" class="btn" onclick="document.getElementById('feedbackModal').classList.remove('active')">关闭</button>
+        <button type="button" class="btn" data-i18n="feedback_close_btn" onclick="document.getElementById('feedbackModal').classList.remove('active')"></button>
       </div>
     </div>
   </div>
@@ -1020,7 +1024,7 @@
         <div style="font-size: 16px; font-weight: 600; color: #0f172a;">算力日志</div>
         <button type="button" id="rechargePowerBtn" class="mini-btn" style="background: #16a34a; color: #ffffff;padding:10px" onclick="handleRechargeClick()">算力充值</button>
       </div>
-      <button type="button" class="modal-close" aria-label="关闭" onclick="document.getElementById('computingPowerLogsModal').classList.remove('active')" style="position: absolute; top: 12px; right: 12px; z-index: 10;">×</button>
+      <button type="button" class="modal-close" aria-label="关闭" data-i18n="close:aria-label" onclick="document.getElementById('computingPowerLogsModal').classList.remove('active')" style="position: absolute; top: 12px; right: 12px; z-index: 10;">×</button>
       <div style="flex: 1; overflow: hidden; min-height: 0;">
         <iframe id="computingPowerLogsIframe" style="width: 100%; height: 100%; border: none; border-radius: 12px;"></iframe>
       </div>
@@ -1031,13 +1035,13 @@
   <div class="modal-overlay" id="rechargePowerModal" aria-hidden="true" onclick="if(event.target === this){ closeRechargeModal(); }">
     <div class="modal-card" role="dialog" aria-modal="true" style="max-width: 500px; background: #ffffff; color: #111827; border: 1px solid #e5e7eb;">
       <div class="modal-header" style="background: #f8fafc; border-bottom: 1px solid #e5e7eb;">
-        <div class="modal-title" style="color: #0f172a;">算力充值</div>
-        <button class="modal-close" id="rechargeModalClose" type="button" aria-label="关闭" onclick="closeRechargeModal()">×</button>
+        <div class="modal-title" style="color: #0f172a;" data-i18n="recharge_modal">${window.t ? window.t('recharge_modal') : '算力充值'}</div>
+        <button class="modal-close" id="rechargeModalClose" type="button" aria-label="关闭" data-i18n="close:aria-label" onclick="closeRechargeModal()">×</button>
       </div>
       <div class="modal-body" id="rechargeModalBody" style="background: #ffffff; padding: 20px; max-height: 60vh; overflow-y: auto;">
         <div id="rechargeLoading" style="text-align: center; padding: 40px;">
           <div class="loading-spinner"></div>
-          <p style="margin-top: 16px; color: #6b7280;">加载套餐中...</p>
+          <p style="margin-top: 16px; color: #6b7280;" data-i18n="recharge_loading">${window.t ? window.t('recharge_loading') : '加载套餐中...'}</p>
         </div>
       </div>
     </div>
@@ -1131,7 +1135,7 @@
     // 加载充值套餐
     async function loadRechargePackages() {
       const body = document.getElementById('rechargeModalBody');
-      body.innerHTML = '<div style="text-align: center; padding: 40px;"><div class="loading-spinner"></div><p style="margin-top: 16px; color: #6b7280;">加载套餐中...</p></div>';
+      body.innerHTML = '<div style="text-align: center; padding: 40px;"><div class="loading-spinner"></div><p style="margin-top: 16px; color: #6b7280;">' + (window.t ? window.t('recharge_loading') : '加载套餐中...') + '</p></div>';
 
       try {
         const authToken = localStorage.getItem('auth_token');
@@ -1146,11 +1150,11 @@
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                   <div>
                     <div style="font-weight: 600; color: #0f172a;">${pkg.description}</div>
-                    <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">${pkg.computing_power} 算力</div>
+                    <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">${pkg.computing_power} ${window.t ? window.t('computing_power') : '算力'}</div>
                   </div>
                   <div style="text-align: right;">
                     <div style="font-size: 20px; font-weight: 600; color: #ef4444;">¥${pkg.price}</div>
-                    <div style="font-size: 11px; color: #9ca3af;">${(pkg.price / pkg.computing_power * 100).toFixed(2)}元/百算力</div>
+                    <div style="font-size: 11px; color: #9ca3af;">${(pkg.price / pkg.computing_power * 100).toFixed(2)} ${window.t ? window.t('computing_power_per_hundred') : '元/百算力'}</div>
                   </div>
                 </div>
               </div>
@@ -1159,11 +1163,11 @@
           html += '</div>';
           body.innerHTML = html;
         } else {
-          body.innerHTML = '<div style="text-align: center; padding: 40px; color: #6b7280;">暂无可用套餐</div>';
+          body.innerHTML = '<div style="text-align: center; padding: 40px; color: #6b7280;">' + (window.t ? window.t('recharge_no_packages') : '暂无可用套餐') + '</div>';
         }
       } catch (e) {
         console.error('加载充值套餐失败:', e);
-        body.innerHTML = '<div style="text-align: center; padding: 40px; color: #ef4444;">加载失败，请重试</div>';
+        body.innerHTML = '<div style="text-align: center; padding: 40px; color: #ef4444;">' + (window.t ? window.t('recharge_load_failed') : '加载失败，请重试') + '</div>';
       }
     }
 
@@ -1173,11 +1177,11 @@
       body.innerHTML = `
         <div style="text-align: center; margin-bottom: 20px;">
           <div style="font-size: 16px; font-weight: 600; color: #0f172a;">${description}</div>
-          <div style="font-size: 14px; color: #6b7280; margin-top: 8px;">${computingPower} 算力 - ¥${price}</div>
+          <div style="font-size: 14px; color: #6b7280; margin-top: 8px;">${computingPower} ${window.t ? window.t('computing_power') : '算力'} - ¥${price}</div>
         </div>
         <div id="rechargeQrCode" style="text-align: center; padding: 20px;">
           <div class="loading-spinner"></div>
-          <p style="margin-top: 16px; color: #6b7280;">正在生成支付二维码...</p>
+          <p style="margin-top: 16px; color: #6b7280;">${window.t ? window.t('recharge_generating_qr') : '正在生成支付二维码...'}</p>
         </div>
       `;
 
@@ -1213,16 +1217,16 @@
           const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(data.code_url)}`;
           body.innerHTML = `
             <div style="text-align: center;">
-              <div style="font-weight: 600; font-size: 14px; margin-bottom: 16px;">请使用微信扫码完成支付</div>
+              <div style="font-weight: 600; font-size: 14px; margin-bottom: 16px;">${window.t ? window.t('recharge_scan_wechat') : '请使用微信扫码完成支付'}</div>
               <div style="background: #fff; padding: 12px; border-radius: 12px; display: inline-block;">
                 <img src="${qrCodeUrl}" alt="微信支付二维码" style="width: 200px; height: 200px;" />
               </div>
               <div style="font-size: 12px; color: #6b7280; margin-top: 16px; line-height: 1.6;">
-                请打开微信"扫一扫"完成支付<br/>
-                如果已支付，请稍等片刻系统会自动到账
+                ${window.t ? window.t('recharge_scan_tip') : '请打开微信"扫一扫"完成支付'}<br/>
+                ${window.t ? window.t('recharge_payment_wait') : '如果已支付，请稍等片刻系统会自动到账'}
               </div>
               <div style="margin-top: 16px;">
-                <button class="mini-btn secondary" onclick="loadRechargePackages()">返回选择套餐</button>
+                <button class="mini-btn secondary" onclick="loadRechargePackages()">${window.t ? window.t('recharge_return_packages') : '返回选择套餐'}</button>
               </div>
             </div>
           `;
@@ -1234,7 +1238,7 @@
         body.innerHTML = `
           <div style="text-align: center; padding: 20px;">
             <p style="color: #ef4444; margin-bottom: 16px;">${e.message}</p>
-            <button class="mini-btn secondary" onclick="loadRechargePackages()">返回选择套餐</button>
+            <button class="mini-btn secondary" onclick="loadRechargePackages()">${window.t ? window.t('recharge_return_packages') : '返回选择套餐'}</button>
           </div>
         `;
       }
@@ -1254,5 +1258,18 @@
   <script src="/js/shot_frame_video_generator.js"></script>
   <script src="/js/events.js"></script>
   <script src="/js/workflow_layout.js"></script>
+
+  <script>
+    // i18n 初始化
+    window.__STATIC_VERSION = window.__STATIC_VERSION || '';
+    ZJTi18n.init(['common', 'video_workflow']).then(() => {
+      ZJTi18nDOM.scanDOM(document);
+      document.documentElement.lang = ZJTi18n.getLocale() === 'en' ? 'en' : 'zh-CN';
+      // 初始化语言切换器
+      if (window.ZJTi18nSwitcher) {
+        ZJTi18nSwitcher.init({ target: '.ratio-floating' });
+      }
+    });
+  </script>
 </body>
 </html>

@@ -240,8 +240,8 @@ def _get_processed_html(file_path: str) -> bytes:
     # 检查是否启用了缓存失效功能
     if CACHE_BUST_ENABLED:
         # 匹配 <script src="..."> 和 <link ... href="..."> 中引用的 .js 和 .css 文件
-        # 只匹配以 /js/ 或 /css/ 开头的本地引用
-        pattern = r'(<(?:script|link)[^>]*(?:src|href)=")(/(?:js|css)/[^"]+)(")'
+        # 只匹配以 /js/、/css/ 或 /i18n/ 开头的本地引用
+        pattern = r'(<(?:script|link)[^>]*(?:src|href)=")(/(?:js|css|i18n)/[^"]+)(")'
 
         def replace_with_version(match):
             prefix = match.group(1)

@@ -19,7 +19,7 @@
       const node = {
         id,
         type: 'dialogue_group',
-        title: '对话组',
+        title: window.t ? window.t('dialogue_group_title') : '对话组',
         x,
         y,
         data: {
@@ -51,70 +51,79 @@
             <div class="dialogue-item" data-index="${index}" style="margin-bottom: 12px; padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                 <div style="font-weight: 600; color: #374151;">${escapeHtml(characterName)}</div>
-                <button class="mini-btn dialogue-generate-btn" data-index="${index}" type="button" style="font-size: 11px; padding: 4px 8px;">生成音频</button>
+                <button class="mini-btn dialogue-generate-btn" data-index="${index}" type="button" style="font-size: 11px; padding: 4px 8px;" data-i18n="dialogue_generate_btn">${window.t ? window.t('dialogue_generate_btn') : '生成音频'}</button>
               </div>
               <div style="color: #6b7280; font-size: 13px; margin-bottom: 8px;">"${escapeHtml(text)}"</div>
               <div class="dialogue-status" data-index="${index}" style="display:none; font-size: 12px; color: #6b7280; margin-bottom: 8px;"></div>
               <div class="dialogue-result" data-index="${index}" style="display:none;">
                 <audio controls style="width:100%; max-height:32px; margin-bottom: 6px;"></audio>
-                <button class="mini-btn dialogue-download-btn" data-index="${index}" type="button" style="font-size: 11px; padding: 4px 8px; display: none;">下载</button>
+                <button class="mini-btn dialogue-download-btn" data-index="${index}" type="button" style="font-size: 11px; padding: 4px 8px; display: none;" data-i18n="dialogue_download_btn">${window.t ? window.t('dialogue_download_btn') : '下载'}</button>
               </div>
             </div>
           `;
         });
       } else {
-        dialogueItemsHtml = '<div class="gen-meta" style="text-align:center; padding: 20px;">暂无对话数据</div>';
+        dialogueItemsHtml = `<div class="gen-meta" style="text-align:center; padding: 20px;" data-i18n="dialogue_no_data">${window.t ? window.t('dialogue_no_data') : '暂无对话数据'}</div>`;
       }
 
       el.innerHTML = `
-        <div class="port input" title="输入（连接分镜节点）"></div>
-        <div class="port video-input-port" title="视频输入（连接视频节点作为情感参考）"></div>
-        <div class="port output" title="输出"></div>
+        <div class="port input" title="${window.t ? window.t('dialogue_input_port_title') : '输入（连接分镜节点）'}"></div>
+        <div class="port video-input-port" title="${window.t ? window.t('dialogue_video_input_port_title') : '视频输入（连接视频节点作为情感参考）'}"></div>
+        <div class="port output" title="${window.t ? window.t('dialogue_output_port_title') : '输出'}"></div>
         <div class="node-header">
-          <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><path d="M8 12H8.01M12 12H12.01M16 12H16.01" stroke-linecap="round"/><path d="M3 7C3 5.89543 3.89543 5 5 5H19C20.1046 5 21 5.89543 21 7V15C21 16.1046 20.1046 17 19 17H13L9 21V17H5C3.89543 17 3 16.1046 3 15V7Z"/></svg>${node.title}</div>
-          <button class="icon-btn" title="删除">×</button>
+          <div class="node-title" data-i18n="dialogue_group_title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><path d="M8 12H8.01M12 12H12.01M16 12H16.01" stroke-linecap="round"/><path d="M3 7C3 5.89543 3.89543 5 5 5H19C20.1046 5 21 5.89543 21 7V15C21 16.1046 20.1046 17 19 17H13L9 21V17H5C3.89543 17 3 16.1046 3 15V7Z"/></svg>${window.t ? window.t('dialogue_group_title') : '对话组'}</div>
+          <button class="icon-btn" title="${window.t ? window.t('dialogue_delete_btn') : '删除'}">×</button>
         </div>
         <div class="node-body">
           <div class="field field-always-visible">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <div class="label" style="margin: 0;">对话列表</div>
+              <div class="label" style="margin: 0;" data-i18n="dialogue_list_label">${window.t ? window.t('dialogue_list_label') : '对话列表'}</div>
             </div>
             <div class="dialogue-items-container">
               ${dialogueItemsHtml}
             </div>
           </div>
-          
+
           <div class="field field-collapsible" style="margin-bottom: 12px;">
-            <label class="label" style="font-size: 12px; margin-bottom: 4px;">情感控制方式</label>
+            <label class="label" style="font-size: 12px; margin-bottom: 4px;" data-i18n="emo_control_method_label">${window.t ? window.t('emo_control_method_label') : '情感控制方式'}</label>
             <select class="dialogue-emo-control-select" style="width: 100%; padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; background: #ffffff; color: #111827;">
-              <option value="0">与参考音频相同</option>
-              <option value="1">使用情感参考音频</option>
-              <option value="2">使用情感向量</option>
+              <option value="0" data-i18n="emo_control_same_ref">${window.t ? window.t('emo_control_same_ref') : '与参考音频相同'}</option>
+              <option value="1" data-i18n="emo_control_ref_audio">${window.t ? window.t('emo_control_ref_audio') : '使用情感参考音频'}</option>
+              <option value="2" data-i18n="emo_control_vector">${window.t ? window.t('emo_control_vector') : '使用情感向量'}</option>
             </select>
           </div>
-          
+
           <div class="dialogue-emo-ref-audio-field field-collapsible" style="margin-bottom: 12px;">
-            <label class="label" style="font-size: 12px; margin-bottom: 4px;">情感参考音频</label>
+            <label class="label" style="font-size: 12px; margin-bottom: 4px;" data-i18n="emo_ref_audio_label">${window.t ? window.t('emo_ref_audio_label') : '情感参考音频'}</label>
             <input type="file" class="dialogue-emo-ref-audio-input" accept="audio/*" style="width: 100%; padding: 4px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 11px; background: #f9fafb;">
             <div class="dialogue-emo-ref-audio-preview" style="display: none; margin-top: 6px;">
               <audio controls style="width: 100%; max-height: 32px; margin-bottom: 4px;"></audio>
-              <button class="mini-btn dialogue-emo-ref-audio-clear-btn" type="button" style="font-size: 11px; padding: 4px 8px;">清除音频</button>
+              <button class="mini-btn dialogue-emo-ref-audio-clear-btn" type="button" style="font-size: 11px; padding: 4px 8px;" data-i18n="emo_ref_audio_clear">${window.t ? window.t('emo_ref_audio_clear') : '清除音频'}</button>
             </div>
           </div>
-          
+
           <div class="dialogue-emo-weight-field field-collapsible" style="display: none; margin-bottom: 12px;">
-            <label class="label" style="font-size: 12px; margin-bottom: 4px;">情感权重: <span class="dialogue-emo-weight-value">1.0</span></label>
+            <label class="label" style="font-size: 12px; margin-bottom: 4px;" data-i18n="emo_weight_label">${window.t ? window.t('emo_weight_label') : '情感权重'}: <span class="dialogue-emo-weight-value">1.0</span></label>
             <input type="range" class="dialogue-emo-weight-slider" min="0" max="1.6" step="0.1" value="1" style="width: 100%;">
-            <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">调整情感强度，0为无情感，1.6为最强情感</div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 2px;" data-i18n="emo_weight_hint">${window.t ? window.t('emo_weight_hint') : '调整情感强度，0为无情感，1.6为最强情感'}</div>
           </div>
-          
+
           <div class="dialogue-emo-vec-field field-collapsible" style="display: none; margin-bottom: 12px;">
-            <label class="label" style="font-size: 12px; margin-bottom: 6px;">情感向量控制</label>
+            <label class="label" style="font-size: 12px; margin-bottom: 6px;" data-i18n="emo_vec_label">${window.t ? window.t('emo_vec_label') : '情感向量控制'}</label>
             <div class="dialogue-emo-vec-sliders" style="font-size: 11px;">
-              ${['喜', '怒', '哀', '惧', '厌恶', '低落', '惊喜', '平静'].map((label, idx) => `
+              ${[
+                {key: 'emo_joy', cn: '喜'},
+                {key: 'emo_anger', cn: '怒'},
+                {key: 'emo_sadness', cn: '哀'},
+                {key: 'emo_fear', cn: '惧'},
+                {key: 'emo_disgust', cn: '厌恶'},
+                {key: 'emo_depression', cn: '低落'},
+                {key: 'emo_surprise', cn: '惊喜'},
+                {key: 'emo_calm', cn: '平静'}
+              ].map((item, idx) => `
                 <div style="margin-bottom: 8px;">
                   <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-                    <span>${label}</span>
+                    <span data-i18n="${item.key}">${window.t ? window.t(item.key) : item.cn}</span>
                     <span class="dialogue-emo-vec-value" data-index="${idx}">0.00</span>
                   </div>
                   <input type="range" class="dialogue-emo-vec-slider" data-index="${idx}" min="0" max="1.5" step="0.01" value="0" style="width: 100%;">
@@ -122,24 +131,24 @@
               `).join('')}
             </div>
             <div style="font-size: 11px; margin-top: 4px;">
-              总和: <span class="dialogue-emo-vec-sum" style="font-weight: bold;">0.00</span> / 1.5
-              <span class="dialogue-emo-vec-warning" style="color: #dc2626; display: none; margin-left: 8px;">情感向量之和不能超过1.5</span>
+              <span data-i18n="emo_vec_sum">${window.t ? window.t('emo_vec_sum') : '总和'}</span>: <span class="dialogue-emo-vec-sum" style="font-weight: bold;">0.00</span> / 1.5
+              <span class="dialogue-emo-vec-warning" style="color: #dc2626; display: none; margin-left: 8px;" data-i18n="emo_vec_warning">${window.t ? window.t('emo_vec_warning') : '情感向量之和不能超过1.5'}</span>
             </div>
           </div>
-          
+
           <div class="field field-collapsible" style="margin-bottom: 12px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <label class="label" style="font-size: 12px; margin: 0;">参考音频</label>
-              <button class="mini-btn dialogue-add-ref-audio-btn" type="button" style="font-size: 11px; padding: 4px 8px;">添加音频</button>
+              <label class="label" style="font-size: 12px; margin: 0;" data-i18n="ref_audio_label">${window.t ? window.t('ref_audio_label') : '参考音频'}</label>
+              <button class="mini-btn dialogue-add-ref-audio-btn" type="button" style="font-size: 11px; padding: 4px 8px;" data-i18n="ref_audio_add">${window.t ? window.t('ref_audio_add') : '添加音频'}</button>
             </div>
-            <div style="font-size: 11px; color: #6b7280; margin-bottom: 8px;">
-              最多6个音频，每个不超过20秒、10MB
+            <div style="font-size: 11px; color: #6b7280; margin-bottom: 8px;" data-i18n="ref_audio_hint">
+              ${window.t ? window.t('ref_audio_hint') : '最多6个音频，每个不超过20秒、10MB'}
             </div>
             <div class="dialogue-ref-audios-list"></div>
           </div>
-          
+
           <div class="field field-collapsible">
-            <button class="mini-btn dialogue-generate-all-btn" type="button" style="font-size: 11px; padding: 4px 8px; width: 100%;">生成全部</button>
+            <button class="mini-btn dialogue-generate-all-btn" type="button" style="font-size: 11px; padding: 4px 8px; width: 100%;" data-i18n="dialogue_generate_all">${window.t ? window.t('dialogue_generate_all') : '生成全部'}</button>
           </div>
         </div>
       `;
@@ -382,15 +391,15 @@
             <div class="ref-audio-item" data-index="${index}" style="margin-bottom: 8px; padding: 8px; background: #f9fafb; border-radius: 6px; border: 1px solid #e5e7eb;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                 <div style="font-size: 12px; font-weight: 600; color: #374151;">${escapeHtml(item.characterName || '未命名角色')}</div>
-                <button class="mini-btn ref-audio-delete-btn" data-index="${index}" type="button" style="font-size: 10px; padding: 2px 6px; background: #ef4444; color: white;">删除</button>
+                <button class="mini-btn ref-audio-delete-btn" data-index="${index}" type="button" style="font-size: 10px; padding: 2px 6px; background: #ef4444; color: white;" data-i18n="dialogue_delete_btn">${window.t ? window.t('dialogue_delete_btn') : '删除'}</button>
               </div>
               <audio controls style="width: 100%; max-height: 28px;" src="${item.url.startsWith('blob:') ? item.url : proxyDownloadUrl(item.url)}"></audio>
             </div>
           `;
         });
-        
+
         refAudiosList.innerHTML = html;
-        
+
         const deleteBtns = refAudiosList.querySelectorAll('.ref-audio-delete-btn');
         deleteBtns.forEach(btn => {
           btn.addEventListener('click', (e) => {
@@ -398,7 +407,7 @@
             const index = parseInt(btn.dataset.index);
             node.data.referenceAudios.splice(index, 1);
             renderRefAudiosList();
-            showToast('已删除参考音频', 'success');
+            showToast(window.t ? window.t('ref_audio_deleted_msg', {}) : '已删除参考音频', 'success');
             try{ autoSaveWorkflow(); } catch(e){}
           });
         });
@@ -493,61 +502,61 @@
       function updateDialogueList(){
         const container = el.querySelector('.dialogue-items-container');
         if(!container) return;
-        
+
         if(!node.data.dialogues || node.data.dialogues.length === 0){
           container.innerHTML = `
-            <div class="gen-meta" style="text-align:center; padding: 20px;">暂无对话数据</div>
+            <div class="gen-meta" style="text-align:center; padding: 20px;" data-i18n="dialogue_no_data">${window.t ? window.t('dialogue_no_data') : '暂无对话数据'}</div>
             <div style="margin-top: 12px; text-align: center; display: none;">
-              <button class="mini-btn dialogue-add-btn" type="button" style="font-size: 11px; padding: 6px 12px; background: #3b82f6; color: white;">+ 添加对话</button>
+              <button class="mini-btn dialogue-add-btn" type="button" style="font-size: 11px; padding: 6px 12px; background: #3b82f6; color: white;" data-i18n="dialogue_add_btn">+ ${window.t ? window.t('dialogue_add_btn') : '添加对话'}</button>
             </div>
           `;
           attachDialogueItemEvents();
           return;
         }
-        
+
         let html = '';
         node.data.dialogues.forEach((dialogue, index) => {
           const characterName = dialogue.character_name || '未知角色';
           const text = dialogue.text || '';
           const hasAudio = node.data.audioResults[index] && node.data.audioResults[index].audioUrl;
-          
+
           html += `
             <div class="dialogue-item" data-index="${index}" style="margin-bottom: 12px; padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                 <div style="font-weight: 600; color: #374151;">${escapeHtml(characterName)}</div>
                 <div style="display: flex; gap: 4px;">
-                  <button class="mini-btn dialogue-edit-btn" data-index="${index}" type="button" style="font-size: 11px; padding: 4px 8px;" title="编辑">编辑</button>
-                  <button class="mini-btn dialogue-delete-btn" data-index="${index}" type="button" style="font-size: 11px; padding: 4px 8px; background: #ef4444; color: white;" title="删除">删除</button>
-                  <button class="mini-btn dialogue-generate-btn" data-index="${index}" type="button" style="font-size: 11px; padding: 4px 8px;">生成音频</button>
+                  <button class="mini-btn dialogue-edit-btn" data-index="${index}" type="button" style="font-size: 11px; padding: 4px 8px;" title="${window.t ? window.t('dialogue_edit_btn') : '编辑'}" data-i18n="dialogue_edit_btn">${window.t ? window.t('dialogue_edit_btn') : '编辑'}</button>
+                  <button class="mini-btn dialogue-delete-btn" data-index="${index}" type="button" style="font-size: 11px; padding: 4px 8px; background: #ef4444; color: white;" title="${window.t ? window.t('dialogue_delete_btn') : '删除'}" data-i18n="dialogue_delete_btn">${window.t ? window.t('dialogue_delete_btn') : '删除'}</button>
+                  <button class="mini-btn dialogue-generate-btn" data-index="${index}" type="button" style="font-size: 11px; padding: 4px 8px;" data-i18n="dialogue_generate_btn">${window.t ? window.t('dialogue_generate_btn') : '生成音频'}</button>
                 </div>
               </div>
               <div class="dialogue-text-display" data-index="${index}" style="color: #6b7280; font-size: 13px; margin-bottom: 8px;">"${escapeHtml(text)}"</div>
               <div class="dialogue-edit-form" data-index="${index}" style="display: none; margin-bottom: 8px;">
-                <input type="text" class="dialogue-edit-character" value="${escapeHtml(characterName)}" placeholder="角色名" style="width: 100%; padding: 6px; margin-bottom: 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;">
-                <textarea class="dialogue-edit-text" placeholder="对话内容" style="width: 100%; padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; resize: vertical;" rows="3">${escapeHtml(text)}</textarea>
+                <input type="text" class="dialogue-edit-character" value="${escapeHtml(characterName)}" placeholder="${window.t ? window.t('dialogue_char_placeholder') : '角色名'}" style="width: 100%; padding: 6px; margin-bottom: 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;">
+                <textarea class="dialogue-edit-text" placeholder="${window.t ? window.t('dialogue_text_placeholder') : '对话内容'}" style="width: 100%; padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; resize: vertical;" rows="3">${escapeHtml(text)}</textarea>
                 <div style="display: flex; gap: 4px; margin-top: 6px;">
-                  <button class="mini-btn dialogue-save-btn" data-index="${index}" type="button" style="font-size: 11px; padding: 4px 8px; background: #10b981; color: white;">保存</button>
-                  <button class="mini-btn dialogue-cancel-btn" data-index="${index}" type="button" style="font-size: 11px; padding: 4px 8px;">取消</button>
+                  <button class="mini-btn dialogue-save-btn" data-index="${index}" type="button" style="font-size: 11px; padding: 4px 8px; background: #10b981; color: white;" data-i18n="dialogue_save_btn">${window.t ? window.t('dialogue_save_btn') : '保存'}</button>
+                  <button class="mini-btn dialogue-cancel-btn" data-index="${index}" type="button" style="font-size: 11px; padding: 4px 8px;" data-i18n="dialogue_cancel_btn">${window.t ? window.t('dialogue_cancel_btn') : '取消'}</button>
                 </div>
               </div>
               <div class="dialogue-status" data-index="${index}" style="display:none; font-size: 12px; color: #6b7280; margin-bottom: 8px;"></div>
               <div class="dialogue-result" data-index="${index}" style="display:${hasAudio ? 'block' : 'none'};">
                 <audio controls style="width:100%; max-height:32px; margin-bottom: 6px;"></audio>
                 <div class="dialogue-actions" style="display: none; gap: 4px;">
-                  <button class="mini-btn dialogue-download-btn" data-index="${index}" type="button" style="font-size: 11px; padding: 4px 8px;">下载</button>
-                  <button class="mini-btn dialogue-add-timeline-btn" data-index="${index}" type="button" style="font-size: 11px; padding: 4px 8px; background: #10b981; color: white;">添加到时间轴</button>
+                  <button class="mini-btn dialogue-download-btn" data-index="${index}" type="button" style="font-size: 11px; padding: 4px 8px;" data-i18n="dialogue_download_btn">${window.t ? window.t('dialogue_download_btn') : '下载'}</button>
+                  <button class="mini-btn dialogue-add-timeline-btn" data-index="${index}" type="button" style="font-size: 11px; padding: 4px 8px; background: #10b981; color: white;" data-i18n="dialogue_add_timeline">${window.t ? window.t('dialogue_add_timeline') : '添加到时间轴'}</button>
                 </div>
               </div>
             </div>
           `;
         });
-        
+
         html += `
           <div style="margin-top: 12px; text-align: center; display: none;">
-            <button class="mini-btn dialogue-add-btn" type="button" style="font-size: 11px; padding: 6px 12px; background: #3b82f6; color: white;">+ 添加对话</button>
+            <button class="mini-btn dialogue-add-btn" type="button" style="font-size: 11px; padding: 6px 12px; background: #3b82f6; color: white;" data-i18n="dialogue_add_btn">+ ${window.t ? window.t('dialogue_add_btn') : '添加对话'}</button>
           </div>
         `;
-        
+
         container.innerHTML = html;
         attachDialogueItemEvents();
         
@@ -1094,8 +1103,14 @@
       
       // 添加调试按钮
       addDebugButtonToNode(el, node);
-      
+
       canvasEl.appendChild(el);
+
+      // i18n: 翻译节点内 DOM
+      if (typeof window.ZJTi18nDOM !== 'undefined') {
+        setTimeout(() => window.ZJTi18nDOM.scanDOM(el), 0);
+      }
+
       setSelected(id);
       return id;
     }
@@ -1116,7 +1131,7 @@
       const node = state.nodes.find(n => n.id === nodeData.id);
       if(!node) return;
       
-      node.title = nodeData.title || '对话组';
+      node.title = nodeData.title || (window.t ? window.t('dialogue_group_title') : '对话组');
       Object.assign(node.data, nodeData.data);
       
       const el = canvasEl.querySelector(`.node[data-node-id="${nodeData.id}"]`);

@@ -6,7 +6,7 @@ function createTextNode(opts){
   const node = {
     id,
     type: 'text',
-    title: '文本',
+    title: window.t ? window.t('text_node_title') : '文本',
     x,
     y,
     data: {
@@ -23,19 +23,19 @@ function createTextNode(opts){
   el.style.top = node.y + 'px';
 
   el.innerHTML = `
-    <div class="port output" title="输出文本"></div>
+    <div class="port output" title="${window.t ? window.t('text_node_output_port') : '输出文本'}"></div>
     <div class="node-header">
-      <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><path d="M4 6H20M4 12H20M4 18H14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>${node.title}</div>
-      <button class="icon-btn" title="删除">×</button>
+      <div class="node-title" data-i18n="text_node_title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><path d="M4 6H20M4 12H20M4 18H14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>${window.t ? window.t('text_node_title') : '文本'}</div>
+      <button class="icon-btn" title="${window.t ? window.t('node_delete_btn') : '删除'}">×</button>
     </div>
     <div class="node-body">
       <div class="field field-always-visible">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-          <div class="label" style="margin: 0;">文本内容</div>
-          <button class="mini-btn text-expand-btn" type="button" style="font-size: 11px; padding: 4px 8px;" title="放大编辑">⤢</button>
+          <div class="label" style="margin: 0;" data-i18n="text_node_content_label">${window.t ? window.t('text_node_content_label') : '文本内容'}</div>
+          <button class="mini-btn text-expand-btn" type="button" style="font-size: 11px; padding: 4px 8px;" title="${window.t ? window.t('script_expand_btn') : '放大编辑'}">⤢</button>
         </div>
-        <textarea class="text-content" rows="4" placeholder="输入文本内容..." style="resize: vertical; min-height: 80px;"></textarea>
-        <div class="text-char-count" style="text-align: right; font-size: 11px; color: var(--muted); margin-top: 4px;">0 字符</div>
+        <textarea class="text-content" rows="4" placeholder="${window.t ? window.t('text_node_placeholder') : '输入文本内容...'}" style="resize: vertical; min-height: 80px;"></textarea>
+        <div class="text-char-count" style="text-align: right; font-size: 11px; color: var(--muted); margin-top: 4px;">0 ${window.t ? window.t('text_node_chars') : '字符'}</div>
       </div>
     </div>
   `;
@@ -91,6 +91,12 @@ function createTextNode(opts){
   addDebugButtonToNode(el, node);
 
   canvasEl.appendChild(el);
+
+  // i18n: 翻译节点内 DOM
+  if (typeof window.ZJTi18nDOM !== 'undefined') {
+    setTimeout(() => window.ZJTi18nDOM.scanDOM(el), 0);
+  }
+
   setSelected(id);
   return id;
 }

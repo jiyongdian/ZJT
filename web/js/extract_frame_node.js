@@ -9,7 +9,7 @@
       const node = {
         id,
         type: 'extract_frame',
-        title: '提取帧',
+        title: window.t ? window.t('extract_frame_title') : '提取帧',
         x,
         y,
         data: {
@@ -30,40 +30,40 @@
       el.style.top = node.y + 'px';
 
       el.innerHTML = `
-        <div class="port input" title="输入（连接视频节点）"></div>
-        <div class="port output" title="输出（提取的帧图片）"></div>
+        <div class="port input" data-i18n="extract_frame_input_port:title" title="输入（连接视频节点）"></div>
+        <div class="port output" data-i18n="extract_frame_output_port:title" title="输出（提取的帧图片）"></div>
         <div class="node-header">
-          <div class="node-title">
+          <div class="node-title" data-i18n="extract_frame_title">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;">
               <rect x="4" y="6" width="16" height="12" rx="2"/>
               <path d="M10 9.5V14.5L14.5 12L10 9.5Z" fill="currentColor" />
               <rect x="6" y="2" width="6" height="4" rx="1" stroke="currentColor" stroke-width="2" />
             </svg>
-            ${node.title}
+            提取帧
           </div>
-          <button class="icon-btn" title="删除">×</button>
+          <button class="icon-btn" data-i18n="node_delete_btn:title" title="删除">×</button>
         </div>
         <div class="node-body">
           <div class="field field-collapsible">
-            <div class="label">视频</div>
+            <div class="label" data-i18n="video">视频</div>
             <input class="video-file" type="file" accept="video/*" />
           </div>
           <div class="field field-always-visible video-preview-field" style="display:none;">
-            <div class="label">预览</div>
+            <div class="label" data-i18n="video_preview">预览</div>
             <div class="video-preview">
               <video class="video-thumb" playsinline muted></video>
             </div>
             <div class="gen-meta video-name"></div>
           </div>
           <div class="field field-always-visible frame-type-field">
-            <div class="label">帧类型</div>
+            <div class="label" data-i18n="frame_type">帧类型</div>
             <select class="frame-type-select">
-              <option value="first">首帧</option>
-              <option value="last">尾帧</option>
+              <option value="first" data-i18n="frame_first">首帧</option>
+              <option value="last" data-i18n="frame_last">尾帧</option>
             </select>
           </div>
           <div class="field field-always-visible extract-actions-field">
-            <button class="gen-btn" type="button" title="提取帧">提取帧</button>
+            <button class="gen-btn" type="button" data-i18n="extract_frame_btn" title="提取帧">提取帧</button>
           </div>
           <div class="field field-always-visible status-field" style="display:none;">
             <div class="gen-meta status"></div>
@@ -148,7 +148,7 @@
         if(!file) return;
 
         if(!file.type.startsWith('video/')){
-          showToast('请选择视频文件', 'error');
+          showToast(window.t ? window.t('extract_frame_select_video') : '请选择视频文件', 'error');
           return;
         }
 
@@ -164,13 +164,13 @@
 
           // 清除之前的提取结果
           clearResult();
-          showToast('视频已加载，点击"提取帧"按钮提取', 'success');
+          showToast(window.t ? window.t('extract_frame_loaded') : '视频已加载，点击"提取帧"按钮提取', 'success');
 
           // 自动保存工作流
           try{ autoSaveWorkflow(); } catch(e){}
         } catch(error){
           console.error('视频处理失败:', error);
-          showToast('视频处理失败', 'error');
+          showToast(window.t ? window.t('extract_frame_failed') : '视频处理失败', 'error');
         }
       });
 
@@ -223,7 +223,7 @@
         const hasVideoUrl = node.data.videoUrl && node.data.videoUrl.length > 0;
 
         if(!hasVideoFile && !hasVideoUrl){
-          showToast('请先上传视频或连接视频节点', 'error');
+          showToast(window.t ? window.t('extract_frame_no_video') : '请先上传视频或连接视频节点', 'error');
           return;
         }
 
@@ -350,6 +350,12 @@
 
       canvasEl.appendChild(el);
       setSelected(id);
+
+      // i18n 翻译
+      if (window.ZJTi18nDOM) {
+        window.ZJTi18nDOM.scanDOM(el);
+      }
+
       return id;
     }
 

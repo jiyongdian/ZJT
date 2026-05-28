@@ -342,7 +342,7 @@
           // 迁移成功后重新查找柱子
           pillar = getPillarForNode(nodeId);
           if (pillar) {
-            showToast('已自动迁移历史数据到新时间轴结构', 'success');
+            showToast(window.t ? window.t('timeline_auto_migrated') : '已自动迁移历史数据到新时间轴结构', 'success');
           }
         }
       }
@@ -373,7 +373,7 @@
 
       renderTimeline();
       if (!state.timeline.visible) flashExpandButton();
-      showToast(`已添加到时间轴 - 镜头${pillar.shotNumber}`, 'success');
+      showToast(window.t ? window.t('timeline_added', { shot: pillar.shotNumber }) : `已添加到时间轴 - 镜头${pillar.shotNumber}`, 'success');
       try{ autoSaveWorkflow(); } catch(e){}
     }
     
@@ -405,11 +405,11 @@
     function removeFromTimeline(clipId) {
       // 从柱子中移除
       removeClipFromPillar(clipId, 'video');
-      
+
       state.timeline.clips = state.timeline.clips.filter(c => c.id !== clipId);
       state.timeline.clips.forEach((c, i) => c.order = i);
       renderTimeline();
-      showToast('已从时间轴移除', 'success');
+      showToast(window.t ? window.t('timeline_removed') : '已从时间轴移除', 'success');
       try{ autoSaveWorkflow(); } catch(e){}
     }
     
@@ -439,7 +439,11 @@
     // 时间轴展开按钮黄色闪烁提示
     function flashExpandButton() {
       const expandBtn = document.getElementById('timelineExpandBtn');
-      if (!expandBtn || expandBtn.style.display === 'none') return;
+      if (!expandBtn) {
+        console.warn('[时间轴] 展开按钮不存在');
+        return;
+      }
+      if (expandBtn.style.display === 'none') return;
       expandBtn.classList.remove('flashing');
       void expandBtn.offsetWidth; // 强制 reflow，重启动画
       expandBtn.classList.add('flashing');
@@ -456,18 +460,24 @@
       const ruler = document.getElementById('timelineRuler');
       const totalDurationEl = document.getElementById('timelineTotalDuration');
       const expandBtn = document.getElementById('timelineExpandBtn');
-      
+
+      // 安全检查：确保所有必要的 DOM 元素存在
+      if (!container || !track || !audioTrack || !ruler || !totalDurationEl || !expandBtn || !canvasContainer) {
+        console.warn('[时间轴] 某些 DOM 元素不存在，无法渲染时间轴');
+        return;
+      }
+
       // 如果有柱子系统，即使没有片段也显示时间轴（显示空柱子）
       const hasPillars = state.timeline.pillars.length > 0;
       const hasClips = state.timeline.clips.length > 0 || state.timeline.audioClips.length > 0;
-      
+
       if (!state.timeline.visible) {
         container.style.display = 'none';
         expandBtn.style.display = 'flex';
         canvasContainer.classList.remove('timeline-visible');
         return;
       }
-      
+
       container.style.display = 'flex';
       expandBtn.style.display = 'none';
       canvasContainer.classList.add('timeline-visible');
@@ -476,7 +486,8 @@
         track.innerHTML = '';
         audioTrack.innerHTML = '';
         ruler.innerHTML = '';
-        totalDurationEl.textContent = '总时长: 0:00';
+        totalDurationEl.textContent = window.t ? window.t('timeline_total_duration', { duration: '0:00' }) : '总时长: 0:00';
+        totalDurationEl.setAttribute('data-i18n-params', JSON.stringify({ duration: '0:00' }));
         return;
       }
       
@@ -510,7 +521,9 @@
       const totalDuration = Math.max(videoTotalDuration, audioTotalDuration);
       const minutes = Math.floor(totalDuration / 60);
       const seconds = (totalDuration % 60).toFixed(2);
-      totalDurationEl.textContent = `总时长: ${minutes}:${seconds.padStart(5, '0')}`;
+      const durationStr = `${minutes}:${seconds.padStart(5, '0')}`;
+      totalDurationEl.textContent = window.t ? window.t('timeline_total_duration', { duration: durationStr }) : `总时长: ${durationStr}`;
+      totalDurationEl.setAttribute('data-i18n-params', JSON.stringify({ duration: durationStr }));
       
       renderTimelineRuler(ruler, totalDuration);
       
@@ -578,7 +591,9 @@
       const totalDuration = accumulatedTime;
       const minutes = Math.floor(totalDuration / 60);
       const seconds = (totalDuration % 60).toFixed(2);
-      totalDurationEl.textContent = `总时长: ${minutes}:${seconds.padStart(5, '0')} (柱子模式)`;
+      const durationStr = `${minutes}:${seconds.padStart(5, '0')}`;
+      totalDurationEl.textContent = (window.t ? window.t('timeline_total_duration', { duration: durationStr }) : `总时长: ${durationStr}`) + ` (${window.t ? window.t('timeline_pillar_mode') : '柱子模式'})`;
+      totalDurationEl.setAttribute('data-i18n-params', JSON.stringify({ duration: durationStr }));
       
       renderTimelineRuler(ruler, totalDuration);
       
@@ -839,7 +854,7 @@
       });
       
       renderTimeline();
-      showToast('已替换视频片段', 'success');
+      showToast(window.t ? window.t('timeline_replaced') : '已替换视频片段', 'success');
       try{ autoSaveWorkflow(); } catch(e){}
     }
     
@@ -1496,9 +1511,9 @@
         // 更新片段的剪切时间
         clip.startTime = currentStart;
         clip.endTime = currentEnd;
-        
+
         renderTimeline();
-        showToast('剪切成功', 'success');
+        showToast(window.t ? window.t('timeline_trim_success') : '剪切成功', 'success');
         try{ autoSaveWorkflow(); } catch(e){}
         
         closeDialog();
@@ -1773,7 +1788,7 @@
           // 迁移成功后重新查找柱子
           pillar = getPillarForNode(nodeId);
           if (pillar) {
-            showToast('已自动迁移历史数据到新时间轴结构', 'success');
+            showToast(window.t ? window.t('timeline_auto_migrated') : '已自动迁移历史数据到新时间轴结构', 'success');
           }
         }
       }
@@ -1805,7 +1820,7 @@
 
       renderTimeline();
       if (!state.timeline.visible) flashExpandButton();
-      showToast(`已添加音频到时间轴 - 镜头${pillar.shotNumber}`, 'success');
+      showToast(window.t ? window.t('timeline_audio_added', { shot: pillar.shotNumber }) : `已添加音频到时间轴 - 镜头${pillar.shotNumber}`, 'success');
       try{ autoSaveWorkflow(); } catch(e){}
     }
     
@@ -1813,11 +1828,11 @@
     function removeAudioFromTimeline(clipId) {
       // 从柱子中移除
       removeClipFromPillar(clipId, 'audio');
-      
+
       state.timeline.audioClips = state.timeline.audioClips.filter(c => c.id !== clipId);
       state.timeline.audioClips.forEach((c, i) => c.order = i);
       renderTimeline();
-      showToast('已从时间轴移除音频', 'success');
+      showToast(window.t ? window.t('timeline_audio_removed') : '已从时间轴移除音频', 'success');
       try{ autoSaveWorkflow(); } catch(e){}
     }
     
