@@ -128,6 +128,8 @@ task_queue:
 
 upload:
   max_image_size_mb: 10
+  max_video_size_mb: 50
+  max_video_duration_seconds: 15
 
 frontend:
   debug_password: "123"

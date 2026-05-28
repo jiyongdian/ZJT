@@ -9,6 +9,12 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 # Mock 所有 task/audio_task.py 的重依赖
+_saved_model = sys.modules.get('model')
+_saved_config_constant = sys.modules.get('config.constant')
+_saved_config_util = sys.modules.get('config.config_util')
+_saved_rh_config = sys.modules.get('task.async_drivers.runninghub_audio_driver')
+_saved_index_tts = sys.modules.get('utils.index_tts_util')
+
 sys.modules['model'] = MagicMock()
 sys.modules['model'].__dict__.update({
     'TasksModel': MagicMock(),
@@ -46,6 +52,19 @@ sys.modules['utils.index_tts_util'] = MagicMock()
 sys.modules['config.config_util'] = MagicMock()
 
 from task.audio_task import build_character_audio_text, calculate_next_retry_delay
+
+# 恢复被 mock 的 sys.modules，防止污染后续测试
+for _key, _saved in [
+    ('model', _saved_model),
+    ('config.constant', _saved_config_constant),
+    ('config.config_util', _saved_config_util),
+    ('task.async_drivers.runninghub_audio_driver', _saved_rh_config),
+    ('utils.index_tts_util', _saved_index_tts),
+]:
+    if _saved is not None:
+        sys.modules[_key] = _saved
+    else:
+        sys.modules.pop(_key, None)
 
 
 class TestBuildCharacterAudioText(unittest.TestCase):

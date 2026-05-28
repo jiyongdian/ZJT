@@ -15,6 +15,7 @@ from config.config_util import get_config, get_dynamic_config_value
 from config.unified_config import DriverImplementation
 from utils.sentry_util import SentryUtil, AlertLevel
 from utils.image_upload_utils import compress_and_upload_image_sync, upload_media_to_cdn_sync
+from model.ai_tool_pipeline_steps import PipelineStepModel, PipelineStepStatus, PipelineStepType, PipelineStage
 
 
 # 接口文档 https://www.volcengine.com/docs/82379/1520757?lang=zh
@@ -68,6 +69,32 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
             level=AlertLevel.ERROR,
             context=context
         )
+
+    def _resolve_video_path_with_face_mask(self, ai_tool, video_path: str) -> str:
+        """
+        查找 face_mask pipeline step 的遮盖结果替换原始视频路径
+
+        如果 ai_tool_pipeline_steps 中存在 target 匹配的已完成 face_mask 步骤，
+        使用其 result_url（人脸遮盖后的视频）替代原始路径，避免 seedance 2.0 审核不通过。
+        """
+        try:
+            steps = PipelineStepModel.get_by_ai_tool_and_stage(ai_tool.id, PipelineStage.PARAM_PREPARE)
+            for step in steps:
+                if (step.step_type == PipelineStepType.FACE_MASK
+                        and step.status == PipelineStepStatus.COMPLETED
+                        and step.target == video_path
+                        and step.result_url):
+                    result_url = step.result_url
+                    # result_url 是相对路径（如 /upload/cache/...），需转为完整 URL 以便 CDN 上传
+                    if result_url.startswith("/") and video_path.startswith("http"):
+                        from urllib.parse import urlparse
+                        parsed = urlparse(video_path)
+                        result_url = f"{parsed.scheme}://{parsed.netloc}{result_url}"
+                    self.logger.info(f"使用 face_mask 结果替换视频: {video_path} -> {result_url}")
+                    return result_url
+        except Exception as e:
+            self.logger.warning(f"查询 face_mask pipeline step 失败，使用原始路径: {e}")
+        return video_path
 
     def _parse_extra_config(self, ai_tool) -> Dict[str, Any]:
         """解析 extra_config JSON"""
@@ -219,15 +246,7 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
             # ---- 多模态参考模式 ----
             self.logger.info(f"多参考图模式: reference_images={len(reference_images)}张")
 
-            if not reference_images:
-                return {
-                    "success": False,
-                    "error": "多参考图模式需要至少1张参考图",
-                    "error_type": "USER",
-                    "retry": False
-                }
-
-            # 处理参考图列表
+            # 处理参考图列表（图片可选，多参考模式下视频/音频也可独立使用）
             processed_reference_images = []
             for ref_img in reference_images:
                 success, new_url, error = compress_and_upload_image_sync(
@@ -238,19 +257,11 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
                 else:
                     self.logger.warning(f"处理参考图失败，跳过: {error}")
 
-            if not processed_reference_images:
-                return {
-                    "success": False,
-                    "error": "所有参考图处理失败",
-                    "error_type": "USER",
-                    "retry": False
-                }
-
             # 文本
             if prompt:
                 content.append({"type": "text", "text": prompt})
 
-            # 参考图
+            # 参考图（如有）
             for ref_img_url in processed_reference_images:
                 content.append({
                     "type": "image_url",
@@ -259,30 +270,36 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
                 })
 
             # 参考视频（仅多参考图模式下添加，需上传到 CDN）
-            reference_video = self.get_video_path(ai_tool) or extra_config.get('reference_video')
-            if reference_video:
-                success, cdn_url, error = upload_media_to_cdn_sync(reference_video, self._config)
-                if success and cdn_url:
-                    content.append({
-                        "type": "video_url",
-                        "video_url": {"url": cdn_url},
-                        "role": "reference_video"
-                    })
-                else:
-                    self.logger.warning(f"参考视频上传 CDN 失败，跳过: {error}")
+            reference_video_raw = self.get_video_path(ai_tool) or extra_config.get('reference_video')
+            if reference_video_raw:
+                video_paths = [v.strip() for v in reference_video_raw.split(",") if v.strip()]
+                for video_path in video_paths:
+                    # 查找 face_mask 遮盖结果，如有则使用遮盖后的视频
+                    actual_path = self._resolve_video_path_with_face_mask(ai_tool, video_path)
+                    success, cdn_url, error = upload_media_to_cdn_sync(actual_path, self._config)
+                    if success and cdn_url:
+                        content.append({
+                            "type": "video_url",
+                            "video_url": {"url": cdn_url},
+                            "role": "reference_video"
+                        })
+                    else:
+                        self.logger.warning(f"参考视频上传 CDN 失败，跳过: {error}")
 
             # 参考音频（仅多参考图模式下添加，需上传到 CDN）
-            reference_audio = self.get_audio_path(ai_tool) or extra_config.get('reference_audio')
-            if reference_audio:
-                success, cdn_url, error = upload_media_to_cdn_sync(reference_audio, self._config)
-                if success and cdn_url:
-                    content.append({
-                        "type": "audio_url",
-                        "audio_url": {"url": cdn_url},
-                        "role": "reference_audio"
-                    })
-                else:
-                    self.logger.warning(f"参考音频上传 CDN 失败，跳过: {error}")
+            reference_audio_raw = self.get_audio_path(ai_tool) or extra_config.get('reference_audio')
+            if reference_audio_raw:
+                audio_paths = [a.strip() for a in reference_audio_raw.split(",") if a.strip()]
+                for audio_path in audio_paths:
+                    success, cdn_url, error = upload_media_to_cdn_sync(audio_path, self._config)
+                    if success and cdn_url:
+                        content.append({
+                            "type": "audio_url",
+                            "audio_url": {"url": cdn_url},
+                            "role": "reference_audio"
+                        })
+                    else:
+                        self.logger.warning(f"参考音频上传 CDN 失败，跳过: {error}")
 
         else:
             # ---- 未知模式，降级为首尾帧 ----

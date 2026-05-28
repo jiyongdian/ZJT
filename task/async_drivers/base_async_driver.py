@@ -51,6 +51,111 @@ class BaseAsyncDriver(ABC):
         self.driver_name = driver_name
         self.logger = logging.getLogger(f"{__name__}.{driver_name}")
 
+    @property
+    def impl_id(self) -> int:
+        """获取实现 ID（子类覆盖）"""
+        from config.unified_config import AsyncTaskImplementationId
+        return AsyncTaskImplementationId.UNKNOWN
+
+    async def submit_with_slot_management(
+        self,
+        user_id: int,
+        params: Dict[str, Any],
+        submit_fn
+    ) -> Dict[str, Any]:
+        """
+        统一提交入口：自动处理槽位管理、async_task 创建、异常释放
+
+        Args:
+            user_id: 用户 ID
+            params: 任务参数字典
+            submit_fn: 业务提交函数，返回 {'success': bool, 'project_id': str, ...}
+
+        Returns:
+            {'success': bool, 'project_id': str, 'async_task_id': int, 'slot_full': bool, ...}
+        """
+        from model import AsyncTasksModel, AsyncTaskStatus, RunningHubSlotsModel
+        from model.runninghub_slots import RunningHubSlot
+        from config.unified_config import get_async_task_config, AsyncTaskImplementationId
+
+        config = get_async_task_config(self.impl_id)
+
+        # 1. 创建 async_task 记录
+        async_task_id = AsyncTasksModel.create(
+            implementation=self.impl_id,
+            user_id=user_id,
+            params=params
+        )
+
+        # 2. 如果需要槽位
+        if config.need_runninghub_slot:
+            slot_acquired = RunningHubSlotsModel.try_acquire_slot(
+                task_id=async_task_id,
+                task_type=config.slot_task_type,
+                source=RunningHubSlot.SOURCE_ASYNC
+            )
+
+            if not slot_acquired:
+                # 槽位满：安排重试，由后台任务负责重试提交
+                logger.info(f"槽位已满，等待重试: impl_id={self.impl_id}, async_task_id={async_task_id}")
+                # 计算重试延迟（指数退避）
+                delay = self._calculate_retry_delay(0)
+                AsyncTasksModel.schedule_retry(async_task_id, delay)
+                return {
+                    'success': False,
+                    'error': '槽位已满',
+                    'error_type': 'SLOT_FULL',
+                    'async_task_id': async_task_id,
+                    'retry': True
+                }
+
+            try:
+                result = await submit_fn()
+
+                if not result.get('success'):
+                    RunningHubSlotsModel.release_slot(async_task_id, source=RunningHubSlot.SOURCE_ASYNC)
+                    AsyncTasksModel.update_status(
+                        record_id=async_task_id,
+                        status=AsyncTaskStatus.FAILED,
+                        error_message=result.get('error', '提交失败')
+                    )
+                    return {**result, 'async_task_id': async_task_id}
+
+                # 提交成功
+                project_id = result.get('project_id')
+                AsyncTasksModel.update_external_task_id(async_task_id, project_id)
+                RunningHubSlotsModel.update_project_id(async_task_id, project_id, source=RunningHubSlot.SOURCE_ASYNC)
+                return {**result, 'async_task_id': async_task_id}
+
+            except Exception as e:
+                RunningHubSlotsModel.release_slot(async_task_id, source=RunningHubSlot.SOURCE_ASYNC)
+                AsyncTasksModel.update_status(
+                    record_id=async_task_id,
+                    status=AsyncTaskStatus.FAILED,
+                    error_message=str(e)
+                )
+                raise
+
+        # 3. 不需要槽位：直接提交
+        return await submit_fn()
+
+    @staticmethod
+    def _calculate_retry_delay(retry_count: int) -> int:
+        """
+        计算重试延迟（指数退避）
+
+        Args:
+            retry_count: 当前重试次数
+
+        Returns:
+            延迟秒数
+        """
+        # retry_count=0: 30s, retry_count=1: 60s, retry_count=2: 120s, retry_count=3: 300s, 最多 5 分钟
+        base_delays = [30, 60, 120, 300, 300]
+        if retry_count < len(base_delays):
+            return base_delays[retry_count]
+        return 300  # 最多 5 分钟
+
     @abstractmethod
     async def submit_task(self, **kwargs) -> Dict[str, Any]:
         """

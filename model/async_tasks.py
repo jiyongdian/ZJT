@@ -9,6 +9,7 @@ from typing import List, Optional, Dict, Any
 from .database import execute_query, execute_update, execute_insert
 import logging
 import json
+import pymysql
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,10 @@ class AsyncTask:
         self.updated_at = kwargs.get('updated_at')
         self.completed_at = kwargs.get('completed_at')
         self.failed_at = kwargs.get('failed_at')
+        # 重试相关字段
+        self.retry_count = kwargs.get('retry_count', 0)
+        self.next_retry_at = kwargs.get('next_retry_at')
+        self.max_retries = kwargs.get('max_retries', 5)
 
     def get_params_dict(self) -> Dict[str, Any]:
         """获取解析后的 params 字典"""
@@ -82,11 +87,50 @@ class AsyncTask:
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'completed_at': self.completed_at.isoformat() if self.completed_at else None,
             'failed_at': self.failed_at.isoformat() if self.failed_at else None,
+            'retry_count': self.retry_count,
+            'next_retry_at': self.next_retry_at.isoformat() if self.next_retry_at else None,
+            'max_retries': self.max_retries,
         }
 
 
 class AsyncTasksModel:
     """异步任务数据库操作"""
+
+    @staticmethod
+    def create_and_schedule(
+        implementation: int,
+        user_id: int,
+        params: Optional[Dict[str, Any]] = None,
+        max_attempts: int = 60,
+        max_retries: int = 5
+    ) -> int:
+        """
+        创建异步任务并立即可被调度器拾取（next_retry_at = NOW()）
+
+        适用于 API 端只需插入记录、由后台调度器统一处理提交的场景。
+        """
+        params_json = json.dumps(params) if params else None
+
+        sql = """
+            INSERT INTO async_tasks
+            (implementation, user_id, params, status, max_attempts, next_retry_at, max_retries)
+            VALUES (%s, %s, %s, %s, %s, NOW(), %s)
+        """
+        db_params = (
+            implementation, user_id,
+            params_json, AsyncTaskStatus.QUEUED, max_attempts, max_retries
+        )
+
+        try:
+            record_id = execute_insert(sql, db_params)
+            logger.info(f"Created and scheduled async task: id={record_id}, impl={implementation}")
+            return record_id
+        except pymysql.MySQLError as e:
+            logger.error(f"Failed to create and schedule async task: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to create and schedule async task (unexpected): {e}")
+            raise
 
     @staticmethod
     def create(
@@ -125,8 +169,11 @@ class AsyncTasksModel:
             record_id = execute_insert(sql, db_params)
             logger.info(f"Created async task: id={record_id}, implementation={implementation}")
             return record_id
-        except Exception as e:
+        except pymysql.MySQLError as e:
             logger.error(f"Failed to create async task: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to create async task (unexpected): {e}")
             raise
 
     @staticmethod
@@ -136,8 +183,11 @@ class AsyncTasksModel:
         try:
             result = execute_query(sql, (record_id,), fetch_one=True)
             return AsyncTask(**result) if result else None
-        except Exception as e:
+        except pymysql.MySQLError as e:
             logger.error(f"Failed to get async task by id {record_id}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to get async task by id {record_id} (unexpected): {e}")
             raise
 
     @staticmethod
@@ -147,8 +197,11 @@ class AsyncTasksModel:
         try:
             result = execute_query(sql, (external_task_id,), fetch_one=True)
             return AsyncTask(**result) if result else None
-        except Exception as e:
+        except pymysql.MySQLError as e:
             logger.error(f"Failed to get async task by external_task_id {external_task_id}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to get async task by external_task_id {external_task_id} (unexpected): {e}")
             raise
 
     @staticmethod
@@ -183,8 +236,11 @@ class AsyncTasksModel:
         try:
             results = execute_query(sql, params, fetch_all=True)
             return [AsyncTask(**row) for row in results] if results else []
-        except Exception as e:
+        except pymysql.MySQLError as e:
             logger.error(f"Failed to get pending async tasks: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to get pending async tasks (unexpected): {e}")
             raise
 
     @staticmethod
@@ -236,8 +292,11 @@ class AsyncTasksModel:
             affected = execute_update(sql, tuple(params))
             logger.info(f"Updated async task {record_id} status to {status}")
             return affected
-        except Exception as e:
+        except pymysql.MySQLError as e:
             logger.error(f"Failed to update async task {record_id}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to update async task {record_id} (unexpected): {e}")
             raise
 
     @staticmethod
@@ -246,8 +305,145 @@ class AsyncTasksModel:
         sql = "UPDATE async_tasks SET try_count = try_count + 1 WHERE id = %s"
         try:
             return execute_update(sql, (record_id,))
-        except Exception as e:
+        except pymysql.MySQLError as e:
             logger.error(f"Failed to increment try_count for id={record_id}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to increment try_count for id={record_id} (unexpected): {e}")
+            raise
+
+    @staticmethod
+    def update_external_task_id(record_id: int, external_task_id: str) -> int:
+        """更新外部任务 ID"""
+        sql = "UPDATE async_tasks SET external_task_id = %s WHERE id = %s"
+        try:
+            return execute_update(sql, (external_task_id, record_id))
+        except pymysql.MySQLError as e:
+            logger.error(f"Failed to update external_task_id for id={record_id}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to update external_task_id for id={record_id} (unexpected): {e}")
+            raise
+
+    @staticmethod
+    def schedule_retry(record_id: int, delay_seconds: int) -> int:
+        """
+        安排任务重试（指数退避）
+
+        Args:
+            record_id: 记录 ID
+            delay_seconds: 延迟秒数
+
+        Returns:
+            影响的行数
+        """
+        from datetime import datetime, timedelta
+        next_retry_at = datetime.now() + timedelta(seconds=delay_seconds)
+
+        sql = """
+            UPDATE async_tasks
+            SET retry_count = retry_count + 1,
+                next_retry_at = %s
+            WHERE id = %s
+        """
+        try:
+            affected = execute_update(sql, (next_retry_at, record_id))
+            logger.info(f"Async task {record_id} scheduled retry in {delay_seconds}s")
+            return affected
+        except pymysql.MySQLError as e:
+            logger.error(f"Failed to schedule retry for async task {record_id}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to schedule retry for async task {record_id} (unexpected): {e}")
+            raise
+
+    @staticmethod
+    def get_ready_to_retry_tasks(limit: int = 50) -> List['AsyncTask']:
+        """
+        获取可重试的任务（status=PENDING 且 next_retry_at <= NOW 且 retry_count < max_retries）
+
+        Returns:
+            AsyncTask 对象列表
+        """
+        sql = """
+            SELECT * FROM async_tasks
+            WHERE status = %s
+              AND next_retry_at IS NOT NULL
+              AND next_retry_at <= NOW()
+              AND retry_count < max_retries
+            ORDER BY next_retry_at ASC
+            LIMIT %s
+        """
+        try:
+            results = execute_query(sql, (AsyncTaskStatus.QUEUED, limit), fetch_all=True)
+            return [AsyncTask(**row) for row in results] if results else []
+        except pymysql.MySQLError as e:
+            logger.error(f"Failed to get ready-to-retry tasks: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to get ready-to-retry tasks (unexpected): {e}")
+            raise
+
+    @staticmethod
+    def update_status_with_retry(
+        record_id: int,
+        status: int,
+        error_message: str = None,
+        result_url: str = None,
+        result_data: Dict[str, Any] = None,
+        reset_retry: bool = False
+    ) -> int:
+        """
+        更新任务状态，可选重置重试计数
+
+        Args:
+            record_id: 记录 ID
+            status: 新状态
+            error_message: 错误信息（可选）
+            result_url: 结果 URL（可选）
+            result_data: 额外结果数据（可选）
+            reset_retry: 是否重置重试计数（默认 False）
+
+        Returns:
+            影响的行数
+        """
+        update_fields = ["status = %s"]
+        params = [status]
+
+        if error_message is not None:
+            update_fields.append("error_message = %s")
+            params.append(error_message)
+
+        if result_url is not None:
+            update_fields.append("result_url = %s")
+            params.append(result_url)
+
+        if result_data is not None:
+            update_fields.append("result_data = %s")
+            params.append(json.dumps(result_data))
+
+        if reset_retry:
+            update_fields.append("retry_count = 0")
+            update_fields.append("next_retry_at = NULL")
+
+        # 根据状态设置完成/失败时间
+        if status == AsyncTaskStatus.COMPLETED:
+            update_fields.append("completed_at = NOW()")
+        elif status in (AsyncTaskStatus.FAILED, AsyncTaskStatus.TIMEOUT):
+            update_fields.append("failed_at = NOW()")
+
+        params.append(record_id)
+        sql = f"UPDATE async_tasks SET {', '.join(update_fields)} WHERE id = %s"
+
+        try:
+            affected = execute_update(sql, tuple(params))
+            logger.info(f"Updated async task {record_id} status to {status}")
+            return affected
+        except pymysql.MySQLError as e:
+            logger.error(f"Failed to update async task {record_id}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to update async task {record_id} (unexpected): {e}")
             raise
 
 
@@ -268,8 +464,12 @@ CREATE TABLE IF NOT EXISTS `async_tasks` (
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `completed_at` datetime DEFAULT NULL COMMENT '完成时间',
   `failed_at` datetime DEFAULT NULL COMMENT '失败时间',
+  `retry_count` int DEFAULT '0' COMMENT '重试次数',
+  `next_retry_at` datetime DEFAULT NULL COMMENT '下次重试时间',
+  `max_retries` int DEFAULT '5' COMMENT '最大重试次数',
   PRIMARY KEY (`id`),
   KEY `idx_user_id` (`user_id`),
-  KEY `idx_impl_status` (`implementation`, `status`)
+  KEY `idx_impl_status` (`implementation`, `status`),
+  KEY `idx_async_task_retry_ready` (`status`, `next_retry_at`, `retry_count`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='通用异步任务表';
 """

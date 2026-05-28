@@ -445,6 +445,33 @@ def init_scheduler(app):
         coalesce=True
     )
 
+    # 异步任务提交重试处理（槽位满时自动重试）
+    logger.info('启用异步任务提交重试处理，每7秒执行一次')
+    from task.async_task_submission import process_pending_async_task_submissions
+    scheduler.add_job(
+        func=process_pending_async_task_submissions,
+        trigger=IntervalTrigger(seconds=7),
+        id='process_pending_async_task_submissions',
+        name='Process pending async task submissions every 30 seconds',
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True
+    )
+
+    # Pipeline 步骤处理（param_prepare / before_finish 阶段）
+    logger.info('启用Pipeline步骤处理，每13秒执行一次')
+    from task.pipeline_processor import PipelineProcessor
+    task_with_app_pipeline = partial(_run_async_task, PipelineProcessor.process_all_pending_steps)
+    scheduler.add_job(
+        func=task_with_app_pipeline,
+        trigger=IntervalTrigger(seconds=13),
+        id='process_pipeline_steps',
+        name='Process pipeline steps every 10 seconds',
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True
+    )
+
     # 启动调度器
     scheduler.start()
     logger.info("定时任务启动成功")

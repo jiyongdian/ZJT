@@ -137,11 +137,13 @@ next_trigger = datetime.now() + timedelta(seconds=delay_seconds)
 对于 RunningHub 任务（type=10 LTX2.0, type=11 Wan2.2），在标记为过期或失败时会自动释放槽位：
 
 ```python
+from model.runninghub_slots import RunningHubSlot
+
 if ai_tool.type in [10, 11]:
     if ai_tool.project_id:
         RunningHubSlotsModel.release_slot_by_project_id(ai_tool.project_id)
     else:
-        RunningHubSlotsModel.release_slot_by_task_table_id(task.id)
+        RunningHubSlotsModel.release_slot(task.id, source=RunningHubSlot.SOURCE_TASK)
 ```
 
 ### 队列已满错误

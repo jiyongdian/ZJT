@@ -61,10 +61,35 @@ class AsyncTaskImplementationId:
     """异步任务实现 ID 常量（用于 async_tasks 表的 implementation 字段）"""
     UNKNOWN = 0
     RUNNINGHUB_AUDIO = 1  # RunningHub 音频生成
-    # 后续可添加其他异步任务实现：
-    # RUNNINGHUB_VIDEO = 2
-    # CUSTOM_LLM_TASK = 3
-    # etc.
+    RUNNINGHUB_FACE_MASK = 2  # RunningHub 人脸遮盖视频生成
+
+
+@dataclass
+class AsyncTaskConfig:
+    """异步任务配置类"""
+    impl_id: int                      # 实现 ID
+    name: str                         # 名称
+    need_runninghub_slot: bool = False  # 是否需要 RunningHub 槽位
+    slot_task_type: int = 0           # 槽位 task_type（对应 runninghub_slots.task_type）
+
+
+# 异步任务配置表
+ASYNC_TASK_CONFIGS: Dict[int, AsyncTaskConfig] = {
+    AsyncTaskImplementationId.UNKNOWN: AsyncTaskConfig(
+        impl_id=0, name="未知", need_runninghub_slot=False
+    ),
+    AsyncTaskImplementationId.RUNNINGHUB_AUDIO: AsyncTaskConfig(
+        impl_id=1, name="RunningHub音频", need_runninghub_slot=True, slot_task_type=1
+    ),
+    AsyncTaskImplementationId.RUNNINGHUB_FACE_MASK: AsyncTaskConfig(
+        impl_id=2, name="RunningHub人脸遮盖", need_runninghub_slot=True, slot_task_type=2
+    ),
+}
+
+
+def get_async_task_config(impl_id: int) -> AsyncTaskConfig:
+    """获取异步任务配置"""
+    return ASYNC_TASK_CONFIGS.get(impl_id, ASYNC_TASK_CONFIGS[AsyncTaskImplementationId.UNKNOWN])
 
 @dataclass
 class PowerModifier:

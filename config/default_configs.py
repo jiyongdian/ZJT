@@ -59,6 +59,27 @@ DEFAULT_CONFIGS: List[Dict[str, Any]] = [
         'editable': True,
         'is_sensitive': False
     },
+    {
+        'key': 'upload.max_video_size_mb',
+        'value_type': 'int',
+        'description': 'Agent 对话模式上传视频最大大小限制（MB）',
+        'editable': True,
+        'is_sensitive': False
+    },
+    {
+        'key': 'upload.max_video_duration_seconds',
+        'value_type': 'int',
+        'description': 'Agent 对话模式上传视频最大时长限制（秒），超时长的视频将被截断',
+        'editable': True,
+        'is_sensitive': False
+    },
+    {
+        'key': 'upload.max_audio_size_mb',
+        'value_type': 'int',
+        'description': 'Agent 对话模式上传音频最大大小限制（MB）',
+        'editable': True,
+        'is_sensitive': False
+    },
 
     # ==================== 前端配置 ====================
     {
