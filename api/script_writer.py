@@ -54,6 +54,7 @@ from script_writer_core.chat_session import ChatSession
 from script_writer_core.file_manager import FileManager
 from script_writer_core.skill_loader import SkillLoader
 from utils.file_storage import get_file_storage
+from utils.video_compressor import get_video_info, needs_compression
 logger = logging.getLogger(__name__)
 
 # 创建路由器
@@ -2115,40 +2116,19 @@ async def generate_character_reference_audio(
         )
         text = build_character_audio_text(character_data, audio_request.text)
 
-        # 通过驱动提交任务到 RunningHub
-        from task.async_drivers.runninghub_audio_driver import RunningHubAudioDriver
-        driver = RunningHubAudioDriver()
-        submit_result = await driver.submit_task(style_prompt=style_prompt, text=text)
-
-        if not submit_result['success']:
-            return JSONResponse(submit_result, status_code=502)
-
-        runninghub_task_id = submit_result['project_id']
-
-        # 写入异步任务表，由 scheduler 后台轮询
+        # 写入异步任务表，由 scheduler 后台统一处理提交
         from model import AsyncTasksModel
         from config.unified_config import AsyncTaskImplementationId
 
-        # 构建任务参数（JSON 格式）
-        params = {
-            'character_id': character.id if character else None,
-            'character_name': character_data.get('name'),
-            'style_prompt': style_prompt,
-            'text': text
-        }
-
-        task_id = AsyncTasksModel.create(
+        task_id = AsyncTasksModel.create_and_schedule(
             implementation=AsyncTaskImplementationId.RUNNINGHUB_AUDIO,
             user_id=int(user_id),
-            external_task_id=runninghub_task_id,
-            params=params,
-            max_attempts=60
+            params={'style_prompt': style_prompt, 'text': text}
         )
 
         return JSONResponse({
             'success': True,
             'task_id': task_id,
-            'runninghub_task_id': runninghub_task_id,
             'message': '音频生成任务已提交，请通过 task_id 查询状态'
         })
     except Exception as e:
@@ -3670,6 +3650,193 @@ async def upload_agent_image(
 
     except Exception as e:
         logger.error(f'Agent 图片上传失败: {str(e)}')
+        return JSONResponse({
+            'success': False,
+            'error': f'上传失败: {str(e)}'
+        }, status_code=500)
+
+
+@router.post('/upload-agent-video')
+@require_permission("script_writer:upload_image")
+async def upload_agent_video(
+    request: Request,
+    file: UploadFile = File(...),
+    session_id: str = Form(...)
+):
+    """
+    上传 Agent 对话模式的视频文件
+
+    视频保存到 upload/marketing/video/{session_id}/ 目录，
+    前端已压缩为 480p，此处仅做存储。
+
+    Args:
+        file: 视频文件
+        session_id: 会话ID（用于组织存储路径）
+
+    Returns:
+        视频访问 URL
+    """
+    try:
+        allowed_extensions = {'.mp4', '.mov', '.webm', '.avi', '.mkv'}
+        file_extension = os.path.splitext(file.filename or '')[1].lower()
+
+        if file_extension not in allowed_extensions:
+            return JSONResponse({
+                'success': False,
+                'error': f'不支持的文件类型。允许的类型: {", ".join(allowed_extensions)}'
+            }, status_code=400)
+
+        max_size_mb = get_dynamic_config_value('upload', 'max_video_size_mb', default=50)
+        max_size_bytes = max_size_mb * 1024 * 1024
+
+        content = await file.read()
+        if len(content) > max_size_bytes:
+            return JSONResponse({
+                'success': False,
+                'error': f'视频大小不能超过 {max_size_mb}MB'
+            }, status_code=400)
+
+        upload_dir = os.path.join('upload', 'marketing', 'video', session_id)
+        app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        full_upload_dir = os.path.join(app_dir, upload_dir)
+
+        os.makedirs(full_upload_dir, exist_ok=True)
+
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+        unique_id = uuid.uuid4().hex[:8]
+        filename = f"{timestamp}_{unique_id}{file_extension}"
+        file_path = os.path.join(full_upload_dir, filename)
+
+        with open(file_path, 'wb') as f:
+            f.write(content)
+
+        # ffprobe 验证分辨率和时长
+        video_info = await get_video_info(file_path)
+        if video_info:
+            max_duration = get_dynamic_config_value('upload', 'max_video_duration_seconds', default=15)
+
+            if video_info['duration'] > max_duration + 1:
+                os.remove(file_path)
+                return JSONResponse({
+                    'success': False,
+                    'error': f'视频时长 {video_info["duration"]:.1f}s 超过限制 {max_duration}s'
+                }, status_code=400)
+
+            if needs_compression(video_info, max_shortest_edge=480):
+                os.remove(file_path)
+                shortest = min(video_info.get('width', 0), video_info.get('height', 0))
+                longest = max(video_info.get('width', 0), video_info.get('height', 0))
+                return JSONResponse({
+                    'success': False,
+                    'error': f'视频分辨率 {longest}x{shortest} 最短边 {shortest}px 超过 480p 限制'
+                }, status_code=400)
+
+        # 根据 is_local 配置决定返回本地 URL 还是 CDN URL
+        is_local = get_dynamic_config_value('server', 'is_local', default=False)
+
+        if is_local:
+            # 本地开发：返回本地服务器 URL
+            server_host = get_config()["server"]["host"]
+            url = f"{server_host.rstrip('/')}/{upload_dir.replace(os.sep, '/')}/{filename}"
+        else:
+            # 生产环境：上传到七牛云 CDN，返回 CDN URL
+            try:
+                storage = get_file_storage(get_config())
+                storage_key = storage.generate_key_with_datetime(f"marketing_video_{filename}")
+                upload_result = await storage.upload_file(storage_key, file_path)
+                if upload_result.success:
+                    url = storage.get_download_url(upload_result.key)
+                else:
+                    # CDN 上传失败，降级返回本地 URL
+                    logger.warning(f'视频 CDN 上传失败({upload_result.error})，降级返回本地 URL')
+                    server_host = get_config()["server"]["host"]
+                    url = f"{server_host.rstrip('/')}/{upload_dir.replace(os.sep, '/')}/{filename}"
+            except Exception as cdn_err:
+                logger.error(f'视频 CDN 上传异常: {cdn_err}')
+                server_host = get_config()["server"]["host"]
+                url = f"{server_host.rstrip('/')}/{upload_dir.replace(os.sep, '/')}/{filename}"
+
+        logger.info(f'Agent 视频上传成功: {url}')
+
+        return JSONResponse({
+            'success': True,
+            'url': url
+        })
+
+    except Exception as e:
+        logger.error(f'Agent 视频上传失败: {str(e)}')
+        return JSONResponse({
+            'success': False,
+            'error': f'上传失败: {str(e)}'
+        }, status_code=500)
+
+
+@router.post('/upload-agent-audio')
+@require_permission("script_writer:upload_image")
+async def upload_agent_audio(
+    request: Request,
+    file: UploadFile = File(...),
+    session_id: str = Form(...)
+):
+    """
+    上传 Agent 对话模式的音频文件
+
+    音频保存到 upload/marketing/audio/{session_id}/ 目录，
+    以 session_id 为子目录，方便定时清理脚本比照 chat_sessions 表删除孤立文件。
+
+    Args:
+        file: 音频文件
+        session_id: 会话ID（用于组织存储路径）
+
+    Returns:
+        音频访问 URL
+    """
+    try:
+        allowed_extensions = {'.mp3', '.wav', '.aac', '.ogg', '.m4a', '.flac'}
+        file_extension = os.path.splitext(file.filename or '')[1].lower()
+
+        if file_extension not in allowed_extensions:
+            return JSONResponse({
+                'success': False,
+                'error': f'不支持的文件类型。允许的类型: {", ".join(allowed_extensions)}'
+            }, status_code=400)
+
+        max_size_mb = get_dynamic_config_value('upload', 'max_audio_size_mb', default=20)
+        max_size_bytes = max_size_mb * 1024 * 1024
+
+        content = await file.read()
+        if len(content) > max_size_bytes:
+            return JSONResponse({
+                'success': False,
+                'error': f'音频大小不能超过 {max_size_mb}MB'
+            }, status_code=400)
+
+        upload_dir = os.path.join('upload', 'marketing', 'audio', session_id)
+        app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        full_upload_dir = os.path.join(app_dir, upload_dir)
+
+        os.makedirs(full_upload_dir, exist_ok=True)
+
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+        unique_id = uuid.uuid4().hex[:8]
+        filename = f"{timestamp}_{unique_id}{file_extension}"
+        file_path = os.path.join(full_upload_dir, filename)
+
+        with open(file_path, 'wb') as f:
+            f.write(content)
+
+        server_host = get_config()["server"]["host"]
+        url = f"{server_host.rstrip('/')}/{upload_dir.replace(os.sep, '/')}/{filename}"
+
+        logger.info(f'Agent 音频上传成功: {url}')
+
+        return JSONResponse({
+            'success': True,
+            'url': url
+        })
+
+    except Exception as e:
+        logger.error(f'Agent 音频上传失败: {str(e)}')
         return JSONResponse({
             'success': False,
             'error': f'上传失败: {str(e)}'

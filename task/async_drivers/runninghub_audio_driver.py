@@ -37,6 +37,32 @@ class RunningHubAudioDriver(BaseAsyncDriver):
         super().__init__("runninghub_audio")
         self._client = RunningHubClient()
 
+    @property
+    def impl_id(self) -> int:
+        from config.unified_config import AsyncTaskImplementationId
+        return AsyncTaskImplementationId.RUNNINGHUB_AUDIO
+
+    async def submit_with_slot_management(
+        self,
+        user_id: int,
+        style_prompt: str,
+        text: str
+    ) -> Dict[str, Any]:
+        """使用统一槽位管理的音频提交"""
+        params = {
+            'style_prompt': style_prompt,
+            'text': text
+        }
+
+        async def do_submit():
+            return await self.submit_task(style_prompt=style_prompt, text=text)
+
+        return await super().submit_with_slot_management(
+            user_id=user_id,
+            params=params,
+            submit_fn=do_submit
+        )
+
     async def submit_task(
         self,
         style_prompt: str,

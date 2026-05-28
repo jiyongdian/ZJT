@@ -8,6 +8,7 @@ from perseids_server.client import make_perseids_request
 from config.constant import TASK_COMPUTING_POWER
 from config.config_util import get_dynamic_config_value
 from model import TasksModel, AIToolsModel, RunningHubSlotsModel
+from model.runninghub_slots import RunningHubSlot
 from config.constant import (
     TASK_TYPE_GENERATE_VIDEO,
     AI_TOOL_STATUS_PENDING,
@@ -15,13 +16,18 @@ from config.constant import (
     AI_TOOL_STATUS_COMPLETED,
     AI_TOOL_STATUS_FAILED,
     AI_TOOL_STATUS_SYNC_QUEUED,
+    AI_TOOL_STATUS_WAITING_PARAM_PREPARE,
+    AI_TOOL_STATUS_WAITING_BEFORE_FINISH,
     TASK_STATUS_QUEUED,
     TASK_STATUS_PROCESSING,
     TASK_STATUS_COMPLETED,
     TASK_STATUS_FAILED,
     TASK_STATUS_SYNC_QUEUED,
+    TASK_STATUS_WAITING_PARAM_PREPARE,
+    TASK_STATUS_WAITING_BEFORE_FINISH,
     RUNNINGHUB_TASK_TYPES
 )
+from model.ai_tool_pipeline_steps import PipelineStepStatus, PipelineStage
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -180,13 +186,23 @@ async def _submit_new_task(ai_tool):
     from task.sync_task_executor import get_sync_task_executor
 
     ai_tool_type = ai_tool.type
+    # 需要重构该变量名为 ai_tools_id
     task_id = ai_tool.id
 
     if _is_test_mode_enabled():
         logger.info(f"[TEST MODE] [DRIVER] Submitting task {task_id} (type: {ai_tool_type})")
 
     try:
-        # 0. 获取 implementation 并立即记录（确保无论后续成功/失败/异常都有记录）
+        # 0a. 检查 param_prepare 步骤（流水线预处理阶段）
+        from task.pipeline_processor import PipelineProcessor
+        pending_prep = PipelineProcessor.get_pending_steps(task_id, PipelineStage.PARAM_PREPARE)
+        if pending_prep:
+            AIToolsModel.update(task_id, status=AI_TOOL_STATUS_WAITING_PARAM_PREPARE)
+            TasksModel.update_by_task_id(task_id, status=TASK_STATUS_WAITING_PARAM_PREPARE)
+            logger.info(f"Task {task_id} has {len(pending_prep)} param_prepare steps, entering pipeline")
+            return True  # 调度器会自动分发 PENDING 步骤
+
+        # 0b. 获取 implementation 并立即记录（确保无论后续成功/失败/异常都有记录）
         implementation_name = VideoDriverFactory.get_implementation_for_user(ai_tool_type, ai_tool.user_id)
         if implementation_name:
             implementation_id = get_implementation_id(implementation_name)
@@ -229,7 +245,7 @@ async def _submit_new_task(ai_tool):
             if ai_tool_type in RUNNINGHUB_TASK_TYPES:
                 task = TasksModel.get_by_task_id(task_id)
                 if task:
-                    RunningHubSlotsModel.release_slot_by_task_table_id(task.id)
+                    RunningHubSlotsModel.release_slot(task.id, source=RunningHubSlot.SOURCE_TASK)
                     logger.info(f"Released RunningHub slot for failed driver creation, task {task_id}")
             # 退还算力
             _refund_computing_power(ai_tool, error_message)
@@ -275,7 +291,7 @@ async def _submit_new_task(ai_tool):
             if is_runninghub:
                 task = TasksModel.get_by_task_id(task_id)
                 if task:
-                    RunningHubSlotsModel.release_slot_by_task_table_id(task.id)
+                    RunningHubSlotsModel.release_slot(task.id, source=RunningHubSlot.SOURCE_TASK)
                     logger.info(f"Released RunningHub slot for failed task {task_id}")
 
             # 退还算力
@@ -339,7 +355,7 @@ async def _submit_new_task(ai_tool):
         if is_runninghub:
             task = TasksModel.get_by_task_id(task_id)
             if task:
-                RunningHubSlotsModel.update_project_id(task.id, project_id)
+                RunningHubSlotsModel.update_project_id(task.id, project_id, source=RunningHubSlot.SOURCE_TASK)
                 logger.info(f"Updated RunningHub slot project_id for task {task_id}")
         
         logger.info(f"Task {task_id} submitted successfully with project_id: {project_id}")
@@ -433,7 +449,7 @@ async def _check_task_status(ai_tool):
                 else:
                     task = TasksModel.get_by_task_id(task_id)
                     if task:
-                        RunningHubSlotsModel.release_slot_by_task_table_id(task.id)
+                        RunningHubSlotsModel.release_slot(task.id, source=RunningHubSlot.SOURCE_TASK)
                 logger.info(f"Released RunningHub slot for failed driver creation in check_status, task {task_id}")
             return True  # 返回 True 表示任务已完成（失败）
         
@@ -482,6 +498,87 @@ async def _check_task_status(ai_tool):
         
         # 不立即标记为失败，继续重试
         return False
+
+
+def _check_pipeline_stage(ai_tool, stage):
+    """
+    检查流水线阶段状态，推进 ai_tool
+
+    在 ai_tool 处于 WAITING_PARAM_PREPARE 或 WAITING_BEFORE_FINISH 状态时调用。
+    检查该阶段所有步骤的状态，据此决定 ai_tool 的下一步状态。
+
+    Args:
+        ai_tool: AITool 对象
+        stage: PipelineStage 阶段名称
+
+    Returns:
+        bool: True 表示阶段已完成（ai_tool 状态已推进），False 表示仍在处理中
+    """
+    from task.pipeline_processor import PipelineProcessor
+
+    all_steps = PipelineProcessor.get_all_steps(ai_tool.id, stage)
+    if not all_steps:
+        # 无步骤，直接回到主流程
+        if stage == PipelineStage.PARAM_PREPARE:
+            AIToolsModel.update(ai_tool.id, status=AI_TOOL_STATUS_PENDING)
+            TasksModel.update_by_task_id(ai_tool.id, status=TASK_STATUS_QUEUED)
+        return True
+
+    has_pending_or_processing = any(
+        s.status in (PipelineStepStatus.PENDING, PipelineStepStatus.PROCESSING)
+        for s in all_steps
+    )
+    has_failed = any(
+        s.status in (PipelineStepStatus.FAILED, PipelineStepStatus.TIMEOUT)
+        for s in all_steps
+    )
+
+    if has_failed:
+        if stage == PipelineStage.PARAM_PREPARE:
+            # 预处理失败 → 整个任务失败
+            failed_step = next(
+                (s for s in all_steps if s.status in (PipelineStepStatus.FAILED, PipelineStepStatus.TIMEOUT)),
+                None
+            )
+            error_msg = failed_step.error_message if failed_step else "数据预处理失败"
+            AIToolsModel.update(ai_tool.id, status=AI_TOOL_STATUS_FAILED, message=f"数据预处理失败: {error_msg}")
+            TasksModel.update_by_task_id(ai_tool.id, status=TASK_STATUS_FAILED)
+            _refund_computing_power(ai_tool, f"数据预处理失败: {error_msg}")
+            logger.info(f"Task {ai_tool.id} failed: param_prepare step failed")
+        elif stage == PipelineStage.BEFORE_FINISH:
+            # 检查是否还有待处理的重试步骤
+            remaining = PipelineProcessor.get_pending_steps(ai_tool.id, stage)
+            if remaining:
+                # 还有重试机会，继续等待
+                return False
+            # 所有重试耗尽 → 最终失败
+            AIToolsModel.update(
+                ai_tool.id,
+                status=AI_TOOL_STATUS_FAILED,
+                message=ai_tool.message or "所有重试失败"
+            )
+            TasksModel.update_by_task_id(ai_tool.id, status=TASK_STATUS_FAILED)
+            _refund_computing_power(ai_tool, "所有重试失败")
+            logger.info(f"Task {ai_tool.id} failed: all retry attempts exhausted")
+        return True
+
+    if has_pending_or_processing:
+        # 还有步骤在处理中或待处理，继续等待
+        return False
+
+    # 所有步骤已完成
+    if stage == PipelineStage.PARAM_PREPARE:
+        # 预处理完成：应用结果并回到 PENDING
+        PipelineProcessor.apply_results(ai_tool, stage)
+        AIToolsModel.update(ai_tool.id, status=AI_TOOL_STATUS_PENDING)
+        TasksModel.update_by_task_id(ai_tool.id, status=TASK_STATUS_QUEUED)
+        logger.info(f"Task {ai_tool.id} param_prepare completed, returning to PENDING")
+    elif stage == PipelineStage.BEFORE_FINISH:
+        # before_finish 的 implementation_retry 驱动已将 ai_tool 设回 PENDING
+        # 此处无需额外操作
+        logger.info(f"Task {ai_tool.id} before_finish completed, re-submitting with new implementation")
+    return True
+
 
 async def _handle_task_success(project_id, task_id, media_url):
     """
@@ -552,6 +649,29 @@ def _handle_task_failure(project_id, task_id, ai_tool_type, reason, user_id):
     elif reason and "This content may violate our guardrails concerning similarity to third-party content. " in reason:
         reason = "此内容可能违反了我们关于与第三方内容相似性的规定"
 
+    # 检查 before_finish 步骤（失败后重试阶段）
+    try:
+        from task.pipeline_processor import PipelineProcessor
+        ai_tool = AIToolsModel.get_by_id(task_id)
+        if ai_tool:
+            retry_steps = PipelineProcessor.create_before_finish_steps(
+                ai_tool_id=task_id,
+                ai_tool_type=ai_tool_type,
+                failed_implementation=ai_tool.implementation or 0,
+                failure_reason=reason
+            )
+            if retry_steps:
+                AIToolsModel.update(task_id, status=AI_TOOL_STATUS_WAITING_BEFORE_FINISH, message=reason)
+                TasksModel.update_by_task_id(task_id, status=TASK_STATUS_WAITING_BEFORE_FINISH)
+                logger.info(f"Task {task_id} entering before_finish pipeline with {len(retry_steps)} retry steps")
+                # 释放 RunningHub 槽位（重试时会重新获取）
+                if ai_tool_type in RUNNINGHUB_TASK_TYPES and project_id:
+                    RunningHubSlotsModel.release_slot_by_project_id(project_id)
+                return True
+    except Exception as e:
+        logger.warning(f"Failed to create before_finish steps for task {task_id}: {e}")
+        # 不阻断原有失败处理流程
+
     try:
         AIToolsModel.update_by_project_id(
             project_id=project_id,
@@ -569,7 +689,7 @@ def _handle_task_failure(project_id, task_id, ai_tool_type, reason, user_id):
                 # 如果没有 project_id（提交失败），通过 task_id 释放
                 task = TasksModel.get_by_task_id(task_id)
                 if task:
-                    RunningHubSlotsModel.release_slot_by_task_table_id(task.id)
+                    RunningHubSlotsModel.release_slot(task.id, source=RunningHubSlot.SOURCE_TASK)
         
     except Exception as db_error:
         logger.error(f"Failed to update records for failed task {project_id}: {db_error}")
@@ -682,10 +802,14 @@ async def process_generate_video(task):
             return await _submit_new_task(ai_tool)
         elif status == AI_TOOL_STATUS_PROCESSING:
             return await _check_task_status(ai_tool)
+        elif status == AI_TOOL_STATUS_WAITING_PARAM_PREPARE:
+            return _check_pipeline_stage(ai_tool, PipelineStage.PARAM_PREPARE)
+        elif status == AI_TOOL_STATUS_WAITING_BEFORE_FINISH:
+            return _check_pipeline_stage(ai_tool, PipelineStage.BEFORE_FINISH)
         else:
             logger.warning(f"Unexpected status {status} for task {task.task_id}")
             return False
-        
+
     except Exception as e:
         logger.error(f"Failed to process video generation task: {str(e)}")
         return False
@@ -775,7 +899,7 @@ def process_task_with_retry(task_type, process_func):
                         if ai_tool.project_id:
                             RunningHubSlotsModel.release_slot_by_project_id(ai_tool.project_id)
                         else:
-                            RunningHubSlotsModel.release_slot_by_task_table_id(task.id)
+                            RunningHubSlotsModel.release_slot(task.id, source=RunningHubSlot.SOURCE_TASK)
                     
                     expired_count += 1
                     logger.info(f"Task {task.task_id} marked as expired")
@@ -857,7 +981,7 @@ def process_task_with_retry(task_type, process_func):
                             if ai_tool.project_id:
                                 RunningHubSlotsModel.release_slot_by_project_id(ai_tool.project_id)
                             else:
-                                RunningHubSlotsModel.release_slot_by_task_table_id(task.id)
+                                RunningHubSlotsModel.release_slot(task.id, source=RunningHubSlot.SOURCE_TASK)
                     
                     expired_count += 1
                     logger.info(f"Task {task.task_id} marked as failed due to max retry exceeded")
@@ -875,9 +999,9 @@ def process_task_with_retry(task_type, process_func):
                 if is_runninghub and task.status == TASK_STATUS_QUEUED:
                     # 尝试获取槽位
                     slot_acquired = RunningHubSlotsModel.try_acquire_slot(
-                        task_table_id=task.id,
-                        task_id=task.task_id,
-                        task_type=ai_tool.type
+                        task_id=task.id,
+                        task_type=ai_tool.type,
+                        source=RunningHubSlot.SOURCE_TASK
                     )
                     
                     if not slot_acquired:

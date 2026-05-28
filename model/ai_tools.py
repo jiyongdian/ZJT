@@ -141,7 +141,76 @@ class AIToolsModel:
         except Exception as e:
             logger.error(f"Failed to create AI tool record: {e}")
             raise
-    
+
+    @staticmethod
+    def create_with_pipeline_steps(
+        prompt: str,
+        user_id: int,
+        type: Optional[int] = None,
+        image_path: Optional[str] = None,
+        duration: Optional[int] = None,
+        ratio: Optional[str] = None,
+        project_id: Optional[str] = None,
+        transaction_id: Optional[str] = None,
+        result_url: Optional[str] = None,
+        status: Optional[int] = AI_TOOL_STATUS_PENDING,
+        message: Optional[str] = None,
+        image_size: Optional[str] = None,
+        completed_time: Optional[datetime] = None,
+        extra_config: Optional[str] = None,
+        reference_images: Optional[str] = None,
+        implementation: Optional[int] = 0,
+        audio_path: Optional[str] = None,
+        video_path: Optional[str] = None
+    ) -> int:
+        """
+        创建 AI tool 记录及关联的 pipeline steps（在同一事务内）
+
+        当 video_path 包含逗号分隔的多个路径时，为每个路径创建一个 face_mask pipeline step。
+        用于 Seedance 等需要人脸遮盖预处理的视频生成模型。
+
+        Args:
+            video_path: 参考视频路径，支持逗号分隔的多个路径
+
+        Returns:
+            Inserted record ID (ai_tools.id)
+        """
+        from .database import transaction, execute_insert_in_transaction
+        from .ai_tool_pipeline_steps import PipelineStepModel, PipelineStepStatus, PipelineStepType, PipelineStage
+
+        sql = """
+            INSERT INTO ai_tools
+            (prompt, user_id, type, image_path, duration, ratio, project_id, transaction_id, result_url, status, message, image_size, completed_time, extra_config, reference_images, implementation, audio_path, video_path)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        params = (prompt, user_id, type, image_path, duration, ratio, project_id, transaction_id, result_url, status, message, image_size, completed_time, extra_config, reference_images, implementation, audio_path, video_path)
+
+        try:
+            with transaction() as conn:
+                # 创建 ai_tools 记录
+                ai_tool_id = execute_insert_in_transaction(conn, sql, params)
+                logger.info(f"Created AI tool record with ID: {ai_tool_id}")
+
+                # 为每个视频路径创建 face_mask pipeline step
+                if video_path:
+                    video_paths = [v.strip() for v in video_path.split(",") if v.strip()]
+                    for idx, single_video_path in enumerate(video_paths):
+                        PipelineStepModel.create_in_transaction(
+                            conn,
+                            ai_tool_id=ai_tool_id,
+                            stage=PipelineStage.PARAM_PREPARE,
+                            step_type=PipelineStepType.FACE_MASK,
+                            step_order=idx,
+                            params={'video_path': single_video_path},
+                            target=single_video_path
+                        )
+                    logger.info(f"Created {len(video_paths)} face_mask pipeline steps for ai_tool {ai_tool_id}")
+
+                return ai_tool_id
+        except Exception as e:
+            logger.error(f"Failed to create AI tool record with pipeline steps: {e}")
+            raise
+
     @staticmethod
     def get_by_id(record_id: int) -> Optional[AITool]:
         """

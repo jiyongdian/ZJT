@@ -3046,7 +3046,7 @@ MCP_TOOLS = [
     },
     {
         "name": "generate_character_reference_audio",
-        "description": "为角色生成参考音频（异步非阻塞）。根据角色设定自动构建提示词，提交音频生成任务。返回 runninghub_task_id，可通过 check_reference_audio_status 查询生成状态。",
+        "description": "为角色生成参考音频（异步非阻塞）。根据角色设定自动构建提示词，提交音频生成任务。返回 task_id（async_tasks 表主键），可通过 check_reference_audio_status 查询生成状态。",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -3068,20 +3068,20 @@ MCP_TOOLS = [
     },
     {
         "name": "check_reference_audio_status",
-        "description": "查询角色参考音频生成任务状态。如果任务成功且提供了角色名称，会自动更新角色的 default_voice 字段。",
+        "description": "查询角色参考音频生成任务状态。后台 scheduler 会自动轮询 RunningHub 状态并更新数据库。",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "runninghub_task_id": {
+                "task_id": {
                     "type": "string",
-                    "description": "RunningHub 任务ID（必填），由 generate_character_reference_audio 返回"
+                    "description": "任务ID（必填），即 async_tasks 表主键，由 generate_character_reference_audio 返回"
                 },
                 "character_name": {
                     "type": "string",
-                    "description": "角色名称（可选），如果提供且任务成功，会自动更新角色的 default_voice 字段"
+                    "description": "角色名称（可选），仅用于返回信息"
                 }
             },
-            "required": ["runninghub_task_id"]
+            "required": ["task_id"]
         }
     }
 ]
@@ -3260,7 +3260,7 @@ def generate_character_reference_audio(user_id: str, world_id: str, auth_token: 
     """
     为角色生成参考音频 - MCP工具函数（同步非阻塞）
 
-    同步提交任务到 RunningHub，写入异步任务表，由 scheduler 后台轮询结果。
+    创建异步任务记录，由 scheduler 后台统一处理提交到 RunningHub 和状态轮询。
 
     Args:
         user_id: 用户ID（必填）
@@ -3271,7 +3271,7 @@ def generate_character_reference_audio(user_id: str, world_id: str, auth_token: 
         text: 自定义文本内容（可选），不填则根据角色设定自动生成
 
     Returns:
-        dict: 包含 runninghub_task_id 的结果，可用于 check_reference_audio_status 查询
+        dict: 包含 task_id 的结果，可用于 check_reference_audio_status 查询
     """
     try:
         # 检查 RunningHub API Key 是否已配置
@@ -3308,20 +3308,16 @@ def generate_character_reference_audio(user_id: str, world_id: str, auth_token: 
         final_style_prompt = style_prompt.strip() if style_prompt and style_prompt.strip() else \
             "请生成平静、自然、清晰、有辨识度的参考音频，语气平和，不带明显情感"
 
-        # 通过驱动同步提交任务
-        from task.async_drivers.runninghub_audio_driver import RunningHubAudioDriver
-        driver = RunningHubAudioDriver()
-        result = driver.submit_task_sync(
-            style_prompt=final_style_prompt,
-            text=final_text
-        )
+        # 验证 user_id
+        try:
+            int(user_id)
+        except (ValueError, TypeError):
+            return {
+                'success': False,
+                'error': f'无效的 user_id: {user_id}'
+            }
 
-        if not result['success']:
-            return result
-
-        runninghub_task_id = result['project_id']
-
-        # 写入异步任务表，由 scheduler 后台轮询
+        # 写入异步任务表，由 scheduler 后台统一处理提交和状态轮询
         from model import AsyncTasksModel
         from config.unified_config import AsyncTaskImplementationId
 
@@ -3332,30 +3328,19 @@ def generate_character_reference_audio(user_id: str, world_id: str, auth_token: 
             'world_id': world_id
         }
 
-        try:
-            int(user_id)
-        except (ValueError, TypeError):
-            return {
-                'success': False,
-                'error': f'无效的 user_id: {user_id}'
-            }
-
-        AsyncTasksModel.create(
+        # 创建异步任务记录（next_retry_at=NOW()，调度器约7秒后自动拾取提交到 RunningHub）
+        task_id = AsyncTasksModel.create_and_schedule(
             implementation=AsyncTaskImplementationId.RUNNINGHUB_AUDIO,
             user_id=int(user_id),
-            external_task_id=runninghub_task_id,
             params=params,
             max_attempts=25
         )
 
         return {
             'success': True,
-            'runninghub_task_id': runninghub_task_id,
+            'task_id': task_id,
             'character_name': character_name,
-            'style_prompt': final_style_prompt,
-            'text': final_text,
-            'status': 'submitted',
-            'message': f'已为角色 "{character_name}" 提交参考音频生成任务 (task_id={runninghub_task_id})，请使用 check_reference_audio_status 查询生成状态'
+            'message': f'已为角色 "{character_name}" 提交参考音频生成任务 (task_id={task_id})，请使用 check_reference_audio_status 查询生成状态'
         }
 
     except Exception as e:
@@ -3367,19 +3352,20 @@ def generate_character_reference_audio(user_id: str, world_id: str, auth_token: 
 
 
 def check_reference_audio_status(user_id: str, world_id: str, auth_token: str,
-                                   runninghub_task_id: str,
+                                   task_id: str,
                                    character_name: Optional[str] = None) -> Dict[str, Any]:
     """
     查询角色参考音频生成任务状态 - MCP工具函数（同步，直接查数据库）
 
     后台 scheduler 会自动轮询 RunningHub 状态并更新数据库，本函数直接读取数据库中的任务状态。
+    task_id 为 create_and_schedule 返回的 async_tasks 表主键。
 
     Args:
         user_id: 用户ID（必填）
         world_id: 世界ID（必填）
         auth_token: 认证令牌（必填）
-        runninghub_task_id: RunningHub 任务ID（必填）
-        character_name: 角色名称（可选，仅用于返回信息，角色更新由 scheduler 自动完成）
+        task_id: 任务ID（必填），即 async_tasks 表主键
+        character_name: 角色名称（可选，仅用于返回信息）
 
     Returns:
         dict: 包含任务状态和结果URL的结果
@@ -3387,13 +3373,20 @@ def check_reference_audio_status(user_id: str, world_id: str, auth_token: str,
     try:
         from model import AsyncTasksModel, AsyncTaskStatus
 
-        task = AsyncTasksModel.get_by_external_task_id(runninghub_task_id)
+        # task_id 可能是 async_tasks 主键，也可能是 external_task_id（RunningHub project_id）
+        # 优先按主键（数字）查询，失败则按 external_task_id 查询
+        task = None
+        if task_id.isdigit():
+            task = AsyncTasksModel.get_by_id(int(task_id))
+
+        if not task:
+            task = AsyncTasksModel.get_by_external_task_id(task_id)
         if not task:
             return {
                 'success': True,
                 'status': 'not_found',
-                'runninghub_task_id': runninghub_task_id,
-                'message': f'未找到 runninghub_task_id={runninghub_task_id} 对应的任务记录'
+                'task_id': task_id,
+                'message': f'未找到 task_id={task_id} 对应的任务记录'
             }
 
         # 状态映射
@@ -3409,9 +3402,12 @@ def check_reference_audio_status(user_id: str, world_id: str, auth_token: str,
         result = {
             'success': True,
             'status': readable_status,
-            'runninghub_task_id': runninghub_task_id,
+            'task_id': task_id,
             'message': f'任务状态: {readable_status}'
         }
+
+        if task.external_task_id:
+            result['runninghub_task_id'] = task.external_task_id
 
         if task.status == AsyncTaskStatus.COMPLETED and task.result_url:
             result['audio_url'] = task.result_url

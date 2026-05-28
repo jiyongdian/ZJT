@@ -9,6 +9,7 @@ from config.config_util import get_dynamic_config_value
 
 logger = logging.getLogger(__name__)
 
+
 def _get_max_concurrent_slots():
     """动态获取最大槽位数量"""
     return get_dynamic_config_value("runninghub", "max_concurrent_slots", default=3)
@@ -16,27 +17,31 @@ def _get_max_concurrent_slots():
 
 class RunningHubSlot:
     """RunningHub 槽位模型类"""
-    
+
+    # source 常量
+    SOURCE_TASK = 'task'    # 来自 tasks 表（视频生成）
+    SOURCE_ASYNC = 'async'  # 来自 async_tasks 表（音频、人脸遮盖等）
+
     def __init__(self, **kwargs):
         self.id = kwargs.get('id')
         self.task_id = kwargs.get('task_id')
-        self.task_table_id = kwargs.get('task_table_id')
         self.project_id = kwargs.get('project_id')
         self.task_type = kwargs.get('task_type')
+        self.source = kwargs.get('source', self.SOURCE_TASK)
         self.status = kwargs.get('status')
         self.acquired_at = kwargs.get('acquired_at')
         self.released_at = kwargs.get('released_at')
         self.created_at = kwargs.get('created_at')
         self.updated_at = kwargs.get('updated_at')
-    
+
     def to_dict(self):
         """转换为字典"""
         return {
             'id': self.id,
             'task_id': self.task_id,
-            'task_table_id': self.task_table_id,
             'project_id': self.project_id,
             'task_type': self.task_type,
+            'source': self.source,
             'status': self.status,
             'acquired_at': self.acquired_at.isoformat() if self.acquired_at else None,
             'released_at': self.released_at.isoformat() if self.released_at else None,
@@ -47,18 +52,18 @@ class RunningHubSlot:
 
 class RunningHubSlotsModel:
     """RunningHub 槽位管理模型"""
-    
+
     @staticmethod
     def count_active_slots() -> int:
         """
         统计当前活跃的槽位数量
-        
+
         Returns:
             活跃槽位数量
         """
         sql = """
-            SELECT COUNT(*) as count 
-            FROM runninghub_slots 
+            SELECT COUNT(*) as count
+            FROM runninghub_slots
             WHERE status = 1
         """
         try:
@@ -69,112 +74,110 @@ class RunningHubSlotsModel:
         except Exception as e:
             logger.error(f"Failed to count active slots: {e}")
             return 0
-    
+
     @staticmethod
-    def try_acquire_slot(task_table_id: int, task_id: int, task_type: int, max_slots: int = None) -> bool:
+    def try_acquire_slot(task_id: int, task_type: int, source: str, max_slots: int = None) -> bool:
         """
         尝试获取槽位（带并发检查）
-        
+
         Args:
-            task_table_id: tasks表的主键id
-            task_id: tasks表的task_id (对应 ai_tools.id)
-            task_type: 任务类型 (10-LTX2.0, 11-Wan2.2)
+            task_id: 源表主键 (source='task' 时为 tasks.id, source='async' 时为 async_tasks.id)
+            task_type: 任务类型 (10-LTX2.0, 11-Wan2.2, 1-异步音频, 2-异步人脸遮盖)
+            source: 来源标识 (SOURCE_TASK 或 SOURCE_ASYNC)
             max_slots: 最大槽位数，默认从配置文件读取
-        
+
         Returns:
             是否成功获取槽位
         """
         try:
-            # 如果未指定 max_slots，使用配置文件中的值
             if max_slots is None:
                 max_slots = _get_max_concurrent_slots()
-            
-            # 检查当前槽位数量
+
             current_count = RunningHubSlotsModel.count_active_slots()
-            
+
             if current_count >= max_slots:
-                logger.info(f"RunningHub slots full ({current_count}/{max_slots}), cannot acquire for task {task_id}")
+                logger.info(f"RunningHub slots full ({current_count}/{max_slots}), cannot acquire for {source} task {task_id}")
                 return False
-            
-            # 尝试插入槽位记录
+
             sql = """
-                INSERT INTO runninghub_slots 
-                (task_table_id, task_id, task_type, status)
-                VALUES (%s, %s, %s, 1)
+                INSERT INTO runninghub_slots
+                (task_id, task_type, status, source)
+                VALUES (%s, %s, 1, %s)
             """
-            execute_insert(sql, (task_table_id, task_id, task_type))
-            
-            logger.info(f"Acquired RunningHub slot for task {task_id} (table_id: {task_table_id}), slots: {current_count + 1}/{max_slots}")
+            execute_insert(sql, (task_id, task_type, source))
+
+            logger.info(f"Acquired RunningHub slot for {source} task {task_id}, slots: {current_count + 1}/{max_slots}")
             return True
-            
+
         except Exception as e:
-            # 可能是唯一键冲突（已经获取过槽位）
-            logger.warning(f"Failed to acquire slot for task {task_id}: {e}")
+            logger.warning(f"Failed to acquire slot for {source} task {task_id}: {e}")
             return False
-    
+
     @staticmethod
-    def update_project_id(task_table_id: int, project_id: str) -> int:
+    def update_project_id(task_id: int, project_id: str, source: str) -> int:
         """
         更新槽位的 project_id（任务提交成功后）
-        
+
         Args:
-            task_table_id: tasks表的主键id
+            task_id: 源表主键
             project_id: RunningHub项目ID
-        
+            source: 来源标识
+
         Returns:
             影响的行数
         """
         sql = """
-            UPDATE runninghub_slots 
+            UPDATE runninghub_slots
             SET project_id = %s
-            WHERE task_table_id = %s AND status = 1
+            WHERE task_id = %s AND source = %s AND status = 1
         """
         try:
-            affected = execute_update(sql, (project_id, task_table_id))
-            logger.info(f"Updated project_id for task_table_id {task_table_id}: {project_id}")
+            affected = execute_update(sql, (project_id, task_id, source))
+            logger.info(f"Updated project_id for {source} task {task_id}: {project_id}")
             return affected
         except Exception as e:
-            logger.error(f"Failed to update project_id for task_table_id {task_table_id}: {e}")
+            logger.error(f"Failed to update project_id for {source} task {task_id}: {e}")
             return 0
-    
+
     @staticmethod
-    def release_slot_by_task_table_id(task_table_id: int) -> int:
+    def release_slot(task_id: int, source: str) -> int:
         """
-        通过 task_table_id 释放槽位
-        
+        通过 task_id + source 释放槽位
+
         Args:
-            task_table_id: tasks表的主键id
-        
+            task_id: 源表主键
+            source: 来源标识
+
         Returns:
             影响的行数
         """
         sql = """
-            UPDATE runninghub_slots 
+            UPDATE runninghub_slots
             SET status = 2, released_at = NOW()
-            WHERE task_table_id = %s AND status = 1
+            WHERE task_id = %s AND source = %s AND status = 1
         """
         try:
-            affected = execute_update(sql, (task_table_id,))
+            affected = execute_update(sql, (task_id, source))
             if affected > 0:
-                logger.info(f"Released RunningHub slot for task_table_id {task_table_id}")
+                logger.info(f"Released RunningHub slot for {source} task {task_id}")
             return affected
         except Exception as e:
-            logger.error(f"Failed to release slot for task_table_id {task_table_id}: {e}")
+            logger.error(f"Failed to release slot for {source} task {task_id}: {e}")
             return 0
-    
+
     @staticmethod
     def release_slot_by_project_id(project_id: str) -> int:
         """
         通过 project_id 释放槽位
-        
+
         Args:
             project_id: RunningHub项目ID
-        
+
         Returns:
             影响的行数
         """
         sql = """
-            UPDATE runninghub_slots 
+            UPDATE runninghub_slots
             SET status = 2, released_at = NOW()
             WHERE project_id = %s AND status = 1
         """
@@ -186,46 +189,47 @@ class RunningHubSlotsModel:
         except Exception as e:
             logger.error(f"Failed to release slot for project_id {project_id}: {e}")
             return 0
-    
+
     @staticmethod
-    def get_slot_by_task_table_id(task_table_id: int) -> Optional[RunningHubSlot]:
+    def get_slot(task_id: int, source: str) -> Optional[RunningHubSlot]:
         """
-        通过 task_table_id 获取槽位信息
-        
+        通过 task_id + source 获取槽位信息
+
         Args:
-            task_table_id: tasks表的主键id
-        
+            task_id: 源表主键
+            source: 来源标识
+
         Returns:
             RunningHubSlot 对象或 None
         """
         sql = """
-            SELECT * FROM runninghub_slots 
-            WHERE task_table_id = %s
+            SELECT * FROM runninghub_slots
+            WHERE task_id = %s AND source = %s
         """
         try:
-            result = execute_query(sql, (task_table_id,), fetch_one=True)
+            result = execute_query(sql, (task_id, source), fetch_one=True)
             if result:
                 return RunningHubSlot(**result)
             return None
         except Exception as e:
-            logger.error(f"Failed to get slot for task_table_id {task_table_id}: {e}")
+            logger.error(f"Failed to get slot for {source} task {task_id}: {e}")
             return None
-    
+
     @staticmethod
     def cleanup_stale_slots(timeout_minutes: int = 60) -> int:
         """
         清理超时的槽位（超过指定时间仍未完成的任务）
-        
+
         Args:
             timeout_minutes: 超时时间（分钟），默认60分钟
-        
+
         Returns:
             清理的槽位数量
         """
         sql = """
-            UPDATE runninghub_slots 
+            UPDATE runninghub_slots
             SET status = 2, released_at = NOW()
-            WHERE status = 1 
+            WHERE status = 1
             AND acquired_at < DATE_SUB(NOW(), INTERVAL %s MINUTE)
         """
         try:
@@ -241,19 +245,18 @@ class RunningHubSlotsModel:
 CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS `runninghub_slots` (
   `id` int unsigned NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `task_id` int unsigned NOT NULL COMMENT 'tasks表的task_id (ai_tools.id)',
-  `task_table_id` int unsigned NOT NULL COMMENT 'tasks表的主键id',
+  `task_id` int unsigned NOT NULL DEFAULT '0' COMMENT 'source=task 时存 tasks.id，source=async 时存 async_tasks.id',
   `project_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'RunningHub项目ID（提交后才有）',
-  `task_type` tinyint NOT NULL COMMENT '任务类型(10-LTX2.0, 11-Wan2.2)',
+  `task_type` tinyint NOT NULL COMMENT '任务类型(10-LTX2.0, 11-Wan2.2, 1-异步音频, 2-异步人脸遮盖)',
+  `source` varchar(10) NOT NULL DEFAULT 'task' COMMENT '来源: task-tasks表, async-async_tasks表',
   `status` tinyint NOT NULL DEFAULT '1' COMMENT '状态: 1-槽位占用中, 2-已释放',
   `acquired_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '槽位获取时间',
   `released_at` datetime DEFAULT NULL COMMENT '槽位释放时间',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_task_table_id` (`task_table_id`),
+  UNIQUE KEY `uk_task_id_source` (`task_id`, `source`),
   KEY `idx_status_task_type` (`status`,`task_type`),
-  KEY `idx_task_id` (`task_id`),
   KEY `idx_project_id` (`project_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='RunningHub并发槽位管理表';
 """

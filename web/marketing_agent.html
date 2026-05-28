@@ -10,6 +10,7 @@
     <script src="/js/axios.min.js"></script>
     <script src="/js/marked.min.js"></script>
     <script src="/js/task_config.js"></script>
+    <script src="/js/video_compressor.js"></script>
     <link rel="stylesheet" href="/css/github.min.css">
     <!-- i18n 支持 -->
     <script src="/i18n/i18n-core.js?v=__VERSION__"></script>
@@ -238,7 +239,7 @@
                         @drop.prevent="handleDrop"
                     >
                         <div class="marketing-input-upload">
-                            <input type="file" ref="fileInputRef" style="display: none;" accept="image/*" @change="handleFileChange">
+                            <input type="file" ref="fileInputRef" style="display: none;" accept="image/*,video/*,audio/*" @change="handleFileChange">
                             <button class="marketing-upload-btn" :title="hasUploadedImage ? $t('replace_image') : $t('upload_reference')" @click="triggerUpload">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M12 5v14M5 12h14"/>
@@ -271,7 +272,8 @@
                                         </div>
                                     </div>
                                     <span>{{ item.displayName }}</span>
-                                    <span v-if="item.uploading" style="color: #d97706; font-size: 10px;">{{ $t('sending') }}</span>
+                                    <span v-if="item.agentVideoItem && item.agentVideoItem.compressing" style="color: #2563eb; font-size: 10px;">{{ $t('compressing') }} {{ item.agentVideoItem.compressProgress }}%</span>
+                                    <span v-else-if="item.uploading" style="color: #d97706; font-size: 10px;">{{ $t('sending') }}</span>
                                     <span v-if="item.uploadFailed" style="color: #dc2626; font-size: 10px;">{{ $t('error') }}</span>
                                     <div style="cursor: pointer; color: #94a3b8; margin-left: 2px; font-size: 13px;" @click.stop="removeMediaItem(item.id)">×</div>
                                 </div>
@@ -837,6 +839,15 @@
             const agentImageFiles = ref([]);  // [{file, previewUrl, serverUrl, uploading}]
             const AGENT_IMAGE_MAX_COUNT = 9;
 
+            // Agent 模式视频上传状态（最多 3 个）
+            const agentVideoFiles = ref([]);  // [{file, previewUrl, serverUrl, uploading, uploadFailed, compressing, compressProgress, originalSize, compressedSize}]
+            const AGENT_VIDEO_MAX_COUNT = 3;
+            // Agent 模式音频上传状态
+            const agentAudioFiles = ref([]);  // [{file, previewUrl, serverUrl, uploading, uploadFailed, duration}]
+            const AGENT_AUDIO_MAX_COUNT = 5;
+            const maxVideoSizeMB = ref(100);  // 从服务器配置获取
+            const maxVideoDurationSeconds = ref(15);  // 从服务器配置获取
+
             // 图片生成任务状态
             const imageProjectIds = ref([]);
             const imageStatus = ref('');
@@ -1227,7 +1238,9 @@
             const hasPendingAgentImages = Vue.computed(() => {
                 if (selectedType.value !== 'agent') return false;
                 if (mediaType.value !== 'video') {
-                    return agentImageFiles.value.some(img => img.uploading || img.uploadFailed || !img.serverUrl);
+                    const pendingImages = agentImageFiles.value.some(img => img.uploading || img.uploadFailed || !img.serverUrl);
+                    const pendingVideos = agentVideoFiles.value.some(v => v.uploading || v.compressing || v.uploadFailed || !v.serverUrl);
+                    return pendingImages || pendingVideos;
                 }
                 return hasUploadedImage.value && uploadedImageFile.value && !uploadedImageServerUrl.value && !uploadedImageUrl.value?.startsWith('http');
             });
@@ -1624,10 +1637,10 @@
                 const text = inputText.value.trim();
                 if (!text || isLoading.value) return;
 
-                // ===== 发送前：统一等待图片上传完成 =====
+                // ===== 发送前：统一等待图片/视频上传完成 =====
                 if (selectedType.value === 'agent') {
                     if (mediaType.value !== 'video') {
-                        // Agent 对话/音频模式：检查多图上传状态
+                        // Agent 对话/音频模式：检查多图 + 多视频上传状态
                         const failedImages = agentImageFiles.value.filter(img => img.uploadFailed);
                         if (failedImages.length > 0) {
                             showError(window.t('upload_failed_delete'));
@@ -1640,10 +1653,27 @@
                                 return;
                             }
                         }
-                        // 等待后二次校验
                         const invalidAfterWait = agentImageFiles.value.filter(img => img.uploadFailed || !img.serverUrl);
                         if (invalidAfterWait.length > 0) {
-                            showError(window.t('upload_failed_delete'));
+                            showError(t('upload_failed_delete'));
+                            return;
+                        }
+                        // 检查视频上传状态
+                        const failedVideos = agentVideoFiles.value.filter(v => v.uploadFailed);
+                        if (failedVideos.length > 0) {
+                            showError(t('video_upload_failed_delete'));
+                            return;
+                        }
+                        if (agentVideoFiles.value.some(v => v.uploading || v.compressing)) {
+                            const ok = await waitForAgentVideosUploaded(60000);
+                            if (!ok) {
+                                showError(t('video_processing_timeout'));
+                                return;
+                            }
+                        }
+                        const invalidVideosAfterWait = agentVideoFiles.value.filter(v => v.uploadFailed || !v.serverUrl);
+                        if (invalidVideosAfterWait.length > 0) {
+                            showError(t('video_upload_failed_delete'));
                             return;
                         }
                     } else {
@@ -1689,6 +1719,9 @@
                         content: userContent,
                         timestamp: new Date().toISOString()
                     });
+                    if (currentSessionId.value) {
+                        appendMessageToBackend('user', userContent);
+                    }
                     inputText.value = '';
                     autoResize();
                     scrollToBottom();
@@ -1705,7 +1738,15 @@
                     }
                     referenceImageFiles.value.forEach(ref => {
                         if (ref.url) {
-                            userContent += `\n\n<img src="${ref.url}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${ref.url}'" alt="${window.t('reference_image_alt')}">`;
+                            userContent += `\n\n<img src="${ref.url}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${ref.url}'" alt="${t('reference_image_alt')}">`;
+                        }
+                    });
+                    // 展示 mediaItems 中的视频和音频引用
+                    mediaItems.value.forEach(m => {
+                        if (m.type === 'video' && m.fileUrl) {
+                            userContent += `\n\n${t('video_tag')} ${m.displayName} <video src="${m.fileUrl}" style="max-height:160px;border-radius:8px;" controls muted></video>`;
+                        } else if (m.type === 'audio' && m.fileUrl) {
+                            userContent += `\n\n${t('audio_tag')} ${m.displayName} <audio src="${m.fileUrl}" controls style="width:100%;max-height:40px;border-radius:8px;"></audio>`;
                         }
                     });
                     messages.value.push({
@@ -1713,6 +1754,9 @@
                         content: userContent,
                         timestamp: new Date().toISOString()
                     });
+                    if (currentSessionId.value) {
+                        appendMessageToBackend('user', userContent);
+                    }
                     inputText.value = '';
                     autoResize();
                     scrollToBottom();
@@ -1731,11 +1775,15 @@
                 // 添加用户消息（含图片缩略图）
                 let userContent = text;
                 const isAgentChatPreview = selectedType.value === 'agent';
-                if (isAgentChatPreview && mediaType.value !== 'video' && agentImageFiles.value.length > 0) {
-                    // Agent 模式多图预览，使用服务器 URL 避免 blob URL 被释放后失效
+                if (isAgentChatPreview && mediaType.value !== 'video') {
+                    // Agent 对话模式：显示多图 + 多视频预览
                     agentImageFiles.value.forEach((img, i) => {
                         const displayUrl = img.serverUrl;
-                        userContent += `\n\n${window.t('image_label', { num: i + 1 })} <img src="${displayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${displayUrl}'" alt="${window.t('image_alt')}${i + 1}">`;
+                        userContent += `\n\n${t('image_label', {num: i + 1})} <img src="${displayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${displayUrl}'" alt="${t('image_label', {num: i + 1})}">`;
+                    });
+                    agentVideoFiles.value.forEach((vid, i) => {
+                        const displayUrl = vid.serverUrl;
+                        userContent += `\n\n${t('video_label', {num: i + 1})} <video src="${displayUrl}" style="max-height:160px;border-radius:8px;" controls muted></video>`;
                     });
                 } else if (isAgentChatPreview && mediaType.value === 'video' && hasUploadedImage.value) {
                     // Agent 视频模式参考图预览，优先使用服务器 URL 避免 blob URL 失效
@@ -1744,7 +1792,17 @@
                         userContent += `\n\n<img src="${videoDisplayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${videoDisplayUrl}'" alt="${window.t('reference_image_alt')}">`;
                     }
                 } else if (hasUploadedImage.value && uploadedImageUrl.value) {
-                    userContent += `\n\n<img src="${uploadedImageUrl.value}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${uploadedImageUrl.value}'" alt="${window.t('reference_image_alt')}">`;
+                    userContent += `\n\n<img src="${uploadedImageUrl.value}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${uploadedImageUrl.value}'" alt="${t('reference_image_alt')}">`;
+                }
+                // 视频生成模式下，展示 mediaItems 中的视频和音频引用
+                if (selectedType.value === 'video' || (selectedType.value === 'agent' && mediaType.value === 'video')) {
+                    mediaItems.value.forEach(m => {
+                        if (m.type === 'video' && m.fileUrl) {
+                            userContent += `\n\n${t('video_tag')} ${m.displayName} <video src="${m.fileUrl}" style="max-height:160px;border-radius:8px;" controls muted></video>`;
+                        } else if (m.type === 'audio' && m.fileUrl) {
+                            userContent += `\n\n${t('audio_tag')} ${m.displayName} <audio src="${m.fileUrl}" controls style="width:100%;max-height:40px;border-radius:8px;"></audio>`;
+                        }
+                    });
                 }
                 messages.value.push({
                     role: 'user',
@@ -2093,7 +2151,11 @@
                     const hasFileImage = uploadedImageFile.value || referenceImageFiles.value.length > 0 || mediaItems.value.some(m => m.type === 'image' && m.originalFile);
                     const hasUrlImage = hasUploadedImage.value && uploadedImageUrl.value;
                     const hasAnyImage = hasFileImage || hasUrlImage;
-                    if (hasAnyImage) {
+                    const hasVideoOrAudio = mediaItems.value.some(m => m.type === 'video' || m.type === 'audio');
+                    const shortKey = selectedModelKey.value ? selectedModelKey.value.split('_image_to_video')[0].split('_text_to_video')[0] : '';
+                    const modelConfig = shortKey ? videoModelConfigs.value[shortKey] : null;
+                    const supportsRefAudioVideo = modelConfig?.supports_ref_audio_video === true;
+                    if (hasAnyImage || (hasVideoOrAudio && supportsRefAudioVideo)) {
                         // 图生视频
                         form.append('image_mode', videoImageMode.value);
 
@@ -2117,6 +2179,33 @@
                         } else if (hasUrlImage) {
                             // URL 图片（如从已生成图片直接转视频，无 File 对象）
                             form.append('image_urls', uploadedImageUrl.value);
+                        }
+
+                        // 添加参考音频/视频（从 mediaItems 获取已上传的文件）
+                        const audioItem = mediaItems.value.find(m => m.type === 'audio' && m.originalFile);
+                        const videoItem = mediaItems.value.find(m => m.type === 'video' && m.originalFile);
+                        if (audioItem?.originalFile) {
+                            form.append('audio', audioItem.originalFile);
+                        }
+                        if (videoItem?.originalFile) {
+                            form.append('video', videoItem.originalFile);
+                        }
+
+                        // 添加参考音频 URL（如 @视频1 从 mediaRefs 解析）
+                        const audioUrls = [];
+                        const videoUrls = [];
+                        mediaItems.value.forEach(m => {
+                            if (m.type === 'audio' && m.fileUrl) {
+                                audioUrls.push(m.fileUrl);
+                            } else if (m.type === 'video' && m.fileUrl) {
+                                videoUrls.push(m.fileUrl);
+                            }
+                        });
+                        if (audioUrls.length > 0) {
+                            form.append('audio_urls', audioUrls.join(','));
+                        }
+                        if (videoUrls.length > 0) {
+                            form.append('video_urls', videoUrls.join(','));
                         }
 
                         // 发送媒体引用映射（用于 @ 引用解析）
@@ -2263,7 +2352,7 @@
             // 继续按钮
             async function sendContinue() {
                 showContinue.value = false;
-                await sendMessageToApi('继续');
+                await sendMessageToApi(t('continue'));
             }
 
             // 调用 API 发送消息
@@ -2321,11 +2410,27 @@
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 300000);
 
+                    // 收集视频 URL（Agent 对话模式）
+                    const videoUrls = [];
+                    if (isAgentChat && agentVideoFiles.value.length > 0) {
+                        const invalidVideos = agentVideoFiles.value.filter(v => !isHttpUrl(v.serverUrl));
+                        if (invalidVideos.length > 0) {
+                            showError(t('video_not_ready'));
+                            isLoading.value = false;
+                            return;
+                        }
+                        agentVideoFiles.value.forEach(v => {
+                            videoUrls.push(v.serverUrl);
+                        });
+                        console.log('[Agent] 发送视频 URL:', videoUrls.length, '个', videoUrls);
+                    }
+
                     // 安全校验：只允许 HTTP URL，过滤 blob: / 空 / 非字符串
                     const validImageUrls = imageUrls.filter(isHttpUrl);
                     if (imageUrls.length > 0 && validImageUrls.length < imageUrls.length) {
                         console.warn('[安全] 过滤掉非 HTTP 图片 URL:', imageUrls.filter(u => !isHttpUrl(u)));
                     }
+                    const validVideoUrls = videoUrls.filter(isHttpUrl);
 
                     // 1. 创建任务
                     // 构建图片偏好（auto 分辨率不传）
@@ -2345,6 +2450,7 @@
                             message: text,
                             auth_token: authToken.value,
                             image_urls: validImageUrls.length > 0 ? validImageUrls : undefined,
+                            video_urls: validVideoUrls.length > 0 ? validVideoUrls : undefined,
                             model: selectedLLMModel.value ? selectedLLMModel.value.name : '',
                             model_id: selectedLLMModel.value ? selectedLLMModel.value.id : undefined,
                             vendor_id: selectedLLMModel.value ? (selectedLLMModel.value.vendor_id || 1) : 1,
@@ -2397,7 +2503,7 @@
                     });
                 } finally {
                     isLoading.value = false;
-                    // 清理已使用的图片（Agent 模式清理多图，其他模式清理 base64）
+                    // 清理已使用的图片和视频（Agent 模式清理多图+多视频，其他模式清理 base64）
                     if (isAgentChat) {
                         agentImageFiles.value.forEach(img => {
                             if (img.previewUrl) {
@@ -2407,6 +2513,16 @@
                             }
                         });
                         agentImageFiles.value = [];
+                        // 清理视频
+                        agentVideoFiles.value.forEach(vid => {
+                            if (vid.previewUrl) {
+                                if (vid.previewUrl.startsWith('blob:')) URL.revokeObjectURL(vid.previewUrl);
+                                const item = mediaItems.value.find(m => m.agentVideoItem === vid || m.fileUrl === vid.previewUrl || m.fileUrl === vid.serverUrl);
+                                if (item) removeMediaItem(item.id);
+                            }
+                        });
+                        agentVideoFiles.value = [];
+                        agentAudioFiles.value = [];
                         hasUploadedImage.value = false;
                         uploadedImageUrl.value = '';
                         uploadedImageFile.value = null;
@@ -2683,6 +2799,8 @@
                 mediaItems.value = [];
                 mediaCounters.value = { image: 0, video: 0, audio: 0 };
                 agentImageFiles.value = [];
+                agentVideoFiles.value = [];
+                agentAudioFiles.value = [];
                 referenceImageFiles.value = [];
                 hasUploadedImage.value = false;
                 uploadedImageUrl.value = '';
@@ -2981,6 +3099,8 @@
                 mediaItems.value = [];
                 mediaCounters.value = { image: 0, video: 0, audio: 0 };
                 agentImageFiles.value = [];
+                agentVideoFiles.value = [];
+                agentAudioFiles.value = [];
                 referenceImageFiles.value = [];
                 hasUploadedImage.value = false;
                 uploadedImageUrl.value = '';
@@ -3204,6 +3324,12 @@
 
             // ========== 初始化 ==========
             onMounted(async () => {
+                // 恢复 mediaType 偏好
+                const savedMediaType = localStorage.getItem('marketing_media_type');
+                if (savedMediaType === 'image' || savedMediaType === 'video') {
+                    mediaType.value = savedMediaType;
+                }
+
                 // 点击空白处关闭菜单
                 document.addEventListener('click', () => {
                     activeMenuId.value = null;
@@ -3215,6 +3341,12 @@
                     const cfg = await resp.json();
                     if (cfg.data?.max_image_size_mb) {
                         maxImageSizeMB.value = cfg.data.max_image_size_mb;
+                    }
+                    if (cfg.data?.max_video_size_mb) {
+                        maxVideoSizeMB.value = cfg.data.max_video_size_mb;
+                    }
+                    if (cfg.data?.max_video_duration_seconds) {
+                        maxVideoDurationSeconds.value = cfg.data.max_video_duration_seconds;
                     }
                     if (cfg.data?.is_enterprise !== undefined) {
                         isEnterprise.value = cfg.data.is_enterprise;
@@ -3588,56 +3720,221 @@
             function handleFileChange(e) {
                 const files = e.target.files;
                 if (!files || files.length === 0) return;
-                // Agent 对话模式：支持多图上传（最多 9 张）
+                // Agent 对话模式：支持多图 + 多视频上传
                 const isAgentChatMode = selectedType.value === 'agent' && mediaType.value !== 'video';
                 if (isAgentChatMode) {
                     const filesToProcess = Array.from(files);
-                    const remainingSlots = AGENT_IMAGE_MAX_COUNT - agentImageFiles.value.length;
-                    if (remainingSlots <= 0) {
-                        showError(window.t('max_images', { max: AGENT_IMAGE_MAX_COUNT }));
-                        if (fileInputRef.value) fileInputRef.value.value = '';
-                        return;
+                    // 分离图片、视频和音频
+                    const imageFiles = filesToProcess.filter(f => f.type.startsWith('image/'));
+                    const videoFiles = filesToProcess.filter(f => f.type.startsWith('video/'));
+                    const audioFiles = filesToProcess.filter(f => f.type.startsWith('audio/'));
+                    const otherFiles = filesToProcess.filter(f => !f.type.startsWith('image/') && !f.type.startsWith('video/') && !f.type.startsWith('audio/'));
+                    otherFiles.forEach(f => showError(t('file_not_media', {name: f.name})));
+
+                    // 处理图片（最多 9 张）
+                    const remainingImageSlots = AGENT_IMAGE_MAX_COUNT - agentImageFiles.value.length;
+                    if (imageFiles.length > 0 && remainingImageSlots <= 0) {
+                        showError(t('max_images', {max: AGENT_IMAGE_MAX_COUNT}));
                     }
-                    const validFiles = filesToProcess.slice(0, remainingSlots).filter(file => {
-                        if (!file.type.startsWith('image/')) {
-                            showError(window.t('file_not_image', { name: file.name }));
-                            return false;
-                        }
+                    const validImageFiles = imageFiles.slice(0, Math.max(0, remainingImageSlots)).filter(file => {
                         if (file.size > maxImageSizeMB.value * 1024 * 1024) {
                             showError(window.t('file_too_large', { name: file.name, size: maxImageSizeMB.value }));
                             return false;
                         }
                         return true;
                     });
-                    if (filesToProcess.length > remainingSlots) {
+                    if (imageFiles.length > remainingImageSlots && remainingImageSlots > 0) {
                         showError(window.t('upload_limit_reached', { remaining: remainingSlots, max: AGENT_IMAGE_MAX_COUNT }));
                     }
-                    validFiles.forEach(file => {
+                    validImageFiles.forEach(file => {
                         const previewUrl = URL.createObjectURL(file);
                         const imgItem = { file, previewUrl, serverUrl: null, uploading: true, uploadFailed: false };
                         agentImageFiles.value.push(imgItem);
                         addMediaItem(file, 'image', previewUrl, { uploading: true, agentImageItem: imgItem });
                         uploadAgentImage(file, imgItem);
                     });
-                    if (validFiles.length > 0) {
+                    if (validImageFiles.length > 0) {
                         const last = agentImageFiles.value[agentImageFiles.value.length - 1];
                         uploadedImageFile.value = last.file;
                         uploadedImageUrl.value = last.previewUrl;
                         hasUploadedImage.value = true;
                         refreshModelSettings();
                     }
+
+                    // 处理视频（最多 3 个，总时长不超过限制）
+                    if (videoFiles.length > 0) {
+                        const remainingVideoSlots = AGENT_VIDEO_MAX_COUNT - agentVideoFiles.value.length;
+                        if (remainingVideoSlots <= 0) {
+                            showError(t('max_videos', {max: AGENT_VIDEO_MAX_COUNT}));
+                        } else {
+                            (async () => {
+                                const currentTotalDuration = agentVideoFiles.value.reduce((sum, v) => sum + (v.duration || 0), 0);
+                                let remainingDuration = maxVideoDurationSeconds.value - currentTotalDuration;
+
+                                if (remainingDuration <= 0) {
+                                    showError(t('video_duration_limit_reached', {dur: maxVideoDurationSeconds.value}));
+                                    return;
+                                }
+
+                                const sizeFiltered = videoFiles.slice(0, remainingVideoSlots).filter(file => {
+                                    if (file.size > maxVideoSizeMB.value * 1024 * 1024) {
+                                        showError(t('file_too_large', {name: file.name, size: maxVideoSizeMB.value}));
+                                        return false;
+                                    }
+                                    return true;
+                                });
+                                if (videoFiles.length > remainingVideoSlots) {
+                                    showError(t('video_upload_limit_reached', {remaining: remainingVideoSlots, max: AGENT_VIDEO_MAX_COUNT}));
+                                }
+
+                                for (const file of sizeFiltered) {
+                                    if (remainingDuration <= 0) {
+                                        showError(t('video_duration_limit_name_skipped', {dur: maxVideoDurationSeconds.value, name: file.name}));
+                                        break;
+                                    }
+                                    let fileDuration = maxVideoDurationSeconds.value;
+                                    try {
+                                        const info = await VIDEO_COMPRESSOR.getVideoResolution(file);
+                                        fileDuration = info.duration || 0;
+                                    } catch (e) { /* 无法读取时按最大值预留 */ }
+                                    if (fileDuration > remainingDuration) {
+                                        showError(t('name_exceeds_remaining_duration', {name: file.name, dur: fileDuration.toFixed(1), remaining: remainingDuration.toFixed(1)}));
+                                        continue;
+                                    }
+                                    processVideoFile(file, fileDuration);
+                                    remainingDuration -= fileDuration;
+                                }
+                            })();
+                        }
+                    }
+
+                    // 处理音频（最多 5 个，总时长不超过 15 秒）
+                    if (audioFiles.length > 0) {
+                        const remainingAudioSlots = AGENT_AUDIO_MAX_COUNT - agentAudioFiles.value.length;
+                        if (remainingAudioSlots <= 0) {
+                            showError(t('max_audios', {max: AGENT_AUDIO_MAX_COUNT}));
+                        } else {
+                            (async () => {
+                                const currentTotalDuration = agentAudioFiles.value.reduce((sum, a) => sum + (a.duration || 0), 0);
+                                let remainingDuration = maxVideoDurationSeconds.value - currentTotalDuration;
+
+                                if (remainingDuration <= 0) {
+                                    showError(t('audio_duration_limit_reached', {dur: maxVideoDurationSeconds.value}));
+                                    return;
+                                }
+
+                                const validAudioFiles = audioFiles.slice(0, remainingAudioSlots);
+                                if (audioFiles.length > remainingAudioSlots) {
+                                    showError(t('audio_upload_limit_reached', {remaining: remainingAudioSlots, max: AGENT_AUDIO_MAX_COUNT}));
+                                }
+
+                                for (const file of validAudioFiles) {
+                                    if (file.size > 20 * 1024 * 1024) {
+                                        showError(t('audio_file_too_large', {name: file.name}));
+                                        continue;
+                                    }
+                                    if (remainingDuration <= 0) {
+                                        showError(t('audio_duration_limit_name_skipped', {dur: maxVideoDurationSeconds.value, name: file.name}));
+                                        break;
+                                    }
+                                    let fileDuration = 0;
+                                    try {
+                                        fileDuration = await getAudioDuration(file);
+                                    } catch (e) { /* 无法读取时长 */ }
+                                    if (fileDuration > remainingDuration) {
+                                        showError(t('audio_name_exceeds_remaining_duration', {name: file.name, dur: fileDuration.toFixed(1), remaining: remainingDuration.toFixed(1)}));
+                                        continue;
+                                    }
+                                    processAudioFile(file, fileDuration);
+                                    remainingDuration -= fileDuration;
+                                }
+                            })();
+                        }
+                    }
+
                     if (fileInputRef.value) fileInputRef.value.value = '';
                     return;
                 }
                 // 其他模式只取第一个文件
                 const file = files[0];
                 if (!file) return;
-                // 简单校验：只接受图片
-                if (!file.type.startsWith('image/')) {
+                // 校验：接受图片、视频和音频
+                if (!file.type.startsWith('image/') && !file.type.startsWith('video/') && !file.type.startsWith('audio/')) {
                     showError(window.t('please_upload_image'));
                     if (fileInputRef.value) fileInputRef.value.value = '';
                     return;
                 }
+                // 图片生成模式：只允许上传图片
+                if (selectedType.value === 'image') {
+                    if (!file.type.startsWith('image/')) {
+                        showError(t('image_mode_only_images'));
+                        if (fileInputRef.value) fileInputRef.value.value = '';
+                        return;
+                    }
+                }
+                // 视频文件：走 processVideoFile 流程
+                if (file.type.startsWith('video/')) {
+                    if (file.size > maxVideoSizeMB.value * 1024 * 1024) {
+                        showError(t('video_size_limit', {size: maxVideoSizeMB.value}));
+                        if (fileInputRef.value) fileInputRef.value.value = '';
+                        return;
+                    }
+                    (async () => {
+                        const currentTotalDuration = agentVideoFiles.value.reduce((sum, v) => sum + (v.duration || 0), 0);
+                        let remainingDuration = maxVideoDurationSeconds.value - currentTotalDuration;
+                        if (remainingDuration <= 0) {
+                            showError(t('video_duration_limit_reached', {dur: maxVideoDurationSeconds.value}));
+                            return;
+                        }
+                        let fileDuration = maxVideoDurationSeconds.value;
+                        try {
+                            const info = await VIDEO_COMPRESSOR.getVideoResolution(file);
+                            fileDuration = info.duration || 0;
+                        } catch (e) { /* 无法读取时按最大值预留 */ }
+                        if (fileDuration > remainingDuration) {
+                            showError(t('video_exceeds_remaining_duration', {dur: fileDuration.toFixed(1), remaining: remainingDuration.toFixed(1)}));
+                            return;
+                        }
+                        processVideoFile(file, fileDuration);
+                        hasUploadedImage.value = true;
+                    })();
+                    if (fileInputRef.value) fileInputRef.value.value = '';
+                    return;
+                }
+                // 音频文件：走 processAudioFile 流程
+                if (file.type.startsWith('audio/')) {
+                    // 图片生成模式不允许音频
+                    if (selectedType.value === 'image') {
+                        showError(t('image_mode_only_images'));
+                        if (fileInputRef.value) fileInputRef.value.value = '';
+                        return;
+                    }
+                    if (file.size > 20 * 1024 * 1024) {
+                        showError(t('audio_size_limit'));
+                        if (fileInputRef.value) fileInputRef.value.value = '';
+                        return;
+                    }
+                    (async () => {
+                        const currentTotalDuration = agentAudioFiles.value.reduce((sum, a) => sum + (a.duration || 0), 0);
+                        let remainingDuration = maxVideoDurationSeconds.value - currentTotalDuration;
+                        if (remainingDuration <= 0) {
+                            showError(t('audio_duration_limit_reached', {dur: maxVideoDurationSeconds.value}));
+                            return;
+                        }
+                        let fileDuration = 0;
+                        try {
+                            fileDuration = await getAudioDuration(file);
+                        } catch (e) { /* 无法读取时长 */ }
+                        if (fileDuration > remainingDuration) {
+                            showError(t('audio_exceeds_remaining_duration', {dur: fileDuration.toFixed(1), remaining: remainingDuration.toFixed(1)}));
+                            return;
+                        }
+                        processAudioFile(file, fileDuration);
+                    })();
+                    if (fileInputRef.value) fileInputRef.value.value = '';
+                    return;
+                }
+                // 以下为图片处理逻辑
                 // 前端预检查文件大小
                 if (file.size > maxImageSizeMB.value * 1024 * 1024) {
                     showError(window.t('image_size_limit', { size: maxImageSizeMB.value }));
@@ -3787,6 +4084,278 @@
                 mediaItems.value = [...mediaItems.value];
             }
 
+            // 截取视频首帧作为缩略图
+            function captureVideoFirstFrame(file) {
+                return new Promise((resolve) => {
+                    const video = document.createElement('video');
+                    video.preload = 'metadata';
+                    video.muted = true;
+                    video.playsInline = true;
+                    video.onloadeddata = () => {
+                        video.currentTime = 0.1;
+                    };
+                    video.onseeked = () => {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = 48;
+                        canvas.height = 48;
+                        const ctx = canvas.getContext('2d');
+                        const scale = Math.max(48 / video.videoWidth, 48 / video.videoHeight);
+                        const w = video.videoWidth * scale;
+                        const h = video.videoHeight * scale;
+                        ctx.drawImage(video, (48 - w) / 2, (48 - h) / 2, w, h);
+                        URL.revokeObjectURL(video.src);
+                        resolve(canvas.toDataURL('image/jpeg', 0.6));
+                    };
+                    video.onerror = () => {
+                        URL.revokeObjectURL(video.src);
+                        resolve(null);
+                    };
+                    video.src = URL.createObjectURL(file);
+                });
+            }
+
+            // 获取音频时长（秒）
+            function getAudioDuration(file) {
+                return new Promise((resolve) => {
+                    const audio = new Audio();
+                    audio.preload = 'metadata';
+                    const url = URL.createObjectURL(file);
+                    audio.onloadedmetadata = () => {
+                        URL.revokeObjectURL(url);
+                        resolve(audio.duration || 0);
+                    };
+                    audio.onerror = () => {
+                        URL.revokeObjectURL(url);
+                        resolve(0);
+                    };
+                    audio.src = url;
+                });
+            }
+
+            // Agent 模式：处理音频文件（上传）
+            async function processAudioFile(file, duration) {
+                const previewUrl = URL.createObjectURL(file);
+                const audioItem = {
+                    file,
+                    previewUrl,
+                    serverUrl: null,
+                    uploading: true,
+                    uploadFailed: false,
+                    duration: duration || 0
+                };
+                agentAudioFiles.value.push(audioItem);
+                addMediaItem(file, 'audio', previewUrl, { uploading: true, agentAudioItem: audioItem });
+
+                try {
+                    await uploadAgentAudio(file, audioItem);
+                } catch (e) {
+                    console.error('音频处理失败:', e);
+                    audioItem.uploading = false;
+                    audioItem.uploadFailed = true;
+                    const mediaItem = mediaItems.value.find(m => m.agentAudioItem === audioItem || m.fileUrl === audioItem.previewUrl);
+                    if (mediaItem) {
+                        mediaItem.uploading = false;
+                        mediaItem.uploadFailed = true;
+                        mediaItems.value = [...mediaItems.value];
+                    }
+                    showError(t('audio_processing_failed'));
+                }
+            }
+
+            // Agent 模式：上传音频到服务器
+            async function uploadAgentAudio(file, audioItem) {
+                try {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('session_id', currentSessionId.value || 'temp');
+                    if (authToken.value) formData.append('auth_token', authToken.value);
+
+                    const resp = await fetch('/api/upload-agent-audio', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await resp.json();
+                    if (data.success && data.url) {
+                        audioItem.serverUrl = data.url;
+                        audioItem.uploading = false;
+                        audioItem.uploadFailed = false;
+                        const mediaItem = mediaItems.value.find(m => m.agentAudioItem === audioItem || m.fileUrl === audioItem.previewUrl);
+                        if (mediaItem) {
+                            mediaItem.fileUrl = data.url;
+                            mediaItem.uploading = false;
+                            mediaItem.uploadFailed = false;
+                            mediaItems.value = [...mediaItems.value];
+                        }
+                        console.log('音频上传成功:', data.url);
+                    } else {
+                        audioItem.uploading = false;
+                        audioItem.uploadFailed = true;
+                        const mediaItem = mediaItems.value.find(m => m.agentAudioItem === audioItem || m.fileUrl === audioItem.previewUrl);
+                        if (mediaItem) {
+                            mediaItem.uploading = false;
+                            mediaItem.uploadFailed = true;
+                            mediaItems.value = [...mediaItems.value];
+                        }
+                        showError(data.error || '音频上传失败');
+                    }
+                } catch (e) {
+                    audioItem.uploading = false;
+                    audioItem.uploadFailed = true;
+                    const mediaItem = mediaItems.value.find(m => m.agentAudioItem === audioItem || m.fileUrl === audioItem.previewUrl);
+                    if (mediaItem) {
+                        mediaItem.uploading = false;
+                        mediaItem.uploadFailed = true;
+                        mediaItems.value = [...mediaItems.value];
+                    }
+                    throw e;
+                }
+            }
+
+            // Agent 模式：处理视频文件（压缩 + 上传）
+            async function processVideoFile(file, maxDurationForThis) {
+                const previewUrl = URL.createObjectURL(file);
+                const vidItem = {
+                    file,
+                    previewUrl,
+                    serverUrl: null,
+                    uploading: false,
+                    uploadFailed: false,
+                    compressing: false,
+                    compressProgress: 0,
+                    originalSize: file.size,
+                    compressedSize: null,
+                    duration: 0,
+                    agentVideoItem: null
+                };
+                vidItem.agentVideoItem = vidItem;
+                agentVideoFiles.value.push(vidItem);
+                const thumbnailUrl = await captureVideoFirstFrame(file);
+                vidItem.thumbnailUrl = thumbnailUrl;
+                addMediaItem(file, 'video', previewUrl, { uploading: true, agentVideoItem: vidItem, thumbnailUrl });
+
+                try {
+                    let uploadFile = file;
+                    // 前端压缩（如果需要）
+                    if (typeof VIDEO_COMPRESSOR !== 'undefined') {
+                        vidItem.compressing = true;
+                        const effectiveMaxDuration = maxDurationForThis || maxVideoDurationSeconds.value;
+                        const result = await VIDEO_COMPRESSOR.compressVideoTo480p(file, (p) => {
+                            vidItem.compressProgress = p;
+                        }, effectiveMaxDuration);
+                        vidItem.compressing = false;
+                        vidItem.duration = result.info?.outputDuration || result.info?.duration || 0;
+                        if (result.truncated) {
+                            console.log(`[Agent] 视频 "${file.name}" 已截断至 ${effectiveMaxDuration}s`);
+                        }
+                        if (result.compressed) {
+                            vidItem.compressedSize = result.blob.size;
+                            const ext = result.info.outputType === 'video/mp4' ? '.mp4' : '.webm';
+                            uploadFile = new File([result.blob], 'compressed' + ext, { type: result.blob.type });
+                            console.log(`[Agent] 视频压缩: ${(file.size/1024/1024).toFixed(1)}MB → ${(result.blob.size/1024/1024).toFixed(1)}MB`);
+                        }
+                    } else {
+                        vidItem.duration = maxDurationForThis || maxVideoDurationSeconds.value;
+                    }
+
+                    vidItem.uploading = true;
+                    await uploadAgentVideo(uploadFile, vidItem);
+                } catch (err) {
+                    console.error('[Agent] 视频处理失败:', err);
+                    vidItem.compressing = false;
+                    vidItem.uploading = false;
+                    vidItem.uploadFailed = true;
+                    // 更新 mediaItem 状态
+                    const mediaItem = mediaItems.value.find(m => m.agentVideoItem === vidItem || m.fileUrl === vidItem.previewUrl);
+                    if (mediaItem) {
+                        mediaItem.uploading = false;
+                        mediaItem.uploadFailed = true;
+                        mediaItems.value = [...mediaItems.value];
+                    }
+                    showError(t('video_processing_failed'));
+                }
+            }
+
+            // Agent 模式：上传视频到服务器
+            async function uploadAgentVideo(file, vidItem) {
+                try {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('session_id', currentSessionId.value || 'temp');
+                    if (authToken.value) formData.append('auth_token', authToken.value);
+                    const resp = await fetch('/api/upload-agent-video', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await resp.json();
+                    if (data.success && data.url) {
+                        vidItem.serverUrl = data.url;
+                        vidItem.uploading = false;
+                        vidItem.uploadFailed = false;
+                        // 更新 mediaItem 状态
+                        const mediaItem = mediaItems.value.find(m => m.agentVideoItem === vidItem || m.fileUrl === vidItem.previewUrl);
+                        if (mediaItem) {
+                            mediaItem.fileUrl = data.url;
+                            mediaItem.uploading = false;
+                            mediaItem.uploadFailed = false;
+                            mediaItems.value = [...mediaItems.value];
+                        }
+                        console.log('[Agent] 视频上传成功:', data.url);
+                    } else {
+                        vidItem.uploading = false;
+                        vidItem.uploadFailed = true;
+                        console.error('[Agent] 视频上传失败:', data.error);
+                        const mediaItem = mediaItems.value.find(m => m.agentVideoItem === vidItem || m.fileUrl === vidItem.previewUrl);
+                        if (mediaItem) {
+                            mediaItem.uploading = false;
+                            mediaItem.uploadFailed = true;
+                            mediaItems.value = [...mediaItems.value];
+                        }
+                        showError(t('video_upload_failed_retry'));
+                    }
+                } catch (err) {
+                    vidItem.uploading = false;
+                    vidItem.uploadFailed = true;
+                    console.error('[Agent] 视频上传异常:', err);
+                    const mediaItem = mediaItems.value.find(m => m.agentVideoItem === vidItem || m.fileUrl === vidItem.previewUrl);
+                    if (mediaItem) {
+                        mediaItem.uploading = false;
+                        mediaItem.uploadFailed = true;
+                        mediaItems.value = [...mediaItems.value];
+                    }
+                    showError(t('video_upload_error_retry'));
+                }
+            }
+
+            // Agent 模式：删除单个视频
+            function removeAgentVideo(index) {
+                const removed = agentVideoFiles.value[index];
+                if (!removed) return;
+                if (removed.previewUrl && removed.previewUrl.startsWith('blob:')) {
+                    URL.revokeObjectURL(removed.previewUrl);
+                }
+                // 从 mediaItems 中移除
+                const mediaItem = mediaItems.value.find(m => m.agentVideoItem === removed || m.fileUrl === removed.previewUrl || m.fileUrl === removed.serverUrl);
+                if (mediaItem) removeMediaItem(mediaItem.id);
+                agentVideoFiles.value.splice(index, 1);
+            }
+
+            // 等待所有视频上传完成
+            async function waitForAgentVideosUploaded(timeoutMs) {
+                if (agentVideoFiles.value.every(v => !v.uploading && !v.compressing)) return true;
+                return new Promise(resolve => {
+                    const startTime = Date.now();
+                    const check = setInterval(() => {
+                        if (agentVideoFiles.value.every(v => !v.uploading && !v.compressing)) {
+                            clearInterval(check);
+                            resolve(true);
+                        } else if (Date.now() - startTime > timeoutMs) {
+                            clearInterval(check);
+                            resolve(false);
+                        }
+                    }, 500);
+                });
+            }
+
             // 上传失败自动清理辅助函数
             function removeMediaItemByFileUrl(fileUrl) {
                 const item = mediaItems.value.find(m => m.fileUrl === fileUrl);
@@ -3863,6 +4432,16 @@
                     }
                 });
                 agentImageFiles.value = [];
+                // 清理 Agent 模式视频
+                agentVideoFiles.value.forEach(vid => {
+                    if (vid.previewUrl && vid.previewUrl.startsWith('blob:')) {
+                        URL.revokeObjectURL(vid.previewUrl);
+                        const item = mediaItems.value.find(m => m.agentVideoItem === vid || m.fileUrl === vid.previewUrl || m.fileUrl === vid.serverUrl);
+                        if (item) removeMediaItem(item.id);
+                    }
+                });
+                agentVideoFiles.value = [];
+                agentAudioFiles.value = [];
                 hasUploadedImage.value = false;
                 uploadedImageUrl.value = '';
                 uploadedImageFile.value = null;
@@ -3943,11 +4522,13 @@
                     displayName,
                     type,
                     fileUrl: previewUrl,
-                    thumbnailUrl: type === 'image' ? previewUrl : null,
+                    thumbnailUrl: type === 'image' ? previewUrl : (options.thumbnailUrl || null),
                     originalFile: file,
                     uploading: !!options.uploading,
                     uploadFailed: !!options.uploadFailed,
-                    agentImageItem: options.agentImageItem || null
+                    agentImageItem: options.agentImageItem || null,
+                    agentVideoItem: options.agentVideoItem || null,
+                    agentAudioItem: options.agentAudioItem || null
                 });
                 mediaItems.value = [...mediaItems.value];
             }
@@ -3991,6 +4572,28 @@
                         uploadedImageUrl.value = '';
                         uploadedImageFile.value = null;
                         uploadedImageServerUrl.value = '';
+                    }
+                }
+                // 同步清理 agentVideoFiles 中匹配的项
+                if (removed.type === 'video' && removed.fileUrl) {
+                    const vidIdx = agentVideoFiles.value.findIndex(v => v.previewUrl === removed.fileUrl || v.serverUrl === removed.fileUrl || v === removed.agentVideoItem);
+                    if (vidIdx >= 0) {
+                        const agentVid = agentVideoFiles.value[vidIdx];
+                        if (agentVid.previewUrl && agentVid.previewUrl.startsWith('blob:')) {
+                            URL.revokeObjectURL(agentVid.previewUrl);
+                        }
+                        agentVideoFiles.value.splice(vidIdx, 1);
+                    }
+                }
+                // 同步清理 agentAudioFiles 中匹配的项
+                if (removed.type === 'audio' && removed.fileUrl) {
+                    const audIdx = agentAudioFiles.value.findIndex(a => a.previewUrl === removed.fileUrl || a.serverUrl === removed.fileUrl || a === removed.agentAudioItem);
+                    if (audIdx >= 0) {
+                        const agentAud = agentAudioFiles.value[audIdx];
+                        if (agentAud.previewUrl && agentAud.previewUrl.startsWith('blob:')) {
+                            URL.revokeObjectURL(agentAud.previewUrl);
+                        }
+                        agentAudioFiles.value.splice(audIdx, 1);
                     }
                 }
                 // 从 mediaItems 删除并重新编号
@@ -4122,51 +4725,213 @@
                 isDragging.value = false;
                 const files = e.dataTransfer.files;
                 if (!files || files.length === 0) return;
-                // Agent 对话模式：支持多图拖拽上传
+                // Agent 对话模式：支持多图 + 多视频拖拽上传
                 const isAgentChat = selectedType.value === 'agent' && mediaType.value !== 'video';
                 if (isAgentChat) {
                     const filesToProcess = Array.from(files);
-                    const remainingSlots = AGENT_IMAGE_MAX_COUNT - agentImageFiles.value.length;
-                    if (remainingSlots <= 0) {
+                    // 分离图片、视频和音频
+                    const imageFiles = filesToProcess.filter(f => f.type.startsWith('image/'));
+                    const videoFiles = filesToProcess.filter(f => f.type.startsWith('video/'));
+                    const audioFiles = filesToProcess.filter(f => f.type.startsWith('audio/'));
+                    const otherFiles = filesToProcess.filter(f => !f.type.startsWith('image/') && !f.type.startsWith('video/') && !f.type.startsWith('audio/'));
+                    otherFiles.forEach(f => showError(t('file_not_media', {name: f.name})));
+
+                    // 处理图片（最多 9 张）
+                    const remainingImageSlots = AGENT_IMAGE_MAX_COUNT - agentImageFiles.value.length;
+                    if (imageFiles.length > 0 && remainingImageSlots <= 0) {
                         showError(window.t('max_images', { max: AGENT_IMAGE_MAX_COUNT }));
-                        return;
                     }
-                    const validFiles = filesToProcess.slice(0, remainingSlots).filter(file => {
-                        if (!file.type.startsWith('image/')) {
-                            showError(window.t('file_not_image', { name: file.name }));
-                            return false;
-                        }
+                    const validImageFiles = imageFiles.slice(0, Math.max(0, remainingImageSlots)).filter(file => {
                         if (file.size > maxImageSizeMB.value * 1024 * 1024) {
                             showError(window.t('file_too_large', { name: file.name, size: maxImageSizeMB.value }));
                             return false;
                         }
                         return true;
                     });
-                    if (filesToProcess.length > remainingSlots) {
-                        showError(window.t('upload_limit_reached', { remaining: remainingSlots, max: AGENT_IMAGE_MAX_COUNT }));
+                    if (imageFiles.length > remainingImageSlots && remainingImageSlots > 0) {
+                        showError(t('upload_limit_reached', {remaining: remainingImageSlots, max: AGENT_IMAGE_MAX_COUNT}));
                     }
-                    validFiles.forEach(file => {
+                    validImageFiles.forEach(file => {
                         const previewUrl = URL.createObjectURL(file);
                         const imgItem = { file, previewUrl, serverUrl: null, uploading: true, uploadFailed: false };
                         agentImageFiles.value.push(imgItem);
                         addMediaItem(file, 'image', previewUrl, { uploading: true, agentImageItem: imgItem });
                         uploadAgentImage(file, imgItem);
                     });
-                    if (validFiles.length > 0) {
+                    if (validImageFiles.length > 0) {
                         const last = agentImageFiles.value[agentImageFiles.value.length - 1];
                         uploadedImageFile.value = last.file;
                         uploadedImageUrl.value = last.previewUrl;
                         hasUploadedImage.value = true;
                         refreshModelSettings();
                     }
+
+                    // 处理视频（最多 3 个，总时长不超过限制）
+                    if (videoFiles.length > 0) {
+                        const remainingVideoSlots = AGENT_VIDEO_MAX_COUNT - agentVideoFiles.value.length;
+                        if (remainingVideoSlots <= 0) {
+                            showError(t('max_videos', {max: AGENT_VIDEO_MAX_COUNT}));
+                        } else {
+                            (async () => {
+                                const currentTotalDuration = agentVideoFiles.value.reduce((sum, v) => sum + (v.duration || 0), 0);
+                                let remainingDuration = maxVideoDurationSeconds.value - currentTotalDuration;
+
+                                if (remainingDuration <= 0) {
+                                    showError(t('video_duration_limit_reached', {dur: maxVideoDurationSeconds.value}));
+                                    return;
+                                }
+
+                                const sizeFiltered = videoFiles.slice(0, remainingVideoSlots).filter(file => {
+                                    if (file.size > maxVideoSizeMB.value * 1024 * 1024) {
+                                        showError(t('file_too_large', {name: file.name, size: maxVideoSizeMB.value}));
+                                        return false;
+                                    }
+                                    return true;
+                                });
+                                if (videoFiles.length > remainingVideoSlots) {
+                                    showError(t('video_upload_limit_reached', {remaining: remainingVideoSlots, max: AGENT_VIDEO_MAX_COUNT}));
+                                }
+
+                                for (const file of sizeFiltered) {
+                                    if (remainingDuration <= 0) {
+                                        showError(t('video_duration_limit_name_skipped', {dur: maxVideoDurationSeconds.value, name: file.name}));
+                                        break;
+                                    }
+                                    let fileDuration = maxVideoDurationSeconds.value;
+                                    try {
+                                        const info = await VIDEO_COMPRESSOR.getVideoResolution(file);
+                                        fileDuration = info.duration || 0;
+                                    } catch (e) { /* 无法读取时按最大值预留 */ }
+                                    if (fileDuration > remainingDuration) {
+                                        showError(t('name_exceeds_remaining_duration', {name: file.name, dur: fileDuration.toFixed(1), remaining: remainingDuration.toFixed(1)}));
+                                        continue;
+                                    }
+                                    processVideoFile(file, fileDuration);
+                                    remainingDuration -= fileDuration;
+                                }
+                            })();
+                        }
+                    }
+
+                    // 处理音频（最多 5 个，总时长不超过 15 秒）
+                    if (audioFiles.length > 0) {
+                        const remainingAudioSlots = AGENT_AUDIO_MAX_COUNT - agentAudioFiles.value.length;
+                        if (remainingAudioSlots <= 0) {
+                            showError(t('max_audios', {max: AGENT_AUDIO_MAX_COUNT}));
+                        } else {
+                            (async () => {
+                                const currentTotalDuration = agentAudioFiles.value.reduce((sum, a) => sum + (a.duration || 0), 0);
+                                let remainingDuration = maxVideoDurationSeconds.value - currentTotalDuration;
+
+                                if (remainingDuration <= 0) {
+                                    showError(t('audio_duration_limit_reached', {dur: maxVideoDurationSeconds.value}));
+                                    return;
+                                }
+
+                                const validAudioFiles = audioFiles.slice(0, remainingAudioSlots);
+                                if (audioFiles.length > remainingAudioSlots) {
+                                    showError(t('audio_upload_limit_reached', {remaining: remainingAudioSlots, max: AGENT_AUDIO_MAX_COUNT}));
+                                }
+
+                                for (const file of validAudioFiles) {
+                                    if (file.size > 20 * 1024 * 1024) {
+                                        showError(t('audio_file_too_large', {name: file.name}));
+                                        continue;
+                                    }
+                                    if (remainingDuration <= 0) {
+                                        showError(t('audio_duration_limit_name_skipped', {dur: maxVideoDurationSeconds.value, name: file.name}));
+                                        break;
+                                    }
+                                    let fileDuration = 0;
+                                    try {
+                                        fileDuration = await getAudioDuration(file);
+                                    } catch (e) { /* 无法读取时长 */ }
+                                    if (fileDuration > remainingDuration) {
+                                        showError(t('audio_name_exceeds_remaining_duration', {name: file.name, dur: fileDuration.toFixed(1), remaining: remainingDuration.toFixed(1)}));
+                                        continue;
+                                    }
+                                    processAudioFile(file, fileDuration);
+                                    remainingDuration -= fileDuration;
+                                }
+                            })();
+                        }
+                    }
+
                     return;
                 }
                 // 其他模式只取第一个文件
                 const file = files[0];
-                if (!file.type.startsWith('image/')) {
-                    showError(window.t('please_upload_image'));
+                if (!file.type.startsWith('image/') && !file.type.startsWith('video/') && !file.type.startsWith('audio/')) {
+                    showError(t('please_upload_media'));
                     return;
                 }
+                // 图片生成模式：只允许上传图片
+                if (selectedType.value === 'image') {
+                    if (!file.type.startsWith('image/')) {
+                        showError(t('image_mode_only_images'));
+                        return;
+                    }
+                }
+                // 视频文件：走 processVideoFile 流程
+                if (file.type.startsWith('video/')) {
+                    if (file.size > maxVideoSizeMB.value * 1024 * 1024) {
+                        showError(t('video_size_limit', {size: maxVideoSizeMB.value}));
+                        return;
+                    }
+                    (async () => {
+                        const currentTotalDuration = agentVideoFiles.value.reduce((sum, v) => sum + (v.duration || 0), 0);
+                        let remainingDuration = maxVideoDurationSeconds.value - currentTotalDuration;
+                        if (remainingDuration <= 0) {
+                            showError(t('video_duration_limit_reached', {dur: maxVideoDurationSeconds.value}));
+                            return;
+                        }
+                        let fileDuration = maxVideoDurationSeconds.value;
+                        try {
+                            const info = await VIDEO_COMPRESSOR.getVideoResolution(file);
+                            fileDuration = info.duration || 0;
+                        } catch (e) { /* 无法读取时按最大值预留 */ }
+                        if (fileDuration > remainingDuration) {
+                            showError(t('video_exceeds_remaining_duration', {dur: fileDuration.toFixed(1), remaining: remainingDuration.toFixed(1)}));
+                            return;
+                        }
+                        processVideoFile(file, fileDuration);
+                        hasUploadedImage.value = true;
+                    })();
+                    return;
+                }
+                // 音频文件：走 processAudioFile 流程
+                if (file.type.startsWith('audio/')) {
+                    if (file.size > 20 * 1024 * 1024) {
+                        showError(t('audio_size_limit'));
+                        return;
+                    }
+                    (async () => {
+                        const currentTotalDuration = agentAudioFiles.value.reduce((sum, a) => sum + (a.duration || 0), 0);
+                        let remainingDuration = maxVideoDurationSeconds.value - currentTotalDuration;
+                        if (remainingDuration <= 0) {
+                            showError(t('audio_duration_limit_reached', {dur: maxVideoDurationSeconds.value}));
+                            return;
+                        }
+                        let fileDuration = 0;
+                        try {
+                            fileDuration = await getAudioDuration(file);
+                        } catch (e) { /* 无法读取时长 */ }
+                        if (fileDuration > remainingDuration) {
+                            showError(t('audio_exceeds_remaining_duration', {dur: fileDuration.toFixed(1), remaining: remainingDuration.toFixed(1)}));
+                            return;
+                        }
+                        processAudioFile(file, fileDuration);
+                    })();
+                    return;
+                }
+                // 图片生成模式：只允许上传图片
+                if (selectedType.value === 'image') {
+                    if (!file.type.startsWith('image/')) {
+                        showError(t('image_mode_only_images'));
+                        return;
+                    }
+                }
+                // 以下为图片处理逻辑
                 const isVideoMode = selectedType.value === 'video' ||
                                     (selectedType.value === 'agent' && mediaType.value === 'video');
                 // 首尾帧模式下，不支持尾帧的模型只允许1张图片
@@ -4252,7 +5017,7 @@
                 const prevType = selectedType.value;
                 selectedType.value = type.key;
                 showDropdown.value = false;
-                // 从 Agent 对话模式切换到其他模式时，清理 agentImageFiles
+                // 从 Agent 对话模式切换到其他模式时，清理 agentImageFiles 和 agentVideoFiles
                 if (prevType === 'agent' && type.key !== 'agent') {
                     agentImageFiles.value.forEach(img => {
                         if (img.previewUrl && img.previewUrl.startsWith('blob:')) {
@@ -4260,6 +5025,13 @@
                         }
                     });
                     agentImageFiles.value = [];
+                    agentVideoFiles.value.forEach(vid => {
+                        if (vid.previewUrl && vid.previewUrl.startsWith('blob:')) {
+                            URL.revokeObjectURL(vid.previewUrl);
+                        }
+                    });
+                    agentVideoFiles.value = [];
+                    agentAudioFiles.value = [];
                 }
                 // 根据类型自动切换媒体类型并设置默认模型
                 if (type.key === 'image') {
@@ -4431,9 +5203,10 @@
                 if (currentEventSource) { currentEventSource.close(); currentEventSource = null; }
             }
 
-            // 监听 mediaType 变化，重置选中模型
+            // 监听 mediaType 变化，持久化并重置选中模型
             Vue.watch(mediaType, async (newType, oldType) => {
-                // Agent 模式下从 image 切换到 video 时，清理 agentImageFiles
+                localStorage.setItem('marketing_media_type', newType);
+                // Agent 模式下从 image 切换到 video 时，清理 agentImageFiles 和 agentVideoFiles
                 if (selectedType.value === 'agent' && oldType === 'image' && newType === 'video') {
                     agentImageFiles.value.forEach(img => {
                         if (img.previewUrl && img.previewUrl.startsWith('blob:')) {
@@ -4441,6 +5214,13 @@
                         }
                     });
                     agentImageFiles.value = [];
+                    agentVideoFiles.value.forEach(vid => {
+                        if (vid.previewUrl && vid.previewUrl.startsWith('blob:')) {
+                            URL.revokeObjectURL(vid.previewUrl);
+                        }
+                    });
+                    agentVideoFiles.value = [];
+                    agentAudioFiles.value = [];
                 }
                 if (newType === 'image') {
                     const list = allImageModels.value;
@@ -4695,6 +5475,11 @@
                 agentImageFiles,
                 removeAgentImage,
                 AGENT_IMAGE_MAX_COUNT,
+                agentVideoFiles,
+                removeAgentVideo,
+                AGENT_VIDEO_MAX_COUNT,
+                maxVideoSizeMB,
+                maxVideoDurationSeconds,
                 isDragging,
                 handleDragOver,
                 handleDragLeave,

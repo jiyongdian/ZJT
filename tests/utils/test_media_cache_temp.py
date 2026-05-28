@@ -20,6 +20,13 @@ sys.modules['aiohttp'] = MagicMock()
 sys.modules['aiofiles'] = MagicMock()
 
 from tests.base.base_db_test import DatabaseTestCase
+
+# 确保 utils.media_cache 使用真实的 config.config_util
+# （可能被其他测试文件在 mock 状态下导入导致 get_dynamic_config_value 是 MagicMock）
+import utils.media_cache
+import importlib
+importlib.reload(utils.media_cache)
+
 from utils.media_cache import MediaCacheManager, get_temp_date_dir
 
 
