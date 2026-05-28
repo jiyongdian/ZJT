@@ -374,7 +374,7 @@
       renderTimeline();
       if (!state.timeline.visible) flashExpandButton();
       showToast(window.t ? window.t('timeline_added', { shot: pillar.shotNumber }) : `已添加到时间轴 - 镜头${pillar.shotNumber}`, 'success');
-      try{ autoSaveWorkflow(); } catch(e){}
+      safeAutoSave()
     }
     
     // 获取视频时长
@@ -410,7 +410,7 @@
       state.timeline.clips.forEach((c, i) => c.order = i);
       renderTimeline();
       showToast(window.t ? window.t('timeline_removed') : '已从时间轴移除', 'success');
-      try{ autoSaveWorkflow(); } catch(e){}
+      safeAutoSave()
     }
     
     // 移动时间轴片段（拖拽排序）
@@ -433,7 +433,7 @@
       
       state.timeline.clips.sort((a, b) => a.order - b.order);
       renderTimeline();
-      try{ autoSaveWorkflow(); } catch(e){}
+      safeAutoSave()
     }
     
     // 时间轴展开按钮黄色闪烁提示
@@ -855,7 +855,7 @@
       
       renderTimeline();
       showToast(window.t ? window.t('timeline_replaced') : '已替换视频片段', 'success');
-      try{ autoSaveWorkflow(); } catch(e){}
+      safeAutoSave()
     }
     
     // 根据柱子信息查找对应的分镜节点
@@ -1514,7 +1514,7 @@
 
         renderTimeline();
         showToast(window.t ? window.t('timeline_trim_success') : '剪切成功', 'success');
-        try{ autoSaveWorkflow(); } catch(e){}
+        safeAutoSave()
         
         closeDialog();
       });
@@ -1550,7 +1550,7 @@
       });
       
       renderTimeline();
-      try{ autoSaveWorkflow(); } catch(e){}
+      safeAutoSave()
     }
     
     // Cookie工具函数
@@ -1821,7 +1821,7 @@
       renderTimeline();
       if (!state.timeline.visible) flashExpandButton();
       showToast(window.t ? window.t('timeline_audio_added', { shot: pillar.shotNumber }) : `已添加音频到时间轴 - 镜头${pillar.shotNumber}`, 'success');
-      try{ autoSaveWorkflow(); } catch(e){}
+      safeAutoSave()
     }
     
     // 从时间轴移除音频片段
@@ -1833,7 +1833,7 @@
       state.timeline.audioClips.forEach((c, i) => c.order = i);
       renderTimeline();
       showToast(window.t ? window.t('timeline_audio_removed') : '已从时间轴移除音频', 'success');
-      try{ autoSaveWorkflow(); } catch(e){}
+      safeAutoSave()
     }
     
     // 移动音频片段（拖拽排序）
@@ -1856,7 +1856,7 @@
       
       state.timeline.audioClips.sort((a, b) => a.order - b.order);
       renderTimeline();
-      try{ autoSaveWorkflow(); } catch(e){}
+      safeAutoSave()
     }
     
     // 获取音频时长

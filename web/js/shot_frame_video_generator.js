@@ -231,9 +231,7 @@ async function generateShotFrameVideo(nodeId, node){
       }
     }
     
-    renderConnections();
-    renderImageConnections();
-    renderFirstFrameConnections();
+    renderAllConnections();
     renderMinimap();
 
     // 轮询视频生成状态,更新视频URL
@@ -319,9 +317,7 @@ async function generateShotFrameVideo(nodeId, node){
         });
         
         // 重新渲染连接线
-        renderConnections();
-        renderImageConnections();
-        renderFirstFrameConnections();
+        renderAllConnections();
         
         generateBtn.disabled = false;
         generateBtn.textContent = '生成视频';
@@ -332,7 +328,7 @@ async function generateShotFrameVideo(nodeId, node){
           fetchComputingPower();
         }
         
-        try{ autoSaveWorkflow(); } catch(e){ console.error('Auto save failed:', e); }
+        safeAutoSave()
       },
       (error) => {
         const errorMsg = `生成失败: ${error}`;

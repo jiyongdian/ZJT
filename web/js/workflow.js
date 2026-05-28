@@ -1081,7 +1081,7 @@
                 if(migrated){
                   console.log('[恢复工作流] 历史数据迁移成功');
                   renderTimeline();
-                  try{ autoSaveWorkflow(); } catch(e){}
+                  safeAutoSave()
                 }
               }
             }, 500);
@@ -1092,12 +1092,7 @@
         }
         
         // 重新渲染
-        renderConnections();
-        renderImageConnections();
-        renderFirstFrameConnections();
-        renderVideoConnections();
-        renderReferenceConnections();
-        renderAudioConnections();
+        renderAllConnections();
         renderMinimap();
         
         // 恢复完成后，更新所有分镜节点的图片选择菜单和角色节点的按钮状态
@@ -1141,18 +1136,25 @@
       }
     }
 
-    // 恢复单个节点
+    // 恢复单个节点（优先使用注册表，未注册的走旧逻辑）
     function restoreNode(nodeData){
+      // 兼容旧的 image_edit 节点，转换为新的 image 节点
+      if(nodeData.type === 'image_edit'){
+        nodeData.type = 'image';
+        nodeData.data.url = nodeData.data.imageUrl || nodeData.data.url || '';
+      }
+
+      // 优先从注册表查找
+      if(typeof restoreNodeByRegistry === 'function' && restoreNodeByRegistry(nodeData)){
+        return;
+      }
+
+      // 未注册的节点类型走旧逻辑
       if(nodeData.type === 'image_to_video'){
         createImageToVideoNodeWithData(nodeData);
       } else if(nodeData.type === 'video'){
         createVideoNodeWithData(nodeData);
       } else if(nodeData.type === 'image'){
-        createImageNodeWithData(nodeData);
-      } else if(nodeData.type === 'image_edit'){
-        // 兼容旧的 image_edit 节点，转换为新的 image 节点
-        nodeData.type = 'image';
-        nodeData.data.url = nodeData.data.imageUrl || nodeData.data.url || '';
         createImageNodeWithData(nodeData);
       } else if(nodeData.type === 'script'){
         createScriptNodeWithData(nodeData);
@@ -1166,16 +1168,6 @@
         createLocationNodeWithData(nodeData);
       } else if(nodeData.type === 'props'){
         createPropsNodeWithData(nodeData);
-      } else if(nodeData.type === 'text_to_speech'){
-        createTextToSpeechNodeWithData(nodeData);
-      } else if(nodeData.type === 'dialogue_group'){
-        createDialogueGroupNodeWithData(nodeData);
-      } else if(nodeData.type === 'text'){
-        createTextNodeWithData(nodeData);
-      } else if(nodeData.type === 'extract_frame'){
-        createExtractFrameNodeWithData(nodeData);
-      } else if(nodeData.type === 'camera_control'){
-        createCameraControlNodeWithData(nodeData);
       } else if(nodeData.type === 'audio'){
         createAudioNodeWithData(nodeData);
       }
@@ -1905,9 +1897,7 @@
       }
 
       // 重新渲染所有连接线
-      if(typeof renderImageConnections === 'function') renderImageConnections();
-      if(typeof renderAudioConnections === 'function') renderAudioConnections();
-      if(typeof renderVideoConnections === 'function') renderVideoConnections();
+      if(typeof renderAllConnections === 'function') renderAllConnections();
     }
 
     // 带数据创建视频节点（复用createVideoNode的逻辑）
@@ -2027,56 +2017,6 @@
               if(previewRow) previewRow.style.display = 'flex';
             }
           }
-        }
-      }
-    }
-
-    // 带数据创建相机控制节点
-    function createCameraControlNodeWithData(nodeData){
-      const savedNextNodeId = state.nextNodeId;
-      state.nextNodeId = nodeData.id;
-
-      createCameraControlNode({ x: nodeData.x, y: nodeData.y });
-
-      state.nextNodeId = Math.max(savedNextNodeId, nodeData.id + 1);
-
-      const node = state.nodes.find(n => n.id === nodeData.id);
-      if(node && nodeData.data){
-        Object.assign(node.data, nodeData.data);
-
-        const el = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
-        if(el){
-          // 恢复相机参数到 UI
-          const hSlider = el.querySelector('.camera-ctrl-horizontal-angle-slider');
-          const hInput = el.querySelector('.camera-ctrl-horizontal-angle');
-          const vSlider = el.querySelector('.camera-ctrl-vertical-angle-slider');
-          const vInput = el.querySelector('.camera-ctrl-vertical-angle');
-          const zSlider = el.querySelector('.camera-ctrl-zoom-slider');
-          const zInput = el.querySelector('.camera-ctrl-zoom');
-
-          if(node.data.camera){
-            if(hSlider) hSlider.value = node.data.camera.horizontal_angle ?? 0;
-            if(hInput) hInput.value = node.data.camera.horizontal_angle ?? 0;
-            if(vSlider) vSlider.value = node.data.camera.vertical_angle ?? 0;
-            if(vInput) vInput.value = node.data.camera.vertical_angle ?? 0;
-            if(zSlider) zSlider.value = node.data.camera.zoom ?? 5.0;
-            if(zInput) zInput.value = node.data.camera.zoom ?? 5.0;
-          }
-
-          // 恢复抽卡次数标签
-          const drawCountLabel = el.querySelector('.camera-ctrl-draw-count-label');
-          if(drawCountLabel) { const _t = window.t ? window.t('draw_count_x', { count: node.data.drawCount || 1 }) : null; drawCountLabel.textContent = (_t && _t !== 'draw_count_x') ? _t : `抽卡次数：X${node.data.drawCount || 1}`; }
-
-          // 恢复标题
-          if(nodeData.title){
-            node.title = nodeData.title;
-            const titleEl = el.querySelector('.node-title');
-            if(titleEl) titleEl.textContent = nodeData.title;
-          }
-
-          // 更新源图缩略图
-          const updateSourceThumbnail = el._updateSourceThumbnail;
-          if(typeof updateSourceThumbnail === 'function') updateSourceThumbnail();
         }
       }
     }

@@ -234,3 +234,80 @@
       }
     }
 
+    /**
+     * 统一轮询任务状态
+     * @param {Object} opts
+     * @param {string} opts.statusUrl - 状态查询URL（不含auth参数）
+     * @param {number} [opts.maxAttempts=60] - 最大轮询次数
+     * @param {number} [opts.interval=10000] - 轮询间隔(ms)
+     * @param {function} opts.onSuccess - 成功回调(payload)
+     * @param {function} opts.onFailed - 失败回调(payload)
+     * @param {function} [opts.onTimeout] - 超时回调
+     * @param {function} [opts.onPending] - 进行中回调(payload)，返回true可停止轮询
+     */
+    function pollTaskStatus(opts) {
+      var maxAttempts = opts.maxAttempts || 60;
+      var interval = opts.interval || 10000;
+      var attempts = 0;
+
+      var checkStatus = async function() {
+        if (attempts >= maxAttempts) {
+          if (opts.onTimeout) opts.onTimeout();
+          return;
+        }
+
+        attempts++;
+
+        try {
+          var authToken = getAuthToken();
+          var params = authToken ? '?auth_token=' + encodeURIComponent(authToken) : '';
+          var res = await fetch(opts.statusUrl + params, { method: 'GET' });
+          var text = await res.text();
+          var payload = text ? JSON.parse(text) : null;
+
+          if (!payload) {
+            setTimeout(checkStatus, interval);
+            return;
+          }
+
+          var status = typeof payload.status === 'string' ? payload.status.toUpperCase() : payload.status;
+
+          if (status === 'SUCCESS' || status === 2) {
+            opts.onSuccess(payload);
+          } else if (status === 'FAILED' || status === -1) {
+            opts.onFailed(payload);
+          } else {
+            if (opts.onPending && opts.onPending(payload) === true) return;
+            setTimeout(checkStatus, interval);
+          }
+        } catch (error) {
+          console.error('状态检查失败:', error);
+          setTimeout(checkStatus, interval);
+        }
+      };
+
+      checkStatus();
+    }
+
+    /**
+     * 向 FormData 追加认证信息（user_id + auth_token）
+     * @param {FormData} form
+     */
+    function appendAuthToForm(form) {
+      var userId = getUserId();
+      var authToken = getAuthToken();
+      if (userId) form.append('user_id', userId);
+      if (authToken) form.append('auth_token', authToken);
+    }
+
+    /**
+     * 获取包含认证信息的请求头
+     * @returns {{Authorization: string, 'X-User-Id': string}}
+     */
+    function getAuthHeaders() {
+      return {
+        'Authorization': getAuthToken(),
+        'X-User-Id': getUserId()
+      };
+    }
+

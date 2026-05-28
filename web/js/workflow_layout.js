@@ -452,12 +452,10 @@
     const finalBottom = layoutRemainingNodes(remainingNodes, currentY);
     currentY = Math.max(currentY, finalBottom);
 
-    renderConnections();
-    renderImageConnections();
-    renderFirstFrameConnections();
+    renderAllConnections();
     renderMinimap();
     updateCanvasSize();
-    try{ autoSaveWorkflow(); }catch(e){ console.warn('自动保存失败', e); }
+    safeAutoSave();
     showToast('自动排列完成', 'success');
   }
 
