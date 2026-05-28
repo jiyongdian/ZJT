@@ -37,37 +37,37 @@
           <img src="/files/logo.svg" alt="Logo" style="width: 48px; height: 48px;" />
           <div class="header-title-group">
             <div class="title">{{ mainTitle }}</div>
-            <div class="subtitle" v-if="route.name==='list'" data-i18n="subtitle">AI短剧制作平台</div>
+            <div class="subtitle" v-if="route.name==='list'">{{ $t('subtitle') }}</div>
           </div>
         </div>
         <div style="display: flex; gap: 10px; align-items: center;">
-          <button class="btn secondary" v-if="route.name!=='list'" @click="goHome" data-i18n="back">返回</button>
+          <button class="btn secondary" v-if="route.name!=='list'" @click="goHome">{{ $t('back') }}</button>
           <template v-if="isLoggedIn">
             <div class="user-info-wrapper">
-              <span class="user-phone clickable" @click="openInviteModal" title="点击查看邀请码" data-i18n="invite_code:title">{{ maskedPhone }}</span>
+              <span class="user-phone clickable" @click="openInviteModal" :title="$t('invite_code')">{{ maskedPhone }}</span>
               <div class="computing-power-display">
                 <template v-if="checkinStatus.checkin_enabled">
-                  <button class="checkin-badge" v-if="!checkinStatus.checked_in_today" @click="performCheckin" :disabled="checkinLoading" title="点击签到领算力" data-i18n="check_in">
-                    签到
+                  <button class="checkin-badge" v-if="!checkinStatus.checked_in_today" @click="performCheckin" :disabled="checkinLoading" :title="$t('check_in_tip')">
+                    {{ $t('check_in') }}
                   </button>
-                  <span class="checkin-badge checked" v-else title="今日已签到" data-i18n="checked_in_today:title">
-                    已签
+                  <span class="checkin-badge checked" v-else :title="$t('checked_in_today')">
+                    {{ $t('checked_in') }}
                   </span>
                 </template>
-                <span class="clickable" @click="openComputingPowerLogs" title="点击查看算力日志" data-i18n="click_power_logs:title">
-                  算力: <span class="computing-power-value" data-i18n="power_loading">{{ computingPower !== null ? computingPower : '加载中...' }}</span>
+                <span class="clickable" @click="openComputingPowerLogs" :title="$t('click_power_logs')">
+                  {{ $t('power') }}: <span class="computing-power-value">{{ computingPower !== null ? computingPower : $t('loading') }}</span>
                 </span>
-                <button class="refresh-btn" @click="fetchComputingPower" title="刷新算力" data-i18n="refresh:title">
+                <button class="refresh-btn" @click="fetchComputingPower" :title="$t('refresh')">
                   ↻
                 </button>
               </div>
-              <button class="btn secondary" @click="handleRechargeClick" style="margin-top: 8px; font-size: 12px; padding: 4px 12px;" data-i18n="recharge">算力充值</button>
+              <button class="btn secondary" @click="handleRechargeClick" style="margin-top: 8px; font-size: 12px; padding: 4px 12px;">{{ $t('recharge') }}</button>
             </div>
-            <a v-if="userRole === 'admin'" href="/admin" class="btn secondary" style="text-decoration: none;" data-i18n="admin_panel">管理后台</a>
-            <button class="btn secondary" @click="showUserSettingsModal" data-i18n="settings">设置</button>
-            <button class="btn secondary" @click="handleLogout" data-i18n="logout">登出</button>
+            <a v-if="userRole === 'admin'" href="/admin" class="btn secondary" style="text-decoration: none;">{{ $t('admin_panel') }}</a>
+            <button class="btn secondary" @click="showUserSettingsModal">{{ $t('settings') }}</button>
+            <button class="btn secondary" @click="handleLogout">{{ $t('logout') }}</button>
           </template>
-          <button class="btn" v-else @click="showLoginModal = true" data-i18n="login">登录</button>
+          <button class="btn" v-else @click="showLoginModal = true">{{ $t('login') }}</button>
         </div>
       </header>
 
@@ -357,12 +357,12 @@
           <div v-if="loginShowTerms" class="terms-checkbox">
             <input type="checkbox" id="login-terms" v-model="loginForm.termsAgreed" />
             <label for="login-terms" style="cursor: pointer;">
-              我已阅读并同意 <span class="terms-link" @click.stop="showTermsModal = true">《AI工具服务使用条款》</span>
+              {{ $t('agree_with_terms') }} <span class="terms-link" @click.stop="showTermsModal = true">{{ $t('service_terms') }}</span>
             </label>
           </div>
           <div class="field" style="margin-top: 20px;">
             <button class="btn" style="width: 100%;" @click="handleLogin" :disabled="loginLoading">
-              {{ loginLoading ? '登录中...' : '登录' }}
+              {{ loginLoading ? $t('logging_in') : $t('login') }}
             </button>
           </div>
           <div class="status danger" v-if="loginError" style="text-align: center; margin-top: 10px;">{{ loginError }}</div>
@@ -391,7 +391,7 @@
           <div v-if="isLocal" class="field">
             <div class="local-mode-tip" style="background: #e8f5e9; padding: 12px; border-radius: 6px; margin-bottom: 10px;">
               <p style="margin: 0; color: #2e7d32; font-size: 13px;">
-                <strong>本地模式：</strong>您的数据（包括算力）都存储您自己的电脑中，您可以在后台修改或通知管理员(第一位用户)修改。
+                <strong>{{ $t('local_mode_title') }}</strong>{{ $t('local_mode_desc') }}
               </p>
             </div>
           </div>
@@ -455,10 +455,10 @@
     <div class="modal-overlay" v-if="showTermsModal" @click.self="showTermsModal = false">
       <div class="modal terms-modal" style="position: relative;">
         <button class="modal-close" @click="showTermsModal = false">×</button>
-        <div class="modal-title">AI工具服务使用条款</div>
+        <div class="modal-title">{{ $t('ai_service_terms') }}</div>
         <div class="terms-content" v-html="termsContent"></div>
         <div style="padding: 16px; text-align: center;">
-          <button class="btn" style="width: 100%;" @click="showTermsModal = false">我已阅读</button>
+          <button class="btn" style="width: 100%;" @click="showTermsModal = false">{{ $t('have_read') }}</button>
         </div>
       </div>
     </div>
@@ -8273,7 +8273,11 @@
       
       async loadTermsContent() {
         try {
-          const response = await axios.get('/files/AI工具服务使用条款.txt');
+          const locale = localStorage.getItem('zjt_locale') || 'zh-CN';
+          const termsFile = locale === 'en'
+            ? '/files/AI Tool Service Terms.txt'
+            : '/files/AI工具服务使用条款.txt';
+          const response = await axios.get(termsFile);
           // Convert markdown-like text to HTML
           let html = response.data
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // Bold text
@@ -8281,11 +8285,14 @@
             .replace(/^## (.*?)$/gm, '<h2>$1</h2>')  // H2 headers
             .replace(/\n\n/g, '</p><p>')  // Paragraphs
             .replace(/\n/g, '<br>');  // Line breaks
-          
+
           this.termsContent = '<p>' + html + '</p>';
         } catch (error) {
           console.error('Failed to load terms:', error);
-          this.termsContent = '<p>加载使用条款失败，请稍后重试。</p>';
+          const locale = localStorage.getItem('zjt_locale') || 'zh-CN';
+          this.termsContent = locale === 'en'
+            ? '<p>Failed to load terms of service. Please try again later.</p>'
+            : '<p>加载使用条款失败，请稍后重试。</p>';
         }
       },
       

@@ -79,6 +79,7 @@
   "resend_code": "重新发送",
   "agree_terms": "我已阅读并同意用户协议和隐私政策",
   "register": "注册",
+  "logging_in": "登录中...",
   "login_button": "登录",
   "register_button": "注册",
   "reset_button": "重置密码",
