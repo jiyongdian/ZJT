@@ -105,6 +105,7 @@
   "service_terms": "AI Tool Service Terms",
   "local_mode_title": "Local mode:",
   "local_mode_desc": "Your data (including compute power) is stored on your own computer. You can modify it in the backend or notify the administrator (the first user) to modify it.",
+  "local_recharge_tip": "QR code payment is only available in cloud mode. In local mode, admin users can add power in the admin panel, and non-admin users please contact the administrator.",
   "have_read": "I have read",
   "invite_code_optional": "Invite Code (Optional)",
   "enter_invite_code": "Please enter invite code",

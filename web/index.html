@@ -8450,7 +8450,7 @@
 
       handleRechargeClick() {
         if (this.isLocal) {
-          alert('只有云端环境才能开启二维码支付。本地模式下，管理员用户请进入后台增加算力，非管理员用户请通知管理员。');
+          alert(this.$t('local_recharge_tip'));
         } else {
           this.showRechargePowerModal = true;
           this.fetchRechargePackages();
