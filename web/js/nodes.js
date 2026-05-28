@@ -241,9 +241,6 @@
       }
 
       const worldId = state.defaultWorldId;
-      const userId = localStorage.getItem('user_id') || '1';
-      const authToken = localStorage.getItem('auth_token') || '';
-
       for (const shotNode of allShotFrameNodes) {
         const imagePrompt = shotNode.data.imagePrompt || '';
         const shotData = shotNode.data.shotJson || {};
@@ -257,10 +254,7 @@
             collectedCharacters.add(characterName);
             try {
               const response = await fetch(`/api/characters?world_id=${worldId}&page=1&page_size=100&keyword=${encodeURIComponent(characterName)}`, {
-                headers: {
-                  'Authorization': authToken,
-                  'X-User-Id': userId
-                }
+                headers: getAuthHeaders()
               });
               if (response.ok) {
                 const result = await response.json();
@@ -291,10 +285,7 @@
           collectedLocations.add(shotData.db_location_id);
           try {
             const response = await fetch(`/api/location/${shotData.db_location_id}`, {
-              headers: {
-                'Authorization': authToken,
-                'X-User-Id': userId
-              }
+              headers: getAuthHeaders()
             });
             if (response.ok) {
               const result = await response.json();
@@ -330,10 +321,7 @@
             if (prop && prop.props_db_id) {
               try {
                 const response = await fetch(`/api/props/${prop.props_db_id}`, {
-                  headers: {
-                    'Authorization': authToken,
-                    'X-User-Id': userId
-                  }
+                  headers: getAuthHeaders()
                 });
                 if (response.ok) {
                   const result = await response.json();
@@ -477,11 +465,7 @@
                 from: state.connecting.fromId,
                 to: id
               });
-              renderConnections();
-              renderImageConnections();
-              renderFirstFrameConnections();
-              renderVideoConnections();
-              renderAudioConnections();
+              renderAllConnections();
             }
           }
         }
@@ -545,7 +529,7 @@
             showToast(window.t ? window.t('video_upload_success') : '视频上传成功', 'success');
 
             // 自动保存工作流
-            try{ autoSaveWorkflow(); } catch(e){}
+            safeAutoSave()
           }
         } catch(error){
           console.error('视频上传失败:', error);
@@ -741,7 +725,7 @@
             node.data.url = permanentUrl;
             playerEl.src = permanentUrl;
             showToast(window.t ? window.t('audio_upload_success') : '音频上传成功', 'success');
-            try{ autoSaveWorkflow(); } catch(e){}
+            safeAutoSave()
           }
         } catch(error){
           console.error('音频上传失败:', error);
@@ -1330,8 +1314,7 @@
       try{
         const response = await fetch('/api/worlds?page=1&page_size=100', {
           headers: {
-            'Authorization': localStorage.getItem('auth_token') || '',
-            'X-User-Id': localStorage.getItem('user_id') || '1'
+            ...getAuthHeaders()
           }
         });
 
@@ -1372,8 +1355,7 @@
 
         const response = await fetch(url, {
           headers: {
-            'Authorization': localStorage.getItem('auth_token') || '',
-            'X-User-Id': localStorage.getItem('user_id') || '1'
+            ...getAuthHeaders()
           }
         });
 
@@ -1458,7 +1440,7 @@
       }
 
       showToast(window.t ? window.t('location_set_success') : '场景设置成功', 'success');
-      try{ autoSaveWorkflow(); } catch(e){}
+      safeAutoSave()
     }
     
     // 将 selectLocation 暴露到全局作用域
@@ -1508,7 +1490,7 @@
 
       updateShotGroupNodeDisplay(currentEditingNodeId);
       closeShotGroupEditModal();
-      try{ autoSaveWorkflow(); } catch(e){}
+      safeAutoSave()
     }
 
     function updateShotGroupNodeDisplay(nodeId){
@@ -2084,7 +2066,7 @@
         shotGroupModalContent.innerHTML = renderShotGroupTable(node.data, nodeId);
       }
       
-      try{ autoSaveWorkflow(); } catch(e){}
+      safeAutoSave()
       showToast(window.t ? window.t('prop_removed') : '已删除道具', 'success');
     }
 
@@ -2289,7 +2271,7 @@
         shotGroupModalContent.innerHTML = renderShotGroupTable(node.data, nodeId);
       }
       
-      try{ autoSaveWorkflow(); } catch(e){}
+      safeAutoSave()
       showToast(window.t ? window.t('prop_removed') : '已移除道具', 'success');
     }
     
@@ -2340,7 +2322,7 @@
       document.getElementById('propsModal').classList.remove('show');
       window.currentPropsSelectionContext = null;
       
-      try{ autoSaveWorkflow(); } catch(e){}
+      safeAutoSave()
       showToast(window.t ? window.t('prop_added') : '已添加道具', 'success');
     };
 
@@ -2460,10 +2442,7 @@
       state.connections = state.connections.filter(c => c.id !== connId);
       if(state.selectedConnId === connId) state.selectedConnId = null;
       hideConnDeleteBtn();
-      renderConnections();
-      renderImageConnections();
-      renderFirstFrameConnections();
-      renderVideoConnections();
+      renderAllConnections();
       renderReferenceConnections();
       
       // 如果删除的连接涉及分镜节点，更新其预览图和选择菜单
@@ -2670,10 +2649,7 @@
           e.stopPropagation();
           state.selectedConnId = null;
           state.selectedImgConnId = connId;  // 使用保存的connId
-          renderConnections();
-          renderImageConnections();
-          renderFirstFrameConnections();
-          renderVideoConnections();
+          renderAllConnections();
         });
         
         // 显示删除按钮（计算贝塞尔曲线t=0.5处的实际位置）
@@ -2788,10 +2764,7 @@
           state.selectedImgConnId = null;
           state.selectedFirstFrameConnId = null;
           state.selectedVideoConnId = conn.id;
-          renderConnections();
-          renderImageConnections();
-          renderFirstFrameConnections();
-          renderVideoConnections();
+          renderAllConnections();
         });
         
         // 显示删除按钮（计算贝塞尔曲线t=0.5处的实际位置）
@@ -2898,12 +2871,7 @@
             state.selectedVideoConnId = null;
             state.selectedReferenceConnId = null;
             state.selectedAudioConnId = conn.id;
-            renderConnections();
-            renderImageConnections();
-            renderFirstFrameConnections();
-            renderVideoConnections();
-            renderReferenceConnections();
-            renderAudioConnections();
+            renderAllConnections();
           });
 
           if(state.selectedAudioConnId === conn.id){
@@ -2999,10 +2967,7 @@
           state.selectedFirstFrameConnId = null;
           state.selectedVideoConnId = null;
           state.selectedReferenceConnId = conn.id;
-          renderConnections();
-          renderImageConnections();
-          renderFirstFrameConnections();
-          renderVideoConnections();
+          renderAllConnections();
           renderReferenceConnections();
         });
         
@@ -3101,10 +3066,7 @@
           state.selectedConnId = null;
           state.selectedImgConnId = null;
           state.selectedFirstFrameConnId = conn.id;
-          renderConnections();
-          renderImageConnections();
-          renderFirstFrameConnections();
-          renderVideoConnections();
+          renderAllConnections();
         });
         
         // 显示删除按钮
@@ -3610,9 +3572,7 @@
         // 更新算力显示
         updateComputingPowerDisplay();
         // 重新渲染连接线
-        renderImageConnections();
-        renderAudioConnections();
-        renderVideoConnections();
+        renderAllConnections();
       });
       
       // 多参考图上传处理
@@ -4206,8 +4166,7 @@
         }
 
         // 禁用按钮
-        genBtnMain.disabled = true;
-        genBtnMain.textContent = '生成中...';
+        setBtnLoading(genBtnMain, '生成中...');
         genStatus.style.color = '';
         genStatus.style.display = 'block';
         genStatus.textContent = '正在提交任务...';
@@ -4288,12 +4247,9 @@
           // 所有视频节点ID（只包含新创建的节点）
           const allVideoNodeIds = [...newVideoNodeIds];
 
-          renderConnections();
-          renderImageConnections();
-          renderFirstFrameConnections();
-          renderVideoConnections();
+          renderAllConnections();
           renderMinimap();
-          try{ autoSaveWorkflow(); } catch(e){}
+          safeAutoSave()
 
           // 为每个视频节点初始化状态显示
           allVideoNodeIds.forEach((videoNodeId, idx) => {
@@ -4303,8 +4259,7 @@
               const statusEl = videoEl.querySelector('.video-status');
               if(statusField && statusEl){
                 statusField.style.display = 'block';
-                statusEl.style.color = '';
-                statusEl.textContent = '生成中...';
+                setStatusEl(statusEl, '生成中...');
               }
             }
           });
@@ -4321,8 +4276,7 @@
                 console.log('[TEST MODE] onComplete raw result:', statusResult);
               }
 
-              genBtnMain.disabled = false;
-              genBtnMain.textContent = '生成视频';
+              setBtnReady(genBtnMain, '生成视频');
               
               const tasks = statusResult.tasks || [];
               let successCount = 0;
@@ -4356,12 +4310,7 @@
                     console.log(`[图生视频] 视频节点 ${videoNodeId} 绑定 project_id:`, videoNode.data.project_id, '来源:', node.data.projectIds, 'index:', idx);
                     
                     if(previewField && thumbVideo && nameEl){
-                      thumbVideo.src = proxyDownloadUrl(videoUrl);
-                      thumbVideo.muted = true;
-                      thumbVideo.loop = true;
-                      thumbVideo.controls = false;
-                      thumbVideo.preload = 'metadata';
-                      thumbVideo.playsInline = true;
+                      setupVideoThumbnail(thumbVideo, videoUrl);
                       thumbVideo.onloadedmetadata = () => {
                         try{
                           if(isFinite(thumbVideo.duration) && thumbVideo.duration > 0){
@@ -4383,13 +4332,11 @@
                     }
                     
                     if(statusField && statusEl){
-                      statusEl.style.color = '#16a34a';
-                      statusEl.textContent = '✓ 生成成功';
+                      setStatusEl(statusEl, '✓ 生成成功', '#16a34a');
                     }
                   } else {
                     if(statusField && statusEl){
-                      statusEl.style.color = '#dc2626';
-                      statusEl.textContent = '✗ 生成成功但未返回视频地址';
+                      setStatusEl(statusEl, '✗ 生成成功但未返回视频地址', '#dc2626');
                     }
                   }
                 } else if(task.status === 'FAILED'){
@@ -4423,10 +4370,7 @@
               }
 
               // 视频节点内容已更新，重新渲染连接线
-              renderConnections();
-              renderImageConnections();
-              renderFirstFrameConnections();
-              renderVideoConnections();
+              renderAllConnections();
               renderMinimap();
 
               // 刷新用户算力显示
@@ -4440,8 +4384,7 @@
               const truncatedError = truncateErrorMessage(errorMsg);
               genStatus.style.color = '#dc2626';
               genStatus.textContent = truncatedError;
-              genBtnMain.disabled = false;
-              genBtnMain.textContent = '生成视频';
+              setBtnReady(genBtnMain, '生成视频');
               
               // 更新所有视频节点状态为失败
               allVideoNodeIds.forEach((videoNodeId) => {
@@ -4451,8 +4394,7 @@
                   const statusEl = videoEl.querySelector('.video-status');
                   if(statusField && statusEl){
                     statusField.style.display = 'block';
-                    statusEl.style.color = '#dc2626';
-                    statusEl.textContent = `✗ ${truncatedError}`;
+                    setStatusEl(statusEl, `✗ ${truncatedError}`, '#dc2626');
                   }
                 }
               });
@@ -4481,18 +4423,15 @@
                 // 只更新已经完成（成功或失败）的任务状态
                 if(task.status === 'FAILED'){
                   statusField.style.display = 'block';
-                  statusEl.style.color = '#dc2626';
-                  statusEl.textContent = `✗ 生成失败: ${truncateErrorMessage(task.error) || '未知错误'}`;
+                  setStatusEl(statusEl, `✗ 生成失败: ${truncateErrorMessage(task.error) || '未知错误'}`, '#dc2626');
                 } else if(task.status === 'SUCCESS' && task.result){
                   // 成功的任务在这里只更新状态文本，视频加载留给onComplete处理
                   statusField.style.display = 'block';
-                  statusEl.style.color = '#16a34a';
-                  statusEl.textContent = '✓ 生成成功，加载中...';
+                  setStatusEl(statusEl, '✓ 生成成功，加载中...', '#16a34a');
                 } else if(task.status === 'RUNNING'){
                   // 运行中的任务保持"生成中..."状态
                   statusField.style.display = 'block';
-                  statusEl.style.color = '';
-                  statusEl.textContent = '生成中...';
+                  setStatusEl(statusEl, '生成中...');
                 }
               });
             }
@@ -4503,8 +4442,7 @@
           const truncatedErr = truncateErrorMessage(err.message);
           genStatus.style.color = '#dc2626';
           genStatus.textContent = truncatedErr || '生成失败';
-          genBtnMain.disabled = false;
-          genBtnMain.textContent = '生成视频';
+          setBtnReady(genBtnMain, '生成视频');
           showToast('视频生成失败: ' + truncatedErr, 'error');
         }
       });
@@ -4740,8 +4678,7 @@
           // 删除该端口的连接
           state.imageConnections = state.imageConnections.filter(c => !(c.to === id && c.portType === 'start'));
           startImagePort.classList.add('disabled');
-          renderImageConnections();
-          renderVideoConnections();
+          renderAllConnections();
           updateComputingPowerDisplay();  // 更新算力显示
           showToast(window.t ? window.t('first_frame_upload_success') : '首帧图片上传成功', 'success');
         } else {
@@ -4769,8 +4706,7 @@
           // 删除该端口的连接
           state.imageConnections = state.imageConnections.filter(c => !(c.to === id && c.portType === 'end'));
           endImagePort.classList.add('disabled');
-          renderImageConnections();
-          renderVideoConnections();
+          renderAllConnections();
           updateComputingPowerDisplay();  // 更新算力显示
           showToast(window.t ? window.t('last_frame_upload_success') : '尾帧图片上传成功', 'success');
         } else {
@@ -4792,7 +4728,7 @@
         startImagePort.classList.remove('disabled');
         renderImageConnections();
         updateComputingPowerDisplay();  // 更新算力显示
-        try{ autoSaveWorkflow(); } catch(e){}
+        safeAutoSave()
       });
 
       endClearBtn.addEventListener('click', (e) => {
@@ -4807,7 +4743,7 @@
         endImagePort.classList.remove('disabled');
         renderImageConnections();
         updateComputingPowerDisplay();  // 更新算力显示
-        try{ autoSaveWorkflow(); } catch(e){}
+        safeAutoSave()
       });
 
       // 初始化：恢复已保存的图片预览
@@ -5017,7 +4953,7 @@
                 state.referenceConnections.splice(idx, 1);
                 renderReferenceConnections();
                 updateReferenceImages();
-                try{ autoSaveWorkflow(); } catch(err){}
+                safeAutoSave()
               }
             });
             
@@ -5090,7 +5026,7 @@
                   });
                   renderReferenceConnections();
                   updateReferenceImages();
-                  try{ autoSaveWorkflow(); } catch(e){}
+                  safeAutoSave()
                 }
               }
             }
@@ -5130,18 +5066,14 @@
                 from: state.connecting.fromId,
                 to: id
               });
-              renderConnections();
-              renderImageConnections();
-              renderFirstFrameConnections();
-              renderVideoConnections();
-              renderAudioConnections();
+              renderAllConnections();
               
               // 更新分镜节点的预览图和选择菜单
               if(fromNode.updatePreview){
                 fromNode.updatePreview();
               }
               
-              try{ autoSaveWorkflow(); } catch(e){}
+              safeAutoSave()
             }
           }
         }
@@ -5288,8 +5220,7 @@
               try {
                 coloringBtn.disabled = true;
                 statusEl.style.display = 'block';
-                statusEl.style.color = '#666';
-                statusEl.textContent = window.t ? window.t('uploading_image') : '正在上传涂色图片...';
+                setStatusEl(statusEl, window.t ? window.t('uploading_image') : '正在上传涂色图片...', '#666');
                 
                 const coloredImageBlob = await fetch(result.coloredImage).then(r => r.blob());
                 const uploadFormData = new FormData();
@@ -5297,10 +5228,7 @@
                 
                 const uploadRes = await fetch('/api/video-workflow/upload', {
                   method: 'POST',
-                  headers: {
-                    'Authorization': getAuthToken ? getAuthToken() : '',
-                    'X-User-Id': getUserId ? getUserId() : localStorage.getItem('user_id') || ''
-                  },
+                  headers: getAuthHeaders(),
                   body: uploadFormData
                 });
                 
@@ -5316,16 +5244,14 @@
                 imagePreviewImg.src = coloredImageUrl;
                 imagePreviewRow.style.display = 'block';
                 
-                statusEl.style.color = '#22c55e';
-                statusEl.textContent = window.t ? window.t('fill_complete_msg') : '涂色完成！';
+                setStatusEl(statusEl, window.t ? window.t('fill_complete_msg') : '涂色完成！', '#22c55e');
                 showToast(window.t ? window.t('fill_complete_msg') : '涂色完成！', 'success');
 
-                try{ autoSaveWorkflow(); } catch(e){}
+                safeAutoSave()
                 renderMinimap();
               } catch(err){
                 console.error('涂色编辑失败:', err);
-                statusEl.style.color = '#dc2626';
-                statusEl.textContent = window.t ? window.t('fill_error_msg') : '涂色失败';
+                setStatusEl(statusEl, window.t ? window.t('fill_error_msg') : '涂色失败', '#dc2626');
                 showToast((window.t ? window.t('fill_error_msg') : '涂色失败: ') + err.message, 'error');
               } finally {
                 coloringBtn.disabled = false;
@@ -5351,7 +5277,7 @@
             connectedShotFrameNode.updatePreview();
           }
           showToast(window.t ? window.t('set_as_first_frame_msg') : '已设置为视频首帧', 'success');
-          try{ autoSaveWorkflow(); } catch(e){}
+          safeAutoSave()
         }
       });
 
@@ -5455,7 +5381,7 @@
           }
 
           showToast('图片上传成功', 'success');
-          try{ autoSaveWorkflow(); } catch(e){}
+          safeAutoSave()
         } else {
           imagePreviewRow.style.display = 'none';
           imagePreviewImg.removeAttribute('src');
@@ -5477,22 +5403,19 @@
         e.stopPropagation();
         if(!node.data.url && !node.data.file){
           statusEl.style.display = 'block';
-          statusEl.style.color = '#dc2626';
-          statusEl.textContent = '请先上传图片';
+          setStatusEl(statusEl, '请先上传图片', '#dc2626');
           return;
         }
         
         if(!node.data.prompt){
           statusEl.style.display = 'block';
-          statusEl.style.color = '#dc2626';
-          statusEl.textContent = '请先输入编辑提示词或调整相机参数';
+          setStatusEl(statusEl, '请先输入编辑提示词或调整相机参数', '#dc2626');
           return;
         }
 
         editBtn.disabled = true;
         statusEl.style.display = 'block';
-        statusEl.style.color = '';
-        statusEl.textContent = '正在提交任务...';
+        setStatusEl(statusEl, '正在提交任务...');
 
         try{
           let submitData = node.data.file;
@@ -5572,14 +5495,11 @@
           }
 
 
-          renderConnections();
-          renderImageConnections();
-          renderFirstFrameConnections();
-          renderVideoConnections();
+          renderAllConnections();
           renderReferenceConnections();
           renderMinimap();
 
-          try{ autoSaveWorkflow(); } catch(e){}
+          safeAutoSave()
 
           pollVideoStatus(
             submitRes.projectIds,
@@ -5600,15 +5520,13 @@
               }
 
               if(imageUrls.length === 0){
-                statusEl.style.color = '#dc2626';
-                statusEl.textContent = '生成成功，但未获取到图片地址';
+                setStatusEl(statusEl, '生成成功，但未获取到图片地址', '#dc2626');
                 editBtn.disabled = false;
                 showToast('生成成功但未返回图片地址', 'error');
                 return;
               }
 
-              statusEl.style.color = '#16a34a';
-              statusEl.textContent = `生成完成！共${imageUrls.length}张图片`;
+              setStatusEl(statusEl, `生成完成！共${imageUrls.length}张图片`, '#16a34a');
               editBtn.disabled = false;
 
               // 更新已创建的图片节点
@@ -5632,7 +5550,7 @@
                 }
               });
 
-              try{ autoSaveWorkflow(); } catch(e){}
+              safeAutoSave()
               renderMinimap();
               showToast('图片编辑成功！', 'success');
               
@@ -5642,15 +5560,13 @@
               }
             },
             (errMsg) => {
-              statusEl.style.color = '#dc2626';
-              statusEl.textContent = errMsg;
+              setStatusEl(statusEl, errMsg, '#dc2626');
               editBtn.disabled = false;
               showToast(errMsg || '图片编辑失败', 'error');
             }
           );
         } catch(err){
-          statusEl.style.color = '#dc2626';
-          statusEl.textContent = err.message || '提交失败';
+          setStatusEl(statusEl, err.message || '提交失败', '#dc2626');
           editBtn.disabled = false;
           showToast('提交失败: ' + (err.message || ''), 'error');
         }
@@ -5718,11 +5634,10 @@
             to: cameraNodeId
           });
           renderConnections();
-          renderImageConnections();
-          renderFirstFrameConnections();
+          renderAllConnections();
           renderMinimap();
           showToast('已创建相机控制节点', 'success');
-          try{ autoSaveWorkflow(); } catch(err){}
+          safeAutoSave()
         });
       }
 
@@ -6079,9 +5994,7 @@
           window._vendorIcons = vendorIcons;
 
           const response = await fetch('/api/models', {
-            headers: {
-              'Authorization': getAuthToken()
-            }
+            headers: getAuthHeaders()
           });
           const data = await response.json();
 
@@ -6464,16 +6377,14 @@
         splitBtn.disabled = true;
         splitGridBtn.disabled = true;
         statusEl.style.display = 'block';
-        statusEl.style.color = '#666';
-        statusEl.textContent = node.data.narrationAsDialogue ? '正在将剧本转换为解说剧格式，再解析分镜...' : '正在调用LLM解析剧本...';
+        setStatusEl(statusEl, node.data.narrationAsDialogue ? '正在将剧本转换为解说剧格式，再解析分镜...' : '正在调用LLM解析剧本...', '#666');
 
         try {
           const response = await fetch('/api/parse-script', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': getAuthToken(),
-              'X-User-Id': getUserId()
+              ...getAuthHeaders()
             },
             body: JSON.stringify({
               script_content: node.data.scriptContent,
@@ -6495,8 +6406,7 @@
           if(result.code === 0 && result.data) {
             node.data.parsedData = result.data;
             
-            statusEl.style.color = '#16a34a';
-            statusEl.textContent = `解析成功！共${result.data.shot_groups?.length || 0}个分镜组`;
+            setStatusEl(statusEl, `解析成功！共${result.data.shot_groups?.length || 0}个分镜组`, '#16a34a');
             if(window.TaskConfig && !window.TaskConfig.isLoaded()) {
               await window.TaskConfig.load();
             }
@@ -6549,13 +6459,9 @@
               renderTimeline();
               if (!state.timeline.visible) flashExpandButton();
               
-              renderConnections();
-              renderImageConnections();
-              renderFirstFrameConnections();
-              renderVideoConnections();
-              renderAudioConnections();
+              renderAllConnections();
               renderMinimap();
-              try{ autoSaveWorkflow(); } catch(e){}
+              safeAutoSave()
               
               // 自动为每个分镜组生成分镜
               statusEl.textContent = '正在自动生成分镜...';
@@ -6565,8 +6471,7 @@
                   await generateShotFramesIndependentAsync(shotGroupNodeId, shotGroupNode);
                 }
               }
-              statusEl.style.color = '#16a34a';
-              statusEl.textContent = `已完成：${createdShotGroupNodes.length}个分镜组，所有分镜已自动生成`;
+              setStatusEl(statusEl, `已完成：${createdShotGroupNodes.length}个分镜组，所有分镜已自动生成`, '#16a34a');
             }
             
             showToast(window.t ? window.t('script_split_complete') : '剧本拆分成功！所有分镜已自动生成', 'success');
@@ -6575,8 +6480,7 @@
           }
         } catch(error) {
           console.error('剧本解析失败:', error);
-          statusEl.style.color = '#dc2626';
-          statusEl.textContent = '解析失败: ' + (error.message || '未知错误');
+          setStatusEl(statusEl, '解析失败: ' + (error.message || '未知错误'), '#dc2626');
           showToast(window.t ? window.t('script_parse_error') : '剧本解析失败', 'error');
         } finally {
           splitBtn.disabled = false;
@@ -6761,8 +6665,7 @@
                 
                 form.append('prompt', finalGridPrompt);
                 form.append('count', '1');
-                form.append('user_id', getUserId());
-                form.append('auth_token', getAuthToken());
+                appendAuthToForm(form);
                 
                 if(finalModel === 'gemini-3-pro-image-preview') {
                   form.append('image_size', '4K');
@@ -6862,14 +6765,10 @@
               });
 
 
-              renderConnections();
-              renderImageConnections();
-              renderFirstFrameConnections();
-              renderVideoConnections();
-              renderAudioConnections();
+              renderAllConnections();
               renderMinimap();
 
-              try{ autoSaveWorkflow(); } catch(e){}
+              safeAutoSave()
 
               gridStatusEl.style.color = '#16a34a';
               gridStatusEl.textContent = `已提交${imageCount}张宫格图片生成任务，正在轮询状态...`;
@@ -6916,11 +6815,7 @@
                     }
                   }
                   
-                  try {
-                    await autoSaveWorkflow();
-                  } catch(e) {
-                    console.error('[宫格生图] 自动保存失败:', e);
-                  }
+                  safeAutoSave();
                   
                   gridStatusEl.style.color = '#16a34a';
                   gridStatusEl.textContent = '宫格图片生成完成，正在拆分...';
@@ -6968,8 +6863,7 @@
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': getAuthToken(),
-              'X-User-Id': getUserId()
+              ...getAuthHeaders()
             },
             body: JSON.stringify({
               script_content: node.data.scriptContent,
@@ -7043,10 +6937,7 @@
           renderTimeline();
           if (!state.timeline.visible) flashExpandButton();
           
-          renderConnections();
-          renderImageConnections();
-          renderFirstFrameConnections();
-          renderVideoConnections();
+          renderAllConnections();
           renderMinimap();
 
           // 第三步：生成分镜节点并收集提示词
@@ -7170,8 +7061,7 @@
             
             form.append('prompt', finalGridPrompt);
             form.append('count', '1');
-            form.append('user_id', getUserId());
-            form.append('auth_token', getAuthToken());
+            appendAuthToForm(form);
             
             // 加强版模型需要传入4K图片大小
             if(finalModel === 'gemini-3-pro-image-preview') {
@@ -7273,12 +7163,9 @@
             });
           });
 
-          renderConnections();
-          renderImageConnections();
-          renderFirstFrameConnections();
-          renderVideoConnections();
+          renderAllConnections();
           renderMinimap();
-          try{ autoSaveWorkflow(); } catch(e){}
+          safeAutoSave()
 
           gridStatusEl.style.color = '#16a34a';
           gridStatusEl.textContent = `已提交${imageCount}张宫格图片生成任务，正在轮询状态...`;
@@ -7330,11 +7217,7 @@
               }
               
               // 保存工作流
-              try {
-                await autoSaveWorkflow();
-              } catch(e) {
-                console.error('[宫格生图] 自动保存失败:', e);
-              }
+              safeAutoSave();
               
               gridStatusEl.style.color = '#16a34a';
               gridStatusEl.textContent = '宫格图片生成完成，正在拆分...';
@@ -7446,8 +7329,7 @@
             localStorage.setItem(batchTipKey, 'true');
           }
           
-          batchGenerateBtn.disabled = true;
-          batchGenerateBtn.textContent = '批量生成中...';
+          setBtnLoading(batchGenerateBtn, '批量生成中...');
           
           let successCount = 0;
           let failCount = 0;
@@ -7472,21 +7354,19 @@
             }
           }
           
-          batchGenerateBtn.disabled = false;
-          batchGenerateBtn.textContent = '逐个生成视频';
+          setBtnReady(batchGenerateBtn, '逐个生成视频');
           
           const resultMsg = `批量生成完成！成功 ${successCount} 个分镜组，失败 ${failCount} 个`;
           batchStatusEl.style.color = successCount > 0 ? '#22c55e' : '#dc2626';
           batchStatusEl.textContent = resultMsg;
           showToast(resultMsg, successCount > 0 ? 'success' : 'warning');
           
-          try{ autoSaveWorkflow(); } catch(e){}
+          safeAutoSave()
         } catch(error) {
           console.error('Generate script videos error:', error);
           showToast(`批量生成失败: ${error.message}`, 'error');
           
-          batchGenerateBtn.textContent = '逐个生成视频';
-          batchGenerateBtn.disabled = false;
+          setBtnReady(batchGenerateBtn, '逐个生成视频');
           batchStatusEl.style.color = '#dc2626';
           batchStatusEl.textContent = `失败: ${error.message}`;
         }
@@ -7619,8 +7499,7 @@
             
             form.append('prompt', finalGridPrompt);
             form.append('count', '1');
-            form.append('user_id', getUserId());
-            form.append('auth_token', getAuthToken());
+            appendAuthToForm(form);
             
             if(finalModel === 'gemini-3-pro-image-preview') {
               form.append('image_size', '4K');
@@ -7716,12 +7595,9 @@
             });
           });
           
-          renderConnections();
-          renderImageConnections();
-          renderFirstFrameConnections();
-          renderVideoConnections();
+          renderAllConnections();
           renderMinimap();
-          try{ autoSaveWorkflow(); } catch(e){}
+          safeAutoSave()
 
           gridOnlyStatusEl.style.color = '#16a34a';
           gridOnlyStatusEl.textContent = `已提交${imageCount}张宫格图片生成任务，正在轮询状态...`;
@@ -7764,12 +7640,8 @@
                 }
               }
               
-              try {
-                await autoSaveWorkflow();
-              } catch(e) {
-                console.error('[宫格生图-仅生图] 自动保存失败:', e);
-              }
-              
+              safeAutoSave();
+
               gridOnlyStatusEl.style.color = '#16a34a';
               gridOnlyStatusEl.textContent = '宫格图片生成完成，正在拆分...';
               showToast('宫格图片生成完成，正在拆分', 'success');
@@ -8081,14 +7953,10 @@
                 from: state.connecting.fromId,
                 to: id
               });
-              renderConnections();
-              renderImageConnections();
-              renderFirstFrameConnections();
-              renderVideoConnections();
-              renderAudioConnections();
+              renderAllConnections();
               renderReferenceConnections();
               renderMinimap();
-              try{ autoSaveWorkflow(); } catch(e){}
+              safeAutoSave()
             }
           }
         }
@@ -8517,8 +8385,7 @@
           
           form.append('prompt', finalGridPrompt);
           form.append('count', '1');
-          form.append('user_id', getUserId());
-          form.append('auth_token', getAuthToken());
+          appendAuthToForm(form);
           
           if(finalModel === 'gemini-3-pro-image-preview') {
             form.append('image_size', '4K');
@@ -8621,9 +8488,7 @@
         
 
         renderConnections();
-        renderImageConnections();
-        renderFirstFrameConnections();
-        renderVideoConnections();
+        renderAllConnections();
         renderMinimap();
 
 
@@ -8636,7 +8501,7 @@
         gridStatusEl.textContent = `已提交${imageCount}张宫格图片生成任务，等待AI生成...`;
         showToast(`已提交${imageCount}张宫格图片生成任务`, 'success');
         
-        try{ autoSaveWorkflow(); } catch(e){}
+        safeAutoSave()
         
       } catch(error) {
         console.error('[宫格生图] 错误:', error);
@@ -8757,11 +8622,8 @@
         }
       });
 
-      renderConnections();
-      renderImageConnections();
-      renderFirstFrameConnections();
-      renderVideoConnections();
-      try{ autoSaveWorkflow(); } catch(e){}
+      renderAllConnections();
+      safeAutoSave()
       
       // 显示合理的提示信息
       if(createdNodeIds.length === 0 && skippedCount > 0){
@@ -8896,11 +8758,8 @@
       
       console.log(`[宫格生图] 生成完成 - 新建: ${createdNodeIds.length}, 跳过: ${skippedCount}`);
 
-      renderConnections();
-      renderImageConnections();
-      renderFirstFrameConnections();
-      renderVideoConnections();
-      try{ autoSaveWorkflow(); } catch(e){}
+      renderAllConnections();
+      safeAutoSave()
       
       // 返回创建的节点ID数组（供宫格生图等功能使用）
       return createdNodeIds;
@@ -9296,7 +9155,7 @@
         videoModelEl.addEventListener('change', () => {
           node.data.videoModel = videoModelEl.value;
           updateRefAudioVideoVisibility();
-          try{ autoSaveWorkflow(); } catch(e){}
+          safeAutoSave()
         });
 
         // 参考音频输入事件
@@ -9309,7 +9168,7 @@
               const nameEl = el.querySelector('.shot-ref-audio-name');
               if(nameEl) nameEl.textContent = '✓ ' + file.name;
             }
-            try{ autoSaveWorkflow(); } catch(e){}
+            safeAutoSave()
           });
         }
 
@@ -9323,7 +9182,7 @@
               const nameEl = el.querySelector('.shot-ref-video-name');
               if(nameEl) nameEl.textContent = '✓ ' + file.name;
             }
-            try{ autoSaveWorkflow(); } catch(e){}
+            safeAutoSave()
           });
         }
       }
@@ -9416,7 +9275,7 @@
             node.data.selectedSceneRefUrl = null;
             node.data.selectedSceneRefLabel = null;
             renderSceneTags();
-            try{ autoSaveWorkflow(); } catch(e){}
+            safeAutoSave()
           });
           tag.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -9486,7 +9345,7 @@
             node.data.selectedSceneRefLabel = null;
             renderSceneTags();
             closeRefDropdowns();
-            try{ autoSaveWorkflow(); } catch(e){}
+            safeAutoSave()
           });
           dropdown.appendChild(mainItem);
 
@@ -9501,7 +9360,7 @@
               node.data.selectedSceneRefLabel = opt.label;
               renderSceneTags();
               closeRefDropdowns();
-              try{ autoSaveWorkflow(); } catch(e){}
+              safeAutoSave()
             });
             dropdown.appendChild(item);
           });
@@ -9539,7 +9398,7 @@
             node.data.refScene = { id: loc.id, name: loc.name, pic: loc.reference_image || '' };
             renderSceneTags();
             closeRefDropdowns();
-            try{ autoSaveWorkflow(); } catch(e){}
+            safeAutoSave()
           });
           dropdown.appendChild(item);
         });
@@ -9575,7 +9434,7 @@
             e.stopPropagation();
             node.data.refProps.splice(idx, 1);
             renderPropTags();
-            try{ autoSaveWorkflow(); } catch(e){}
+            safeAutoSave()
           });
           propTagsEl.appendChild(tag);
         });
@@ -9618,7 +9477,7 @@
             }
             renderPropTags();
             closeRefDropdowns();
-            try{ autoSaveWorkflow(); } catch(e){}
+            safeAutoSave()
           });
           dropdown.appendChild(item);
         });
@@ -9724,7 +9583,7 @@
               if(node.data.selectedCharRefImageLabels) delete node.data.selectedCharRefImageLabels[charName];
               renderCharTags();
               closeRefDropdowns();
-              try{ autoSaveWorkflow(); } catch(e){}
+              safeAutoSave()
             });
             dropdown.appendChild(mainItem);
           }
@@ -9744,7 +9603,7 @@
               node.data.selectedCharRefImageLabels[charName] = opt.label;
               renderCharTags();
               closeRefDropdowns();
-              try{ autoSaveWorkflow(); } catch(e){}
+              safeAutoSave()
             });
             dropdown.appendChild(item);
           });
@@ -10005,7 +9864,7 @@
               });
               renderFirstFrameConnections();
               
-              try{ autoSaveWorkflow(); } catch(e){}
+              safeAutoSave()
             });
           });
         } else {
@@ -10087,7 +9946,7 @@
             refreshParentShotGroupPreview();
             
             renderFirstFrameConnections();
-            try{ autoSaveWorkflow(); } catch(e){}
+            safeAutoSave()
           }
         }
         state.connecting = null;
@@ -10243,15 +10102,13 @@
           }
           
           try {
-            reduceViolationBtn.disabled = true;
-            reduceViolationBtn.textContent = '改写提示词，修改违规内容...';
+            setBtnLoading(reduceViolationBtn, '改写提示词，修改违规内容...');
             
             const response = await fetch('/api/reduce-violation', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': getAuthToken(),
-                'X-User-Id': getUserId()
+                ...getAuthHeaders()
               },
               body: JSON.stringify({ prompt: currentPrompt })
             });
@@ -10269,8 +10126,7 @@
             console.error('降低违规失败:', error);
             showToast('降低违规失败: ' + error.message, 'error');
           } finally {
-            reduceViolationBtn.disabled = false;
-            reduceViolationBtn.textContent = '提示词已优化，再次优化';
+            setBtnReady(reduceViolationBtn, '提示词已优化，再次优化');
           }
         });
       }
@@ -10356,7 +10212,7 @@
           }
           
           showToast('已创建对话组节点并开始生成音频', 'success');
-          try{ autoSaveWorkflow(); } catch(e){}
+          safeAutoSave()
         });
       }
 
@@ -10379,18 +10235,14 @@
                 from: state.connecting.fromId,
                 to: id
               });
-              renderConnections();
-              renderImageConnections();
-              renderFirstFrameConnections();
-              renderVideoConnections();
-              renderAudioConnections();
+              renderAllConnections();
               
               // 如果是图片节点连接，更新预览图和选择菜单
               if(fromNode.type === 'image'){
                 updatePreviewImage();
               }
               
-              try{ autoSaveWorkflow(); } catch(e){}
+              safeAutoSave()
             }
           }
         }
@@ -10461,8 +10313,7 @@
       try {
         const response = await fetch(`/api/scripts?world_id=${defaultWorldId}&page=1&page_size=50`, {
           headers: {
-            'Authorization': localStorage.getItem('auth_token') || '',
-            'X-User-Id': localStorage.getItem('user_id') || ''
+            ...getAuthHeaders()
           }
         });
 
@@ -10755,8 +10606,7 @@
         const mergeStatusEl = document.querySelector(`.node[data-node-id="${shotGroupNodeId}"] .grid-merge-status`);
         if(!generateBtn) return;
         
-        generateBtn.disabled = true;
-        generateBtn.textContent = '生成中...';
+        setBtnLoading(generateBtn, '生成中...');
         
         const firstShotFrame = shotFrameNodes[0];
         const duration = shotGroupNode.data.videoDuration || 5;
@@ -10893,12 +10743,7 @@
         form.append('ratio', state.ratio || '9:16');
         form.append('task_id', taskId9);
         
-        if(userId){
-          form.append('user_id', userId);
-        }
-        if(authToken){
-          form.append('auth_token', authToken);
-        }
+        appendAuthToForm(form);
         
         const res = await fetch('/api/ai-app-run-image', {
           method: 'POST',
@@ -10963,9 +10808,7 @@
         }
 
         renderConnections();
-        renderImageConnections();
-        renderFirstFrameConnections();
-        renderVideoConnections();
+        renderAllConnections();
         renderMinimap();
 
         // 轮询视频生成状态,更新视频URL
@@ -11035,7 +10878,7 @@
             generateBtn.textContent = '生成视频';
             generateBtn.disabled = false;
             
-            try{ autoSaveWorkflow(); } catch(e){}
+            safeAutoSave()
           },
           (error) => {
             console.error('Shot group video generation error:', error);
@@ -11093,8 +10936,7 @@
           localStorage.setItem(batchTipKey, 'true');
         }
 
-        batchGenerateBtn.disabled = true;
-        batchGenerateBtn.textContent = '批量生成中...';
+        setBtnLoading(batchGenerateBtn, '批量生成中...');
 
         let successCount = 0;
         let failCount = 0;
@@ -11121,8 +10963,7 @@
           }
         }
 
-        batchGenerateBtn.disabled = false;
-        batchGenerateBtn.textContent = '逐个生成视频';
+        setBtnReady(batchGenerateBtn, '逐个生成视频');
 
         if(successCount > 0) {
           showToast(`批量生成完成！成功 ${successCount} 个，失败 ${failCount} 个`, 'success');
@@ -11136,8 +10977,7 @@
 
         const batchGenerateBtn = document.querySelector(`.node[data-node-id="${shotGroupNodeId}"] .shot-group-batch-generate-btn`);
         if(batchGenerateBtn) {
-          batchGenerateBtn.disabled = false;
-          batchGenerateBtn.textContent = '逐个生成视频';
+          setBtnReady(batchGenerateBtn, '逐个生成视频');
         }
       }
     }

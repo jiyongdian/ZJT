@@ -370,9 +370,7 @@ async function generateShotFrameImage(nodeId, node){
     }
     
     // 重新渲染连接线
-    renderConnections();
-    renderImageConnections();
-    renderFirstFrameConnections();
+    renderAllConnections();
     renderMinimap();
     
     // 轮询任务状态,更新图片URL
@@ -462,9 +460,7 @@ async function generateShotFrameImage(nodeId, node){
         }
         
         // 重新渲染连接线
-        renderConnections();
-        renderImageConnections();
-        renderFirstFrameConnections();
+        renderAllConnections();
         
         // 更新分镜节点的预览图
         if(node.updatePreview){
@@ -475,7 +471,7 @@ async function generateShotFrameImage(nodeId, node){
         generateBtn.textContent = '生成分镜图';
         showToast(`分镜图生成成功！已创建 ${imageUrls.length} 个图片节点`, 'success');
         
-        try{ autoSaveWorkflow(); } catch(e){ console.error('Auto save failed:', e); }
+        safeAutoSave()
       },
       (error) => {
         showToast(`生成失败: ${error}`, 'error');
