@@ -1639,48 +1639,46 @@
 
                 // ===== 发送前：统一等待图片/视频上传完成 =====
                 if (selectedType.value === 'agent') {
-                    if (mediaType.value !== 'video') {
-                        // Agent 对话/音频模式：检查多图 + 多视频上传状态
-                        const failedImages = agentImageFiles.value.filter(img => img.uploadFailed);
-                        if (failedImages.length > 0) {
-                            showError(window.t('upload_failed_delete'));
+                    // 统一等待 agentImageFiles 中的图片上传完成（不区分 mediaType）
+                    const failedImages = agentImageFiles.value.filter(img => img.uploadFailed);
+                    if (failedImages.length > 0) {
+                        showError(window.t('upload_failed_delete'));
+                        return;
+                    }
+                    if (agentImageFiles.value.some(img => img.uploading)) {
+                        const ok = await waitForAgentImagesUploaded(10000);
+                        if (!ok) {
+                            showError(window.t('upload_timeout_retry'));
                             return;
                         }
-                        if (agentImageFiles.value.some(img => img.uploading)) {
-                            const ok = await waitForAgentImagesUploaded(10000);
-                            if (!ok) {
-                                showError(window.t('upload_timeout_retry'));
-                                return;
-                            }
-                        }
-                        const invalidAfterWait = agentImageFiles.value.filter(img => img.uploadFailed || !img.serverUrl);
-                        if (invalidAfterWait.length > 0) {
-                            showError(t('upload_failed_delete'));
+                    }
+                    const invalidAfterWait = agentImageFiles.value.filter(img => img.uploadFailed || !img.serverUrl);
+                    if (invalidAfterWait.length > 0) {
+                        showError(t('upload_failed_delete'));
+                        return;
+                    }
+                    // 统一等待 agentVideoFiles 中的视频上传完成（不区分 mediaType）
+                    const failedVideos = agentVideoFiles.value.filter(v => v.uploadFailed);
+                    if (failedVideos.length > 0) {
+                        showError(t('video_upload_failed_delete'));
+                        return;
+                    }
+                    if (agentVideoFiles.value.some(v => v.uploading || v.compressing)) {
+                        const ok = await waitForAgentVideosUploaded(60000);
+                        if (!ok) {
+                            showError(t('video_processing_timeout'));
                             return;
                         }
-                        // 检查视频上传状态
-                        const failedVideos = agentVideoFiles.value.filter(v => v.uploadFailed);
-                        if (failedVideos.length > 0) {
-                            showError(t('video_upload_failed_delete'));
-                            return;
-                        }
-                        if (agentVideoFiles.value.some(v => v.uploading || v.compressing)) {
-                            const ok = await waitForAgentVideosUploaded(60000);
-                            if (!ok) {
-                                showError(t('video_processing_timeout'));
-                                return;
-                            }
-                        }
-                        const invalidVideosAfterWait = agentVideoFiles.value.filter(v => v.uploadFailed || !v.serverUrl);
-                        if (invalidVideosAfterWait.length > 0) {
-                            showError(t('video_upload_failed_delete'));
-                            return;
-                        }
-                    } else {
-                        // Agent 视频模式：等待服务器 HTTP URL 就绪
+                    }
+                    const invalidVideosAfterWait = agentVideoFiles.value.filter(v => v.uploadFailed || !v.serverUrl);
+                    if (invalidVideosAfterWait.length > 0) {
+                        showError(t('video_upload_failed_delete'));
+                        return;
+                    }
+                    // Agent 视频模式下，如果是旧的单图上传方式，等待服务器 URL 就绪
+                    if (mediaType.value === 'video' && agentImageFiles.value.length === 0) {
                         const existingServerUrl = getCurrentImageServerUrl();
                         if (hasUploadedImage.value && uploadedImageFile.value && !existingServerUrl) {
-                            // 检查是否有明确的失败标记
                             const failedImage = agentImageFiles.value.some(img => img.uploadFailed);
                             if (failedImage) {
                                 showError(window.t('upload_failed_delete'));
@@ -1775,8 +1773,8 @@
                 // 添加用户消息（含图片缩略图）
                 let userContent = text;
                 const isAgentChatPreview = selectedType.value === 'agent';
-                if (isAgentChatPreview && mediaType.value !== 'video') {
-                    // Agent 对话模式：显示多图 + 多视频预览
+                if (isAgentChatPreview && (agentImageFiles.value.length > 0 || agentVideoFiles.value.length > 0)) {
+                    // Agent 模式：统一显示多图 + 多视频预览（不区分 mediaType）
                     agentImageFiles.value.forEach((img, i) => {
                         const displayUrl = img.serverUrl;
                         userContent += `\n\n${t('image_label', {num: i + 1})} <img src="${displayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${displayUrl}'" alt="${t('image_label', {num: i + 1})}">`;
@@ -1786,7 +1784,7 @@
                         userContent += `\n\n${t('video_label', {num: i + 1})} <video src="${displayUrl}" style="max-height:160px;border-radius:8px;" controls muted></video>`;
                     });
                 } else if (isAgentChatPreview && mediaType.value === 'video' && hasUploadedImage.value) {
-                    // Agent 视频模式参考图预览，优先使用服务器 URL 避免 blob URL 失效
+                    // Agent 视频模式参考图预览（旧单图上传方式），优先使用服务器 URL 避免 blob URL 失效
                     const videoDisplayUrl = getCurrentImageServerUrl();
                     if (videoDisplayUrl) {
                         userContent += `\n\n<img src="${videoDisplayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${videoDisplayUrl}'" alt="${window.t('reference_image_alt')}">`;
@@ -1794,8 +1792,8 @@
                 } else if (hasUploadedImage.value && uploadedImageUrl.value) {
                     userContent += `\n\n<img src="${uploadedImageUrl.value}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${uploadedImageUrl.value}'" alt="${t('reference_image_alt')}">`;
                 }
-                // 视频生成模式下，展示 mediaItems 中的视频和音频引用
-                if (selectedType.value === 'video' || (selectedType.value === 'agent' && mediaType.value === 'video')) {
+                // Agent 模式下，展示 mediaItems 中的视频和音频引用
+                if (selectedType.value === 'video' || isAgentChatPreview) {
                     mediaItems.value.forEach(m => {
                         if (m.type === 'video' && m.fileUrl) {
                             userContent += `\n\n${t('video_tag')} ${m.displayName} <video src="${m.fileUrl}" style="max-height:160px;border-radius:8px;" controls muted></video>`;
