@@ -2376,14 +2376,13 @@
             async function sendMessageToApi(text) {
                 isLoading.value = true;
                 const sessionId = currentSessionId.value;
-                const isAgentChat = selectedType.value === 'agent' && mediaType.value !== 'video';
-                const isAgentVideo = selectedType.value === 'agent' && mediaType.value === 'video';
+                const isAgentMode = selectedType.value === 'agent';
 
                 try {
                     // 收集图片 URL（统一使用 HTTP URL）
                     const imageUrls = [];
-                    if (isAgentChat && agentImageFiles.value.length > 0) {
-                        // Agent 对话模式：防御校验 + 收集 HTTP URL
+                    if (isAgentMode && agentImageFiles.value.length > 0) {
+                        // Agent 模式：统一从 agentImageFiles 收集图片
                         const invalidImages = agentImageFiles.value.filter(img => !isHttpUrl(img.serverUrl));
                         if (invalidImages.length > 0) {
                             showError(window.t('upload_not_ready'));
@@ -2394,25 +2393,14 @@
                             imageUrls.push(img.serverUrl);
                         });
                         console.log('[Agent] 发送图片 URL:', imageUrls.length, '张', imageUrls);
-                    } else if (isAgentVideo && hasUploadedImage.value) {
-                        // Agent 视频模式：handleSend() 已等待 URL 就绪，这里做防御校验
-                        const finalServerUrl = getCurrentImageServerUrl();
-                        if (finalServerUrl) {
-                            imageUrls.push(finalServerUrl);
-                        } else if (uploadedImageFile.value) {
-                            showError(window.t('upload_not_ready'));
-                            isLoading.value = false;
-                            return;
-                        }
                     } else if (hasUploadedImage.value) {
-                        // VL 模式：等待服务器上传完成获取 HTTP URL
+                        // 非 Agent 模式 或 Agent 模式无 agentImageFiles 时的回退逻辑
                         const serverUrl = uploadedImageServerUrl.value;
                         if (isHttpUrl(serverUrl)) {
                             imageUrls.push(serverUrl);
                         } else if (isHttpUrl(uploadedImageUrl.value)) {
                             imageUrls.push(uploadedImageUrl.value);
                         } else {
-                            // 兜底等待（非 Agent 模式 handleSend 未等待）
                             const serverUrl = await waitForImageServerUrl(10000);
                             if (serverUrl) {
                                 imageUrls.push(serverUrl);
@@ -2427,31 +2415,34 @@
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 300000);
 
-                    // 收集视频 URL（Agent 对话模式）
+                    // 收集视频和音频 URL
                     const videoUrls = [];
                     const audioUrls = [];
-                    if (isAgentChat && agentVideoFiles.value.length > 0) {
-                        const invalidVideos = agentVideoFiles.value.filter(v => !isHttpUrl(v.serverUrl));
-                        if (invalidVideos.length > 0) {
-                            showError(t('video_not_ready'));
-                            isLoading.value = false;
-                            return;
+                    if (isAgentMode) {
+                        // Agent 模式：优先从 agentVideoFiles 收集，再从 mediaItems 补充
+                        if (agentVideoFiles.value.length > 0) {
+                            const invalidVideos = agentVideoFiles.value.filter(v => !isHttpUrl(v.serverUrl));
+                            if (invalidVideos.length > 0) {
+                                showError(t('video_not_ready'));
+                                isLoading.value = false;
+                                return;
+                            }
+                            agentVideoFiles.value.forEach(v => {
+                                videoUrls.push(v.serverUrl);
+                            });
+                            console.log('[Agent] 发送视频 URL:', videoUrls.length, '个', videoUrls);
                         }
-                        agentVideoFiles.value.forEach(v => {
-                            videoUrls.push(v.serverUrl);
-                        });
-                        console.log('[Agent] 发送视频 URL:', videoUrls.length, '个', videoUrls);
-                    } else if (isAgentVideo) {
-                        // 视频模式：从 mediaItems 收集已上传的视频 URL 和音频 URL
+                        // 从 mediaItems 补充视频和音频 URL（视频子模式下的上传来源）
                         mediaItems.value.forEach(m => {
-                            if (m.type === 'video' && m.fileUrl && isHttpUrl(m.fileUrl)) {
+                            if (m.type === 'video' && m.fileUrl && isHttpUrl(m.fileUrl) && !videoUrls.includes(m.fileUrl)) {
                                 videoUrls.push(m.fileUrl);
                             } else if (m.type === 'audio' && m.fileUrl && isHttpUrl(m.fileUrl)) {
                                 audioUrls.push(m.fileUrl);
                             }
                         });
-                        console.log('[Agent] 视频模式发送视频 URL:', videoUrls.length, '个', videoUrls);
-                        console.log('[Agent] 视频模式发送音频 URL:', audioUrls.length, '个', audioUrls);
+                        if (audioUrls.length > 0) {
+                            console.log('[Agent] 发送音频 URL:', audioUrls.length, '个', audioUrls);
+                        }
                     }
 
                     // 安全校验：只允许 HTTP URL，过滤 blob: / 空 / 非字符串
@@ -2486,7 +2477,7 @@
                             model_id: selectedLLMModel.value ? selectedLLMModel.value.id : undefined,
                             vendor_id: selectedLLMModel.value ? (selectedLLMModel.value.vendor_id || 1) : 1,
                             image_preferences: imagePreferences,
-                            video_preferences: isAgentVideo ? {
+                            video_preferences: (isAgentMode && mediaType.value === 'video') ? {
                                 ratio: selectedRatio.value,
                                 duration: selectedDuration.value,
                                 image_mode: videoImageMode.value,
@@ -2518,7 +2509,7 @@
                     updateSessionTitle(text);
 
                     // 任务创建成功后立即清理媒体预览（不等待流式响应结束）
-                    if (isAgentChat || isAgentVideo) {
+                    if (isAgentMode) {
                         agentImageFiles.value.forEach(img => {
                             if (img.previewUrl && img.previewUrl.startsWith('blob:')) URL.revokeObjectURL(img.previewUrl);
                         });

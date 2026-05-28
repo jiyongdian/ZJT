@@ -2986,7 +2986,7 @@ MCP_TOOLS = [
     },
     {
         "name": "image_to_video",
-        "description": "图片生成视频（图生视频，非阻塞）。基于参考图片生成视频，立即返回 project_ids。非阻塞，后台自动跟踪进度。⚠️ 严禁捏造图片URL，image_urls 必须是对话中真实存在的图片地址。",
+        "description": "图片生成视频（图生视频，非阻塞）。基于参考图片和/或参考视频和/或参考音频生成视频，立即返回 project_ids。非阻塞，后台自动跟踪进度。⚠️ 严禁捏造图片/视频URL，必须是对话中真实存在的地址。",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -2996,7 +2996,7 @@ MCP_TOOLS = [
                 },
                 "image_urls": {
                     "type": "string",
-                    "description": "参考图片URL（必填），多张用英文逗号分隔。对话中每张图片都有 [图片N]（URL: ...） 标签，请将所有图片 URL 用逗号拼接后传入。例如：'http://xxx/a.jpg,http://xxx/b.jpg'"
+                    "description": "参考图片URL（可选），多张用英文逗号分隔。对话中每张图片都有 [图片N]（URL: ...） 标签，请将所有图片 URL 用逗号拼接后传入。例如：'http://xxx/a.jpg,http://xxx/b.jpg'。视频克隆场景中可只传 video_urls 不传此参数。"
                 },
                 "ratio": {
                     "type": "string",
@@ -3023,7 +3023,7 @@ MCP_TOOLS = [
                     "description": "参考音频URL（可选），多个用英文逗号分隔。仅部分模型支持。用于提供驱动音频，让生成的视频配合音频节奏。"
                 }
             },
-            "required": ["prompt", "image_urls"]
+            "required": ["prompt"]
         }
     },
     {
