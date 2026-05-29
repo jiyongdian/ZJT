@@ -7,6 +7,7 @@ Seedance 火山引擎供应商 v1 版本驱动实现
 子类通过 driver_type 和 model_name 区分不同模型。
 """
 from typing import Dict, Any, Optional
+import os
 import traceback
 import json
 import uuid
@@ -85,11 +86,12 @@ class SeedanceVolcengineV1Driver(BaseVideoDriver):
                         and step.target == video_path
                         and step.result_url):
                     result_url = step.result_url
-                    # result_url 是相对路径（如 /upload/cache/...），需转为完整 URL 以便 CDN 上传
-                    if result_url.startswith("/") and video_path.startswith("http"):
-                        from urllib.parse import urlparse
-                        parsed = urlparse(video_path)
-                        result_url = f"{parsed.scheme}://{parsed.netloc}{result_url}"
+                    # result_url 是本地路径（如 /upload/cache/...），去掉前导 / 变成相对路径
+                    if result_url.startswith("/"):
+                        result_url = result_url.lstrip('/')
+                    if not os.path.exists(result_url):
+                        self.logger.warning(f"face_mask 结果文件不存在: {result_url}，使用原始路径")
+                        return video_path
                     self.logger.info(f"使用 face_mask 结果替换视频: {video_path} -> {result_url}")
                     return result_url
         except Exception as e:

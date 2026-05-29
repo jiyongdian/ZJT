@@ -1773,18 +1773,15 @@
                 // 添加用户消息（含图片缩略图）
                 let userContent = text;
                 const isAgentChatPreview = selectedType.value === 'agent';
-                if (isAgentChatPreview && (agentImageFiles.value.length > 0 || agentVideoFiles.value.length > 0)) {
-                    // Agent 模式：统一显示多图 + 多视频预览（不区分 mediaType）
+                // 图片显示（独立判断）
+                if (isAgentChatPreview && agentImageFiles.value.length > 0) {
+                    // Agent 模式：从 agentImageFiles 显示多图预览
                     agentImageFiles.value.forEach((img, i) => {
                         const displayUrl = img.serverUrl;
                         userContent += `\n\n${t('image_label', {num: i + 1})} <img src="${displayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${displayUrl}'" alt="${t('image_label', {num: i + 1})}">`;
                     });
-                    agentVideoFiles.value.forEach((vid, i) => {
-                        const displayUrl = vid.serverUrl;
-                        userContent += `\n\n${t('video_label', {num: i + 1})} <video src="${displayUrl}" style="max-height:160px;border-radius:8px;" controls muted></video>`;
-                    });
                 } else if (isAgentChatPreview && mediaType.value === 'video' && hasUploadedImage.value) {
-                    // Agent 视频模式参考图预览（旧单图上传方式），优先使用服务器 URL 避免 blob URL 失效
+                    // Agent 视频模式参考图预览（单图上传方式），优先使用服务器 URL
                     const videoDisplayUrl = getCurrentImageServerUrl();
                     if (videoDisplayUrl) {
                         userContent += `\n\n<img src="${videoDisplayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${videoDisplayUrl}'" alt="${window.t('reference_image_alt')}">`;
@@ -1792,10 +1789,19 @@
                 } else if (hasUploadedImage.value && uploadedImageUrl.value) {
                     userContent += `\n\n<img src="${uploadedImageUrl.value}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${uploadedImageUrl.value}'" alt="${t('reference_image_alt')}">`;
                 }
-                // Agent 模式下，展示 mediaItems 中的视频和音频引用
+                // 视频显示（独立判断）
+                if (isAgentChatPreview && agentVideoFiles.value.length > 0) {
+                    agentVideoFiles.value.forEach((vid, i) => {
+                        const displayUrl = vid.serverUrl;
+                        userContent += `\n\n${t('video_label', {num: i + 1})} <video src="${displayUrl}" style="max-height:160px;border-radius:8px;" controls muted></video>`;
+                    });
+                }
+                // Agent 模式下，展示 mediaItems 中的视频和音频引用（去重）
                 if (selectedType.value === 'video' || isAgentChatPreview) {
+                    const shownVideoUrls = agentVideoFiles.value.map(v => v.serverUrl).filter(Boolean);
                     mediaItems.value.forEach(m => {
                         if (m.type === 'video' && m.fileUrl) {
+                            if (shownVideoUrls.includes(m.fileUrl)) return;
                             userContent += `\n\n${t('video_tag')} ${m.displayName} <video src="${m.fileUrl}" style="max-height:160px;border-radius:8px;" controls muted></video>`;
                         } else if (m.type === 'audio' && m.fileUrl) {
                             userContent += `\n\n${t('audio_tag')} ${m.displayName} <audio src="${m.fileUrl}" controls style="width:100%;max-height:40px;border-radius:8px;"></audio>`;
@@ -1807,6 +1813,9 @@
                     content: userContent,
                     timestamp: new Date().toISOString()
                 });
+                if (currentSessionId.value) {
+                    appendMessageToBackend('user', userContent);
+                }
                 inputText.value = '';
                 autoResize();
                 scrollToBottom();
@@ -2647,6 +2656,10 @@
                                 showContinue.value = true;
                                 // 刷新算力显示
                                 loadComputingPower();
+                                // AI 文本回复立即保存到后端（图片/视频结果由轮询回调保存）
+                                if (fullContent && currentSessionId.value) {
+                                    appendMessageToBackend('assistant', fullContent);
+                                }
                                 resolve();
                             }
                         } catch (e) {

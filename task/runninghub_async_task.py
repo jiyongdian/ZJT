@@ -145,9 +145,10 @@ def _handle_face_mask_task_success(task: Any, result_url: str):
         融合后的本地相对路径（无前导 /），失败返回 None
     """
     try:
+        import os
         from utils.media_cache import download_and_cache
         from utils.face_mask_util import overlay_face_mask
-        from utils.project_path import get_project_root
+        from utils.project_path import get_project_root, resolve_upload_url_to_local_path
         from datetime import datetime
 
         params = task.get_params_dict()
@@ -157,30 +158,43 @@ def _handle_face_mask_task_success(task: Any, result_url: str):
             logger.error("缺少 video_path 参数，无法融合视频")
             return None
 
-        # Step 1: 下载遮罩视频到本地缓存
+        project_root = get_project_root()
+
+        # Step 1: 下载遮罩视频和原视频到本地缓存
         loop = asyncio.new_event_loop()
         try:
+            # 1a. 下载遮罩视频
             mask_video_local = loop.run_until_complete(
                 download_and_cache(result_url, task.id, "video")
             )
+            if not mask_video_local:
+                logger.error("下载遮罩视频失败")
+                return None
+            mask_video_abs = os.path.join(project_root, mask_video_local.lstrip('/'))
+
+            # 1b. 获取原视频本地路径
+            if original_video.startswith('http://') or original_video.startswith('https://'):
+                # 优先尝试本机 URL 映射（域名与 server.host 匹配时直接用本地文件，无需下载）
+                from utils.image_upload_utils import try_map_url_to_local_file
+                from config.config_util import get_config
+                local_mapped = try_map_url_to_local_file(original_video, get_config(), project_root)
+                if local_mapped and os.path.exists(local_mapped):
+                    original_abs = local_mapped
+                    logger.info(f"原视频映射到本地文件: {original_video} -> {original_abs}")
+                else:
+                    # CDN/远程 URL：路径映射不可靠（CDN 路径结构与本地不同），下载到缓存
+                    original_local = loop.run_until_complete(
+                        download_and_cache(original_video, task.id, "video")
+                    )
+                    if not original_local:
+                        logger.error(f"原视频下载失败: {original_video}")
+                        return None
+                    original_abs = os.path.join(project_root, original_local.lstrip('/'))
+            else:
+                original_abs = resolve_upload_url_to_local_path(original_video)
         finally:
             loop.close()
 
-        if not mask_video_local:
-            logger.error("下载遮罩视频失败")
-            return None
-
-        # 转换为本地绝对路径
-        import os
-        from utils.project_path import resolve_upload_url_to_local_path
-        project_root = get_project_root()
-
-        mask_video_abs = os.path.join(project_root, mask_video_local.lstrip('/'))
-
-        if original_video.startswith('http://') or original_video.startswith('https://'):
-            original_abs = resolve_upload_url_to_local_path(original_video)
-        else:
-            original_abs = os.path.join(project_root, original_video.lstrip('/'))
         if not os.path.exists(original_abs):
             logger.error(f"原视频不存在: {original_abs}")
             return None
@@ -218,6 +232,11 @@ def _handle_face_mask_task_success(task: Any, result_url: str):
 SUCCESS_HANDLER_MAP = {
     AsyncTaskImplementationId.RUNNINGHUB_AUDIO: _handle_audio_task_success,
     AsyncTaskImplementationId.RUNNINGHUB_FACE_MASK: _handle_face_mask_task_success,
+}
+
+# 后处理必须成功的实现方列表。如果 success_handler 返回 None，任务应标记为 FAILED。
+POST_PROCESSING_REQUIRED = {
+    AsyncTaskImplementationId.RUNNINGHUB_FACE_MASK: True,
 }
 
 
@@ -284,14 +303,25 @@ def process_runninghub_async_tasks(app=None):
                             if success_handler:
                                 local_path = success_handler(task, result_url)
 
-                            async_result_url = f"/{local_path}" if local_path else result_url
-                            AsyncTasksModel.update_status(
-                                record_id=task.id,
-                                status=AsyncTaskStatus.COMPLETED,
-                                result_url=async_result_url
-                            )
-                            RunningHubSlotsModel.release_slot(task.id, source=RunningHubSlot.SOURCE_ASYNC)
-                            logger.info(f"RunningHub 异步任务完成: {task.id}, result: {async_result_url}")
+                            # 后处理必须成功但返回 None → 标记 FAILED
+                            if POST_PROCESSING_REQUIRED.get(impl_id) and local_path is None:
+                                error_msg = f"任务后处理失败 (implementation={impl_id}), task_id={task.id}"
+                                logger.error(error_msg)
+                                AsyncTasksModel.update_status(
+                                    record_id=task.id,
+                                    status=AsyncTaskStatus.FAILED,
+                                    error_message=error_msg
+                                )
+                                RunningHubSlotsModel.release_slot(task.id, source=RunningHubSlot.SOURCE_ASYNC)
+                            else:
+                                async_result_url = f"/{local_path}" if local_path else result_url
+                                AsyncTasksModel.update_status(
+                                    record_id=task.id,
+                                    status=AsyncTaskStatus.COMPLETED,
+                                    result_url=async_result_url
+                                )
+                                RunningHubSlotsModel.release_slot(task.id, source=RunningHubSlot.SOURCE_ASYNC)
+                                logger.info(f"RunningHub 异步任务完成: {task.id}, result: {async_result_url}")
 
                         elif status_result.get('status') == 'FAILED':
                             error_message = status_result.get('error', '任务失败')
