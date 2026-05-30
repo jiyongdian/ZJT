@@ -60,7 +60,10 @@ async function replaceCharacterMarkers(prompt){
 
 // 分镜节点生成视频功能
 async function generateShotFrameVideo(nodeId, node){
-  if(!node.data.previewImageUrl){
+  const mode = node.data.videoMode || 'first_last_frame';
+
+  // 首帧模式需要分镜图，参考图模式不需要
+  if(mode === 'first_last_frame' && !node.data.previewImageUrl){
     showToast('请先生成分镜图', 'warning');
     return;
   }
@@ -75,8 +78,8 @@ async function generateShotFrameVideo(nodeId, node){
     errorEl.textContent = '';
   }
 
-  // 验证参考音频和视频的总时长
-  if(node.data.refAudioFile || node.data.refVideoFile) {
+  // 验证参考音频和视频的总时长（仅首帧模式，参考图模式下 ref audio/video 已隐藏）
+  if(mode === 'first_last_frame' && (node.data.refAudioFile || node.data.refVideoFile)) {
     const validationForm = new FormData();
     if(node.data.refAudioFile) {
       validationForm.append('audio_files', node.data.refAudioFile);
@@ -117,21 +120,12 @@ async function generateShotFrameVideo(nodeId, node){
     generateBtn.disabled = true;
     generateBtn.textContent = '生成中...';
 
-    // 获取预览图的URL
-    const imageUrl = node.data.previewImageUrl;
-    
     // 使用节点中用户编辑的视频提示词文本，而不是JSON格式
     let videoPrompt = node.data.videoPromptText || node.data.videoPrompt || '';
     const duration = node.data.videoDuration || 15;
     const count = node.data.videoDrawCount || 1;
-    const videoModel = node.data.videoModel || 'sora2';
-    
-    // 如果是Sora模型,需要替换提示词中的角色标记
-    // 注意: 图生视频模式下禁用角色卡替换,因为效果不佳。等后期支持文生视频时再启用
-    // if(videoModel === 'sora2'){
-    //   videoPrompt = await replaceCharacterMarkers(videoPrompt);
-    // }
-    
+    const videoModel = node.data.videoModel || (mode === 'multi_reference' ? 'veo3' : 'sora2');
+
     // 添加视频提示词后缀
     if(typeof getVideoPromptWithSuffix === 'function'){
       videoPrompt = getVideoPromptWithSuffix(videoPrompt);
@@ -139,43 +133,80 @@ async function generateShotFrameVideo(nodeId, node){
 
     showToast(`正在生成 ${count} 个视频...`, 'info');
 
-    // 调用图生视频API
     const userId = localStorage.getItem('user_id') || '1';
     const authToken = localStorage.getItem('auth_token') || '';
-    // 根据 videoModel 获取 task_id
-    const taskId = TaskConfig.getTaskIdByKey(videoModel || 'wan22', 'image_to_video');
-    if(!taskId){
-      throw new Error(`未找到视频模型 ${videoModel} 对应的任务配置`);
-    }
-    
+
+    // === 构建公共字段 ===
     const form = new FormData();
-    
-    form.append('image_urls', imageUrl);
     form.append('prompt', videoPrompt);
+    form.append('ratio', state.ratio || '9:16');
     form.append('duration_seconds', duration);
     form.append('count', count);
-    form.append('ratio', state.ratio || '9:16');
-    form.append('task_id', taskId);
+    if(userId) form.append('user_id', userId);
+    if(authToken) form.append('auth_token', authToken);
 
-    // 添加参考音频和视频文件
-    if(node.data.refAudioFile) {
-      form.append('audio_files', node.data.refAudioFile);
-    }
-    if(node.data.refVideoFile) {
-      form.append('video_files', node.data.refVideoFile);
-    }
+    let res;
 
-    if(userId){
-      form.append('user_id', userId);
-    }
-    if(authToken){
-      form.append('auth_token', authToken);
-    }
+    if(mode === 'multi_reference') {
+      // === 参考图模式 ===
+      // 收集角色/场景/道具参考图
+      showToast('正在收集参考图...', 'info');
+      const { referenceImageUrls, promptSuffix } = await collectShotFrameRefImages(node);
 
-    const res = await fetch('/api/ai-app-run-image', {
-      method: 'POST',
-      body: form
-    });
+      // 将 promptSuffix 追加到视频提示词
+      if(promptSuffix.length > 0) {
+        videoPrompt = videoPrompt + '\n\n' + promptSuffix.join('，') + '。';
+        form.set('prompt', videoPrompt);
+      }
+
+      if(referenceImageUrls.length > 0) {
+        // 有参考图 → image_to_video + multi_reference
+        const taskId = TaskConfig.getTaskIdByKey(videoModel, 'image_to_video');
+        if(!taskId) {
+          throw new Error(`未找到视频模型 ${videoModel} 对应的图生视频任务配置`);
+        }
+        form.append('task_id', taskId);
+        form.append('image_urls', referenceImageUrls.join(','));
+        form.append('image_mode', 'multi_reference');
+
+        showToast(`使用 ${referenceImageUrls.length} 张参考图生成视频...`, 'info');
+        res = await fetch('/api/ai-app-run-image', { method: 'POST', body: form });
+      } else {
+        // 无参考图 → 回退 text_to_video
+        const t2vTaskId = TaskConfig.getTaskIdByKey(videoModel, 'text_to_video');
+        if(!t2vTaskId) {
+          throw new Error(`模型 ${videoModel} 不支持文生视频回退，请添加参考图（角色/场景/道具）或切换支持文生视频的模型`);
+        }
+
+        // 仅在 text_to_video 回退时启用角色标记替换
+        const replacedPrompt = await replaceCharacterMarkers(videoPrompt);
+        form.set('prompt', replacedPrompt);
+
+        form.append('task_id', t2vTaskId);
+        showToast('无参考图，回退为文生视频模式...', 'info');
+        res = await fetch('/api/ai-app-run', { method: 'POST', body: form });
+      }
+    } else {
+      // === 首帧模式（原有逻辑） ===
+      const imageUrl = node.data.previewImageUrl;
+      const taskId = TaskConfig.getTaskIdByKey(videoModel || 'wan22', 'image_to_video');
+      if(!taskId) {
+        throw new Error(`未找到视频模型 ${videoModel} 对应的任务配置`);
+      }
+      form.append('task_id', taskId);
+      form.append('image_urls', imageUrl);
+      form.append('image_mode', 'first_last_frame');
+
+      // 添加参考音频和视频文件
+      if(node.data.refAudioFile) {
+        form.append('audio_files', node.data.refAudioFile);
+      }
+      if(node.data.refVideoFile) {
+        form.append('video_files', node.data.refVideoFile);
+      }
+
+      res = await fetch('/api/ai-app-run-image', { method: 'POST', body: form });
+    }
 
     const data = await res.json();
     

@@ -191,6 +191,10 @@ class Veo3CommonV1Driver(BaseVideoDriver):
         if image_urls:
             payload["images"] = image_urls
 
+        # 参考图模式关闭首帧约束
+        if mode == ImageMode.MULTI_REFERENCE:
+            payload["veo_fl_close"] = True
+
         return {
             "url": f"{self._base_url}/v1/video/create",
             "method": "POST",

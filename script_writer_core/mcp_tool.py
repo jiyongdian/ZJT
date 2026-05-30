@@ -3301,12 +3301,27 @@ def generate_character_reference_audio(user_id: str, world_id: str, auth_token: 
             }
 
         # 构建提示词（复用 task/audio_task.py 中的函数）
-        from task.audio_task import build_character_audio_text
+        from task.audio_task import build_character_audio_text, _extract_gender_from_text
         final_text = build_character_audio_text(character_data, text)
 
-        # style_prompt 直接使用用户提供的，如果没提供则使用默认
-        final_style_prompt = style_prompt.strip() if style_prompt and style_prompt.strip() else \
-            "请生成平静、自然、清晰、有辨识度的参考音频，语气平和，不带明显情感"
+        # style_prompt 直接使用用户提供的，如果没提供则根据角色信息自动生成
+        if style_prompt and style_prompt.strip():
+            final_style_prompt = style_prompt.strip()
+        else:
+            # 根据角色信息构建默认提示词
+            age = character_data.get('age') or ''
+            appearance = character_data.get('appearance') or ''
+            identity = character_data.get('identity') or ''
+            gender = _extract_gender_from_text(f"{identity} {appearance}")
+
+            prompt_parts = ["请生成平静、自然、清晰、有辨识度的参考音频"]
+            if gender:
+                prompt_parts.append(f"声音应体现{gender}特征")
+            if age:
+                prompt_parts.append(f"年龄感约为{age}岁")
+            prompt_parts.append("语气平和，不带明显情感")
+
+            final_style_prompt = "，".join(prompt_parts)
 
         # 验证 user_id
         try:

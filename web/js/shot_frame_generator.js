@@ -20,6 +20,119 @@ function removeMissingCharacterMarkers(prompt, missingCharacters){
   });
 }
 
+/**
+ * 收集分镜节点的角色/场景/道具参考图（公共函数）
+ * 供 generateShotFrameImage 和 generateShotFrameVideo 共用
+ * @param {Object} node - 分镜节点
+ * @returns {{ referenceImageUrls: string[], promptSuffix: string[], missingCharacters: Set }}
+ */
+async function collectShotFrameRefImages(node) {
+  const referenceImageUrls = [];
+  const promptSuffix = [];
+  const missingCharacters = new Set();
+  let imageIndex = 1;
+
+  const imagePrompt = node.data.imagePrompt || '';
+
+  // 1. 提取角色名（用【【】】包裹）
+  const characterPattern = /【【([^】]+)】】/g;
+  const characterNames = [];
+  let match;
+  while ((match = characterPattern.exec(imagePrompt)) !== null) {
+    const name = match[1].trim();
+    if (name && !characterNames.includes(name)) {
+      characterNames.push(name);
+    }
+  }
+
+  // 2. 匹配角色并获取参考图 URL
+  if (characterNames.length > 0) {
+    // 如果没有 worldId，跳过角色匹配（不阻断，返回已收集的图）
+    if (!state.defaultWorldId) {
+      console.warn('[参考图收集] 未选择世界，跳过角色匹配');
+    } else {
+      const worldId = state.defaultWorldId;
+      for (const characterName of characterNames) {
+        try {
+          const userId = localStorage.getItem('user_id') || '1';
+          const authToken = localStorage.getItem('auth_token') || '';
+
+          const response = await fetch(`/api/characters?world_id=${worldId}&page=1&page_size=100&keyword=${encodeURIComponent(characterName)}`, {
+            headers: {
+              'Authorization': authToken,
+              'X-User-Id': userId
+            }
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            if (result.code === 0 && result.data && Array.isArray(result.data.data)) {
+              const characters = result.data.data;
+              if (characters.length > 0) {
+                const matchedChar = characters.find(c => c.name === characterName) || characters[0];
+                const userSelectedCharUrl = (node.data.selectedCharRefImages && node.data.selectedCharRefImages[characterName]);
+                const charRefUrl = userSelectedCharUrl || (matchedChar && matchedChar.reference_image);
+                if (charRefUrl) {
+                  referenceImageUrls.push(charRefUrl);
+                  const labelDesc = userSelectedCharUrl && userSelectedCharUrl !== matchedChar?.reference_image
+                    ? `的${(node.data.selectedCharRefImageLabels && node.data.selectedCharRefImageLabels[characterName]) || '已选择'}` : '';
+                  promptSuffix.push(`图${imageIndex}是${characterName}${labelDesc}`);
+                  imageIndex++;
+                }
+              } else {
+                missingCharacters.add(characterName);
+              }
+            } else if (result.code === 0 && result.data && result.data.data === null) {
+              missingCharacters.add(characterName);
+            }
+          }
+        } catch (error) {
+          console.error(`[参考图收集] 匹配角色 ${characterName} 失败:`, error);
+        }
+      }
+    }
+  }
+
+  // 3. 添加场景参考图（从 node.data.refScene + state.worldLocations 获取）
+  if (node.data.refScene && node.data.refScene.id) {
+    const loc = (state.worldLocations || []).find(l => l.id === node.data.refScene.id);
+    const mainRefImage = (loc && loc.reference_image) || node.data.refScene.pic || '';
+    const sceneRefUrl = node.data.selectedSceneRefUrl || mainRefImage;
+    if (sceneRefUrl) {
+      referenceImageUrls.push(sceneRefUrl);
+      const locationName = (loc && loc.name) || node.data.refScene.name || '场景';
+      const isCustomSelection = node.data.selectedSceneRefUrl && node.data.selectedSceneRefUrl !== mainRefImage;
+      const angleLabel = isCustomSelection ? (node.data.selectedSceneRefLabel || '已选择角度') : '';
+      promptSuffix.push(`图${imageIndex}是${locationName}所在地点${angleLabel ? '(' + angleLabel + ')' : ''}`);
+      imageIndex++;
+    }
+  }
+
+  // 4. 添加道具参考图（从 node.data.refProps + state.worldProps 获取）
+  const refProps = node.data.refProps || [];
+  for (const refProp of refProps) {
+    const propDbId = refProp.props_db_id || refProp.id;
+    const worldProp = (state.worldProps || []).find(p => p.id === propDbId);
+    const refImage = (worldProp && worldProp.reference_image) || refProp.reference_image || '';
+    if (refImage) {
+      referenceImageUrls.push(refImage);
+      const propName = (worldProp && worldProp.name) || refProp.name;
+      promptSuffix.push(`图${imageIndex}是${propName}`);
+      imageIndex++;
+    }
+  }
+
+  // 5. 裁剪超限图片（根据 max_multi_ref_images 配置）
+  const videoModel = node.data.videoModel || 'wan22';
+  const modelConfig = window.TaskConfig?.getModelConfigs()?.[videoModel];
+  const maxRefImages = modelConfig?.max_multi_ref_images || 5;
+  if (referenceImageUrls.length > maxRefImages) {
+    referenceImageUrls.length = maxRefImages;
+  }
+
+  return { referenceImageUrls, promptSuffix, missingCharacters };
+}
+
 // 生成分镜图功能
 async function generateShotFrameImage(nodeId, node){
   console.log('[生成分镜图] 函数被调用, nodeId:', nodeId, 'node:', node);
@@ -42,139 +155,36 @@ async function generateShotFrameImage(nodeId, node){
       return;
     }
     
-    // 1. 提取角色名（用【【】】包裹）
+    // 1. 收集参考图（角色/场景/道具）
     const characterPattern = /【【([^】]+)】】/g;
     const characterNames = [];
-    const missingCharacters = new Set();
-    let match;
-    while((match = characterPattern.exec(imagePrompt)) !== null){
-      const name = match[1].trim();
+    let charMatch;
+    while((charMatch = characterPattern.exec(imagePrompt)) !== null){
+      const name = charMatch[1].trim();
       if(name && !characterNames.includes(name)){
         characterNames.push(name);
       }
     }
-    
-    console.log('[生成分镜图] 提取到的角色列表:', characterNames);
-    
-    // 2. 匹配角色并获取参考图 URL
-    const referenceImageUrls = [];
-    const promptSuffix = [];
-    let imageIndex = 1;
-    
     if(characterNames.length > 0){
       showToast(`检测到${characterNames.length}个角色，正在匹配...`, 'info');
-      
-      // 获取 world_id
-      if(!state.defaultWorldId){
-        showToast('请先在左上角选择世界，以便正确匹配角色', 'warning');
-        generateBtn.disabled = false;
-        generateBtn.textContent = '生成分镜图';
-        return;
-      }
-      const worldId = state.defaultWorldId;
-      console.log(`[生成分镜图] 使用世界ID: ${worldId}, 角色列表:`, characterNames);
-      
-      for(const characterName of characterNames){
-        try {
-          const userId = localStorage.getItem('user_id') || '1';
-          const authToken = localStorage.getItem('auth_token') || '';
-          
-          const response = await fetch(`/api/characters?world_id=${worldId}&page=1&page_size=100&keyword=${encodeURIComponent(characterName)}`, {
-            headers: {
-              'Authorization': authToken,
-              'X-User-Id': userId
-            }
-          });
-          
-          if(response.ok){
-            const result = await response.json();
-            console.log(`[角色匹配] 角色"${characterName}"查询结果:`, result);
-            if(result.code === 0 && result.data && Array.isArray(result.data.data)){
-              const characters = result.data.data;
-              console.log(`[角色匹配] 找到${characters.length}个匹配角色:`, characters.map(c => c.name));
-              if(characters.length > 0){
-                // 精确匹配或模糊匹配
-                const matchedChar = characters.find(c => c.name === characterName) || characters[0];
-                console.log(`[角色匹配] 最终匹配角色:`, matchedChar.name, '参考图:', matchedChar.reference_image);
-                
-                // 检查用户是否为该角色选择了特定图片
-                const userSelectedCharUrl = (node.data.selectedCharRefImages && node.data.selectedCharRefImages[characterName]);
-                const charRefUrl = userSelectedCharUrl || (matchedChar && matchedChar.reference_image);
-                if(charRefUrl){
-                  referenceImageUrls.push(charRefUrl);
-                  const labelDesc = userSelectedCharUrl && userSelectedCharUrl !== matchedChar?.reference_image
-                    ? `的${(node.data.selectedCharRefImageLabels && node.data.selectedCharRefImageLabels[characterName]) || '已选择'}` : '';
-                  promptSuffix.push(`图${imageIndex}是${characterName}${labelDesc}`);
-                  imageIndex++;
-                  console.log(`[角色匹配] 成功添加角色参考图: ${characterName}${labelDesc ? '(' + labelDesc + ')' : '(主图)'}`);
-                }
-              } else {
-                missingCharacters.add(characterName);
-              }
-            } else if(result.code === 0 && result.data && result.data.data === null){
-              missingCharacters.add(characterName);
-            }
-          }
-        } catch(error){
-          console.error(`匹配角色 ${characterName} 失败:`, error);
-        }
-      }
     }
 
+    const { referenceImageUrls, promptSuffix, missingCharacters } = await collectShotFrameRefImages(node);
+
+    // 移除不存在角色的标记
     const sanitizedPrompt = removeMissingCharacterMarkers(imagePrompt, missingCharacters);
     if(sanitizedPrompt !== imagePrompt){
       imagePrompt = sanitizedPrompt;
       node.data.imagePrompt = sanitizedPrompt;
-      const promptTextarea = document.querySelector(`.node[data-node-id="${nodeId}"] .shot-frame-image-prompt`);
+      const promptTextarea = document.querySelector(`.node[data-node-id=”${nodeId}”] .shot-frame-image-prompt`);
       if(promptTextarea){
         promptTextarea.value = sanitizedPrompt;
       }
     }
-    
-    // 3. 添加场景参考图（从 node.data.refScene + state.worldLocations 获取）
-    if(node.data.refScene && node.data.refScene.id){
-      const loc = (state.worldLocations || []).find(l => l.id === node.data.refScene.id);
-      const mainRefImage = (loc && loc.reference_image) || node.data.refScene.pic || '';
 
-      // 优先使用用户选择的特定图片，否则使用主图
-      const sceneRefUrl = node.data.selectedSceneRefUrl || mainRefImage;
-      if(sceneRefUrl){
-        referenceImageUrls.push(sceneRefUrl);
-        const locationName = (loc && loc.name) || node.data.refScene.name || '场景';
-        const isCustomSelection = node.data.selectedSceneRefUrl && node.data.selectedSceneRefUrl !== mainRefImage;
-        const angleLabel = isCustomSelection ? (node.data.selectedSceneRefLabel || '已选择角度') : '';
-        promptSuffix.push(`图${imageIndex}是${locationName}所在地点${angleLabel ? '(' + angleLabel + ')' : ''}`);
-        imageIndex++;
-        console.log(`[场景匹配] 成功添加场景参考图: ${locationName}${isCustomSelection ? '(已选特定角度)' : '(主图)'}`);
-      } else {
-        console.warn(`[场景匹配] 场景”${node.data.refScene.name}”无参考图`);
-      }
-    }
-    
-    // 4. 添加道具参考图（从 node.data.refProps + state.worldProps 获取）
-    const refProps = node.data.refProps || [];
-    if(refProps.length > 0){
-      console.log('[生成分镜图] 检测到引用道具:', refProps.map(p => p.name));
-      for(const refProp of refProps){
-        const propDbId = refProp.props_db_id || refProp.id;
-        // 优先从 state.worldProps 获取最新数据（包含最新的 reference_image）
-        const worldProp = (state.worldProps || []).find(p => p.id === propDbId);
-        const refImage = (worldProp && worldProp.reference_image) || refProp.reference_image || '';
-        if(refImage){
-          referenceImageUrls.push(refImage);
-          const propName = (worldProp && worldProp.name) || refProp.name;
-          promptSuffix.push(`图${imageIndex}是${propName}`);
-          imageIndex++;
-          console.log(`[道具匹配] 成功添加道具参考图: ${propName}`);
-        } else {
-          console.warn(`[道具匹配] 道具“${refProp.name}”无参考图`);
-        }
-      }
-    }
-    
-    // 4. 构建最终提示词
+    // 2. 构建最终提示词
     let finalPrompt = imagePrompt;
-    
+
     if(promptSuffix.length > 0){
       finalPrompt = `${imagePrompt}\n\n${promptSuffix.join('，')}。`;
     }

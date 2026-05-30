@@ -320,6 +320,28 @@ async def generate_audio_task(app=None):
     await process_task_with_retry(TASK_TYPE_GENERATE_AUDIO, process_generate_audio)
 
 
+def _extract_gender_from_text(text: str) -> str:
+    """
+    从文本中提取性别信息
+
+    Args:
+        text: 包含性别线索的文本（如身份、外貌描述）
+
+    Returns:
+        str: 性别描述（"男性"/"女性"/""）
+    """
+    male_keywords = ['男', '他', '先生', '少年', '男子', '男人', '帅哥', '大叔', '男孩', '父亲', '爷爷', '叔叔', '哥哥', '弟弟']
+    female_keywords = ['女', '她', '小姐', '少女', '女子', '女人', '美女', '阿姨', '女孩', '母亲', '奶奶', '姐姐', '妹妹', '公主', '皇后']
+
+    for keyword in male_keywords:
+        if keyword in text:
+            return '男性'
+    for keyword in female_keywords:
+        if keyword in text:
+            return '女性'
+    return ''
+
+
 def build_character_audio_text(character_data: Dict[str, Any], custom_text: Optional[str]) -> str:
     """
     构建角色音频文本
@@ -333,9 +355,24 @@ def build_character_audio_text(character_data: Dict[str, Any], custom_text: Opti
     """
     if custom_text and custom_text.strip():
         return custom_text.strip()
+
     character_name = character_data.get('name') or '我'
     identity = character_data.get('identity') or '故事中的角色'
-    return f"大家好，我是{character_name}，是{identity}。很高兴在这个故事里与你相遇。"
+    age = character_data.get('age') or ''
+    appearance = character_data.get('appearance') or ''
+
+    # 从外貌或身份中提取性别信息
+    gender = _extract_gender_from_text(f"{identity} {appearance}")
+
+    # 构建包含性别和年龄的文本
+    text = f"大家好，我是{character_name}"
+    if age:
+        text += f"，今年{age}岁"
+    if gender:
+        text += f"，是一位{gender}"
+    text += f"，是{identity}。很高兴在这个故事里与你相遇。"
+
+    return text
 
 
 async def build_character_audio_style_prompt(

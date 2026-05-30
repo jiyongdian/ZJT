@@ -139,6 +139,49 @@
       }
     }
 
+    // 文生视频 API
+    async function generateVideoFromText(prompt, duration, count, ratio, videoModel){
+      if(TEST_MODE){
+        console.log('[TEST MODE] 模拟文生视频API调用', { prompt, duration, count, ratio, videoModel });
+        await new Promise(r => setTimeout(r, 500));
+        const mockIds = [];
+        for(let i = 0; i < (count || 1); i++){
+          mockIds.push('mock_t2v_' + Date.now() + '_' + i);
+        }
+        return { projectIds: mockIds, status: 'submitted' };
+      }
+
+      const userId = localStorage.getItem('user_id');
+      const authToken = getAuthToken();
+
+      const taskId = TaskConfig.getTaskIdByKey(videoModel, 'text_to_video');
+      if(!taskId){
+        throw new Error(`未找到文生视频模型 ${videoModel} 对应的任务配置`);
+      }
+
+      const form = new FormData();
+      form.append('prompt', prompt || '');
+      form.append('ratio', ratio || '9:16');
+      form.append('duration_seconds', duration || 5);
+      form.append('count', count || 1);
+      form.append('task_id', taskId);
+
+      if(userId) form.append('user_id', userId);
+      if(authToken) form.append('auth_token', authToken);
+
+      const res = await fetch('/api/ai-app-run', {
+        method: 'POST',
+        body: form
+      });
+
+      const data = await res.json();
+      if(data.project_ids && data.project_ids.length > 0){
+        return { projectIds: data.project_ids, status: data.status };
+      } else {
+        throw new Error(data.detail || data.message || '提交任务失败');
+      }
+    }
+
     // 查询视频生成状态
     // 测试模式下的模拟状态计数器
     const mockStatusCounter = {};

@@ -254,6 +254,12 @@ def _get_processed_html(file_path: str) -> bytes:
 
         content = re.sub(pattern, replace_with_version, content)
 
+        # 注入版本号到 JS 变量，用于 i18n JSON 等动态 fetch 的缓存失效
+        content = content.replace(
+            "window.__STATIC_VERSION = window.__STATIC_VERSION || '';",
+            f"window.__STATIC_VERSION = window.__STATIC_VERSION || '{STATIC_VERSION}';"
+        )
+
     # 仅在启用 cache_bust 时才缓存处理结果
     if CACHE_BUST_ENABLED:
         _PROCESSED_HTML_CACHE[file_path] = content.encode('utf-8')
