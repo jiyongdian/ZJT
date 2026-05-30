@@ -27,6 +27,7 @@ class AgentTaskEntity:
         self.model_id = kwargs.get('model_id')
         self.enable_thinking = kwargs.get('enable_thinking', False)
         self.thinking_effort = kwargs.get('thinking_effort', 'medium')
+        self.language = kwargs.get('language', 'zh-CN')
 
         # Deserialize image_urls from JSON
         image_urls_json = kwargs.get('image_urls')
@@ -97,6 +98,7 @@ class AgentTaskEntity:
             'model_id': self.model_id,
             'enable_thinking': self.enable_thinking,
             'thinking_effort': self.thinking_effort,
+            'language': self.language,
             'image_urls': self.image_urls,
             'video_urls': self.video_urls,
             'audio_urls': self.audio_urls,
@@ -129,7 +131,8 @@ class AgentTasksModel:
         image_urls: Optional[List[str]] = None,
         video_urls: Optional[List[str]] = None,
         audio_urls: Optional[List[str]] = None,
-        status: str = 'pending'
+        status: str = 'pending',
+        language: str = 'zh-CN'
     ) -> int:
         """
         Create a new agent task
@@ -141,8 +144,8 @@ class AgentTasksModel:
             INSERT INTO agent_tasks
             (task_id, session_id, user_id, world_id, user_message,
              auth_token, vendor_id, model_id, enable_thinking, thinking_effort,
-             image_urls, video_urls, audio_urls, status)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+             image_urls, video_urls, audio_urls, status, language)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         # enable_thinking: bool/str -> str（数据库存字符串，支持 true/false/auto）
         enable_thinking_str = str(enable_thinking).lower() if isinstance(enable_thinking, bool) else str(enable_thinking)
@@ -154,7 +157,7 @@ class AgentTasksModel:
         audio_urls_json = json.dumps(audio_urls, ensure_ascii=False) if audio_urls else None
         params = (task_id, session_id, user_id, world_id, user_message,
                   auth_token, vendor_id, model_id, enable_thinking_str, thinking_effort,
-                  image_urls_json, video_urls_json, audio_urls_json, status)
+                  image_urls_json, video_urls_json, audio_urls_json, status, language)
 
         try:
             record_id = execute_insert(sql, params)

@@ -157,6 +157,7 @@ class AgentTask:
     image_urls: Optional[List[str]] = None
     video_urls: Optional[List[str]] = None
     audio_urls: Optional[List[str]] = None
+    language: str = "zh-CN"
     status: TaskStatus = TaskStatus.PENDING
     created_at: datetime = field(default_factory=datetime.now)
     started_at: Optional[datetime] = None
@@ -217,6 +218,7 @@ class TaskManager:
         image_urls: Optional[List[str]] = None,
         video_urls: Optional[List[str]] = None,
         audio_urls: Optional[List[str]] = None,
+        language: str = "zh-CN",
     ) -> str:
         """创建新任务，返回 task_id"""
         # 处理长文本输入
@@ -237,6 +239,7 @@ class TaskManager:
             )
 
         task_id = str(uuid.uuid4())
+        logger.info(f"Creating AgentTask with language='{language}'")
         task = AgentTask(
             task_id=task_id,
             session_id=session_id,
@@ -251,7 +254,9 @@ class TaskManager:
             image_urls=image_urls,
             video_urls=video_urls,
             audio_urls=audio_urls,
+            language=language,
         )
+        logger.info(f"AgentTask created, task.language='{task.language}'")
 
         # 写入数据库（唯一数据源，跨进程共享）
         try:
@@ -269,7 +274,8 @@ class TaskManager:
                 image_urls=image_urls,
                 video_urls=video_urls,
                 audio_urls=audio_urls,
-                status='pending'
+                status='pending',
+                language=language
             )
         except Exception as e:
             logger.error(f"Failed to save task to database: {e}")
@@ -309,6 +315,7 @@ class TaskManager:
                     image_urls=getattr(db_task, 'image_urls', None),
                     video_urls=getattr(db_task, 'video_urls', None),
                     audio_urls=getattr(db_task, 'audio_urls', None),
+                    language=getattr(db_task, 'language', 'zh-CN'),
                     status=TaskStatus(db_task.status),
                     progress=db_task.progress,
                     current_step=db_task.current_step,

@@ -34,7 +34,8 @@ class ExpertAgent(BaseAgent, AskUserMixin):
         thinking_effort: str = "medium",
         task_manager: Optional[Any] = None,
         task_id: Optional[str] = None,
-        max_iterations: int = 10
+        max_iterations: int = 10,
+        language: str = "zh-CN"
     ):
         # 使用第一个技能名称作为主要标识
         primary_skill = skill_names[0] if skill_names else "unknown"
@@ -43,7 +44,8 @@ class ExpertAgent(BaseAgent, AskUserMixin):
         
         # 初始化技能加载器（支持用户级自定义 skill）
         self.skill_loader = SkillLoader(user_id=int(user_id) if user_id else None)
-        
+
+        self.language = language
         system_prompt = self._build_system_prompt(skill_names, context_from_pm)
         
         super().__init__(
@@ -105,13 +107,21 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                 logger.warning(f"Failed to load {skill_name} skill, skipping")
         
         # 如果成功加载技能内容，则附加到提示词中
+        prompt = base_prompt
         if skill_prompts:
             skills_section = "\n\n" + "="*60 + "\n**你的技能指导**\n" + "="*60 + "\n\n"
             for skill_name, skill_prompt in skill_prompts:
                 skills_section += f"\n### 技能：{skill_name}\n\n{skill_prompt}\n\n{'-'*60}\n"
-            return base_prompt + skills_section
-        else:
-            return base_prompt
+            prompt = base_prompt + skills_section
+
+        # 追加语言指令（非中文时）
+        if self.language != 'zh-CN':
+            from config.constant import LANGUAGE_INSTRUCTIONS
+            lang_instruction = LANGUAGE_INSTRUCTIONS.get(self.language, '')
+            if lang_instruction:
+                prompt += lang_instruction
+
+        return prompt
     
     def execute_task(self, task: Dict[str, Any]) -> Dict[str, Any]:
         """执行具体任务"""

@@ -2483,6 +2483,7 @@
                             model: selectedLLMModel.value ? selectedLLMModel.value.name : '',
                             model_id: selectedLLMModel.value ? selectedLLMModel.value.id : undefined,
                             vendor_id: selectedLLMModel.value ? (selectedLLMModel.value.vendor_id || 1) : 1,
+                            language: localStorage.getItem('zjt_locale') || 'zh-CN',
                             image_preferences: imagePreferences,
                             video_preferences: (isAgentMode && mediaType.value === 'video') ? {
                                 ratio: selectedRatio.value,

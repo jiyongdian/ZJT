@@ -244,111 +244,29 @@
 
                         <!-- 需求选择区域（有世界时显示） -->
                         <div class="requirement-selector" id="requirement-selector" style="display: none;">
-                            <p class="requirement-title">请选择您的创作需求</p>
+                            <p class="requirement-title" data-i18n="select_requirement">请选择您的创作需求</p>
                             <div class="requirement-buttons">
                                 <button class="requirement-btn" onclick="handleRequirementSelect(1)">
                                     <span class="req-icon">📥</span>
-                                    <span class="req-text">导入已有剧本</span>
+                                    <span class="req-text" data-i18n="import_script">导入已有剧本</span>
                                 </button>
                                 <button class="requirement-btn" onclick="handleRequirementSelect(2)">
                                     <span class="req-icon">✍️</span>
-                                    <span class="req-text">剧本续写</span>
+                                    <span class="req-text" data-i18n="script_continuation">剧本续写</span>
                                 </button>
                                 <button class="requirement-btn" onclick="handleRequirementSelect(3)">
                                     <span class="req-icon">📝</span>
-                                    <span class="req-text">剧本新建</span>
+                                    <span class="req-text" data-i18n="new_script">剧本新建</span>
                                 </button>
                                 <button class="requirement-btn" onclick="handleRequirementSelect(4)">
                                     <span class="req-icon">💡</span>
-                                    <span class="req-text">其他</span>
+                                    <span class="req-text" data-i18n="other">其他</span>
                                 </button>
                             </div>
                         </div>
 
                         <div class="agent-carousel" id="agent-carousel">
-                            <div class="carousel-track">
-                                <div class="carousel-slide active" data-slide="0">
-                                    <p class="slide-tag">总领全局</p>
-                                    <h3>剧本架构师 Script-Orchestrator</h3>
-                                    <ul>
-                                        <li>实时展示创作进度与关键节点</li>
-                                        <li>按需分流：新建、续写、拆分流程</li>
-                                        <li>协调所有智能体，打包输出完整成果</li>
-                                    </ul>
-                                </div>
-                                <div class="carousel-slide" data-slide="1">
-                                    <p class="slide-tag">故事骨架</p>
-                                    <h3>Plot-Analyzer</h3>
-                                    <ul>
-                                        <li>读取 / 创建世界观与故事大纲</li>
-                                        <li>规划反转、悬念与伏笔时间线</li>
-                                        <li>同步画风、时代环境与色彩策略</li>
-                                    </ul>
-                                </div>
-                                <div class="carousel-slide" data-slide="2">
-                                    <p class="slide-tag">剧集创作</p>
-                                    <h3>Story-Writer</h3>
-                                    <ul>
-                                        <li>采集本集目标、情绪与关键场景</li>
-                                        <li>分场景写作，自动留下吸睛钩子</li>
-                                        <li>自动保存剧本并提示缺失资源</li>
-                                    </ul>
-                                </div>
-                                <div class="carousel-slide" data-slide="3">
-                                    <p class="slide-tag">内容审核</p>
-                                    <h3>Content-Compliance-Checker</h3>
-                                    <ul>
-                                        <li>扫描真实地名、黄赌毒、暴力等违规点</li>
-                                        <li>校验角色 / 大纲一致性并量化评分</li>
-                                        <li>评测集末钩子吸引力并给出整改建议</li>
-                                    </ul>
-                                </div>
-                                <div class="carousel-slide" data-slide="4">
-                                    <p class="slide-tag">剧本拆分</p>
-                                    <h3>Novel-Episode-Splitter</h3>
-                                    <ul>
-                                        <li>按场景时长智能分集，保持文本原貌</li>
-                                        <li>检测已有集数差异并征求处理策略</li>
-                                        <li>批量写入剧本 ，附带拆分统计</li>
-                                    </ul>
-                                </div>
-                                <div class="carousel-slide" data-slide="5">
-                                    <p class="slide-tag">角色设定</p>
-                                    <h3>Character-Creator</h3>
-                                    <ul>
-                                        <li>识别新角色并通过问答收集完整设定</li>
-                                        <li>整理性格、习惯、背景与关系网络</li>
-                                        <li>生成标准  角色卡，保证一致性</li>
-                                    </ul>
-                                </div>
-                                <div class="carousel-slide" data-slide="6">
-                                    <p class="slide-tag">角色形象</p>
-                                    <h3>Character-Image-Designer</h3>
-                                    <ul>
-                                        <li>继承世界画风，锁定缺图角色</li>
-                                        <li>输出含三视图、动作和表情的参考图</li>
-                                        <li>避免任务冲突，批量管理生成状态</li>
-                                    </ul>
-                                </div>
-                                <div class="carousel-slide" data-slide="7">
-                                    <p class="slide-tag">场景 & 道具</p>
-                                    <h3>Location-Creator</h3>
-                                    <ul>
-                                        <li>按剧情梳理新场景与道具清单</li>
-                                        <li>提炼环境、氛围、功能及象征意义</li>
-                                        <li>产出结构化 JSON，服务后续创作</li>
-                                    </ul>
-                                </div>
-                                <div class="carousel-slide" data-slide="8">
-                                    <p class="slide-tag">视觉呈现</p>
-                                    <h3>Location/Prop Image Designer</h3>
-                                    <ul>
-                                        <li>同步画风，为缺图场景 / 道具生成视觉稿</li>
-                                        <li>场景提供全景 + 多角度，道具提供三视图</li>
-                                        <li>严格控制任务状态，防止重复提交</li>
-                                    </ul>
-                                </div>
-                            </div>
+                            <div class="carousel-track" id="carousel-track"></div>
                             <div class="carousel-controls">
                                 <button class="carousel-btn prev" id="carousel-prev" aria-label="上一页">
                                     <span>←</span>
@@ -358,9 +276,9 @@
                                 </button>
                             </div>
                             <div class="carousel-indicators" id="carousel-indicators">
-                                <button class="indicator active" data-target="0" aria-label="第 1 页"></button>
-                                <button class="indicator" data-target="1" aria-label="第 2 页"></button>
-                                <button class="indicator" data-target="2" aria-label="第 3 页"></button>
+                                <button class="indicator active" data-target="0"></button>
+                                <button class="indicator" data-target="1"></button>
+                                <button class="indicator" data-target="2"></button>
                                 <button class="indicator" data-target="3" aria-label="第 4 页"></button>
                                 <button class="indicator" data-target="4" aria-label="第 5 页"></button>
                                 <button class="indicator" data-target="5" aria-label="第 6 页"></button>
@@ -380,7 +298,7 @@
                         <textarea 
                             id="message-input" 
                             class="message-input"
-                            placeholder="输入消息... (Shift+Enter 换行，Enter 发送)"
+                            placeholder="输入消息... (Shift+Enter 换行，Enter 发送)" data-i18n-placeholder="placeholder_message"
                             rows="1"
                         ></textarea>
                         <button id="send-btn" class="send-btn">
@@ -466,7 +384,7 @@
                 </div>
                 <div class="file-list-container" id="file-list">
                     <div class="file-list-header">
-                        <button class="add-file-btn-fab" id="add-file-btn" style="display:none" onclick="showNewScriptModal()" title="新建剧本">
+                        <button class="add-file-btn-fab" id="add-file-btn" style="display:none" onclick="showNewScriptModal()" title="新建剧本" data-i18n-title="title_new_script">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                 <path d="M12 5v14M5 12h14"></path>
                             </svg>
@@ -497,35 +415,35 @@
                 <div id="character-view-form" class="view-form" style="display: none;">
                     <div class="form-grid">
                         <div class="form-group">
-                            <label class="form-label">角色名称</label>
+                            <label class="form-label"><span data-i18n="label_character_name">角色名称</span></label>
                             <div class="view-field" id="view-char-name"></div>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">年龄</label>
+                            <label class="form-label"><span data-i18n="label_age">年龄</span></label>
                             <div class="view-field" id="view-char-age"></div>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">身份</label>
+                            <label class="form-label"><span data-i18n="label_identity">身份</span></label>
                             <div class="view-field" id="view-char-identity"></div>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">外貌</label>
+                            <label class="form-label"><span data-i18n="label_appearance">外貌</span></label>
                             <div class="view-field" id="view-char-appearance"></div>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">性格</label>
+                            <label class="form-label"><span data-i18n="label_personality">性格</span></label>
                             <div class="view-field" id="view-char-personality"></div>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">行为习惯</label>
+                            <label class="form-label"><span data-i18n="label_behavior">行为习惯</span></label>
                             <div class="view-field" id="view-char-behavior"></div>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">其他信息</label>
+                            <label class="form-label"><span data-i18n="label_other_info">其他信息</span></label>
                             <div class="view-field" id="view-char-other"></div>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">参考图片</label>
+                            <label class="form-label"><span data-i18n="label_reference_image">参考图片</span></label>
                             <div class="view-image-container" id="view-char-image-container"></div>
                         </div>
                     </div>
@@ -535,19 +453,19 @@
                 <div id="location-view-form" class="view-form" style="display: none;">
                     <div class="form-grid">
                         <div class="form-group">
-                            <label class="form-label">场景名称</label>
+                            <label class="form-label"><span data-i18n="label_scene_name">场景名称</span></label>
                             <div class="view-field" id="view-loc-name"></div>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">父级场景</label>
+                            <label class="form-label"><span data-i18n="label_parent_scene">父级场景</span></label>
                             <div class="view-field" id="view-loc-parent"></div>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">场景描述</label>
+                            <label class="form-label"><span data-i18n="label_scene_desc">场景描述</span></label>
                             <div class="view-field" id="view-loc-description"></div>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">参考图片</label>
+                            <label class="form-label"><span data-i18n="label_reference_image">参考图片</span></label>
                             <div class="view-image-container" id="view-loc-image-container"></div>
                         </div>
                     </div>
@@ -557,19 +475,19 @@
                 <div id="prop-view-form" class="view-form" style="display: none;">
                     <div class="form-grid">
                         <div class="form-group">
-                            <label class="form-label">道具名称</label>
+                            <label class="form-label"><span data-i18n="label_prop_name">道具名称</span></label>
                             <div class="view-field" id="view-prop-name"></div>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">道具类型</label>
+                            <label class="form-label"><span data-i18n="label_prop_type">道具类型</span></label>
                             <div class="view-field" id="view-prop-type"></div>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">道具描述</label>
+                            <label class="form-label"><span data-i18n="label_prop_desc">道具描述</span></label>
                             <div class="view-field" id="view-prop-description"></div>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">参考图片</label>
+                            <label class="form-label"><span data-i18n="label_reference_image">参考图片</span></label>
                             <div class="view-image-container" id="view-prop-image-container"></div>
                         </div>
                     </div>
@@ -579,43 +497,43 @@
                 <div id="world-view-form" class="view-form" style="display: none;">
                     <div class="form-grid">
                         <div class="form-group">
-                            <label class="form-label">世界名称</label>
+                            <label class="form-label"><span data-i18n="label_world_name">世界名称</span></label>
                             <div class="view-field" id="view-world-name"></div>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">用户ID</label>
+                            <label class="form-label"><span data-i18n="label_user_id">用户ID</span></label>
                             <div class="view-field" id="view-world-user-id"></div>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">世界描述</label>
+                            <label class="form-label"><span data-i18n="label_world_desc">世界描述</span></label>
                             <div class="view-field" id="view-world-description"></div>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">故事大纲</label>
+                            <label class="form-label"><span data-i18n="label_story_outline">故事大纲</span></label>
                             <div class="view-field" id="view-world-story-outline"></div>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">画面风格</label>
+                            <label class="form-label"><span data-i18n="label_visual_style">画面风格</span></label>
                             <div class="view-field" id="view-world-visual-style"></div>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">时代环境</label>
+                            <label class="form-label"><span data-i18n="label_era_environment">时代环境</span></label>
                             <div class="view-field" id="view-world-era-environment"></div>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">色彩语言</label>
+                            <label class="form-label"><span data-i18n="label_color_language">色彩语言</span></label>
                             <div class="view-field" id="view-world-color-language"></div>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">构图倾向</label>
+                            <label class="form-label"><span data-i18n="label_composition_preference">构图倾向</span></label>
                             <div class="view-field" id="view-world-composition-preference"></div>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">创建时间</label>
+                            <label class="form-label"><span data-i18n="label_created_at">创建时间</span></label>
                             <div class="view-field" id="view-world-created"></div>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">更新时间</label>
+                            <label class="form-label"><span data-i18n="label_updated_at">更新时间</span></label>
                             <div class="view-field" id="view-world-updated"></div>
                         </div>
                     </div>
@@ -625,23 +543,23 @@
                 <div id="script-view-form" class="view-form" style="display: none;">
                     <div class="form-grid">
                         <div class="form-group">
-                            <label class="form-label">剧本标题</label>
+                            <label class="form-label"><span data-i18n="label_script_title">剧本标题</span></label>
                             <div class="view-field" id="view-script-title"></div>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">集数</label>
+                            <label class="form-label"><span data-i18n="label_episode_num">集数</span></label>
                             <div class="view-field" id="view-script-episode"></div>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">剧本内容</label>
+                            <label class="form-label"><span data-i18n="label_script_content">剧本内容</span></label>
                             <div class="view-field script-content" id="view-script-content"></div>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">创建时间</label>
+                            <label class="form-label"><span data-i18n="label_created_at">创建时间</span></label>
                             <div class="view-field" id="view-script-created"></div>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">更新时间</label>
+                            <label class="form-label"><span data-i18n="label_updated_at">更新时间</span></label>
                             <div class="view-field" id="view-script-updated"></div>
                         </div>
                     </div>
@@ -653,7 +571,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeViewModal()">关闭</button>
+                <button class="btn btn-secondary" onclick="closeViewModal()" data-i18n="btn_close">关闭</button>
             </div>
         </div>
     </div>
@@ -687,7 +605,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeFeedbackModal()">关闭</button>
+                <button class="btn btn-secondary" onclick="closeFeedbackModal()" data-i18n="btn_close">关闭</button>
             </div>
         </div>
     </div>
@@ -709,42 +627,42 @@
                 <div id="character-edit-form" class="edit-form" style="display: none;">
                     <div class="form-grid">
                         <div class="form-group">
-                            <label class="form-label">角色名称</label>
-                            <input type="text" id="char-name" class="form-input" placeholder="输入角色名称">
+                            <label class="form-label"><span data-i18n="label_character_name">角色名称</span></label>
+                            <input type="text" id="char-name" class="form-input" placeholder="输入角色名称" data-i18n-placeholder="placeholder_char_name">
                         </div>
                         <div class="form-group">
-                            <label class="form-label">年龄</label>
-                            <input type="text" id="char-age" class="form-input" placeholder="输入年龄">
+                            <label class="form-label"><span data-i18n="label_age">年龄</span></label>
+                            <input type="text" id="char-age" class="form-input" placeholder="输入年龄" data-i18n-placeholder="placeholder_char_age">
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">身份</label>
-                            <input type="text" id="char-identity" class="form-input" placeholder="输入身份">
+                            <label class="form-label"><span data-i18n="label_identity">身份</span></label>
+                            <input type="text" id="char-identity" class="form-input" placeholder="输入身份" data-i18n-placeholder="placeholder_char_identity">
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">外貌</label>
-                            <textarea id="char-appearance" class="form-textarea" rows="3" placeholder="描述角色外貌特征"></textarea>
+                            <label class="form-label"><span data-i18n="label_appearance">外貌</span></label>
+                            <textarea id="char-appearance" class="form-textarea" rows="3" placeholder="描述角色外貌特征" data-i18n-placeholder="placeholder_char_appearance"></textarea>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">性格</label>
-                            <textarea id="char-personality" class="form-textarea" rows="3" placeholder="描述角色性格特点"></textarea>
+                            <label class="form-label"><span data-i18n="label_personality">性格</span></label>
+                            <textarea id="char-personality" class="form-textarea" rows="3" placeholder="描述角色性格特点" data-i18n-placeholder="placeholder_char_personality"></textarea>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">行为习惯</label>
-                            <textarea id="char-behavior" class="form-textarea" rows="3" placeholder="描述角色行为习惯"></textarea>
+                            <label class="form-label"><span data-i18n="label_behavior">行为习惯</span></label>
+                            <textarea id="char-behavior" class="form-textarea" rows="3" placeholder="描述角色行为习惯" data-i18n-placeholder="placeholder_char_behavior"></textarea>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">其他信息</label>
-                            <textarea id="char-other" class="form-textarea" rows="3" placeholder="其他相关信息"></textarea>
+                            <label class="form-label"><span data-i18n="label_other_info">其他信息</span></label>
+                            <textarea id="char-other" class="form-textarea" rows="3" placeholder="其他相关信息" data-i18n-placeholder="placeholder_char_other"></textarea>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">参考音频</label>
+                            <label class="form-label"><span data-i18n="label_audio_ref">参考音频</span></label>
                             <div class="image-upload-container">
-                                <input type="text" id="char-default-voice" class="form-input" placeholder="参考音频URL" readonly>
+                                <input type="text" id="char-default-voice" class="form-input" placeholder="参考音频URL" data-i18n-placeholder="placeholder_audio_url" readonly>
                                 <div class="image-upload-actions">
-                                    <button type="button" class="btn btn-secondary btn-sm" onclick="clearCharacterDefaultVoice()">
+                                    <button type="button" class="btn btn-secondary btn-sm" onclick="clearCharacterDefaultVoice()" data-i18n="btn_clear">
                                         清空
                                     </button>
-                                    <button type="button" class="btn btn-primary btn-sm" id="generate-character-voice-btn" onclick="generateCharacterReferenceAudio()">
+                                    <button type="button" class="btn btn-primary btn-sm" id="generate-character-voice-btn" onclick="generateCharacterReferenceAudio()" data-i18n="btn_generate_audio">
                                         生成参考音频
                                     </button>
                                 </div>
@@ -754,11 +672,11 @@
                             </div>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">参考图片</label>
+                            <label class="form-label"><span data-i18n="label_reference_image">参考图片</span></label>
                             <div class="image-upload-container">
-                                <input type="text" id="char-image" class="form-input" placeholder="图片URL或描述" readonly>
+                                <input type="text" id="char-image" class="form-input" placeholder="图片URL或描述" data-i18n-placeholder="placeholder_image_url" readonly>
                                 <div class="image-upload-actions">
-                                    <button type="button" class="btn btn-secondary btn-sm" onclick="clearImageInput('char-image')">
+                                    <button type="button" class="btn btn-secondary btn-sm" onclick="clearImageInput('char-image')" data-i18n="btn_clear">
                                         清空
                                     </button>
                                     <button type="button" class="btn btn-primary btn-sm" onclick="triggerImageUpload('char-image', 1)">
@@ -778,14 +696,14 @@
                             </div>
                             <!-- 多服装参考图区域 -->
                             <div style="margin-top: 12px;">
-                                <label class="form-label" style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+                                <label class="form-label" style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;" data-i18n="label_multi_outfit_ref">
                                     多服装/造型参考图
-                                    <span style="font-size: 11px; color: #6b7280; font-weight: normal;">（可选）</span>
+                                    <span style="font-size: 11px; color: #6b7280; font-weight: normal;" data-i18n="label_optional">（可选）</span>
                                 </label>
                                 <div id="char-multi-image-list" style="display: flex; flex-wrap: wrap; gap: 8px; min-height: 20px;"></div>
                                 <div style="display: flex; gap: 8px; align-items: center; margin-top: 8px;">
-                                    <input type="text" id="char-multi-image-label" class="form-input" placeholder="标签，如：晚礼服" style="flex: 0 0 100px;">
-                                    <button type="button" class="btn btn-secondary btn-sm" onclick="triggerCharMultiImageUpload()">上传图片</button>
+                                    <input type="text" id="char-multi-image-label" class="form-input" placeholder="标签，如：晚礼服" data-i18n-placeholder="placeholder_tag_dress" style="flex: 0 0 100px;">
+                                    <button type="button" class="btn btn-secondary btn-sm" onclick="triggerCharMultiImageUpload()" data-i18n="btn_upload_image">上传图片</button>
                                     <input type="file" id="char-multi-image-file" accept="image/*" style="display: none;" onchange="handleCharMultiImageUpload(event)">
                                 </div>
                             </div>
@@ -797,23 +715,23 @@
                 <div id="location-edit-form" class="edit-form" style="display: none;">
                     <div class="form-grid">
                         <div class="form-group">
-                            <label class="form-label">场景名称</label>
-                            <input type="text" id="loc-name" class="form-input" placeholder="输入场景名称">
+                            <label class="form-label"><span data-i18n="label_scene_name">场景名称</span></label>
+                            <input type="text" id="loc-name" class="form-input" placeholder="输入场景名称" data-i18n-placeholder="placeholder_loc_name">
                         </div>
                         <div class="form-group">
-                            <label class="form-label">父级场景</label>
-                            <input type="text" id="loc-parent" class="form-input" placeholder="输入父级场景ID（可选）">
+                            <label class="form-label"><span data-i18n="label_parent_scene">父级场景</span></label>
+                            <input type="text" id="loc-parent" class="form-input" placeholder="输入父级场景ID（可选）" data-i18n-placeholder="placeholder_loc_parent">
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">场景描述</label>
-                            <textarea id="loc-description" class="form-textarea" rows="5" placeholder="详细描述场景环境、氛围、特色等"></textarea>
+                            <label class="form-label"><span data-i18n="label_scene_desc">场景描述</span></label>
+                            <textarea id="loc-description" class="form-textarea" rows="5" placeholder="详细描述场景环境、氛围、特色等" data-i18n-placeholder="placeholder_loc_desc"></textarea>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">参考图片</label>
+                            <label class="form-label"><span data-i18n="label_reference_image">参考图片</span></label>
                             <div class="image-upload-container">
-                                <input type="text" id="loc-image" class="form-input" placeholder="图片URL或描述" readonly>
+                                <input type="text" id="loc-image" class="form-input" placeholder="图片URL或描述" data-i18n-placeholder="placeholder_image_url" readonly>
                                 <div class="image-upload-actions">
-                                    <button type="button" class="btn btn-secondary btn-sm" onclick="clearImageInput('loc-image')">
+                                    <button type="button" class="btn btn-secondary btn-sm" onclick="clearImageInput('loc-image')" data-i18n="btn_clear">
                                         清空
                                     </button>
                                     <button type="button" class="btn btn-primary btn-sm" onclick="triggerImageUpload('loc-image', 2)">
@@ -840,14 +758,14 @@
                                 <div id="loc-multi-image-list" style="display: flex; flex-wrap: wrap; gap: 8px; min-height: 20px;"></div>
                                 <div style="display: flex; gap: 8px; align-items: center; margin-top: 8px;">
                                     <select id="loc-multi-image-angle" class="form-input" style="flex: 0 0 90px;">
-                                        <option value="front">正面</option>
-                                        <option value="back">背面</option>
-                                        <option value="left">左侧</option>
-                                        <option value="right">右侧</option>
-                                        <option value="custom">自定义</option>
+                                        <option value="front" data-i18n="angle_front">正面</option>
+                                        <option value="back" data-i18n="angle_back">背面</option>
+                                        <option value="left" data-i18n="angle_left">左侧</option>
+                                        <option value="right" data-i18n="angle_right">右侧</option>
+                                        <option value="custom" data-i18n="angle_custom">自定义</option>
                                     </select>
-                                    <input type="text" id="loc-multi-image-label" class="form-input" placeholder="标签，如：正门" style="flex: 0 0 100px;">
-                                    <button type="button" class="btn btn-secondary btn-sm" onclick="triggerLocMultiImageUpload()">上传图片</button>
+                                    <input type="text" id="loc-multi-image-label" class="form-input" placeholder="标签，如：正门" data-i18n-placeholder="placeholder_tag_entrance" style="flex: 0 0 100px;">
+                                    <button type="button" class="btn btn-secondary btn-sm" onclick="triggerLocMultiImageUpload()" data-i18n="btn_upload_image">上传图片</button>
                                     <input type="file" id="loc-multi-image-file" accept="image/*" style="display: none;" onchange="handleLocMultiImageUpload(event)">
                                 </div>
                                 <!-- 生成多角度图按钮 -->
@@ -871,26 +789,26 @@
                 <div id="prop-edit-form" class="edit-form" style="display: none;">
                     <div class="form-grid">
                         <div class="form-group">
-                            <label class="form-label">道具名称</label>
-                            <input type="text" id="prop-name" class="form-input" placeholder="输入道具名称">
+                            <label class="form-label"><span data-i18n="label_prop_name">道具名称</span></label>
+                            <input type="text" id="prop-name" class="form-input" placeholder="输入道具名称" data-i18n-placeholder="placeholder_prop_name">
                         </div>
                         <div class="form-group">
-                            <label class="form-label">道具类型</label>
-                            <input type="text" id="prop-type" class="form-input" placeholder="输入道具类型">
+                            <label class="form-label"><span data-i18n="label_prop_type">道具类型</span></label>
+                            <input type="text" id="prop-type" class="form-input" placeholder="输入道具类型" data-i18n-placeholder="placeholder_prop_type">
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">道具描述</label>
-                            <textarea id="prop-description" class="form-textarea" rows="5" placeholder="详细描述道具外观、功能、用途等"></textarea>
+                            <label class="form-label"><span data-i18n="label_prop_desc">道具描述</span></label>
+                            <textarea id="prop-description" class="form-textarea" rows="5" placeholder="详细描述道具外观、功能、用途等" data-i18n-placeholder="placeholder_prop_desc"></textarea>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">参考图片</label>
+                            <label class="form-label"><span data-i18n="label_reference_image">参考图片</span></label>
                             <div class="image-upload-container">
-                                <input type="text" id="prop-image" class="form-input" placeholder="图片URL或描述" readonly>
+                                <input type="text" id="prop-image" class="form-input" placeholder="图片URL或描述" data-i18n-placeholder="placeholder_image_url" readonly>
                                 <div class="image-upload-actions">
-                                    <button type="button" class="btn btn-secondary btn-sm" onclick="clearImageInput('prop-image')">
+                                    <button type="button" class="btn btn-secondary btn-sm" onclick="clearImageInput('prop-image')" data-i18n="btn_clear">
                                         清空
                                     </button>
-                                    <button type="button" class="btn btn-primary btn-sm" onclick="triggerImageUpload('prop-image', 3)">
+                                    <button type="button" class="btn btn-primary btn-sm" onclick="triggerImageUpload('prop-image', 3)" data-i18n="btn_upload_image">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                                             <polyline points="17 8 12 3 7 8"/>
@@ -913,23 +831,23 @@
                 <div id="script-edit-form" class="edit-form" style="display: none;">
                     <div class="form-grid">
                         <div class="form-group">
-                            <label class="form-label">剧本标题</label>
-                            <input type="text" id="script-title" class="form-input" placeholder="输入剧本标题">
+                            <label class="form-label"><span data-i18n="label_script_title">剧本标题</span></label>
+                            <input type="text" id="script-title" class="form-input" placeholder="输入剧本标题" data-i18n-placeholder="placeholder_script_title">
                         </div>
                         <div class="form-group">
-                            <label class="form-label">集数</label>
-                            <input type="number" id="script-episode" class="form-input" placeholder="输入集数">
+                            <label class="form-label"><span data-i18n="label_episode_num">集数</span></label>
+                            <input type="number" id="script-episode" class="form-input" placeholder="输入集数" data-i18n-placeholder="placeholder_episode_num">
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">剧本内容</label>
-                            <textarea id="script-content" class="form-textarea" rows="10" placeholder="输入剧本内容"></textarea>
+                            <label class="form-label"><span data-i18n="label_script_content">剧本内容</span></label>
+                            <textarea id="script-content" class="form-textarea" rows="10" placeholder="输入剧本内容" data-i18n-placeholder="placeholder_script_content"></textarea>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">创建时间</label>
+                            <label class="form-label"><span data-i18n="label_created_at">创建时间</span></label>
                             <input type="text" id="script-created" class="form-input" readonly>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">更新时间</label>
+                            <label class="form-label"><span data-i18n="label_updated_at">更新时间</span></label>
                             <input type="text" id="script-updated" class="form-input" readonly>
                         </div>
                     </div>
@@ -939,43 +857,43 @@
                 <div id="world-edit-form" class="edit-form" style="display: none;">
                     <div class="form-grid">
                         <div class="form-group">
-                            <label class="form-label">世界名称</label>
-                            <input type="text" id="world-name" class="form-input" placeholder="输入世界名称">
+                            <label class="form-label"><span data-i18n="label_world_name">世界名称</span></label>
+                            <input type="text" id="world-name" class="form-input" placeholder="输入世界名称" data-i18n-placeholder="placeholder_world_name">
                         </div>
                         <div class="form-group">
-                            <label class="form-label">用户ID</label>
+                            <label class="form-label"><span data-i18n="label_user_id">用户ID</span></label>
                             <input type="text" id="world-user-id" class="form-input" readonly>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">世界描述</label>
-                            <textarea id="world-description" class="form-textarea" rows="4" placeholder="描述这个世界的背景、设定等"></textarea>
+                            <label class="form-label"><span data-i18n="label_world_desc">世界描述</span></label>
+                            <textarea id="world-description" class="form-textarea" rows="4" placeholder="描述这个世界的背景、设定等" data-i18n-placeholder="placeholder_world_desc"></textarea>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">故事大纲</label>
-                            <textarea id="world-story-outline" class="form-textarea" rows="5" placeholder="描述世界的主要故事线和情节大纲"></textarea>
+                            <label class="form-label"><span data-i18n="label_story_outline">故事大纲</span></label>
+                            <textarea id="world-story-outline" class="form-textarea" rows="5" placeholder="描述世界的主要故事线和情节大纲" data-i18n-placeholder="placeholder_world_story"></textarea>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">画面风格</label>
-                            <textarea id="world-visual-style" class="form-textarea" rows="3" placeholder="描述世界的视觉风格和艺术风格"></textarea>
+                            <label class="form-label"><span data-i18n="label_visual_style">画面风格</span></label>
+                            <textarea id="world-visual-style" class="form-textarea" rows="3" placeholder="描述世界的视觉风格和艺术风格" data-i18n-placeholder="placeholder_world_visual"></textarea>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">时代环境</label>
-                            <textarea id="world-era-environment" class="form-textarea" rows="3" placeholder="描述世界的时代背景和环境设定"></textarea>
+                            <label class="form-label"><span data-i18n="label_era_environment">时代环境</span></label>
+                            <textarea id="world-era-environment" class="form-textarea" rows="3" placeholder="描述世界的时代背景和环境设定" data-i18n-placeholder="placeholder_world_era"></textarea>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">色彩语言</label>
-                            <textarea id="world-color-language" class="form-textarea" rows="3" placeholder="描述世界的主色调和色彩风格"></textarea>
+                            <label class="form-label"><span data-i18n="label_color_language">色彩语言</span></label>
+                            <textarea id="world-color-language" class="form-textarea" rows="3" placeholder="描述世界的主色调和色彩风格" data-i18n-placeholder="placeholder_world_color"></textarea>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">构图倾向</label>
-                            <textarea id="world-composition-preference" class="form-textarea" rows="3" placeholder="描述世界的构图风格和镜头语言"></textarea>
+                            <label class="form-label"><span data-i18n="label_composition_preference">构图倾向</span></label>
+                            <textarea id="world-composition-preference" class="form-textarea" rows="3" placeholder="描述世界的构图风格和镜头语言" data-i18n-placeholder="placeholder_world_composition"></textarea>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">创建时间</label>
+                            <label class="form-label"><span data-i18n="label_created_at">创建时间</span></label>
                             <input type="text" id="world-created" class="form-input" readonly>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">更新时间</label>
+                            <label class="form-label"><span data-i18n="label_updated_at">更新时间</span></label>
                             <input type="text" id="world-updated" class="form-input" readonly>
                         </div>
                     </div>
@@ -987,8 +905,8 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeEditModal()">取消</button>
-                <button class="btn btn-primary" onclick="saveEditedFile()">保存</button>
+                <button class="btn btn-secondary" onclick="closeEditModal()" data-i18n="btn_cancel">取消</button>
+                <button class="btn btn-primary" onclick="saveEditedFile()" data-i18n="btn_save">保存</button>
             </div>
         </div>
     </div>
@@ -1008,18 +926,18 @@
             <div class="modal-body">
                 <div class="form-grid">
                     <div class="form-group full-width">
-                        <label class="form-label">世界名称 *</label>
-                        <input type="text" id="new-world-name" class="form-input" placeholder="输入世界名称" maxlength="100">
+                        <label class="form-label"><span data-i18n="label_world_name">世界名称</span> *</label>
+                        <input type="text" id="new-world-name" class="form-input" placeholder="输入世界名称" data-i18n-placeholder="placeholder_world_name" maxlength="100">
                     </div>
                     <div class="form-group full-width">
-                        <label class="form-label">世界描述</label>
+                        <label class="form-label"><span data-i18n="label_world_desc">世界描述</span></label>
                         <textarea id="new-world-description" class="form-textarea" rows="4" placeholder="描述这个世界的背景、设定等（可选）" maxlength="500"></textarea>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeNewWorldModal()">取消</button>
-                <button class="btn btn-primary" onclick="createNewWorld()">创建世界</button>
+                <button class="btn btn-secondary" onclick="closeNewWorldModal()" data-i18n="btn_cancel">取消</button>
+                <button class="btn btn-primary" onclick="createNewWorld()" data-i18n="btn_create_world">创建世界</button>
             </div>
         </div>
     </div>
@@ -1039,23 +957,23 @@
             <div class="modal-body">
                 <div class="form-grid">
                     <div class="form-group full-width">
-                        <label class="form-label">剧本标题 *</label>
-                        <input type="text" id="new-script-title" class="form-input" placeholder="输入剧本标题" maxlength="200">
+                        <label class="form-label"><span data-i18n="label_script_title">剧本标题</span> *</label>
+                        <input type="text" id="new-script-title" class="form-input" placeholder="输入剧本标题" data-i18n-placeholder="placeholder_script_title" maxlength="200">
                     </div>
                     <div class="form-group full-width">
-                        <label class="form-label">集数 *</label>
-                        <input type="number" id="new-script-episode" class="form-input" min="1" placeholder="输入集数" oninput="checkEpisodeDuplicate()">
+                        <label class="form-label"><span data-i18n="label_episode_num">集数</span> *</label>
+                        <input type="number" id="new-script-episode" class="form-input" min="1" placeholder="输入集数" data-i18n-placeholder="placeholder_episode_num" oninput="checkEpisodeDuplicate()">
                         <span class="form-hint" id="episode-hint" style="display:none; font-size: 12px; margin-top: 4px;"></span>
                     </div>
                     <div class="form-group full-width">
-                        <label class="form-label">剧本内容</label>
-                        <textarea id="new-script-content" class="form-textarea" rows="6" placeholder="输入剧本内容（可选）"></textarea>
+                        <label class="form-label"><span data-i18n="label_script_content">剧本内容</span></label>
+                        <textarea id="new-script-content" class="form-textarea" rows="6" placeholder="输入剧本内容（可选）" data-i18n-placeholder="placeholder_script_content_optional"></textarea>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeNewScriptModal()">取消</button>
-                <button class="btn btn-primary" id="create-script-btn" onclick="createNewScript()">创建剧本</button>
+                <button class="btn btn-secondary" onclick="closeNewScriptModal()" data-i18n="btn_cancel">取消</button>
+                <button class="btn btn-primary" id="create-script-btn" onclick="createNewScript()" data-i18n="btn_create_script">创建剧本</button>
             </div>
         </div>
     </div>
@@ -1073,39 +991,39 @@
             <div class="modal-body">
                 <div class="form-grid">
                     <div class="form-group full-width">
-                        <label class="form-label">角色名称 *</label>
-                        <input type="text" id="new-char-name" class="form-input" placeholder="输入角色名称" maxlength="200">
+                        <label class="form-label"><span data-i18n="label_character_name">角色名称</span> *</label>
+                        <input type="text" id="new-char-name" class="form-input" placeholder="输入角色名称" data-i18n-placeholder="placeholder_char_name" maxlength="200">
                         <span class="form-hint" id="char-name-hint" style="display:none; font-size: 12px; margin-top: 4px;"></span>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">年龄</label>
+                        <label class="form-label"><span data-i18n="label_age">年龄</span></label>
                         <input type="text" id="new-char-age" class="form-input" placeholder="如：25岁">
                     </div>
                     <div class="form-group">
-                        <label class="form-label">身份</label>
+                        <label class="form-label"><span data-i18n="label_identity">身份</span></label>
                         <input type="text" id="new-char-identity" class="form-input" placeholder="如：学生、剑客">
                     </div>
                     <div class="form-group full-width">
-                        <label class="form-label">外貌</label>
-                        <textarea id="new-char-appearance" class="form-textarea" rows="3" placeholder="描述角色外貌特征"></textarea>
+                        <label class="form-label"><span data-i18n="label_appearance">外貌</span></label>
+                        <textarea id="new-char-appearance" class="form-textarea" rows="3" placeholder="描述角色外貌特征" data-i18n-placeholder="placeholder_char_appearance"></textarea>
                     </div>
                     <div class="form-group full-width">
-                        <label class="form-label">性格</label>
-                        <textarea id="new-char-personality" class="form-textarea" rows="3" placeholder="描述角色性格特点"></textarea>
+                        <label class="form-label"><span data-i18n="label_personality">性格</span></label>
+                        <textarea id="new-char-personality" class="form-textarea" rows="3" placeholder="描述角色性格特点" data-i18n-placeholder="placeholder_char_personality"></textarea>
                     </div>
                     <div class="form-group full-width">
-                        <label class="form-label">行为习惯</label>
-                        <textarea id="new-char-behavior" class="form-textarea" rows="3" placeholder="描述角色行为习惯"></textarea>
+                        <label class="form-label"><span data-i18n="label_behavior">行为习惯</span></label>
+                        <textarea id="new-char-behavior" class="form-textarea" rows="3" placeholder="描述角色行为习惯" data-i18n-placeholder="placeholder_char_behavior"></textarea>
                     </div>
                     <div class="form-group full-width">
-                        <label class="form-label">其他信息</label>
+                        <label class="form-label"><span data-i18n="label_other_info">其他信息</span></label>
                         <textarea id="new-char-other" class="form-textarea" rows="3" placeholder="补充信息（可选）"></textarea>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeNewCharacterModal()">取消</button>
-                <button class="btn btn-primary" onclick="createNewCharacter()">创建角色</button>
+                <button class="btn btn-secondary" onclick="closeNewCharacterModal()" data-i18n="btn_cancel">取消</button>
+                <button class="btn btn-primary" onclick="createNewCharacter()" data-i18n="btn_create_character">创建角色</button>
             </div>
         </div>
     </div>
@@ -1123,23 +1041,23 @@
             <div class="modal-body">
                 <div class="form-grid">
                     <div class="form-group full-width">
-                        <label class="form-label">场景名称 *</label>
-                        <input type="text" id="new-loc-name" class="form-input" placeholder="输入场景名称" maxlength="200">
+                        <label class="form-label"><span data-i18n="label_scene_name">场景名称</span> *</label>
+                        <input type="text" id="new-loc-name" class="form-input" placeholder="输入场景名称" data-i18n-placeholder="placeholder_loc_name" maxlength="200">
                         <span class="form-hint" id="loc-name-hint" style="display:none; font-size: 12px; margin-top: 4px;"></span>
                     </div>
                     <div class="form-group full-width">
-                        <label class="form-label">父级场景</label>
+                        <label class="form-label"><span data-i18n="label_parent_scene">父级场景</span></label>
                         <input type="text" id="new-loc-parent" class="form-input" placeholder="所属父级场景名称（可选）">
                     </div>
                     <div class="form-group full-width">
-                        <label class="form-label">场景描述</label>
+                        <label class="form-label"><span data-i18n="label_scene_desc">场景描述</span></label>
                         <textarea id="new-loc-description" class="form-textarea" rows="5" placeholder="描述场景的环境、氛围、关键元素等"></textarea>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeNewLocationModal()">取消</button>
-                <button class="btn btn-primary" onclick="createNewLocation()">创建场景</button>
+                <button class="btn btn-secondary" onclick="closeNewLocationModal()" data-i18n="btn_cancel">取消</button>
+                <button class="btn btn-primary" onclick="createNewLocation()" data-i18n="btn_create_scene">创建场景</button>
             </div>
         </div>
     </div>
@@ -1157,23 +1075,23 @@
             <div class="modal-body">
                 <div class="form-grid">
                     <div class="form-group full-width">
-                        <label class="form-label">道具名称 *</label>
-                        <input type="text" id="new-prop-name" class="form-input" placeholder="输入道具名称" maxlength="200">
+                        <label class="form-label"><span data-i18n="label_prop_name">道具名称</span> *</label>
+                        <input type="text" id="new-prop-name" class="form-input" placeholder="输入道具名称" data-i18n-placeholder="placeholder_prop_name" maxlength="200">
                         <span class="form-hint" id="prop-name-hint" style="display:none; font-size: 12px; margin-top: 4px;"></span>
                     </div>
                     <div class="form-group full-width">
-                        <label class="form-label">道具类型</label>
+                        <label class="form-label"><span data-i18n="label_prop_type">道具类型</span></label>
                         <input type="text" id="new-prop-type" class="form-input" placeholder="如：武器、饰品、工具">
                     </div>
                     <div class="form-group full-width">
-                        <label class="form-label">道具描述</label>
+                        <label class="form-label"><span data-i18n="label_prop_desc">道具描述</span></label>
                         <textarea id="new-prop-description" class="form-textarea" rows="5" placeholder="描述道具的外观、功能、来历等"></textarea>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeNewPropModal()">取消</button>
-                <button class="btn btn-primary" onclick="createNewProp()">创建道具</button>
+                <button class="btn btn-secondary" onclick="closeNewPropModal()" data-i18n="btn_cancel">取消</button>
+                <button class="btn btn-primary" onclick="createNewProp()" data-i18n="btn_create_prop">创建道具</button>
             </div>
         </div>
     </div>
@@ -1193,18 +1111,18 @@
             <div class="modal-body">
                 <div class="form-grid">
                     <div class="form-group full-width">
-                        <label class="form-label">世界名称 *</label>
-                        <input type="text" id="edit-world-name" class="form-input" placeholder="输入世界名称" maxlength="100">
+                        <label class="form-label"><span data-i18n="label_world_name">世界名称</span> *</label>
+                        <input type="text" id="edit-world-name" class="form-input" placeholder="输入世界名称" data-i18n-placeholder="placeholder_world_name" maxlength="100">
                     </div>
                     <div class="form-group full-width">
-                        <label class="form-label">世界描述</label>
+                        <label class="form-label"><span data-i18n="label_world_desc">世界描述</span></label>
                         <textarea id="edit-world-description" class="form-textarea" rows="4" placeholder="描述这个世界的背景、设定等（可选）" maxlength="500"></textarea>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeEditWorldModal()">取消</button>
-                <button class="btn btn-primary" onclick="saveEditedWorld()">保存更改</button>
+                <button class="btn btn-secondary" onclick="closeEditWorldModal()" data-i18n="btn_cancel">取消</button>
+                <button class="btn btn-primary" onclick="saveEditedWorld()" data-i18n="btn_save_changes">保存更改</button>
             </div>
         </div>
     </div>
@@ -1216,7 +1134,7 @@
             <div class="modal-header">
                 <h3 class="modal-title">⚡ 算力日志</h3>
                 <div style="display: flex; gap: 8px;">
-                    <button class="btn btn-primary btn-sm" onclick="handleRechargeClick()">算力充值</button>
+                    <button class="btn btn-primary btn-sm" onclick="handleRechargeClick()" data-i18n="btn_power_recharge">算力充值</button>
                     <button class="modal-close-btn" onclick="closeComputingPowerLogsModal()">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M18 6L6 18M6 6l12 12"/>
@@ -1387,6 +1305,39 @@
             autoplayTimer: null
         };
 
+        // 轮播卡片数据与动态渲染
+        const carouselData = [
+            { tag_key: 'slide_tag_orchestrator', title_key: 'script_orchestrator', features_key: 'orchestrator_features' },
+            { tag_key: 'slide_tag_architect', title_key: 'story_architect', features_key: 'architect_features' },
+            { tag_key: 'slide_tag_writer', title_key: 'episode_writer', features_key: 'writer_features' },
+            { tag_key: 'slide_tag_reviewer', title_key: 'content_reviewer', features_key: 'reviewer_features' },
+            { tag_key: 'slide_tag_splitter', title_key: 'script_splitter', features_key: 'splitter_features' },
+            { tag_key: 'slide_tag_designer', title_key: 'character_designer', features_key: 'designer_features' },
+            { tag_key: 'slide_tag_visualizer', title_key: 'character_visualizer', features_key: 'visualizer_features' },
+            { tag_key: 'slide_tag_scene', title_key: 'scene_designer', features_key: 'scene_designer_features' },
+            { tag_key: 'slide_tag_renderer', title_key: 'visual_renderer', features_key: 'renderer_features' },
+        ];
+
+        function renderCarousel() {
+            const track = document.getElementById('carousel-track');
+            if (!track) return;
+            const t = window.t || (k => k);
+            let html = '';
+            carouselData.forEach((item, idx) => {
+                const tag = t(item.tag_key);
+                const title = t(item.title_key);
+                const featuresRaw = t(item.features_key);
+                const features = featuresRaw.split(';').map(f => f.trim()).filter(Boolean);
+                html += `<div class="carousel-slide${idx === 0 ? ' active' : ''}" data-slide="${idx}">`;
+                html += `<p class="slide-tag">${tag}</p>`;
+                html += `<h3>${title}</h3>`;
+                html += '<ul>';
+                features.forEach(f => { html += `<li>${f}</li>`; });
+                html += '</ul></div>';
+            });
+            track.innerHTML = html;
+        }
+
         function initCarousel() {
             const carousel = document.getElementById('agent-carousel');
             if (!carousel) return;
@@ -1518,8 +1469,9 @@
                 checkRunningHubForMultiAngle();
             }
 
+            renderCarousel();
             initCarousel();
-            
+
             // 设置发送按钮事件监听器
             const sendButton = document.getElementById('send-btn');
             if (sendButton) {
@@ -1660,7 +1612,7 @@
                             const options = vContent.options || [];
 
                             let vHtml = `<div class="verification-question history-mode">`;
-                            vHtml += `<strong class="verification-title">${escapeHtml(vContent.title || 'AI 提问')}</strong>`;
+                            vHtml += `<strong class="verification-title">${escapeHtml(vContent.title || (window.t ? window.t('ai_question') : 'AI 提问'))}</strong>`;
                             vHtml += `<p class="verification-description">${escapeHtml(desc)}</p>`;
                             if (options.length > 0) {
                                 vHtml += `<div class="verification-options">`;
@@ -1721,7 +1673,7 @@
                         addMessage(msg.role, content);
                     });
                     
-                    updateStatus(`已加载 ${data.history.length} 条历史消息`);
+                    updateStatus(window.t ? window.t('status_loaded_history', {count: data.history.length}) : `已加载 ${data.history.length} 条历史消息`);
                 } else {
                     console.log('没有历史消息');
                 }
@@ -1756,7 +1708,7 @@
                     }
                     
                     console.log(`复用已有会话: ${sessionId}`);
-                    updateStatus('剧本编排系统已就绪（复用已有会话）');
+                    updateStatus(window.t ? window.t('status_orchestrator_ready_reuse') : '剧本编排系统已就绪（复用已有会话）');
                     
                     // 加载并显示历史消息
                     await loadAndDisplayHistory(sessionId);
@@ -1832,17 +1784,17 @@
                         warningMsg += '💡 提示：这些文件的本地内容已保留，不会被数据库覆盖。如需同步，请使用"提交数据"按钮。';
                         
                         alert(warningMsg);
-                        updateStatus('剧本编排系统已就绪（检测到未提交的本地修改）');
+                        updateStatus(window.t ? window.t('status_orchestrator_ready_local') : '剧本编排系统已就绪（检测到未提交的本地修改）');
                     } else {
-                        updateStatus('剧本编排系统已就绪');
+                        updateStatus(window.t ? window.t('status_orchestrator_ready') : '剧本编排系统已就绪');
                     }
                     // 会话创建成功后，自动设置生图模型到后端
                     await autoSetTextToImageModel();
                 } else {
-                    showError('创建会话失败: ' + data.error);
+                    showError((window.t ? window.t('error_create_session_failed', {error: data.error}) : '创建会话失败: ' + data.error));
                 }
             } catch (error) {
-                showError('创建会话失败: ' + error.message);
+                showError((window.t ? window.t('error_create_session_failed', {error: error.message}) : '创建会话失败: ' + error.message));
             }
         }
 
@@ -1851,7 +1803,7 @@
             
             if (confirm(confirmMessage)) {
                 try {
-                    updateStatus('正在从数据库同步文件...');
+                    updateStatus(window.t ? window.t('status_syncing_from_db') : '正在从数据库同步文件...');
                     const response = await fetch('/api/sync-files', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -1860,60 +1812,60 @@
                     
                     const data = await response.json();
                     if (!data.success) {
-                        showError('同步失败: ' + (data.error || '未知错误'));
-                        updateStatus('就绪');
+                        showError((window.t ? window.t('error_sync_failed', {error: data.error || (window.t ? window.t('error_unknown') : '未知错误')}) : '同步失败: ' + (data.error || '未知错误')));
+                        updateStatus(window.t ? window.t('status_ready') : '就绪');
                         return;
                     }
                     
+                    const _t = window.t || (k => k);
                     document.getElementById('chat-messages').innerHTML = `
                         <div class="welcome-card">
                             <div class="welcome-icon">🎬</div>
-                            <h2 class="welcome-title">欢迎使用剧本智能创作系统</h2>
-                            <p class="welcome-desc">我是剧本架构师，可以调度所有智能体完成从大纲到合规的全流程创作。</p>
+                            <h2 class="welcome-title">${_t('welcome_title')}</h2>
+                            <p class="welcome-desc">${_t('welcome_desc')}</p>
                             <div class="agent-carousel" id="agent-carousel">
-                                <div class="carousel-track">
-                                    ${Array.from(document.querySelectorAll('.carousel-slide')).map(slide => slide.outerHTML).join('')}
-                                </div>
+                                <div class="carousel-track" id="carousel-track"></div>
                                 <div class="carousel-controls">
-                                    <button class="carousel-btn prev" id="carousel-prev" aria-label="上一页"><span>←</span></button>
-                                    <button class="carousel-btn next" id="carousel-next" aria-label="下一页"><span>→</span></button>
+                                    <button class="carousel-btn prev" id="carousel-prev" aria-label="${_t('prev_page')}"><span>←</span></button>
+                                    <button class="carousel-btn next" id="carousel-next" aria-label="${_t('next_page')}"><span>→</span></button>
                                 </div>
                                 <div class="carousel-indicators" id="carousel-indicators">
-                                    ${Array.from(document.querySelectorAll('.indicator')).map((indicator, idx) => `<button class="indicator${idx === 0 ? ' active' : ''}" data-target="${idx}" aria-label="第 ${idx + 1} 页"></button>`).join('')}
+                                    ${Array.from({length: 9}, (_, idx) => `<button class="indicator${idx === 0 ? ' active' : ''}" data-target="${idx}" aria-label="${_t('page_indicator', {page: idx + 1})}"></button>`).join('')}
                                 </div>
                             </div>
-                            <p class="welcome-hint">选择世界后，告诉我你的目标或直接粘贴剧本，我们就能一起开工！</p>
+                            <p class="welcome-hint">${_t('welcome_hint')}</p>
                         </div>
                     `;
+                    renderCarousel();
                     
                     
                     await createSession();
                     initCarousel();
                     await loadFiles(currentFileType);
-                    updateStatus('已从数据库同步文件，会话已重置');
+                    updateStatus((window.t ? window.t('status_synced_reset') : '已从数据库同步文件，会话已重置'));
                 } catch (error) {
-                    showError('操作失败: ' + error.message);
-                    updateStatus('就绪');
+                    showError((window.t ? window.t('error_operation_failed', {error: error.message}) : '操作失败: ' + error.message));
+                    updateStatus(window.t ? window.t('status_ready') : '就绪');
                 }
             }
         }
 
         async function refreshFiles() {
             try {
-                updateStatus('正在刷新文件...');
+                updateStatus(window.t ? window.t('status_refreshing') : '正在刷新文件...');
                 await loadFiles(currentFileType);
-                updateStatus('文件已刷新');
+                updateStatus(window.t ? window.t('status_files_refreshed') : '文件已刷新');
             } catch (error) {
-                showError('刷新文件失败: ' + error.message);
+                showError((window.t ? window.t('error_refresh_files_failed', {error: error.message}) : '刷新文件失败: ' + error.message));
             }
         }
 
         async function refreshPage() {
-            if (confirm('⚠️ 确定要新建会话吗？\n\n这将会刷新页面并清空当前对话历史。\n\n本地文件不会被删除，但对话上下文会丢失。\n\n是否继续？')) {
+            if (confirm(window.t ? window.t('confirm_new_session') : '⚠️ 确定要新建会话吗？\n\n这将会刷新页面并清空当前对话历史。\n\n本地文件不会被删除，但对话上下文会丢失。\n\n是否继续？')) {
                 try {
                     // 如果有当前会话，先清空会话历史
                     if (sessionId) {
-                        updateStatus('正在清空对话历史...');
+                        updateStatus(window.t ? window.t('status_clearing_history') : '正在清空对话历史...');
                         const response = await fetch(`/api/session/${sessionId}/clear`, {
                             method: 'POST',
                             headers: {
@@ -1939,16 +1891,16 @@
 
         async function compressHistory() {
             if (!sessionId) {
-                showError('没有活跃的会话，无法压缩历史');
+                showError(window.t ? window.t('error_no_active_session') : '没有活跃的会话，无法压缩历史');
                 return;
             }
 
-            if (!confirm('🗜️ 确定要压缩对话历史吗？\n\n这将会：\n• 保留关键决策和重要信息\n• 删除冗余对话内容\n• 减少上下文长度以节省 token\n\n压缩后无法恢复原始历史，是否继续？')) {
+            if (!confirm(window.t ? window.t('confirm_compress_history') : '🗜️ 确定要压缩对话历史吗？\n\n这将会：\n• 保留关键决策和重要信息\n• 删除冗余对话内容\n• 减少上下文长度以节省 token\n\n压缩后无法恢复原始历史，是否继续？')) {
                 return;
             }
 
             try {
-                updateStatus('正在压缩对话历史...');
+                updateStatus(window.t ? window.t('status_compressing_history') : '正在压缩对话历史...');
                 const response = await fetch(`/api/session/${sessionId}/compress`, {
                     method: 'POST',
                     headers: {
@@ -1958,8 +1910,8 @@
 
                 const data = await response.json();
                 if (data.success) {
-                    showSuccess(`✓ 对话历史已压缩：${data.before_count} → ${data.after_count} 条消息`);
-                    updateStatus(`对话历史已压缩，减少 ${data.reduced} 条消息`);
+                    showSuccess(window.t ? window.t('success_history_compressed_detail', {before: data.before_count, after: data.after_count}) : `✓ 对话历史已压缩：${data.before_count} → ${data.after_count} 条消息`);
+                    updateStatus(window.t ? window.t('status_history_compressed', {count: data.reduced}) : `对话历史已压缩，减少 ${data.reduced} 条消息`);
 
                     // 添加系统消息到聊天窗口显示压缩结果
                     addSystemMessage(`对话历史已压缩`,
@@ -1969,13 +1921,13 @@
                         'info'
                     );
                 } else {
-                    showError('压缩失败: ' + (data.error || '未知错误'));
-                    updateStatus('压缩失败');
+                    showError((window.t ? window.t('error_compress_failed', {error: data.error || (window.t ? window.t('error_unknown') : '未知错误')}) : '压缩失败: ' + (data.error || '未知错误')));
+                    updateStatus(window.t ? window.t('status_compress_failed') : '压缩失败');
                 }
             } catch (error) {
                 console.error('压缩对话历史失败:', error);
-                showError('压缩失败: ' + error.message);
-                updateStatus('压缩失败');
+                showError((window.t ? window.t('error_compress_failed', {error: error.message}) : '压缩失败: ' + error.message));
+                updateStatus(window.t ? window.t('status_compress_failed') : '压缩失败');
             }
         }
 
@@ -2007,7 +1959,7 @@
 
             // 检查是否选择了世界
             if (!WORLD_ID) {
-                showError('请先选择世界');
+                showError(window.t ? window.t('error_select_world_first') : '请先选择世界');
                 return;
             }
 
@@ -2020,7 +1972,7 @@
             }
 
             try {
-                updateStatus('正在提交数据...');
+                updateStatus(window.t ? window.t('status_submitting_data') : '正在提交数据...');
                 const response = await fetch('/api/submit-to-database', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -2029,15 +1981,15 @@
 
                 const data = await response.json();
                 if (data.success) {
-                    showSuccess(`✓ 提交成功！共保存 ${data.total} 个文件到数据库`);
-                    updateStatus('数据已提交到数据库');
+                    showSuccess(window.t ? window.t('success_submit_detail', {total: data.total}) : `✓ 提交成功！共保存 ${data.total} 个文件到数据库`);
+                    updateStatus(window.t ? window.t('status_data_submitted') : '数据已提交到数据库');
                 } else {
-                    showError('提交失败: ' + (data.error || '未知错误'));
-                    updateStatus('提交失败');
+                    showError((window.t ? window.t('error_submit_failed', {error: data.error || (window.t ? window.t('error_unknown') : '未知错误')}) : '提交失败: ' + (data.error || '未知错误')));
+                    updateStatus(window.t ? window.t('status_submit_failed') : '提交失败');
                 }
             } catch (error) {
-                showError('提交失败: ' + error.message);
-                updateStatus('提交失败');
+                showError((window.t ? window.t('error_submit_failed', {error: error.message}) : '提交失败: ' + error.message));
+                updateStatus(window.t ? window.t('status_submit_failed') : '提交失败');
             } finally {
                 // 恢复提交状态并启用按钮
                 isSubmitting = false;
@@ -2339,7 +2291,7 @@
             }
 
             showTypingIndicator();
-            updateStatus('AI 思考中...');
+            updateStatus(window.t ? window.t('status_ai_thinking') : 'AI 思考中...');
 
             let timeoutId;
             let hasStartedReceiving = false;
@@ -2350,7 +2302,7 @@
                     if (!hasStartedReceiving) {
                         controller.abort();
                         hideTypingIndicator();
-                        showError('请求超时，请稍后重试。');
+                        showError(window.t ? window.t('error_timeout_retry') : '请求超时，请稍后重试。');
                     }
                 }, 300000);
                 
@@ -2362,7 +2314,7 @@
 
                 if (!modelId) {
                     hideTypingIndicator();
-                    showError('当前模型不可用，请重新加载模型列表');
+                    showError(window.t ? window.t('error_model_unavailable') : '当前模型不可用，请重新加载模型列表');
                     isProcessing = false;
                     const sendBtn = document.getElementById('send-btn');
                     sendBtn.disabled = false;
@@ -2379,6 +2331,7 @@
                         model: selector?.value || '',
                         model_id: modelId,
                         vendor_id: vendorId ? parseInt(vendorId) : 1,
+                        language: localStorage.getItem('zjt_locale') || 'zh-CN',
                         ...getThinkingParams()
                     }),
                     signal: controller.signal
@@ -2425,7 +2378,7 @@
                             hasStartedReceiving = true;
                             hideTypingIndicator(); // 收到第一个消息时才移除打字指示器
                             const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-                            updateStatus(`AI 正在回复... (等待了 ${elapsed}s)`);
+                            updateStatus(window.t ? window.t('status_ai_replying', {elapsed: elapsed}) : `AI 正在回复... (等待了 ${elapsed}s)`);
                             clearTimeout(timeoutId);
                         }
                         
@@ -2443,14 +2396,14 @@
                                 scrollToBottom();
                             }
                         } else if (data.type === 'progress') {
-                            updateStatus(`执行中: ${data.step || ''}`);
+                            updateStatus(window.t ? window.t('status_executing', {step: data.step || ''}) : `执行中: ${data.step || ''}`);
                         } else if (data.type === 'context_compression') {
-                            updateStatus('上下文已自动压缩，继续回复中...');
+                            updateStatus(window.t ? window.t('status_context_compressed') : '上下文已自动压缩，继续回复中...');
                             console.log('[SSE] 上下文压缩事件:', data.reason);
                         } else if (data.type === 'done') {
                             eventSource.close();
                             hideTypingIndicator(); // 确保移除打字指示器
-                            updateStatus('完成');
+                            updateStatus(window.t ? window.t('status_done') : '完成');
                             isProcessing = false;
                             pendingVerificationId = null;
                             pendingVerificationData = null;
@@ -2467,7 +2420,7 @@
                             }
                         } else if (data.type === 'error') {
                             eventSource.close();
-                            showError('任务执行错误: ' + data.error);
+                            showError((window.t ? window.t('error_task_execution', {error: data.error}) : '任务执行错误: ' + data.error));
                             isProcessing = false;
                             pendingVerificationId = null;
                             pendingVerificationData = null;
@@ -2487,7 +2440,7 @@
                                 input.value = '';
                                 input.placeholder = '输入消息...';
                             }
-                            showError('验证已超时，请重新发送消息');
+                            showError(window.t ? window.t('error_verification_timeout') : '验证已超时，请重新发送消息');
                         } else if (data.type === 'status') {
                             if (data.status) updateStatus(data.status);
                         }
@@ -2506,29 +2459,29 @@
                             // 任务已结束，安全重置状态
                             resetProcessingState();
                             if (!hasStartedReceiving) {
-                                showError('连接失败，请重试');
+                                showError(window.t ? window.t('error_connection_failed') : '连接失败，请重试');
                             }
                         } else {
                             // 任务仍在运行，保持旋转状态并尝试重连
-                            updateStatus('连接中断，正在重连...');
+                            updateStatus(window.t ? window.t('status_reconnecting') : '连接中断，正在重连...');
                             setTimeout(() => {
                                 reconnectSSE(taskId, messageDiv, contentDiv, startTime);
                             }, 2000);
                         }
                     }).catch(() => {
                         // 无法获取任务状态，保守处理：保持旋转但显示提示
-                        updateStatus('连接中断，请等待或刷新页面');
+                        updateStatus(window.t ? window.t('status_connection_lost') : '连接中断，请等待或刷新页面');
                     });
                 };
 
-                updateStatus('就绪');
+                updateStatus(window.t ? window.t('status_ready') : '就绪');
             } catch (error) {
                 hideTypingIndicator();
                 clearTimeout(timeoutId);
                 if (error.name === 'AbortError') {
-                    showError('请求超时。剧本编排系统需要较长时间处理，请稍后重试。');
+                    showError(window.t ? window.t('error_orchestrator_timeout') : '请求超时。剧本编排系统需要较长时间处理，请稍后重试。');
                 } else {
-                    showError('发送消息失败: ' + error.message);
+                    showError((window.t ? window.t('error_send_message_failed', {error: error.message}) : '发送消息失败: ' + error.message));
                 }
                 // 只在 catch 中重置状态，不用 finally（因为 EventSource 是异步的）
                 isProcessing = false;
@@ -2556,7 +2509,7 @@
                 sendBtn.disabled = false;
                 sendBtn.classList.remove('sending');
             }
-            updateStatus('就绪');
+            updateStatus(window.t ? window.t('status_ready') : '就绪');
         }
 
         // 重连SSE（最多重连5次）
@@ -2564,9 +2517,9 @@
             const MAX_RETRIES = 5;
 
             if (retryCount >= MAX_RETRIES) {
-                updateStatus('重连失败，请刷新页面重试');
+                updateStatus(window.t ? window.t('status_reconnect_failed') : '重连失败，请刷新页面重试');
                 resetProcessingState();
-                showError('连接中断，已尝试重连5次失败，请刷新页面');
+                showError(window.t ? window.t('error_connection_lost') : '连接中断，已尝试重连5次失败，请刷新页面');
                 return null;
             }
 
@@ -2581,7 +2534,7 @@
                         hasStartedReceiving = true;
                         hideTypingIndicator();
                         const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-                        updateStatus(`AI 正在回复... (等待了 ${elapsed}s)`);
+                        updateStatus(window.t ? window.t('status_ai_replying', {elapsed: elapsed}) : `AI 正在回复... (等待了 ${elapsed}s)`);
                     }
 
                     if (data.type === 'message') {
@@ -2597,12 +2550,12 @@
                             scrollToBottom();
                         }
                     } else if (data.type === 'progress') {
-                        updateStatus(`执行中: ${data.step || ''}`);
+                        updateStatus(window.t ? window.t('status_executing', {step: data.step || ''}) : `执行中: ${data.step || ''}`);
                     } else if (data.type === 'context_compression') {
-                        updateStatus('上下文已自动压缩，继续回复中...');
+                        updateStatus(window.t ? window.t('status_context_compressed') : '上下文已自动压缩，继续回复中...');
                     } else if (data.type === 'done') {
                         newEventSource.close();
-                        updateStatus('完成');
+                        updateStatus(window.t ? window.t('status_done') : '完成');
                         resetProcessingState();
                         loadComputingPower();
                         try {
@@ -2612,7 +2565,7 @@
                         }
                     } else if (data.type === 'error') {
                         newEventSource.close();
-                        showError('任务执行错误: ' + data.error);
+                        showError((window.t ? window.t('error_task_execution', {error: data.error}) : '任务执行错误: ' + data.error));
                         resetProcessingState();
                     } else if (data.type === 'human_verification_required') {
                         const verification = data.verification || {};
@@ -2625,7 +2578,7 @@
                             input.value = '';
                             input.placeholder = '输入消息...';
                         }
-                        showError('验证已超时，请重新发送消息');
+                        showError(window.t ? window.t('error_verification_timeout') : '验证已超时，请重新发送消息');
                     } else if (data.type === 'status') {
                         if (data.status) updateStatus(data.status);
                     }
@@ -2640,13 +2593,13 @@
                     if (taskStatus === 'completed' || taskStatus === 'failed' || taskStatus === 'cancelled') {
                         resetProcessingState();
                     } else {
-                        updateStatus(`重连失败，2秒后再次尝试 (${retryCount + 1}/${MAX_RETRIES})...`);
+                        updateStatus(window.t ? window.t('status_reconnect_retry', {count: retryCount + 1, max: MAX_RETRIES}) : `重连失败，2秒后再次尝试 (${retryCount + 1}/${MAX_RETRIES})...`);
                         setTimeout(() => {
                             reconnectSSE(taskId, messageDiv, contentDiv, startTime, retryCount + 1);
                         }, 2000);
                     }
                 }).catch(() => {
-                    updateStatus('重连失败，请刷新页面');
+                    updateStatus(window.t ? window.t('status_reconnect_final') : '重连失败，请刷新页面');
                 });
             };
 
@@ -2778,7 +2731,7 @@
                 });
                 // 添加"其他"按钮
                 html += `<button class="option-btn option-other-btn" data-option-other="true">`;
-                html += `其他</button>`;
+                html += `${window.t ? window.t('btn_other') : '其他'}</button>`;
                 html += `</div>`;
             }
 
@@ -2796,9 +2749,9 @@
 
                     if (isOther) {
                         // 点击"其他"按钮，焦点转移到下方的消息输入框
-                        input.placeholder = '请输入您的自定义答案...';
+                        input.placeholder = window.t ? window.t('placeholder_custom_answer') : '请输入您的自定义答案...';
                         input.focus();
-                        updateStatus('💬 请在下方输入框中输入您的自定义答案');
+                        updateStatus('💬 ' + (window.t ? window.t('status_custom_answer') : '请在下方输入框中输入您的自定义答案'));
                         console.log('[VERIFICATION] 用户选择"其他"，等待自定义输入');
                     } else {
                         // 点击预设选项，直接提交（无需用户再输入）
@@ -2815,10 +2768,10 @@
             // 启用输入框
             input.disabled = false;
             input.placeholder = verification.options && verification.options.length > 0
-                ? '点击上方选项或选择"其他"输入自定义答案'
-                : '请输入您的回答...';
+                ? (window.t ? window.t('placeholder_select_or_custom') : '点击上方选项或选择"其他"输入自定义答案')
+                : (window.t ? window.t('placeholder_enter_answer') : '请输入您的回答...');
 
-            updateStatus('等待您的回答...');
+            updateStatus(window.t ? window.t('status_waiting_answer') : '等待您的回答...');
         }
 
         async function submitVerificationAnswer(userInput) {
@@ -2857,9 +2810,9 @@
                     input.value = '';
                     input.placeholder = '输入消息...';
 
-                    updateStatus('等待 AI 继续处理...');
+                    updateStatus(window.t ? window.t('status_waiting_ai') : '等待 AI 继续处理...');
                 } else {
-                    showError('验证提交失败：' + response.data.error + '，请重新输入');
+                    showError((window.t ? window.t('error_verification_submit_failed_detail', {error: response.data.error}) : '验证提交失败：' + response.data.error + '，请重新输入'));
                     // 保持 pendingVerificationId，允许用户重试
                     // 注意：不重置 isProcessing，因为 Expert 仍在等待
                     const input = document.getElementById('message-input');
@@ -2893,10 +2846,10 @@
                     pendingVerificationId = null;
                     pendingVerificationData = null;
                     input.placeholder = '输入消息...';
-                    showError('验证已过期，请重新发送消息');
+                    showError(window.t ? window.t('error_verification_expired') : '验证已过期，请重新发送消息');
                 } else {
                     // 其他错误（网络问题等），保持状态允许用户重试
-                    showError('提交验证时出错：' + error.message + '，请重新输入');
+                    showError((window.t ? window.t('error_verification_error_detail', {error: error.message}) : '提交验证时出错：' + error.message + '，请重新输入'));
                     input.focus();
                 }
             }
@@ -3248,7 +3201,7 @@
                 ensureValidModelSelected();
             } catch (error) {
                 console.error('加载模型列表失败:', error);
-                showError('加载模型列表失败，请稍后重试');
+                showError(window.t ? window.t('error_load_models_failed') : '加载模型列表失败，请稍后重试');
             }
         }
 
@@ -3492,7 +3445,7 @@
 
         async function changeModel() {
             if (!sessionId) {
-                showError('请先创建会话');
+                showError(window.t ? window.t('error_create_session_first') : '请先创建会话');
                 return;
             }
             const selector = document.getElementById('model-selector');
@@ -3525,7 +3478,7 @@
             }
 
             if (!AUTH_TOKEN) {
-                showError('缺少认证信息，请重新登录');
+                showError(window.t ? window.t('error_auth_missing') : '缺少认证信息，请重新登录');
                 return;
             }
 
@@ -3542,17 +3495,18 @@
                 });
                 const data = await response.json();
                 if (data.success) {
-                    showSuccess(`已切换到 ${selector.options[selector.selectedIndex].text}`);
+                    showSuccess(window.t ? window.t('success_switched_to', {name: selector.options[selector.selectedIndex].text}) : `已切换到 ${selector.options[selector.selectedIndex].text}`);
                 } else {
                     // 如果返回了有效模型列表，显示更详细的错误信息
                     if (data.valid_models && data.valid_models.length > 0) {
-                        showError(`切换模型失败: ${data.error}\n可用模型: ${data.valid_models.join(', ')}`);
+                        showError(window.t ? window.t('error_switch_model_detail', {error: data.error, models: data.valid_models.join(', ')}) : `切换模型失败: ${data.error}
+可用模型: ${data.valid_models.join(', ')}`);
                     } else {
-                        showError('切换模型失败: ' + data.error);
+                        showError(window.t ? window.t('error_switch_model_failed', {error: data.error}) : '切换模型失败: ' + data.error);
                     }
                 }
             } catch (error) {
-                showError('切换模型失败: ' + error.message);
+                showError((window.t ? window.t('error_switch_model_failed', {error: error.message}) : '切换模型失败: ' + error.message));
             }
         }
 
@@ -3674,7 +3628,7 @@
                 if (selector) {
                     selector.innerHTML = '<option value="">模型加载失败</option>';
                 }
-                showError('加载生图模型列表失败，请稍后重试');
+                showError(window.t ? window.t('error_load_image_models_failed') : '加载生图模型列表失败，请稍后重试');
             }
         }
 
@@ -3750,7 +3704,7 @@
 
         async function changeTextToImageModel() {
             if (!sessionId) {
-                showError('请先创建会话');
+                showError(window.t ? window.t('error_create_session_first') : '请先创建会话');
                 return;
             }
 
@@ -3758,17 +3712,17 @@
             const model = selector.value;
 
             if (!model) {
-                showError('请选择生图模型');
+                showError(window.t ? window.t('error_select_image_model') : '请选择生图模型');
                 return;
             }
 
             if (!USER_ID || !WORLD_ID) {
-                showError('缺少用户ID或世界ID，请刷新页面重试');
+                showError(window.t ? window.t('error_missing_ids') : '缺少用户ID或世界ID，请刷新页面重试');
                 return;
             }
 
             if (!AUTH_TOKEN) {
-                showError('缺少认证信息，请重新登录');
+                showError(window.t ? window.t('error_auth_missing') : '缺少认证信息，请重新登录');
                 return;
             }
 
@@ -3786,12 +3740,12 @@
                 });
                 const data = await response.json();
                 if (data.success) {
-                    showSuccess(`已切换到 ${selector.options[selector.selectedIndex].text}`);
+                    showSuccess(window.t ? window.t('success_switched_to', {name: selector.options[selector.selectedIndex].text}) : `已切换到 ${selector.options[selector.selectedIndex].text}`);
                 } else {
-                    showError('切换生图模型失败: ' + data.error);
+                    showError((window.t ? window.t('error_switch_image_model_failed', {error: data.error}) : '切换生图模型失败: ' + data.error));
                 }
             } catch (error) {
-                showError('切换生图模型失败: ' + error.message);
+                showError((window.t ? window.t('error_switch_image_model_failed', {error: error.message}) : '切换生图模型失败: ' + error.message));
             }
             updateImageModelIcon();
         }
@@ -3832,17 +3786,17 @@
 
         async function exportWorld() {
             try {
-                updateStatus('正在打包并上传世界数据...');
+                updateStatus(window.t ? window.t('status_packing_world') : '正在打包并上传世界数据...');
                 const response = await fetch(`/api/export-world?user_id=${USER_ID}&world_id=${WORLD_ID}&auth_token=${AUTH_TOKEN}`);
                 const result = await response.json().catch(() => ({}));
                 if (!response.ok) {
-                    showError('导出失败: ' + (result.error || response.statusText));
-                    updateStatus('导出失败');
+                    showError((window.t ? window.t('error_export_failed', {error: result.error || response.statusText}) : '导出失败: ' + (result.error || response.statusText)));
+                    updateStatus(window.t ? window.t('status_export_failed') : '导出失败');
                     return;
                 }
                 if (!result.success || !result.download_url) {
-                    showError('导出失败: ' + (result.error || '未获取到下载链接'));
-                    updateStatus('导出失败');
+                    showError((window.t ? window.t('error_export_failed', {error: result.error || (window.t ? window.t('error_no_download_link') : '未获取到下载链接')}) : '导出失败: ' + (result.error || '未获取到下载链接')));
+                    updateStatus(window.t ? window.t('status_export_failed') : '导出失败');
                     return;
                 }
                 const a = document.createElement('a');
@@ -3852,11 +3806,11 @@
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
-                showSuccess('✓ 世界数据导出成功，已生成下载链接');
-                updateStatus('导出完成，可通过图床链接下载');
+                showSuccess(window.t ? window.t('success_world_exported') : '✓ 世界数据导出成功，已生成下载链接');
+                updateStatus(window.t ? window.t('status_export_done') : '导出完成，可通过图床链接下载');
             } catch (error) {
-                showError('导出失败: ' + error.message);
-                updateStatus('导出失败');
+                showError((window.t ? window.t('error_export_failed', {error: error.message}) : '导出失败: ' + error.message));
+                updateStatus(window.t ? window.t('status_export_failed') : '导出失败');
             }
         }
 
@@ -3869,16 +3823,16 @@
             const file = fileInput.files[0];
             if (!file) return;
             if (!file.name.endsWith('.zip')) {
-                showError('请选择 .zip 格式的文件');
+                showError(window.t ? window.t('error_zip_only') : '请选择 .zip 格式的文件');
                 fileInput.value = '';
                 return;
             }
-            if (!confirm(`确定要导入 "${file.name}" 吗？\n\n导入会覆盖当前世界的同名数据，请确认。`)) {
+            if (!confirm(window.t ? window.t('confirm_import_world', {name: file.name}) : `确定要导入 "${file.name}" 吗？\n\n导入会覆盖当前世界的同名数据，请确认。`)) {
                 fileInput.value = '';
                 return;
             }
             try {
-                updateStatus('正在导入世界数据...');
+                updateStatus(window.t ? window.t('status_importing_world') : '正在导入世界数据...');
                 const formData = new FormData();
                 formData.append('user_id', USER_ID);
                 formData.append('world_id', WORLD_ID);
@@ -3890,15 +3844,15 @@
                 const data = await response.json();
                 if (data.success) {
                     showSuccess('✓ ' + data.message);
-                    updateStatus('导入完成');
+                    updateStatus(window.t ? window.t('status_import_done') : '导入完成');
                     await loadFiles(currentFileType);
                 } else {
-                    showError('导入失败: ' + (data.error || '未知错误'));
-                    updateStatus('导入失败');
+                    showError((window.t ? window.t('error_import_failed', {error: data.error || (window.t ? window.t('error_unknown') : '未知错误')}) : '导入失败: ' + (data.error || '未知错误')));
+                    updateStatus(window.t ? window.t('status_import_failed') : '导入失败');
                 }
             } catch (error) {
-                showError('导入失败: ' + error.message);
-                updateStatus('导入失败');
+                showError((window.t ? window.t('error_import_failed', {error: error.message}) : '导入失败: ' + error.message));
+                updateStatus(window.t ? window.t('status_import_failed') : '导入失败');
             } finally {
                 fileInput.value = '';
             }
@@ -4019,7 +3973,7 @@
                             // 转义路径中的特殊字符
                             const escapedPath = relativePath.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
                             deleteButtonHtml = `
-                                <button class="file-btn delete-btn" onclick="deleteStagingFile('${escapedPath}')" title="删除">
+                                <button class="file-btn delete-btn" onclick="deleteStagingFile('${escapedPath}')" title="删除" data-i18n-title="title_delete">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <polyline points="3 6 5 6 21 6"/>
                                         <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -4041,13 +3995,13 @@
                                 ${imageIconHtml}
                                 ${voiceIconHtml}
                                 ${deleteButtonHtml}
-                                <button class="file-btn view-btn" onclick="viewFile('${fileType}', '${fileKey}')" title="查看">
+                                <button class="file-btn view-btn" onclick="viewFile('${fileType}', '${fileKey}')" title="查看" data-i18n-title="title_view">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
                                         <circle cx="12" cy="12" r="3"/>
                                     </svg>
                                 </button>
-                                <button class="file-btn edit-btn" onclick="editFile('${fileType}', '${fileKey}')" title="编辑">
+                                <button class="file-btn edit-btn" onclick="editFile('${fileType}', '${fileKey}')" title="编辑" data-i18n-title="title_edit">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -4119,10 +4073,10 @@
                     
                     document.getElementById('view-modal').classList.add('show');
                 } else {
-                    showError('查看文件失败: ' + (data.error || '未知错误'));
+                    showError((window.t ? window.t('error_view_file_failed', {error: data.error || (window.t ? window.t('error_unknown') : '未知错误')}) : '查看文件失败: ' + (data.error || '未知错误')));
                 }
             } catch (error) {
-                showError('查看文件失败: ' + error.message);
+                showError((window.t ? window.t('error_view_file_failed', {error: error.message}) : '查看文件失败: ' + error.message));
             }
         }
 
@@ -4277,10 +4231,10 @@
                     
                     document.getElementById('edit-modal').classList.add('show');
                 } else {
-                    showError('读取文件失败: ' + (data.error || '未知错误'));
+                    showError((window.t ? window.t('error_read_file_failed', {error: data.error || (window.t ? window.t('error_unknown') : '未知错误')}) : '读取文件失败: ' + (data.error || '未知错误')));
                 }
             } catch (error) {
-                showError('编辑文件失败: ' + error.message);
+                showError((window.t ? window.t('error_edit_file_failed', {error: error.message}) : '编辑文件失败: ' + error.message));
             }
         }
 
@@ -4335,12 +4289,12 @@
 
         async function generateCharacterReferenceAudio() {
             if (!currentEditFile || currentEditFile.fileType !== 'characters') {
-                showError('请先打开一个角色进行编辑');
+                showError(window.t ? window.t('error_open_character_first') : '请先打开一个角色进行编辑');
                 return;
             }
             const characterName = document.getElementById('char-name').value.trim();
             if (!characterName) {
-                showError('角色名称不能为空');
+                showError(window.t ? window.t('error_character_name_required') : '角色名称不能为空');
                 return;
             }
             const btn = document.getElementById('generate-character-voice-btn');
@@ -4348,7 +4302,7 @@
             btn.disabled = true;
             btn.textContent = '生成中...';
             try {
-                updateStatus('正在生成角色参考音频...');
+                updateStatus(window.t ? window.t('status_generating_audio') : '正在生成角色参考音频...');
                 // 获取当前选择的 LLM 模型信息
                 const modelSelector = document.getElementById('model-selector');
                 const selectedModelOption = modelSelector?.options[modelSelector.selectedIndex];
@@ -4379,11 +4333,11 @@
                 document.getElementById('char-default-voice').value = data.default_voice || data.result_url || '';
                 showCharacterDefaultVoicePreview(data.default_voice || data.result_url || '');
                 await saveEditedFile();
-                showSuccess('角色参考音频生成成功');
-                updateStatus('角色参考音频已生成');
+                showSuccess(window.t ? window.t('success_audio_generated') : '角色参考音频生成成功');
+                updateStatus(window.t ? window.t('status_audio_generated') : '角色参考音频已生成');
             } catch (error) {
-                showError('生成参考音频失败: ' + error.message);
-                updateStatus('生成参考音频失败');
+                showError((window.t ? window.t('error_generate_audio_failed', {error: error.message}) : '生成参考音频失败: ' + error.message));
+                updateStatus(window.t ? window.t('status_audio_failed') : '生成参考音频失败');
             } finally {
                 btn.disabled = false;
                 btn.textContent = originalText;
@@ -4439,14 +4393,14 @@
 
             // 验证文件类型
             if (!file.type.startsWith('image/')) {
-                showError('请选择图片文件');
+                showError(window.t ? window.t('error_select_image_file') : '请选择图片文件');
                 event.target.value = '';
                 return;
             }
 
             // 验证文件大小 (10MB)
             if (file.size > 10 * 1024 * 1024) {
-                showError('图片大小不能超过10MB');
+                showError(window.t ? window.t('error_image_too_large') : '图片大小不能超过10MB');
                 event.target.value = '';
                 return;
             }
@@ -4480,12 +4434,12 @@
                 if (data.success) {
                     addLocMultiImageItem(list, label, data.url, angle, undefined);
                     labelInput.value = '';
-                    showSuccess('图片上传成功');
+                    showSuccess(window.t ? window.t('success_image_uploaded') : '图片上传成功');
                 } else {
-                    showError('上传失败: ' + data.error);
+                    showError((window.t ? window.t('error_upload_failed', {error: data.error}) : '上传失败: ' + data.error));
                 }
             } catch (error) {
-                showError('上传失败: ' + error.message);
+                showError((window.t ? window.t('error_upload_failed', {error: error.message}) : '上传失败: ' + error.message));
             }
 
             event.target.value = '';
@@ -4502,7 +4456,7 @@
             wrapper.innerHTML = `
                 <img src="${url}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'" />
                 <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.7);color:white;font-size:10px;padding:2px 6px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${label}</div>
-                <button type="button" style="position:absolute;top:2px;right:2px;background:rgba(239,68,68,0.8);border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;color:white;font-size:12px;line-height:20px;" title="删除">&times;</button>
+                <button type="button" style="position:absolute;top:2px;right:2px;background:rgba(239,68,68,0.8);border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;color:white;font-size:12px;line-height:20px;" title="删除" data-i18n-title="title_delete">&times;</button>
             `;
             wrapper.querySelector('button').addEventListener('click', () => wrapper.remove());
             container.appendChild(wrapper);
@@ -4576,7 +4530,7 @@
                 item.innerHTML = `
                     <img src="${img.url}" alt="${img.label}">
                     <div class="thumbnail-label">${img.label}</div>
-                    ${showGenerateBtn ? `<button class="thumbnail-generate-btn" data-index="${idx}" onclick="event.stopPropagation(); regeneratePreviewSingleAngle(${idx})">生成</button>` : ''}
+                    ${showGenerateBtn ? `<button class="thumbnail-generate-btn" data-index="${idx}" onclick="event.stopPropagation(); regeneratePreviewSingleAngle(${idx})">${window.t ? window.t('btn_generate') : '生成'}</button>` : ''}
                 `;
                 container.appendChild(item);
             });
@@ -4619,7 +4573,7 @@
                                 jsonData = {};
                             }
                         } catch (e) {
-                            showError('无法解析文件数据');
+                            showError(window.t ? window.t('error_parse_file_data') : '无法解析文件数据');
                             return;
                         }
                     }
@@ -4686,10 +4640,10 @@
 
                     document.getElementById('image-preview-modal').classList.add('show');
                 } else {
-                    showError('获取数据失败: ' + (data.error || '未知错误'));
+                    showError((window.t ? window.t('error_fetch_data_failed', {error: data.error || (window.t ? window.t('error_unknown') : '未知错误')}) : '获取数据失败: ' + (data.error || '未知错误')));
                 }
             } catch (error) {
-                showError('预览图片失败: ' + error.message);
+                showError((window.t ? window.t('error_preview_image_failed', {error: error.message}) : '预览图片失败: ' + error.message));
             }
         }
 
@@ -4767,24 +4721,24 @@
             const locationName = document.getElementById('loc-name').value.trim();
 
             if (!mainImage) {
-                showError('请先上传主图');
+                showError(window.t ? window.t('error_upload_main_image_first') : '请先上传主图');
                 return;
             }
 
             if (!locationDesc) {
-                showError('请先填写场景描述');
+                showError(window.t ? window.t('error_fill_scene_desc') : '请先填写场景描述');
                 return;
             }
 
             if (!locationName) {
-                showError('请先填写场景名称');
+                showError(window.t ? window.t('error_fill_scene_name') : '请先填写场景名称');
                 return;
             }
 
             // 检查是否已选择生图模型
             const textToImageModelSelect = document.getElementById('text-to-image-model-selector');
             if (!textToImageModelSelect || !textToImageModelSelect.value) {
-                showError('请先选择生图模型');
+                showError(window.t ? window.t('error_select_image_model') : '请先选择生图模型');
                 return;
             }
 
@@ -4823,7 +4777,7 @@
                 const result = await response.json();
 
                 if (!result.success) {
-                    showError('提交任务失败: ' + result.error);
+                    showError((window.t ? window.t('error_submit_task_failed', {error: result.error}) : '提交任务失败: ' + result.error));
                     statusSpan.textContent = `[${locationName}] 提交失败`;
                     btn.disabled = false;
                     btn.classList.remove('disabled');
@@ -4841,7 +4795,7 @@
             } catch (error) {
                 console.error('提交多角度生图任务出错:', error);
                 statusSpan.textContent = `[${locationName}] 提交失败`;
-                showError('提交任务失败: ' + error.message);
+                showError((window.t ? window.t('error_submit_task_failed', {error: error.message}) : '提交任务失败: ' + error.message));
                 btn.disabled = false;
                 btn.classList.remove('disabled');
                 generatingLocationName = null;
@@ -4912,7 +4866,7 @@
 
                         if (generatedImages.length > 0) {
                             statusSpan.textContent = `[${locationName}] 完成！已生成 ${generatedImages.length} 张多角度图`;
-                            showSuccess(`[${locationName}] 多角度生图完成！共 ${generatedImages.length} 张图片已保存到暂存区`);
+                            showSuccess(window.t ? window.t('success_multi_angle_done', {name: locationName, count: generatedImages.length}) : `[${locationName}] 多角度生图完成！共 ${generatedImages.length} 张图片已保存到暂存区`);
                         } else {
                             statusSpan.textContent = `[${locationName}] 任务完成但无图片`;
                             showWarning('任务完成，但未生成任何图片');
@@ -4935,7 +4889,7 @@
                         });
 
                         statusSpan.textContent = `[${locationName}] 失败: ${task.error_message || '未知错误'}`;
-                        showError(`[${locationName}] 多角度生图失败: ${task.error_message || '未知错误'}`);
+                        showError(window.t ? window.t('error_multi_angle_failed_named', {name: locationName, error: task.error_message || (window.t ? window.t('error_unknown') : '未知错误')}) : `[${locationName}] 多角度生图失败: ${task.error_message || '未知错误'}`);
                         btn.disabled = false;
                         btn.classList.remove('disabled');
                     }
@@ -4962,23 +4916,23 @@
             const statusSpan = document.getElementById('preview-generate-status');
 
             if (!previewMainImage) {
-                showError('主图信息不存在，无法生成');
+                showError(window.t ? window.t('error_no_main_image') : '主图信息不存在，无法生成');
                 return;
             }
 
             if (!previewDescription) {
-                showError('场景描述为空，无法生成');
+                showError(window.t ? window.t('error_empty_scene_desc') : '场景描述为空，无法生成');
                 return;
             }
 
             if (!previewLocationName) {
-                showError('场景名称为空，无法生成');
+                showError(window.t ? window.t('error_empty_scene_name') : '场景名称为空，无法生成');
                 return;
             }
 
             const textToImageModelSelect = document.getElementById('text-to-image-model-selector');
             if (!textToImageModelSelect || !textToImageModelSelect.value) {
-                showError('请先选择生图模型');
+                showError(window.t ? window.t('error_select_image_model') : '请先选择生图模型');
                 return;
             }
 
@@ -5011,7 +4965,7 @@
                 const result = await response.json();
 
                 if (!result.success) {
-                    showError('提交任务失败: ' + result.error);
+                    showError((window.t ? window.t('error_submit_task_failed', {error: result.error}) : '提交任务失败: ' + result.error));
                     statusSpan.textContent = '提交失败';
                     btn.disabled = false;
                     btn.classList.remove('disabled');
@@ -5028,7 +4982,7 @@
             } catch (error) {
                 console.error('提交多角度生图任务出错:', error);
                 statusSpan.textContent = '提交失败';
-                showError('提交任务失败: ' + error.message);
+                showError((window.t ? window.t('error_submit_task_failed', {error: error.message}) : '提交任务失败: ' + error.message));
                 btn.disabled = false;
                 btn.classList.remove('disabled');
             }
@@ -5105,7 +5059,7 @@
 
                         if (generatedImages.length > 0) {
                             statusSpan.textContent = `完成！已生成 ${generatedImages.length} 张多角度图`;
-                            showSuccess(`多角度生图完成！共 ${generatedImages.length} 张图片已保存到暂存区`);
+                            showSuccess(window.t ? window.t('success_multi_angle_done_short', {count: generatedImages.length}) : `多角度生图完成！共 ${generatedImages.length} 张图片已保存到暂存区`);
                         } else {
                             statusSpan.textContent = '任务完成但无图片';
                             showWarning('任务完成，但未生成任何图片');
@@ -5118,7 +5072,7 @@
                         multiAnglePollInterval = null;
 
                         statusSpan.textContent = `失败: ${task.error_message || '未知错误'}`;
-                        showError(`多角度生图失败: ${task.error_message || '未知错误'}`);
+                        showError(window.t ? window.t('error_multi_angle_failed', {error: task.error_message || (window.t ? window.t('error_unknown') : '未知错误')}) : `多角度生图失败: ${task.error_message || '未知错误'}`);
                         btn.disabled = false;
                         btn.classList.remove('disabled');
                     }
@@ -5148,18 +5102,18 @@
 
             if (!angleInfo) {
                 console.warn('未匹配的角度标签:', img.label);
-                showError('不支持的角度标签: ' + img.label);
+                showError(window.t ? window.t('error_unsupported_angle', {label: img.label}) : '不支持的角度标签: ' + img.label);
                 return;
             }
 
             if (!previewMainImage) {
-                showError('主图信息不存在，无法生成');
+                showError(window.t ? window.t('error_no_main_image') : '主图信息不存在，无法生成');
                 return;
             }
 
             const textToImageModelSelect = document.getElementById('text-to-image-model-selector');
             if (!textToImageModelSelect || !textToImageModelSelect.value) {
-                showError('请先选择生图模型');
+                showError(window.t ? window.t('error_select_image_model') : '请先选择生图模型');
                 return;
             }
 
@@ -5193,11 +5147,11 @@
                 if (result.success) {
                     await pollPreviewSingleAngleTask(result.task_key, index, img.label, btn);
                 } else {
-                    showError('生成失败: ' + result.error);
+                    showError((window.t ? window.t('error_generate_failed', {error: result.error}) : '生成失败: ' + result.error));
                     if (btn) { btn.textContent = '生成'; btn.disabled = false; }
                 }
             } catch (error) {
-                showError('生成失败: ' + error.message);
+                showError((window.t ? window.t('error_generate_failed', {error: error.message}) : '生成失败: ' + error.message));
                 if (btn) { btn.textContent = '生成'; btn.disabled = false; }
             }
         }
@@ -5209,7 +5163,7 @@
 
             const poll = async () => {
                 if (Date.now() - startTime > maxWait) {
-                    showError('生成超时');
+                    showError(window.t ? window.t('error_generate_timeout') : '生成超时');
                     if (btn) { btn.textContent = '生成'; btn.disabled = false; }
                     return;
                 }
@@ -5237,11 +5191,11 @@
                             };
                             document.getElementById('preview-image').src = generatedImages[0].url;
                             renderImageThumbnails();
-                            showSuccess('生成成功');
+                            showSuccess(window.t ? window.t('success_generated') : '生成成功');
                         }
                         if (btn) { btn.textContent = '生成'; btn.disabled = false; }
                     } else if (task.status === -1) {  // FAILED
-                        showError('生成失败: ' + (task.error_message || '未知错误'));
+                        showError(window.t ? window.t('error_generate_failed', {error: task.error_message || (window.t ? window.t('error_unknown') : '未知错误')}) : '生成失败: ' + (task.error_message || '未知错误'));
                         if (btn) { btn.textContent = '生成'; btn.disabled = false; }
                     } else if (task.status === 1) {  // PROCESSING
                         const currentIdx = task.current_angle_index;
@@ -5296,14 +5250,14 @@
             
             // 验证文件类型
             if (!file.type.startsWith('image/')) {
-                showError('请选择图片文件');
+                showError(window.t ? window.t('error_select_image_file') : '请选择图片文件');
                 event.target.value = '';
                 return;
             }
             
             // 验证文件大小 (10MB)
             if (file.size > 10 * 1024 * 1024) {
-                showError('图片大小不能超过10MB');
+                showError(window.t ? window.t('error_image_too_large') : '图片大小不能超过10MB');
                 event.target.value = '';
                 return;
             }
@@ -5334,12 +5288,12 @@
                     // 更新输入框和预览
                     document.getElementById(inputId).value = data.url;
                     showImagePreview(inputId, data.url);
-                    showSuccess('图片上传成功');
+                    showSuccess(window.t ? window.t('success_image_uploaded') : '图片上传成功');
                 } else {
-                    showError('上传失败: ' + data.error);
+                    showError((window.t ? window.t('error_upload_failed', {error: data.error}) : '上传失败: ' + data.error));
                 }
             } catch (error) {
-                showError('上传失败: ' + error.message);
+                showError((window.t ? window.t('error_upload_failed', {error: error.message}) : '上传失败: ' + error.message));
             }
             
             // 清空file input
@@ -5373,7 +5327,7 @@
                 }
 
                 if (!data.success) {
-                    showError('获取角色信息失败');
+                    showError(window.t ? window.t('error_fetch_character_failed') : '获取角色信息失败');
                     return;
                 }
 
@@ -5384,11 +5338,11 @@
                         if (content.trim()) {
                             jsonData = JSON.parse(content);
                         } else {
-                            showError('角色数据为空');
+                            showError(window.t ? window.t('error_empty_character_data') : '角色数据为空');
                             return;
                         }
                     } catch (e) {
-                        showError('无法解析角色数据');
+                        showError(window.t ? window.t('error_parse_character_data') : '无法解析角色数据');
                         return;
                     }
                 }
@@ -5401,16 +5355,16 @@
 
                 const audio = new Audio(defaultVoice);
                 audio.onerror = () => {
-                    showError('音频加载失败');
+                    showError(window.t ? window.t('error_audio_load_failed') : '音频加载失败');
                 };
                 audio.play().catch(err => {
-                    showError('播放失败：' + err.message);
+                    showError(window.t ? window.t('error_play_failed', {error: err.message}) : '播放失败：' + err.message);
                 });
 
-                showSuccess(`正在播放 ${characterName} 的音色`);
+                showSuccess(window.t ? window.t('success_playing_voice', {name: characterName}) : `正在播放 ${characterName} 的音色`);
             } catch (error) {
                 console.error('播放角色音色失败:', error);
-                showError('播放失败');
+                showError(window.t ? window.t('error_play_failed') : '播放失败');
             }
         }
 
@@ -5418,7 +5372,7 @@
             // 从相对路径提取文件类型和文件名
             const pathParts = relativePath.split('/');
             if (pathParts.length < 4) {
-                showError('无效的文件路径');
+                showError(window.t ? window.t('error_invalid_file_path') : '无效的文件路径');
                 return;
             }
             
@@ -5458,14 +5412,14 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    showSuccess('删除成功');
+                    showSuccess(window.t ? window.t('success_deleted') : '删除成功');
                     // 重新加载文件列表
                     loadFiles(fileType);
                 } else {
-                    showError('删除失败: ' + data.error);
+                    showError((window.t ? window.t('error_delete_failed', {error: data.error}) : '删除失败: ' + data.error));
                 }
             } catch (error) {
-                showError('删除失败: ' + error.message);
+                showError((window.t ? window.t('error_delete_failed', {error: error.message}) : '删除失败: ' + error.message));
             }
         }
 
@@ -5487,7 +5441,7 @@
             }
             
             if (!newContent.trim()) {
-                showError('文件内容不能为空');
+                showError(window.t ? window.t('error_file_content_empty') : '文件内容不能为空');
                 return;
             }
             
@@ -5515,7 +5469,7 @@
                 if (data.success) {
                     const fileType = currentEditFile.fileType;
                     const fileName = currentEditFile.fileName;
-                    showSuccess(`✓ 文件已更新: ${fileName}`);
+                    showSuccess(window.t ? window.t('success_file_updated', {name: fileName}) : `✓ 文件已更新: ${fileName}`);
                     closeEditModal();
                     await loadFiles(fileType);
                     
@@ -5535,10 +5489,10 @@
                         }
                     }
                 } else {
-                    showError('保存失败: ' + (data.error || '未知错误'));
+                    showError((window.t ? window.t('error_save_failed', {error: data.error || (window.t ? window.t('error_unknown') : '未知错误')}) : '保存失败: ' + (data.error || '未知错误')));
                 }
             } catch (error) {
-                showError('保存文件失败: ' + error.message);
+                showError((window.t ? window.t('error_save_file_failed', {error: error.message}) : '保存文件失败: ' + error.message));
             }
         }
 
@@ -5585,14 +5539,14 @@
 
             // 验证文件类型
             if (!file.type.startsWith('image/')) {
-                showError('请选择图片文件');
+                showError(window.t ? window.t('error_select_image_file') : '请选择图片文件');
                 event.target.value = '';
                 return;
             }
 
             // 验证文件大小 (10MB)
             if (file.size > 10 * 1024 * 1024) {
-                showError('图片大小不能超过10MB');
+                showError(window.t ? window.t('error_image_too_large') : '图片大小不能超过10MB');
                 event.target.value = '';
                 return;
             }
@@ -5624,12 +5578,12 @@
                 if (data.success) {
                     addCharMultiImageItem(list, label, data.url, undefined);
                     labelInput.value = '';
-                    showSuccess('图片上传成功');
+                    showSuccess(window.t ? window.t('success_image_uploaded') : '图片上传成功');
                 } else {
-                    showError('上传失败: ' + data.error);
+                    showError((window.t ? window.t('error_upload_failed', {error: data.error}) : '上传失败: ' + data.error));
                 }
             } catch (error) {
-                showError('上传失败: ' + error.message);
+                showError((window.t ? window.t('error_upload_failed', {error: error.message}) : '上传失败: ' + error.message));
             }
 
             event.target.value = '';
@@ -5645,7 +5599,7 @@
             wrapper.innerHTML = `
                 <img src="${url}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'" />
                 <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.7);color:white;font-size:10px;padding:2px 6px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${label}</div>
-                <button type="button" style="position:absolute;top:2px;right:2px;background:rgba(239,68,68,0.8);border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;color:white;font-size:12px;line-height:20px;" title="删除">&times;</button>
+                <button type="button" style="position:absolute;top:2px;right:2px;background:rgba(239,68,68,0.8);border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;color:white;font-size:12px;line-height:20px;" title="删除" data-i18n-title="title_delete">&times;</button>
             `;
             wrapper.querySelector('button').addEventListener('click', () => wrapper.remove());
             container.appendChild(wrapper);
@@ -5930,12 +5884,12 @@
             const description = document.getElementById('new-world-description').value.trim();
             
             if (!name) {
-                showError('请输入世界名称');
+                showError(window.t ? window.t('error_enter_world_name') : '请输入世界名称');
                 return;
             }
             
             try {
-                updateStatus('正在创建世界...');
+                updateStatus(window.t ? window.t('status_creating_world') : '正在创建世界...');
                 const response = await fetch('/api/worlds', {
                     method: 'POST',
                     headers: { 
@@ -5951,22 +5905,22 @@
                 
                 const data = await response.json();
                 if (data.code === 0) {
-                    showSuccess(`✓ 世界 "${name}" 创建成功！`);
+                    showSuccess(window.t ? window.t('success_world_created_detail', {name: name}) : `✓ 世界 "${name}" 创建成功！`);
                     closeNewWorldModal();
                     await loadUserWorlds();
-                    updateStatus('世界创建完成');
+                    updateStatus(window.t ? window.t('status_world_created') : '世界创建完成');
                     
                     // 自动选中新创建的世界
                     if (data.data && data.data.id) {
                         switchWorld(data.data.id);
                     }
                 } else {
-                    showError('创建世界失败: ' + (data.message || '未知错误'));
-                    updateStatus('创建失败');
+                    showError((window.t ? window.t('error_create_world_failed', {error: data.message || (window.t ? window.t('error_unknown') : '未知错误')}) : '创建世界失败: ' + (data.message || '未知错误')));
+                    updateStatus(window.t ? window.t('status_create_failed') : '创建失败');
                 }
             } catch (error) {
-                showError('创建世界失败: ' + error.message);
-                updateStatus('创建失败');
+                showError((window.t ? window.t('error_create_world_failed', {error: error.message}) : '创建世界失败: ' + error.message));
+                updateStatus(window.t ? window.t('status_create_failed') : '创建失败');
             }
         }
 
@@ -6040,20 +5994,20 @@
             const episode = parseInt(episodeValue);
 
             if (!title) {
-                showError('请输入剧本标题');
+                showError(window.t ? window.t('error_enter_script_title') : '请输入剧本标题');
                 return;
             }
             if (!episodeValue || isNaN(episode) || episode < 1) {
-                showError('请输入有效的集数（正整数）');
+                showError(window.t ? window.t('error_invalid_episode_num') : '请输入有效的集数（正整数）');
                 return;
             }
             if (existingEpisodes.includes(episode)) {
-                showError(`第 ${episode} 集已存在，请选择其他集数`);
+                showError(window.t ? window.t('error_episode_exists', {episode: episode}) : `第 ${episode} 集已存在，请选择其他集数`);
                 return;
             }
 
             try {
-                updateStatus('正在创建剧本...');
+                updateStatus(window.t ? window.t('status_creating_script') : '正在创建剧本...');
                 const now = new Date().toISOString();
                 const scriptData = JSON.stringify({
                     user_id: USER_ID,
@@ -6078,17 +6032,17 @@
 
                 const data = await response.json();
                 if (data.success) {
-                    showSuccess(`✓ 剧本 "${title}"（第${episode}集）创建成功！`);
+                    showSuccess(window.t ? window.t('success_script_created_detail', {title: title, episode: episode}) : `✓ 剧本 "${title}"（第${episode}集）创建成功！`);
                     closeNewScriptModal();
                     await loadFiles('scripts');
-                    updateStatus('剧本创建完成');
+                    updateStatus(window.t ? window.t('status_script_created') : '剧本创建完成');
                 } else {
-                    showError('创建剧本失败: ' + (data.error || '未知错误'));
-                    updateStatus('创建失败');
+                    showError((window.t ? window.t('error_create_script_failed', {error: data.error || (window.t ? window.t('error_unknown') : '未知错误')}) : '创建剧本失败: ' + (data.error || '未知错误')));
+                    updateStatus(window.t ? window.t('status_create_failed') : '创建失败');
                 }
             } catch (error) {
-                showError('创建剧本失败: ' + error.message);
-                updateStatus('创建失败');
+                showError((window.t ? window.t('error_create_script_failed', {error: error.message}) : '创建剧本失败: ' + error.message));
+                updateStatus(window.t ? window.t('status_create_failed') : '创建失败');
             }
         }
 
@@ -6141,11 +6095,11 @@
 
         async function createNewCharacter() {
             const name = document.getElementById('new-char-name').value.trim();
-            if (!name) { showError('请输入角色名称'); return; }
-            if (existingCharacters.includes(name)) { showError(`角色"${name}"已存在`); return; }
+            if (!name) { showError(window.t ? window.t('error_enter_character_name') : '请输入角色名称'); return; }
+            if (existingCharacters.includes(name)) { showError(window.t ? window.t('error_character_exists', {name: name}) : `角色"${name}"已存在`); return; }
 
             try {
-                updateStatus('正在创建角色...');
+                updateStatus(window.t ? window.t('status_creating_character') : '正在创建角色...');
                 const now = new Date().toISOString();
                 const data = {
                     user_id: USER_ID,
@@ -6169,14 +6123,14 @@
                 });
                 const result = await response.json();
                 if (result.success) {
-                    showSuccess(`✓ 角色"${name}"创建成功！`);
+                    showSuccess(window.t ? window.t('success_character_created_detail', {name: name}) : `✓ 角色"${name}"创建成功！`);
                     closeNewCharacterModal();
                     await loadFiles('characters');
                 } else {
-                    showError('创建角色失败: ' + (result.error || '未知错误'));
+                    showError((window.t ? window.t('error_create_character_failed', {error: result.error || (window.t ? window.t('error_unknown') : '未知错误')}) : '创建角色失败: ' + (result.error || '未知错误')));
                 }
             } catch (error) {
-                showError('创建角色失败: ' + error.message);
+                showError((window.t ? window.t('error_create_character_failed', {error: error.message}) : '创建角色失败: ' + error.message));
             }
         }
 
@@ -6228,11 +6182,11 @@
 
         async function createNewLocation() {
             const name = document.getElementById('new-loc-name').value.trim();
-            if (!name) { showError('请输入场景名称'); return; }
-            if (existingLocations.includes(name)) { showError(`场景"${name}"已存在`); return; }
+            if (!name) { showError(window.t ? window.t('error_enter_scene_name') : '请输入场景名称'); return; }
+            if (existingLocations.includes(name)) { showError(window.t ? window.t('error_scene_exists', {name: name}) : `场景"${name}"已存在`); return; }
 
             try {
-                updateStatus('正在创建场景...');
+                updateStatus(window.t ? window.t('status_creating_scene') : '正在创建场景...');
                 const now = new Date().toISOString();
                 const data = {
                     user_id: USER_ID,
@@ -6252,14 +6206,14 @@
                 });
                 const result = await response.json();
                 if (result.success) {
-                    showSuccess(`✓ 场景"${name}"创建成功！`);
+                    showSuccess(window.t ? window.t('success_scene_created_detail', {name: name}) : `✓ 场景"${name}"创建成功！`);
                     closeNewLocationModal();
                     await loadFiles('locations');
                 } else {
-                    showError('创建场景失败: ' + (result.error || '未知错误'));
+                    showError((window.t ? window.t('error_create_scene_failed', {error: result.error || (window.t ? window.t('error_unknown') : '未知错误')}) : '创建场景失败: ' + (result.error || '未知错误')));
                 }
             } catch (error) {
-                showError('创建场景失败: ' + error.message);
+                showError((window.t ? window.t('error_create_scene_failed', {error: error.message}) : '创建场景失败: ' + error.message));
             }
         }
 
@@ -6311,11 +6265,11 @@
 
         async function createNewProp() {
             const name = document.getElementById('new-prop-name').value.trim();
-            if (!name) { showError('请输入道具名称'); return; }
-            if (existingProps.includes(name)) { showError(`道具"${name}"已存在`); return; }
+            if (!name) { showError(window.t ? window.t('error_enter_prop_name') : '请输入道具名称'); return; }
+            if (existingProps.includes(name)) { showError(window.t ? window.t('error_prop_exists', {name: name}) : `道具"${name}"已存在`); return; }
 
             try {
-                updateStatus('正在创建道具...');
+                updateStatus(window.t ? window.t('status_creating_prop') : '正在创建道具...');
                 const now = new Date().toISOString();
                 const data = {
                     user_id: USER_ID,
@@ -6334,14 +6288,14 @@
                 });
                 const result = await response.json();
                 if (result.success) {
-                    showSuccess(`✓ 道具"${name}"创建成功！`);
+                    showSuccess(window.t ? window.t('success_prop_created_detail', {name: name}) : `✓ 道具"${name}"创建成功！`);
                     closeNewPropModal();
                     await loadFiles('props');
                 } else {
-                    showError('创建道具失败: ' + (result.error || '未知错误'));
+                    showError((window.t ? window.t('error_create_prop_failed', {error: result.error || (window.t ? window.t('error_unknown') : '未知错误')}) : '创建道具失败: ' + (result.error || '未知错误')));
                 }
             } catch (error) {
-                showError('创建道具失败: ' + error.message);
+                showError((window.t ? window.t('error_create_prop_failed', {error: error.message}) : '创建道具失败: ' + error.message));
             }
         }
 
@@ -6364,7 +6318,7 @@
 
         function openComputingPowerLogsModal() {
             if (!AUTH_TOKEN) {
-                updateStatus('缺少认证信息', 'error');
+                updateStatus(window.t ? window.t('status_auth_missing') : '缺少认证信息', 'error');
                 return;
             }
             
@@ -6506,7 +6460,7 @@
                                 如果已支付，请稍等片刻系统会自动到账
                             </div>
                             <div style="margin-top: 16px;">
-                                <button class="btn btn-secondary" onclick="loadRechargePackages()">返回选择套餐</button>
+                                <button class="btn btn-secondary" onclick="loadRechargePackages()" data-i18n="btn_return_select_package">返回选择套餐</button>
                             </div>
                         </div>
                     `;
@@ -6529,17 +6483,17 @@
             const description = document.getElementById('edit-world-description').value.trim();
             
             if (!name) {
-                showError('请输入世界名称');
+                showError(window.t ? window.t('error_enter_world_name') : '请输入世界名称');
                 return;
             }
             
             if (!currentEditWorld.id) {
-                showError('无效的世界ID');
+                showError(window.t ? window.t('error_invalid_world_id') : '无效的世界ID');
                 return;
             }
             
             try {
-                updateStatus('正在保存世界信息...');
+                updateStatus(window.t ? window.t('status_saving_world') : '正在保存世界信息...');
                 const response = await fetch(`/api/worlds/${currentEditWorld.id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
@@ -6553,18 +6507,18 @@
                 
                 const data = await response.json();
                 if (data.success) {
-                    showSuccess(`✓ 世界 "${name}" 更新成功！`);
+                    showSuccess(window.t ? window.t('success_world_updated_detail', {name: name}) : `✓ 世界 "${name}" 更新成功！`);
                     closeEditWorldModal();
                     await loadUserWorlds();
                     await loadCurrentWorldName();
-                    updateStatus('世界信息已更新');
+                    updateStatus(window.t ? window.t('status_world_updated') : '世界信息已更新');
                 } else {
-                    showError('更新世界失败: ' + (data.error || '未知错误'));
-                    updateStatus('更新失败');
+                    showError((window.t ? window.t('error_update_world_failed', {error: data.error || (window.t ? window.t('error_unknown') : '未知错误')}) : '更新世界失败: ' + (data.error || '未知错误')));
+                    updateStatus(window.t ? window.t('status_update_failed') : '更新失败');
                 }
             } catch (error) {
-                showError('更新世界失败: ' + error.message);
-                updateStatus('更新失败');
+                showError((window.t ? window.t('error_update_world_failed', {error: error.message}) : '更新世界失败: ' + error.message));
+                updateStatus(window.t ? window.t('status_update_failed') : '更新失败');
             }
         }
 
@@ -6618,10 +6572,10 @@
                     openImportScriptModal();
                     return;
                 case 2:
-                    promptText = '我想进行剧本续写，请继续之前的剧情发展';
+                    promptText = window.t ? window.t('prompt_continuation') : '我想进行剧本续写，请继续之前的剧情发展';
                     break;
                 case 3:
-                    promptText = '我想新建一个剧本';
+                    promptText = window.t ? window.t('prompt_new_script') : '我想新建一个剧本';
                     break;
                 case 4:
                     promptText = '';
@@ -6824,7 +6778,7 @@
             importScriptFileContent = '';
             document.getElementById('import-script-content').value = '';
             document.getElementById('import-script-file').value = '';
-            document.getElementById('drop-zone-text').innerHTML = '拖拽 TXT 文件到此处，或<span class="drop-zone-link">点击选择文件</span>';
+            document.getElementById('drop-zone-text').innerHTML = window.t ? window.t('drop_zone_text') : '拖拽 TXT 文件到此处，或<span class="drop-zone-link">点击选择文件</span>';
             document.getElementById('script-drop-zone').classList.remove('has-file');
             document.getElementById('import-script-modal').classList.add('show');
         }
@@ -6839,23 +6793,23 @@
             const content = textareaContent || importScriptFileContent;
 
             if (!content) {
-                showError('请上传文件或输入剧本内容');
+                showError(window.t ? window.t('error_no_script_content') : '请上传文件或输入剧本内容');
                 return;
             }
 
             closeImportScriptModal();
-            const message = `请帮我导入以下已有剧本内容：\n\n---\n${content}\n---`;
+            const message = `${window.t ? window.t('msg_import_script_prompt') : '请帮我导入以下已有剧本内容：'}\n\n---\n${content}\n---`;
             await sendMessage(message);
         }
 
         function readScriptFile(file) {
             if (!file) return;
             if (!file.name.toLowerCase().endsWith('.txt')) {
-                showError('仅支持 TXT 文件');
+                showError(window.t ? window.t('error_txt_only') : '仅支持 TXT 文件');
                 return;
             }
             if (file.size > 5 * 1024 * 1024) {
-                showError('文件大小不能超过5MB');
+                showError(window.t ? window.t('error_file_too_large') : '文件大小不能超过5MB');
                 return;
             }
 
@@ -6863,14 +6817,14 @@
             reader.onload = function(e) {
                 importScriptFileContent = (e.target.result || '').trim();
                 if (!importScriptFileContent) {
-                    showError('文件内容为空');
+                    showError(window.t ? window.t('error_file_empty') : '文件内容为空');
                     return;
                 }
-                document.getElementById('drop-zone-text').innerHTML = `已选择: <strong>${file.name}</strong>`;
+                document.getElementById('drop-zone-text').innerHTML = `${window.t ? window.t('msg_file_selected') : '已选择'}: <strong>${file.name}</strong>`;
                 document.getElementById('script-drop-zone').classList.add('has-file');
             };
             reader.onerror = function() {
-                showError('读取文件失败');
+                showError(window.t ? window.t('error_read_file_failed') : '读取文件失败');
             };
             reader.readAsText(file, 'UTF-8');
         }
@@ -6889,7 +6843,7 @@
                 // 获取当前选择的模型
                 const modelSelector = document.getElementById('model-selector');
                 if (!modelSelector || !modelSelector.value) {
-                    showError('请先选择一个 LLM 模型');
+                    showError(window.t ? window.t('error_select_llm_model') : '请先选择一个 LLM 模型');
                     debugBtn.disabled = false;
                     debugBtn.textContent = '🧪 测试';
                     return;
@@ -6925,7 +6879,7 @@
 
                 if (!taskResp.success) {
                     console.error('❌ 测试任务创建失败:', taskResp);
-                    showError('测试失败: ' + (taskResp.error || '未知错误'));
+                    showError((window.t ? window.t('error_test_failed', {error: taskResp.error || (window.t ? window.t('error_unknown') : '未知错误')}) : '测试失败: ' + (taskResp.error || '未知错误')));
                     return;
                 }
 
@@ -6965,7 +6919,7 @@
                             // 验证链路
                             if (hasQuestion && hasReply) {
                                 console.log('🎉 完整链路验证成功：LLM 成功提问并基于回答生成了内容！');
-                                showSuccess('🎉 测试成功！LLM 完整链路验证通过！');
+                                showSuccess(window.t ? window.t('success_test_passed') : '🎉 测试成功！LLM 完整链路验证通过！');
                             } else {
                                 console.warn('⚠️ 链路验证不完整:', { hasQuestion, hasReply });
                             }
@@ -6982,7 +6936,7 @@
 
             } catch (error) {
                 console.error('❌ 测试过程发生错误:', error);
-                showError('测试过程发生错误: ' + error.message);
+                showError((window.t ? window.t('error_test_error', {error: error.message}) : '测试过程发生错误: ' + error.message));
             } finally {
                 debugBtn.disabled = false;
                 debugBtn.textContent = '🧪 测试';
@@ -7068,6 +7022,9 @@
                 if (window.ZJTi18nDOM && window.ZJTi18nDOM.scanDOM) {
                     window.ZJTi18nDOM.scanDOM(document);
                 }
+                // 重新渲染轮播卡片
+                renderCarousel();
+                initCarousel();
             };
 
             container.appendChild(btn);
@@ -7099,7 +7056,7 @@
         <div class="modal-overlay" onclick="closeImportScriptModal()"></div>
         <div class="modal-dialog large">
             <div class="modal-header">
-                <h3 class="modal-title">📥 导入已有剧本</h3>
+                <h3 class="modal-title">📥 <span data-i18n="modal_import_script">导入已有剧本</span></h3>
                 <button class="modal-close-btn" onclick="closeImportScriptModal()">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M18 6L6 18M6 6l12 12"/>
@@ -7108,26 +7065,26 @@
             </div>
             <div class="modal-body">
                 <div class="form-group full-width" style="margin-bottom: 16px;">
-                    <label class="form-label">上传 TXT 文件</label>
+                    <label class="form-label" data-i18n="label_upload_txt">上传 TXT 文件</label>
                     <div class="drop-zone" id="script-drop-zone" onclick="document.getElementById('import-script-file').click()">
                         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--text-muted);">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                             <polyline points="17 8 12 3 7 8"/>
                             <line x1="12" y1="3" x2="12" y2="15"/>
                         </svg>
-                        <p class="drop-zone-text" id="drop-zone-text">拖拽 TXT 文件到此处，或<span class="drop-zone-link">点击选择文件</span></p>
+                        <p class="drop-zone-text" id="drop-zone-text" data-i18n="drop_zone_text:html">拖拽 TXT 文件到此处，或<span class="drop-zone-link">点击选择文件</span></p>
                     </div>
                     <input type="file" id="import-script-file" accept=".txt" style="display: none;">
                 </div>
-                <div class="import-divider"><span>或直接输入剧本内容</span></div>
+                <div class="import-divider"><span data-i18n="import_divider_or">或直接输入剧本内容</span></div>
                 <div class="form-group full-width">
-                    <label class="form-label">剧本内容</label>
-                    <textarea id="import-script-content" class="form-textarea" rows="8" placeholder="在此粘贴或输入剧本内容..."></textarea>
+                    <label class="form-label" data-i18n="label_script_content">剧本内容</label>
+                    <textarea id="import-script-content" class="form-textarea" rows="8" data-i18n-placeholder="placeholder_paste_script" placeholder="在此粘贴或输入剧本内容..."></textarea>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeImportScriptModal()">取消</button>
-                <button class="btn btn-primary" onclick="submitImportScript()">导入剧本</button>
+                <button class="btn btn-secondary" onclick="closeImportScriptModal()" data-i18n="btn_cancel">取消</button>
+                <button class="btn btn-primary" onclick="submitImportScript()" data-i18n="btn_import_script">导入剧本</button>
             </div>
         </div>
     </div>
