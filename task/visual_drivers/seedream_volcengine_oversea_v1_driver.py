@@ -18,6 +18,12 @@ class Seedream5VolcengineOverseaV1Driver(Seedream5VolcengineV1Driver):
     使用 volcengine_oversea 配置（独立的 api_key + base_url）
     """
 
+    # 海外版模型映射：task_id -> 模型名称（不带 doubao- 前缀）
+    MODEL_MAPPING = {
+        TaskTypeId.SEEDREAM_TEXT_TO_IMAGE: "seedream-5-0-260128",
+        TaskTypeId.SEEDREAM_4_5_IMAGE: "seedream-4-5-251128",
+    }
+
     def __init__(self):
         # 跳过父类 __init__，直接调用 BaseVideoDriver 避免加载国内配置
         BaseVideoDriver.__init__(
@@ -34,7 +40,7 @@ class Seedream5VolcengineOverseaV1Driver(Seedream5VolcengineV1Driver):
         )
         # 同步请求接口需要更长的超时时间，不复用异步接口的 request_timeout
         self._timeout = get_dynamic_config_value("timeout", "sync_request_timeout", default=300)
-        self._model = "doubao-seedream-5-0-260128"
+        self._model = "seedream-5-0-260128"
 
         # 是否为本地环境
         self._is_local = get_dynamic_config_value("server", "is_local", default=False)
