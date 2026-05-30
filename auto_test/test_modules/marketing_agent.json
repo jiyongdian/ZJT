@@ -1,0 +1,1050 @@
+{
+  "id": "marketing_agent",
+  "name": "营销智能体模块",
+  "description": "营销智能体对话式创作功能的端到端测试，包括会话管理、消息发送、流式响应、历史查询等",
+  "features": [
+    {
+      "id": "marketing_001",
+      "name": "进入营销模式",
+      "description": "验证用户可以从首页选择营销模式，切换后页面正确显示营销模式标识，点击开始创作跳转到营销智能体页面",
+      "priority": "P0",
+      "page_url": "/",
+      "pass": false,
+      "remark": "",
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "打开首页",
+          "mcp_tool": "mcp1_browser_navigate",
+          "mcp_params": {
+            "url": "${config.base_url}/"
+          },
+          "expected_result": "首页正常加载",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "获取页面快照，查找模式切换按钮",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "页面包含「切换模式」或「模式选择」按钮",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "点击模式切换按钮",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "模式切换按钮",
+            "ref": "<从快照中获取的ref>"
+          },
+          "expected_result": "弹出模式选择弹窗，包含「短剧模式」和「营销模式」选项",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 4,
+          "action": "获取弹窗快照",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "弹窗中包含「营销模式」选项",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 5,
+          "action": "选择营销模式",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "营销模式选项",
+            "ref": "<营销模式选项ref>"
+          },
+          "expected_result": "模式切换为营销模式",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 6,
+          "action": "验证localStorage中的模式设置",
+          "mcp_tool": "mcp1_browser_evaluate",
+          "mcp_params": {
+            "function": "() => localStorage.getItem('creation_mode')"
+          },
+          "verify": "返回值为 'marketing'",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 7,
+          "action": "点击开始创作按钮",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "开始创作按钮",
+            "ref": "<开始创作按钮ref>"
+          },
+          "expected_result": "页面跳转到 /marketing-agent",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 8,
+          "action": "验证页面跳转",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "当前页面URL包含 /marketing-agent，页面显示营销智能体对话界面",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    },
+    {
+      "id": "marketing_002",
+      "name": "营销智能体页面加载",
+      "description": "验证营销智能体页面正确加载，包含左侧导航、会话列表、消息输入区等核心组件",
+      "priority": "P0",
+      "page_url": "/marketing-agent",
+      "api_endpoint": "GET /api/worlds, POST /api/session/create",
+      "pass": false,
+      "remark": "",
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "导航到营销智能体页面",
+          "mcp_tool": "mcp1_browser_navigate",
+          "mcp_params": {
+            "url": "${config.base_url}/marketing-agent?user_id={user_id}"
+          },
+          "expected_result": "页面开始加载",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "等待页面加载完成",
+          "mcp_tool": "mcp1_browser_wait_for",
+          "mcp_params": {
+            "text": "发送",
+            "time": 10
+          },
+          "expected_result": "发送按钮出现",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "获取页面快照验证结构",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "页面包含：左侧导航栏（灵感、生成、资产、工作流）、左侧边栏（新对话按钮、搜索框、会话列表）、消息流区域、底部输入区（文本输入框、上传按钮、模型选择、发送按钮）",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 4,
+          "action": "检查API请求",
+          "mcp_tool": "mcp1_browser_network_requests",
+          "mcp_params": {},
+          "verify": "存在 GET /api/worlds 请求返回200；存在 POST /api/session/create 请求返回200",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    },
+    {
+      "id": "marketing_003",
+      "name": "创建新会话",
+      "description": "验证用户可以创建新的营销会话，会话出现在左侧会话列表中",
+      "priority": "P0",
+      "page_url": "/marketing-agent",
+      "api_endpoint": "POST /api/session/create",
+      "pass": false,
+      "remark": "",
+      "prerequisites": [
+        "marketing_002"
+      ],
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "点击新对话按钮",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "新对话按钮",
+            "ref": "<新对话按钮ref>"
+          },
+          "expected_result": "发起创建会话请求",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "检查API请求",
+          "mcp_tool": "mcp1_browser_network_requests",
+          "mcp_params": {
+            "filter": "/api/session/create"
+          },
+          "verify": "POST /api/session/create 请求返回200，响应包含 session_id",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "获取页面快照验证",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "左侧会话列表中出现新的会话项，消息流区域为空（无历史消息）",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    },
+    {
+      "id": "marketing_004",
+      "name": "发送文本消息",
+      "description": "验证用户可以发送文本消息给营销智能体，消息正确显示在消息流中，AI开始响应",
+      "priority": "P0",
+      "page_url": "/marketing-agent",
+      "api_endpoint": "POST /api/session/{session_id}/task",
+      "pass": false,
+      "remark": "",
+      "prerequisites": [
+        "marketing_003"
+      ],
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "定位文本输入框",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "页面底部存在文本输入框和发送按钮",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "在输入框中输入文本",
+          "mcp_tool": "mcp1_browser_type",
+          "mcp_params": {
+            "element": "文本输入框",
+            "ref": "<输入框ref>",
+            "text": "帮我写一个护肤品的带货脚本"
+          },
+          "expected_result": "输入框中显示输入的文本",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "点击发送按钮",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "发送按钮",
+            "ref": "<发送按钮ref>"
+          },
+          "expected_result": "消息被发送，输入框清空",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 4,
+          "action": "检查API请求",
+          "mcp_tool": "mcp1_browser_network_requests",
+          "mcp_params": {
+            "filter": "/api/session/"
+          },
+          "verify": "存在 POST /api/session/{session_id}/task 请求返回200，响应包含 task_id",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 5,
+          "action": "获取页面快照验证消息显示",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "消息流中显示用户发送的消息气泡，内容为「帮我写一个护肤品的带货脚本」",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    },
+    {
+      "id": "marketing_005",
+      "name": "SSE流式响应接收",
+      "description": "验证发送消息后，AI的响应通过SSE流式返回，消息流中逐步显示AI回复内容",
+      "priority": "P0",
+      "page_url": "/marketing-agent",
+      "api_endpoint": "GET /api/task/{task_id}/stream",
+      "pass": false,
+      "remark": "",
+      "prerequisites": [
+        "marketing_004"
+      ],
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "等待AI开始响应",
+          "mcp_tool": "mcp1_browser_wait_for",
+          "mcp_params": {
+            "time": 3
+          },
+          "expected_result": "AI消息气泡开始出现",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "检查SSE请求",
+          "mcp_tool": "mcp1_browser_network_requests",
+          "mcp_params": {
+            "filter": "/api/task/"
+          },
+          "verify": "存在 GET /api/task/{task_id}/stream 请求，响应类型为 text/event-stream",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "等待AI响应完成",
+          "mcp_tool": "mcp1_browser_wait_for",
+          "mcp_params": {
+            "time": 30
+          },
+          "expected_result": "AI消息气泡内容不再变化，响应完成",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 4,
+          "action": "获取页面快照验证AI回复",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "消息流中显示AI的回复气泡，内容为有意义的营销脚本文本，非空",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    },
+    {
+      "id": "marketing_006",
+      "name": "发送带图像的消息",
+      "description": "验证用户可以上传图片并发送带图消息，图片正确显示在消息中，AI能够理解图片内容",
+      "priority": "P1",
+      "page_url": "/marketing-agent",
+      "api_endpoint": "POST /api/upload-agent-image, POST /api/session/{session_id}/task",
+      "pass": false,
+      "remark": "",
+      "prerequisites": [
+        "marketing_003"
+      ],
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "点击上传按钮",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "上传按钮",
+            "ref": "<上传按钮ref>"
+          },
+          "expected_result": "弹出文件选择对话框或触发文件上传",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "选择测试图片文件",
+          "mcp_tool": "mcp1_browser_evaluate",
+          "mcp_params": {
+            "function": "() => { const input = document.querySelector('input[type=file]'); if(input) { const dt = new DataTransfer(); const file = new File(['test'], 'test.jpg', {type: 'image/jpeg'}); dt.items.add(file); input.files = dt.files; input.dispatchEvent(new Event('change', {bubbles: true})); return true; } return false; }"
+          },
+          "verify": "文件选择成功，返回 true",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "等待图片上传完成",
+          "mcp_tool": "mcp1_browser_wait_for",
+          "mcp_params": {
+            "time": 5
+          },
+          "expected_result": "图片上传成功，输入区域显示图片预览",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 4,
+          "action": "检查上传API请求",
+          "mcp_tool": "mcp1_browser_network_requests",
+          "mcp_params": {
+            "filter": "/api/upload-agent-image"
+          },
+          "verify": "存在 POST /api/upload-agent-image 请求返回200，响应包含 url 字段",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 5,
+          "action": "输入描述文本",
+          "mcp_tool": "mcp1_browser_type",
+          "mcp_params": {
+            "element": "文本输入框",
+            "ref": "<输入框ref>",
+            "text": "请根据这张图片写一个产品介绍"
+          },
+          "expected_result": "输入框中显示文本",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 6,
+          "action": "点击发送按钮",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "发送按钮",
+            "ref": "<发送按钮ref>"
+          },
+          "expected_result": "带图消息被发送",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 7,
+          "action": "获取页面快照验证消息显示",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "消息流中显示用户消息，包含图片和文本「请根据这张图片写一个产品介绍」",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    },
+    {
+      "id": "marketing_007",
+      "name": "会话历史查询",
+      "description": "验证刷新页面后，会话历史消息正确加载，之前的消息内容完整保留",
+      "priority": "P0",
+      "page_url": "/marketing-agent",
+      "api_endpoint": "GET /api/session/{session_id}/history",
+      "pass": false,
+      "remark": "",
+      "prerequisites": [
+        "marketing_005"
+      ],
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "刷新页面",
+          "mcp_tool": "mcp1_browser_evaluate",
+          "mcp_params": {
+            "function": "() => location.reload()"
+          },
+          "expected_result": "页面开始重新加载",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "等待页面加载完成",
+          "mcp_tool": "mcp1_browser_wait_for",
+          "mcp_params": {
+            "text": "发送",
+            "time": 10
+          },
+          "expected_result": "页面加载完成",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "检查历史API请求",
+          "mcp_tool": "mcp1_browser_network_requests",
+          "mcp_params": {
+            "filter": "/api/session/"
+          },
+          "verify": "存在 GET /api/session/{session_id}/history 请求返回200",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 4,
+          "action": "获取页面快照验证历史消息",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "消息流中显示之前发送的消息和AI回复，内容完整",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    },
+    {
+      "id": "marketing_008",
+      "name": "会话列表查询",
+      "description": "验证左侧会话列表正确显示用户的会话，包含标题和时间信息",
+      "priority": "P1",
+      "page_url": "/marketing-agent",
+      "api_endpoint": "GET /api/sessions",
+      "pass": false,
+      "remark": "",
+      "prerequisites": [
+        "marketing_003"
+      ],
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "获取页面快照查看会话列表",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "左侧边栏显示会话列表，每个会话项包含标题文本",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "检查会话列表API请求",
+          "mcp_tool": "mcp1_browser_network_requests",
+          "mcp_params": {
+            "filter": "/api/sessions"
+          },
+          "verify": "存在 GET /api/sessions?user_id=... 请求返回200，响应包含会话数组",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "点击会话列表中的某个会话",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "会话列表项",
+            "ref": "<会话列表项ref>"
+          },
+          "expected_result": "切换到该会话，消息流显示该会话的历史消息",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    },
+    {
+      "id": "marketing_009",
+      "name": "会话重命名",
+      "description": "验证用户可以对会话进行重命名，新标题正确保存和显示",
+      "priority": "P1",
+      "page_url": "/marketing-agent",
+      "api_endpoint": "PUT /api/session/{session_id}/title",
+      "pass": false,
+      "remark": "",
+      "prerequisites": [
+        "marketing_003"
+      ],
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "在会话列表中找到目标会话",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "会话列表中存在可操作的会话项",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "右键点击会话项或点击更多操作按钮",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "会话操作按钮",
+            "ref": "<会话操作按钮ref>"
+          },
+          "expected_result": "弹出操作菜单，包含「重命名」选项",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "获取菜单快照",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "菜单中包含「重命名」选项",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 4,
+          "action": "点击重命名选项",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "重命名选项",
+            "ref": "<重命名选项ref>"
+          },
+          "expected_result": "会话标题变为可编辑状态",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 5,
+          "action": "输入新标题",
+          "mcp_tool": "mcp1_browser_type",
+          "mcp_params": {
+            "element": "标题输入框",
+            "ref": "<标题输入框ref>",
+            "text": "护肤品带货脚本"
+          },
+          "expected_result": "输入框显示新标题",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 6,
+          "action": "确认修改（按回车或点击其他区域）",
+          "mcp_tool": "mcp1_browser_evaluate",
+          "mcp_params": {
+            "function": "() => { const input = document.activeElement; if(input) input.dispatchEvent(new Event('blur', {bubbles: true})); return true; }"
+          },
+          "expected_result": "标题修改被提交",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 7,
+          "action": "检查API请求",
+          "mcp_tool": "mcp1_browser_network_requests",
+          "mcp_params": {
+            "filter": "/api/session/"
+          },
+          "verify": "存在 PUT /api/session/{session_id}/title 请求返回200",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 8,
+          "action": "获取快照验证标题更新",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "会话列表中该会话标题已更新为「护肤品带货脚本」",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    },
+    {
+      "id": "marketing_010",
+      "name": "会话删除",
+      "description": "验证用户可以删除会话，删除后会话从列表中移除",
+      "priority": "P1",
+      "page_url": "/marketing-agent",
+      "api_endpoint": "DELETE /api/session/{session_id}",
+      "pass": false,
+      "remark": "",
+      "prerequisites": [
+        "marketing_003"
+      ],
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "在会话列表中找到目标会话",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "会话列表中存在可操作的会话项",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "右键点击会话项或点击更多操作按钮",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "会话操作按钮",
+            "ref": "<会话操作按钮ref>"
+          },
+          "expected_result": "弹出操作菜单，包含「删除」选项",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "点击删除选项",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "删除选项",
+            "ref": "<删除选项ref>"
+          },
+          "expected_result": "弹出确认删除对话框",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 4,
+          "action": "确认删除",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "确认删除按钮",
+            "ref": "<确认删除按钮ref>"
+          },
+          "expected_result": "会话被删除",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 5,
+          "action": "检查API请求",
+          "mcp_tool": "mcp1_browser_network_requests",
+          "mcp_params": {
+            "filter": "/api/session/"
+          },
+          "verify": "存在 DELETE /api/session/{session_id} 请求返回200",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 6,
+          "action": "获取快照验证会话已删除",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "会话列表中不再显示已删除的会话",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    },
+    {
+      "id": "marketing_011",
+      "name": "算力显示",
+      "description": "验证页面正确显示用户的算力余额，发送消息后算力正确扣除",
+      "priority": "P1",
+      "page_url": "/marketing-agent",
+      "pass": false,
+      "remark": "",
+      "prerequisites": [
+        "marketing_002"
+      ],
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "获取页面快照查看算力显示",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "页面顶部或用户信息区域显示算力值（数字）",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "记录当前算力值",
+          "mcp_tool": "mcp1_browser_evaluate",
+          "mcp_params": {
+            "function": "() => { const el = document.querySelector('[class*=power], [class*=算力], [data-power]'); return el ? el.textContent : null; }"
+          },
+          "verify": "返回算力数值",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "发送一条消息消耗算力",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "执行 marketing_004 中的发送消息步骤",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 4,
+          "action": "等待响应完成后检查算力变化",
+          "mcp_tool": "mcp1_browser_wait_for",
+          "mcp_params": {
+            "time": 30
+          },
+          "expected_result": "AI响应完成",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 5,
+          "action": "再次获取算力值",
+          "mcp_tool": "mcp1_browser_evaluate",
+          "mcp_params": {
+            "function": "() => { const el = document.querySelector('[class*=power], [class*=算力], [data-power]'); return el ? el.textContent : null; }"
+          },
+          "verify": "算力值已减少（与步骤2对比）",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    },
+    {
+      "id": "marketing_012",
+      "name": "模型选择功能",
+      "description": "验证用户可以在底部输入区选择不同的AI模型，选择后正确同步到后端",
+      "priority": "P1",
+      "page_url": "/marketing-agent",
+      "api_endpoint": "GET /api/models, POST /api/session/{session_id}/model",
+      "pass": false,
+      "remark": "",
+      "prerequisites": [
+        "marketing_002"
+      ],
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "获取页面快照找到模型选择器",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "底部输入区存在模型选择下拉框或按钮",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "检查模型列表API请求",
+          "mcp_tool": "mcp1_browser_network_requests",
+          "mcp_params": {
+            "filter": "/api/models"
+          },
+          "verify": "存在 GET /api/models 请求返回200，响应包含可用模型列表",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "点击模型选择器",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "模型选择器",
+            "ref": "<模型选择器ref>"
+          },
+          "expected_result": "弹出模型列表或下拉选项",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 4,
+          "action": "获取模型列表快照",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "模型列表中显示多个可用模型选项",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 5,
+          "action": "选择一个模型",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "模型选项",
+            "ref": "<模型选项ref>"
+          },
+          "expected_result": "模型被选中，选择器显示新选择的模型名称",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 6,
+          "action": "检查模型设置API请求",
+          "mcp_tool": "mcp1_browser_network_requests",
+          "mcp_params": {
+            "filter": "/api/session/"
+          },
+          "verify": "存在 POST /api/session/{session_id}/model 请求返回200",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    },
+    {
+      "id": "marketing_013",
+      "name": "生成类型选择",
+      "description": "验证用户可以选择不同的生成类型（如图片、视频），选择后影响AI的回复行为",
+      "priority": "P1",
+      "page_url": "/marketing-agent",
+      "pass": false,
+      "remark": "",
+      "prerequisites": [
+        "marketing_002"
+      ],
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "获取页面快照找到类型选择器",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "底部输入区存在生成类型选择器（如图片/视频切换）",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "点击类型选择器",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "类型选择器",
+            "ref": "<类型选择器ref>"
+          },
+          "expected_result": "弹出类型选项或切换状态",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "获取快照验证类型选项",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "显示可用的生成类型选项",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 4,
+          "action": "选择一种类型",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "类型选项",
+            "ref": "<类型选项ref>"
+          },
+          "expected_result": "类型被选中，界面更新显示新选择的类型",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    },
+    {
+      "id": "marketing_014",
+      "name": "会话搜索功能",
+      "description": "验证用户可以通过搜索框搜索会话，搜索结果正确过滤",
+      "priority": "P2",
+      "page_url": "/marketing-agent",
+      "pass": false,
+      "remark": "",
+      "prerequisites": [
+        "marketing_003"
+      ],
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "获取页面快照找到搜索框",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "左侧边栏顶部存在搜索输入框",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "在搜索框中输入关键词",
+          "mcp_tool": "mcp1_browser_type",
+          "mcp_params": {
+            "element": "搜索输入框",
+            "ref": "<搜索框ref>",
+            "text": "护肤"
+          },
+          "expected_result": "搜索框显示输入的关键词",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "获取快照验证搜索结果",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "会话列表过滤，只显示标题或内容包含「护肤」的会话",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 4,
+          "action": "清空搜索框",
+          "mcp_tool": "mcp1_browser_evaluate",
+          "mcp_params": {
+            "function": "() => { const input = document.querySelector('.search-input, [placeholder*=搜索]'); if(input) { input.value = ''; input.dispatchEvent(new Event('input', {bubbles: true})); return true; } return false; }"
+          },
+          "verify": "搜索框被清空，会话列表恢复显示所有会话",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    }
+  ]
+}

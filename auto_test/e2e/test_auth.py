@@ -1,0 +1,101 @@
+"""认证模块 E2E 测试"""
+import httpx
+import pytest
+
+
+@pytest.mark.auth
+class TestAuth:
+    """认证模块测试"""
+
+    @pytest.mark.p0
+    def test_login_success(self, base_url, e2e_config):
+        """正确手机号+密码登录成功，返回 token 和 user_id"""
+        creds = e2e_config["credentials"]["primary"]
+        try:
+            resp = httpx.post(
+                f"{base_url}/api/auth/login",
+                json={"phone": creds["phone"], "password": creds["password"]},
+                timeout=10,
+            )
+        except (httpx.ConnectError, httpx.ReadError) as e:
+            pytest.skip(f"服务器不可用: {e}")
+        assert resp.status_code == 200
+        data = resp.json()
+        token = data.get("token") or data.get("access_token") or data.get("data", {}).get("token")
+        assert token, f"登录响应中未找到 token: {data}"
+
+    @pytest.mark.p0
+    def test_login_wrong_password(self, base_url, e2e_config):
+        """错误密码登录失败，返回 400 或非200"""
+        creds = e2e_config["credentials"]["primary"]
+        try:
+            resp = httpx.post(
+                f"{base_url}/api/auth/login",
+                json={"phone": creds["phone"], "password": "wrong_password_123"},
+                timeout=10,
+            )
+        except (httpx.ConnectError, httpx.ReadError) as e:
+            pytest.skip(f"服务器不可用: {e}")
+        assert resp.status_code != 200, "错误密码登录应返回非200状态码"
+
+    @pytest.mark.p0
+    def test_logout_success(self, base_url, auth_token, user_id):
+        """登出成功"""
+        try:
+            resp = httpx.post(
+                f"{base_url}/api/auth/logout",
+                json={"auth_token": auth_token},
+                headers={
+                    "Authorization": f"Bearer {auth_token}",
+                    "X-User-Id": str(user_id),
+                },
+                timeout=10,
+            )
+        except (httpx.ConnectError, httpx.ReadError) as e:
+            pytest.skip(f"服务器不可用: {e}")
+        assert resp.status_code == 200
+
+    # ────────────────── P1 测试 ──────────────────
+
+    @pytest.mark.p1
+    def test_login_empty_phone(self, base_url, e2e_config):
+        """P1: 空手机号登录应返回非200"""
+        creds = e2e_config["credentials"]["primary"]
+        try:
+            resp = httpx.post(
+                f"{base_url}/api/auth/login",
+                json={"phone": "", "password": creds["password"]},
+                timeout=10,
+            )
+        except (httpx.ConnectError, httpx.ReadError) as e:
+            pytest.skip(f"服务器不可用: {e}")
+        assert resp.status_code != 200, "空手机号登录应返回非200状态码"
+
+    @pytest.mark.p1
+    def test_login_empty_password(self, base_url, e2e_config):
+        """P1: 空密码登录应返回非200"""
+        creds = e2e_config["credentials"]["primary"]
+        try:
+            resp = httpx.post(
+                f"{base_url}/api/auth/login",
+                json={"phone": creds["phone"], "password": ""},
+                timeout=10,
+            )
+        except (httpx.ConnectError, httpx.ReadError) as e:
+            pytest.skip(f"服务器不可用: {e}")
+        assert resp.status_code != 200, "空密码登录应返回非200状态码"
+
+    @pytest.mark.p1
+    def test_login_nonexistent_user(self, base_url):
+        """P1: 不存在的用户登录应返回非200"""
+        import random
+        fake_phone = f"1{random.randint(30, 99):02d}{random.randint(10000000, 99999999)}"
+        try:
+            resp = httpx.post(
+                f"{base_url}/api/auth/login",
+                json={"phone": fake_phone, "password": "any_password"},
+                timeout=10,
+            )
+        except (httpx.ConnectError, httpx.ReadError) as e:
+            pytest.skip(f"服务器不可用: {e}")
+        assert resp.status_code != 200, "不存在的用户登录应返回非200状态码"

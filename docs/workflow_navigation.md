@@ -10,55 +10,67 @@
 
 #### 模式选择
 - 首次访问时弹出模式选择弹窗
-- 当前支持：短剧模式
+- 当前支持：短剧模式、营销模式（Beta）
 - 模式存储在 `localStorage` 的 `creation_mode` 键中
+- 未选择模式时默认为短剧模式
+- 可通过首页顶部的"切换模式"按钮重新选择
 
 #### 开始创作
-- 首页顶部显示"开始创作"大框
-- 点击后弹出创建工作流表单
-- 表单字段：名称、描述、世界、画风、风格参考图
-- 创建成功后跳转到剧本创作系统
+- 首页顶部显示"开始创作"大框（根据当前模式显示不同文案）
+- 点击后跳转到工作流列表页面并自动打开新建表单（`/video-workflow-list?action=create`）
+- 营销模式下跳转到营销智能体页面（`/marketing-agent`）
+
+#### 功能入口卡片
+- 首页展示功能入口卡片（仅短剧模式）
+- 视频工作流卡片：点击跳转到工作流列表（`/video-workflow-list`）
+- 剧本创作卡片：点击跳转到剧本创作系统（`/script-writer`）
 
 ### 2. 剧本创作系统 (`script_writer.html`)
 
 #### 左侧导览条
-- 位置：页面左侧，固定定位
-- 可折叠/展开，状态保存在 `localStorage`
+- 位置：页面左侧，悬浮模式
+- 通过 CSS hover 自动展开/收起，无需 JavaScript 控制
 - 步骤：
-  1. **剧本资产**（当前页面，高亮显示）
-  2. **无限画布**（可点击跳转）
+  1. **剧本资产**（当前页面，高亮显示，带"当前"标记）
+  2. **制作工坊**（可点击跳转，带箭头指示）
 
 #### 跳转到工作流画布
-- 点击"无限画布"步骤触发
+- 点击"制作工坊"步骤触发（`goToWorkflowCanvas()`）
 - 流程：
-  1. 提交当前剧本数据
-  2. 检查资产完成状态（角色、场景、道具图片）
-  3. 如有未完成资产，弹出确认提示
-  4. 跳转到 `/video-workflow?id={workflowId}`
+  1. 提交当前剧本数据（`submitToDatabase()`）
+  2. 检查资产完成状态（角色、场景、道具图片）（`checkAssetsComplete()`）
+  3. 如有未完成资产，弹出确认提示（`showAssetConfirmModal()`）
+  4. 跳转到 `/video-workflow?id={workflowId}&from_world_id={worldId}&auto_load_script=true`
+  5. 如果没有关联工作流，提示并跳转到工作流列表页
 
 ### 3. 工作流画布 (`video_workflow.html`)
 
 #### 左侧导览条
-- 位置：页面左侧，固定定位
-- 可折叠/展开，状态保存在 `localStorage`
+- 位置：页面左侧，悬浮模式
+- 通过 CSS hover 自动展开/收起，无需 JavaScript 控制
 - 步骤：
-  1. **剧本资产**（可点击返回）
-  2. **无限画布**（当前页面，高亮显示）
+  1. **剧本资产**（可点击返回，带左箭头指示）
+  2. **制作工坊**（当前页面，高亮显示，带"当前"标记）
 
 #### 返回剧本创作系统
-- 点击"剧本资产"步骤触发
+- 点击"剧本资产"步骤触发（`goToScriptWriter()`）
 - 流程：
-  1. 自动保存当前工作流
-  2. 跳转到 `/script-writer?workflow_id={workflowId}`
+  1. 自动保存当前工作流（`saveWorkflow()`）
+  2. 获取当前选择的世界 ID
+  3. 跳转到 `/script-writer?workflow_id={workflowId}&user_id={userId}&world_id={worldId}`
 
 ## URL参数
 
 ### 剧本创作系统
 - `workflow_id` 或 `id`：工作流ID（兼容两种参数名）
 - `user_id`：用户ID
+- `world_id`：世界ID
 
 ### 工作流画布
 - `id`：工作流ID
+- `from_world_id`：来源世界ID（从剧本创作系统跳转时传递）
+- `auto_load_script`：是否自动打开剧本选择框（从剧本创作系统跳转时传递）
+- `debug`：Debug模式密码（用于开启调试模式）
 
 ## CSS样式
 
@@ -67,31 +79,40 @@
 - `css/video_workflow.css`：工作流画布导览条样式
 
 主要类名：
-- `.step-nav`：导览条容器
-- `.step-nav.collapsed`：折叠状态
-- `.step-nav-toggle`：折叠/展开按钮
+- `.step-nav`：导览条容器（悬浮模式，hover 自动展开）
+- `.step-nav-content`：导览条内容区
+- `.step-nav-title`：导览条标题（"创作流程"）
+- `.step-nav-list`：步骤列表容器
 - `.step-nav-item`：步骤项
 - `.step-nav-item.active`：当前步骤
 - `.step-nav-item.clickable`：可点击步骤
+- `.step-nav-icon`：步骤图标
+- `.step-nav-text`：步骤文本
+- `.step-nav-badge.current`：当前步骤标记
+- `.step-nav-arrow`：跳转箭头指示
+- `.step-nav-connector`：步骤连接线
 
 ## localStorage键
 
 | 键名 | 说明 |
 |------|------|
-| `creation_mode` | 创作模式（short_drama） |
-| `step_nav_collapsed` | 剧本系统导览条折叠状态 |
-| `workflow_step_nav_collapsed` | 工作流画布导览条折叠状态 |
+| `creation_mode` | 创作模式（short_drama / marketing） |
+| `user_id` | 用户ID |
 
 ## 关键函数
 
+### index.html
+- `checkCreationMode()`：检查并初始化创作模式
+- `selectCreationMode(mode)`：选择创作模式
+- `handleStartCreation()`：开始创作（跳转到工作流列表或营销智能体）
+- `handleVideoWorkflowClick()`：跳转到工作流列表
+- `handleScriptWriterClick()`：跳转到剧本创作系统
+
 ### script_writer.html
-- `toggleStepNav()`：切换导览条展开/收起
-- `initStepNav()`：初始化导览条状态
-- `checkAssetsComplete()`：检查资产完成状态
+- `checkAssetsComplete()`：检查资产完成状态（调用 `/api/check-assets-complete`）
+- `showAssetConfirmModal(hasScript, missingAssets)`：显示资产检查确认弹窗
 - `goToWorkflowCanvas()`：跳转到工作流画布
+- `submitToDatabase()`：提交当前数据到数据库
 
 ### video_workflow.html
-- `toggleStepNav()`：切换导览条展开/收起
-- `initStepNav()`：初始化导览条状态
-- `adjustShellLayout()`：调整主内容区域布局
-- `goToScriptWriter()`：跳转到剧本创作系统
+- `goToScriptWriter()`：跳转到剧本创作系统（保存工作流后跳转）
