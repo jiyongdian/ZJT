@@ -4,6 +4,7 @@ Audio generation task processing
 import logging
 from datetime import datetime, timedelta
 import uuid
+import json
 from typing import Optional, Dict, Any
 from model import TasksModel, AIAudioModel
 from config.constant import (
@@ -320,90 +321,42 @@ async def generate_audio_task(app=None):
     await process_task_with_retry(TASK_TYPE_GENERATE_AUDIO, process_generate_audio)
 
 
-def _extract_gender_from_text(text: str) -> str:
-    """
-    从文本中提取性别信息
-
-    Args:
-        text: 包含性别线索的文本（如身份、外貌描述）
-
-    Returns:
-        str: 性别描述（"男性"/"女性"/""）
-    """
-    male_keywords = ['男', '他', '先生', '少年', '男子', '男人', '帅哥', '大叔', '男孩', '父亲', '爷爷', '叔叔', '哥哥', '弟弟']
-    female_keywords = ['女', '她', '小姐', '少女', '女子', '女人', '美女', '阿姨', '女孩', '母亲', '奶奶', '姐姐', '妹妹', '公主', '皇后']
-
-    for keyword in male_keywords:
-        if keyword in text:
-            return '男性'
-    for keyword in female_keywords:
-        if keyword in text:
-            return '女性'
-    return ''
 
 
-def build_character_audio_text(character_data: Dict[str, Any], custom_text: Optional[str]) -> str:
-    """
-    构建角色音频文本
 
-    Args:
-        character_data: 角色数据字典
-        custom_text: 自定义文本（可选）
-
-    Returns:
-        str: 音频文本
-    """
-    if custom_text and custom_text.strip():
-        return custom_text.strip()
-
-    character_name = character_data.get('name') or '我'
-    identity = character_data.get('identity') or '故事中的角色'
-    age = character_data.get('age') or ''
-    appearance = character_data.get('appearance') or ''
-
-    # 从外貌或身份中提取性别信息
-    gender = _extract_gender_from_text(f"{identity} {appearance}")
-
-    # 构建包含性别和年龄的文本
-    text = f"大家好，我是{character_name}"
-    if age:
-        text += f"，今年{age}岁"
-    if gender:
-        text += f"，是一位{gender}"
-    text += f"，是{identity}。很高兴在这个故事里与你相遇。"
-
-    return text
-
-
-async def build_character_audio_style_prompt(
+async def _analyze_character_voice_capability(
     character_data: Dict[str, Any],
-    custom_prompt: Optional[str],
     model: Optional[str] = None,
     vendor_id: Optional[int] = None
-) -> str:
+) -> Dict[str, Any]:
     """
-    构建角色音色风格提示词。
-    如果用户提供了自定义提示词，直接返回；
-    否则调用 LLM 根据角色信息自动生成专业的音色描述。
+    使用 LLM 智能分析角色发声能力和音色特征
 
     Args:
         character_data: 角色数据字典
-        custom_prompt: 自定义提示词（可选）
-        model: LLM 模型名称（可选）
+        model: LLM 模型名称（可选，未提供时使用默认模型）
         vendor_id: 供应商 ID（可选）
 
     Returns:
-        str: 音色风格提示词
+        dict: {
+            "can_speak_human_language": bool,
+            "voice_type": str,
+            "voice_description": str,
+            "sample_text": str
+        }
     """
-    # 1. 用户自定义提示词优先
-    if custom_prompt and custom_prompt.strip():
-        return custom_prompt.strip()
-
-    # 2. 角色数据为空时返回默认提示词
     if not character_data:
-        return RunningHubAudioConfig.AUDIO_STYLE_DEFAULT_PROMPT
+        return {
+            "can_speak_human_language": True,
+            "voice_type": "human",
+            "voice_description": "平静、自然、清晰的声音",
+            "sample_text": "大家好，我是角色。"
+        }
 
-    # 3. 构建角色信息文本
+    # 如果没有提供 model，使用默认模型
+    if not model:
+        model = "qwen3.5-plus"
+
     field_mapping = {
         'name': '角色名',
         'age': '年龄',
@@ -419,37 +372,45 @@ async def build_character_audio_style_prompt(
             character_lines.append(f"{label}：{str(value).strip()}")
 
     if not character_lines:
-        return RunningHubAudioConfig.AUDIO_STYLE_DEFAULT_PROMPT
+        return {
+            "can_speak_human_language": True,
+            "voice_type": "human",
+            "voice_description": "平静、自然、清晰的声音",
+            "sample_text": f"大家好，我是{character_data.get('name', '角色')}。"
+        }
 
-    # 4. 前端未传模型信息时 fallback
-    if not model:
-        return RunningHubAudioConfig.AUDIO_STYLE_DEFAULT_PROMPT
-
-    # 5. 构造 LLM 提示词
     system_prompt = (
-        "你是一位专业的声音设计师，擅长根据角色设定生成精准的音色描述。\n\n"
-        "你的任务是根据用户提供的角色信息，生成一段简洁的音色描述提示词，用于 AI 音频生成系统。\n\n"
-        "要求：\n"
-        '1. 描述必须聚焦于"声音特征"：音色、音调、语速、语气、年龄感、性别特征\n'
-        "2. 长度控制在一两句话以内（20-50字）\n"
-        "3. 只输出音色描述本身，不要输出任何解释、前缀或多余内容\n"
-        "4. 如果角色信息包含明确的声音相关描述（如性格急躁、温柔等），据此推断声音特征\n"
-        "5. 如果角色信息不足以推断声音特征，根据角色的年龄、身份、性别做合理推断\n\n"
-        "参考示例：\n"
-        '- "一位30岁左右的成熟男性，声音沉稳有力"\n'
-        '- "年轻女性，声音清脆悦耳，约25岁"\n'
-        '- "专业新闻主播，声音清晰标准，语速适中"\n'
-        '- "童话故事讲述者，声音温柔梦幻，略带神秘感"\n'
-        '- "性格急躁的少年，声音清亮，语速偏快，充满活力"'
+        "你是一位专业的声音设计师。请分析以下角色信息，判断该角色能否说人话，以及应该使用什么样的声音。\n\n"
+        "请严格按照以下JSON格式输出，不要输出任何其他内容：\n"
+        "{\n"
+        '  "can_speak_human_language": true/false,\n'
+        '  "voice_type": "human" | "dog" | "cat" | "bird" | "other_animal" | "machine" | "nature",\n'
+        '  "voice_description": "音色描述（用于TTS提示词）",\n'
+        '  "sample_text": "示例文本（人话或动物叫声）"\n'
+        "}\n\n"
+        "判断规则：\n"
+        "1. 如果角色明确说明\"会说话\"、\"能说人话\"→ can_speak_human_language=true\n"
+        "2. 如果角色是普通动物且无特殊说明→ can_speak_human_language=false\n"
+        "3. 如果角色是\"修炼成精\"、\"童话故事中的xxx\"→ can_speak_human_language=true\n\n"
+        "重要要求：\n"
+        "4. voice_description 必须聚焦声音特征：音色、音调、语速、年龄感、性别特征\n"
+        "   - 人类角色必须包含性别（男性/女性）和年龄感（如\"30岁左右\"、\"年轻\"等）\n"
+        "   - 示例：\"30岁左右的成熟男性，声音沉稳有力\"、\"25岁左右的年轻女性，声音清脆悦耳\"\n\n"
+        "5. sample_text 生成规则：\n"
+        "   - 能说人话（人类/会说话的动物）→ 必须包含年龄和性别信息的自我介绍（20-40字）\n"
+        "     * 格式参考：\"大家好，我是{角色名}，今年{年龄}岁，是一位{性别}，是{身份}。很高兴在这个故事里与你相遇。\"\n"
+        "     * 如果角色信息中没有明确年龄，根据身份和外貌推断（如少年约15-18岁，青年约20-30岁）\n"
+        "     * 如果角色信息中没有明确性别，根据身份和外貌推断\n"
+        "   - 不能说人话（普通动物）→ 生成对应的声音（狗=汪汪汪，猫=喵喵喵，15-20字）"
     )
-    user_prompt = "请根据以下角色信息，生成音色描述提示词：\n\n" + "\n".join(character_lines) + "\n\n请直接输出音色描述："
+
+    user_prompt = "请根据以下角色信息，生成音色分析：\n\n" + "\n".join(character_lines) + "\n\n请直接输出JSON："
 
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
 
-    # 6. 调用 LLM（使用 asyncio.to_thread 包装同步调用）
     try:
         from llm.llm_client_factory import get_llm_client
         import asyncio
@@ -459,19 +420,83 @@ async def build_character_audio_style_prompt(
             llm_client.call_api,
             model=model,
             messages=messages,
-            temperature=RunningHubAudioConfig.AUDIO_STYLE_LLM_TEMPERATURE,
-            max_tokens=RunningHubAudioConfig.AUDIO_STYLE_LLM_MAX_TOKENS,
+            temperature=0.3,
+            max_tokens=1500,
         )
 
-        result = response.choices[0].message.content.strip() if response and response.choices else ""
+        result_text = response.choices[0].message.content.strip() if response and response.choices else ""
 
-        if result:
-            logger.info(f"LLM 生成音色描述成功: {result}")
-            return result
+        if result_text:
+            try:
+                result_json = json.loads(result_text)
+                logger.info(f"LLM 生成角色音色分析成功: {result_json}")
+                return result_json
+            except json.JSONDecodeError:
+                logger.warning(f"LLM 返回的不是有效JSON: {result_text}")
         else:
-            logger.warning("LLM 返回空内容，使用默认音色提示词")
-            return RunningHubAudioConfig.AUDIO_STYLE_DEFAULT_PROMPT
+            logger.warning("LLM 返回空内容")
 
     except Exception as e:
-        logger.warning(f"LLM 生成音色描述失败，使用默认提示词: {e}")
+        logger.warning(f"LLM 生成音色分析失败: {e}")
+
+    return {
+        "can_speak_human_language": True,
+        "voice_type": "human",
+        "voice_description": "平静、自然、清晰的声音",
+        "sample_text": f"大家好，我是{character_data.get('name', '角色')}。"
+    }
+
+
+async def build_character_audio_text(
+    character_data: Dict[str, Any],
+    custom_text: Optional[str],
+    model: Optional[str] = None,
+    vendor_id: Optional[int] = None
+) -> str:
+    """
+    构建角色音频文本（使用 LLM 智能判断角色发声类型）
+
+    Args:
+        character_data: 角色数据字典
+        custom_text: 自定义文本（可选）
+        model: LLM 模型名称（可选）
+        vendor_id: 供应商 ID（可选）
+
+    Returns:
+        str: 音频文本
+    """
+    if custom_text and custom_text.strip():
+        return custom_text.strip()
+
+    voice_analysis = await _analyze_character_voice_capability(character_data, model, vendor_id)
+    return voice_analysis.get('sample_text', f"大家好，我是{character_data.get('name', '角色')}。")
+
+
+async def build_character_audio_style_prompt(
+    character_data: Dict[str, Any],
+    custom_prompt: Optional[str],
+    model: Optional[str] = None,
+    vendor_id: Optional[int] = None
+) -> str:
+    """
+    构建角色音色风格提示词（使用 LLM 智能判断角色发声类型）
+    如果用户提供了自定义提示词，直接返回；
+    否则调用 LLM 根据角色信息自动生成专业的音色描述。
+
+    Args:
+        character_data: 角色数据字典
+        custom_prompt: 自定义提示词（可选）
+        model: LLM 模型名称（可选）
+        vendor_id: 供应商 ID（可选）
+
+    Returns:
+        str: 音色风格提示词
+    """
+    if custom_prompt and custom_prompt.strip():
+        return custom_prompt.strip()
+
+    if not character_data:
         return RunningHubAudioConfig.AUDIO_STYLE_DEFAULT_PROMPT
+
+    voice_analysis = await _analyze_character_voice_capability(character_data, model, vendor_id)
+    return voice_analysis.get('voice_description', RunningHubAudioConfig.AUDIO_STYLE_DEFAULT_PROMPT)

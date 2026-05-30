@@ -2116,7 +2116,10 @@ async def generate_character_reference_audio(
             character_data, audio_request.style_prompt,
             model=audio_request.model, vendor_id=audio_request.vendor_id
         )
-        text = build_character_audio_text(character_data, audio_request.text)
+        text = await build_character_audio_text(
+            character_data, audio_request.text,
+            model=audio_request.model, vendor_id=audio_request.vendor_id
+        )
 
         # 写入异步任务表，由 scheduler 后台统一处理提交
         from model import AsyncTasksModel

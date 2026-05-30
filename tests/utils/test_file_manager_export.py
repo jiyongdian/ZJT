@@ -586,5 +586,339 @@ class TestExportImportRoundTrip(unittest.TestCase):
         os.unlink(zip_path)
 
 
+class TestStripDbIds(unittest.TestCase):
+    """测试 _strip_db_ids 方法"""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp(prefix="test_fm_strip_")
+        self.fm = FileManager(base_dir=self.tmp_dir)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def test_strip_id_fields(self):
+        """测试清除数据库 ID 字段"""
+        data = {"id": 6, "name": "测试", "world_id": 16, "user_id": 1, "description": "描述"}
+        result = self.fm._strip_db_ids(data)
+        self.assertNotIn("id", result)
+        self.assertNotIn("world_id", result)
+        self.assertNotIn("user_id", result)
+        self.assertEqual(result["name"], "测试")
+        self.assertEqual(result["description"], "描述")
+
+    def test_strip_timestamp_fields(self):
+        """测试清除时间戳字段"""
+        data = {"id": 1, "name": "测试", "create_time": "2026-01-01", "update_time": "2026-01-02"}
+        result = self.fm._strip_db_ids(data)
+        self.assertNotIn("id", result)
+        self.assertNotIn("create_time", result)
+        self.assertNotIn("update_time", result)
+        self.assertEqual(result["name"], "测试")
+
+    def test_non_dict_passthrough(self):
+        """测试非 dict 数据直接返回"""
+        self.assertEqual(self.fm._strip_db_ids("hello"), "hello")
+        self.assertEqual(self.fm._strip_db_ids(42), 42)
+        self.assertEqual(self.fm._strip_db_ids([1, 2]), [1, 2])
+
+    def test_no_id_fields(self):
+        """测试没有 ID 字段的数据不变"""
+        data = {"name": "测试", "description": "描述"}
+        result = self.fm._strip_db_ids(data)
+        self.assertEqual(result, data)
+
+
+class TestExportStripDbIds(unittest.TestCase):
+    """测试导出时清除数据库 ID"""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp(prefix="test_fm_export_strip_")
+        self.fm = FileManager(base_dir=self.tmp_dir)
+        self.user_id = "test_user"
+        self.world_id = "test_world"
+        self.fm._ensure_directories(self.user_id, self.world_id)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def test_export_strips_db_ids_from_character(self):
+        """测试导出时角色 JSON 中不包含 id/world_id/user_id"""
+        base_path = self.fm._get_user_world_path(self.user_id, self.world_id)
+        char_data = {
+            "id": 42, "name": "角色A", "world_id": 16, "user_id": 1,
+            "description": "描述", "create_time": "2026-01-01"
+        }
+        (base_path / "characters" / "角色A.json").write_text(
+            json.dumps(char_data, ensure_ascii=False), encoding='utf-8'
+        )
+
+        zip_path = self.fm.export_world(self.user_id, self.world_id)
+        with zipfile.ZipFile(zip_path, 'r') as zipf:
+            content = json.loads(zipf.read("characters/角色A.json"))
+            self.assertNotIn("id", content)
+            self.assertNotIn("world_id", content)
+            self.assertNotIn("user_id", content)
+            self.assertNotIn("create_time", content)
+            self.assertEqual(content["name"], "角色A")
+            self.assertEqual(content["description"], "描述")
+        os.unlink(zip_path)
+
+    def test_export_strips_db_ids_from_world(self):
+        """测试导出时世界 JSON 中不包含 id/user_id"""
+        base_path = self.fm._get_user_world_path(self.user_id, self.world_id)
+        world_data = {"id": 16, "name": "世界A", "user_id": 1, "story_outline": "大纲"}
+        worlds_dir = base_path / "worlds"
+        worlds_dir.mkdir(parents=True, exist_ok=True)
+        (worlds_dir / f"world_{self.world_id}.json").write_text(
+            json.dumps(world_data, ensure_ascii=False), encoding='utf-8'
+        )
+
+        zip_path = self.fm.export_world(self.user_id, self.world_id)
+        with zipfile.ZipFile(zip_path, 'r') as zipf:
+            content = json.loads(zipf.read(f"worlds/world_{self.world_id}.json"))
+            self.assertNotIn("id", content)
+            self.assertNotIn("user_id", content)
+            self.assertEqual(content["name"], "世界A")
+        os.unlink(zip_path)
+
+
+class TestImportWorldFilenameRewrite(unittest.TestCase):
+    """测试导入时 worlds 文件名重写"""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp(prefix="test_fm_import_rewrite_")
+        self.fm = FileManager(base_dir=self.tmp_dir)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def test_import_world_filename_rewrite(self):
+        """测试导入 world_6.json 到 world_1 时文件名正确重写"""
+        # 创建包含 world_6.json 的 ZIP
+        zip_path = os.path.join(self.tmp_dir, "test.zip")
+        with zipfile.ZipFile(zip_path, 'w') as zipf:
+            world_data = {"name": "导出世界", "story_outline": "大纲"}
+            zipf.writestr("worlds/world_6.json", json.dumps(world_data, ensure_ascii=False))
+            zipf.writestr("metadata.json", json.dumps({
+                "export_version": "1.0", "world_id": "6", "user_id": "1"
+            }))
+
+        result = self.fm.import_world("user_1", "1", zip_path)
+        self.assertEqual(result["worlds"], 1)
+
+        # 验证文件名已重写为 world_1.json
+        base_path = self.fm._get_user_world_path("user_1", "1")
+        self.assertTrue((base_path / "worlds" / "world_1.json").exists())
+        # 原始文件名不应存在
+        self.assertFalse((base_path / "worlds" / "world_6.json").exists())
+
+        with open(base_path / "worlds" / "world_1.json", 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            self.assertEqual(data["name"], "导出世界")
+
+
+class TestVoiceExportImport(unittest.TestCase):
+    """测试角色音频导出/导入"""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp(prefix="test_fm_voice_")
+        self.fm = FileManager(base_dir=self.tmp_dir)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def _create_voice_file(self, filename: str) -> Path:
+        """创建假音频文件"""
+        voice_dir = Path(self.tmp_dir) / "upload" / "character" / "voice"
+        voice_dir.mkdir(parents=True, exist_ok=True)
+        voice_file = voice_dir / filename
+        voice_file.write_bytes(b'FAKE_AUDIO_DATA' + b'\x00' * 100)
+        return voice_file
+
+    def test_collect_voice_from_url(self):
+        """测试解析音频 URL"""
+        self._create_voice_file("voice_001.wav")
+        url = "http://localhost:9003/upload/character/voice/voice_001.wav"
+        result = self.fm._collect_voice_from_url(url)
+        self.assertIsNotNone(result)
+        filename, file_path = result
+        self.assertEqual(filename, "voice_001.wav")
+        self.assertTrue(file_path.exists())
+
+    def test_collect_voice_invalid_url(self):
+        """测试无效音频 URL"""
+        result = self.fm._collect_voice_from_url("http://example.com/other/file.wav")
+        self.assertIsNone(result)
+
+    def test_collect_voice_non_audio_ext(self):
+        """测试非音频扩展名"""
+        result = self.fm._collect_voice_from_url("http://localhost:9003/upload/character/voice/file.txt")
+        self.assertIsNone(result)
+
+    def test_rewrite_default_voice(self):
+        """测试导出时替换 default_voice URL"""
+        self._create_voice_file("voice_test.wav")
+        image_mapping = {}
+        collected = set()
+        audio_mapping = {}
+        collected_audios = set()
+
+        data = {
+            "name": "角色A",
+            "default_voice": "http://localhost:9003/upload/character/voice/voice_test.wav"
+        }
+        result = self.fm._rewrite_image_urls(
+            data, image_mapping, collected,
+            audio_mapping=audio_mapping, collected_audios=collected_audios
+        )
+        self.assertEqual(result["default_voice"], "audios/voice_test.wav")
+        self.assertIn("voice_test.wav", audio_mapping)
+
+    def test_rewrite_default_voice_without_audio_params(self):
+        """测试不传 audio 参数时 default_voice 保持不变"""
+        data = {
+            "name": "角色A",
+            "default_voice": "http://localhost:9003/upload/character/voice/voice_test.wav"
+        }
+        image_mapping = {}
+        collected = set()
+        result = self.fm._rewrite_image_urls(data, image_mapping, collected)
+        # 没有传 audio_mapping/collected_audios，走 else 分支，值不变
+        self.assertEqual(result["default_voice"], "http://localhost:9003/upload/character/voice/voice_test.wav")
+
+    def test_restore_default_voice(self):
+        """测试导入时还原 default_voice URL"""
+        audio_mapping = {"voice_001.wav": "/upload/character/voice/voice_001.wav"}
+        reverse_mapping = {}
+        uploaded = {}
+        upload_base = Path(self.tmp_dir) / "upload"
+
+        data = {"name": "角色A", "default_voice": "audios/voice_001.wav"}
+        result = self.fm._restore_image_urls(
+            data, reverse_mapping, uploaded, upload_base,
+            audio_mapping=audio_mapping
+        )
+        self.assertEqual(result["default_voice"], "/upload/character/voice/voice_001.wav")
+
+    def test_restore_default_voice_without_mapping(self):
+        """测试不传 audio_mapping 时 default_voice 保持不变"""
+        reverse_mapping = {}
+        uploaded = {}
+        upload_base = Path(self.tmp_dir) / "upload"
+
+        data = {"name": "角色A", "default_voice": "audios/voice_001.wav"}
+        result = self.fm._restore_image_urls(data, reverse_mapping, uploaded, upload_base)
+        self.assertEqual(result["default_voice"], "audios/voice_001.wav")
+
+    def test_export_with_voice(self):
+        """测试导出包含音频"""
+        self._create_voice_file("export_voice.wav")
+        user_id, world_id = "user_1", "world_1"
+        self.fm._ensure_directories(user_id, world_id)
+        base_path = self.fm._get_user_world_path(user_id, world_id)
+
+        char_data = {
+            "name": "音频角色",
+            "default_voice": "http://localhost:9003/upload/character/voice/export_voice.wav"
+        }
+        (base_path / "characters" / "音频角色.json").write_text(
+            json.dumps(char_data, ensure_ascii=False), encoding='utf-8'
+        )
+
+        zip_path = self.fm.export_world(user_id, world_id)
+        with zipfile.ZipFile(zip_path, 'r') as zipf:
+            names = zipf.namelist()
+            self.assertIn("audios/export_voice.wav", names)
+            self.assertIn("audio_mapping.json", names)
+            mapping = json.loads(zipf.read("audio_mapping.json"))
+            self.assertIn("export_voice.wav", mapping)
+            metadata = json.loads(zipf.read("metadata.json"))
+            self.assertEqual(metadata["audio_count"], 1)
+        os.unlink(zip_path)
+
+    def test_import_with_voice(self):
+        """测试导入包含音频"""
+        zip_path = os.path.join(self.tmp_dir, "test_import_voice.zip")
+        audio_content = b'FAKE_AUDIO_DATA'
+        audio_mapping = {"import_voice.wav": "/upload/character/voice/import_voice.wav"}
+
+        with zipfile.ZipFile(zip_path, 'w') as zipf:
+            zipf.writestr("audios/import_voice.wav", audio_content)
+            zipf.writestr("audio_mapping.json", json.dumps(audio_mapping))
+            char_data = {"name": "导入音频角色", "default_voice": "audios/import_voice.wav"}
+            zipf.writestr("characters/导入音频角色.json", json.dumps(char_data, ensure_ascii=False))
+            zipf.writestr("metadata.json", json.dumps({"export_version": "1.0"}))
+
+        result = self.fm.import_world("user_1", "world_1", zip_path)
+        self.assertEqual(result["audios"], 1)
+        self.assertEqual(result["characters"], 1)
+
+        # 验证音频文件已复制
+        voice_file = Path(self.tmp_dir) / "upload" / "character" / "voice" / "import_voice.wav"
+        self.assertTrue(voice_file.exists())
+        self.assertEqual(voice_file.read_bytes(), audio_content)
+
+        # 验证角色 JSON 中 URL 已还原
+        base_path = self.fm._get_user_world_path("user_1", "world_1")
+        with open(base_path / "characters" / "导入音频角色.json", 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            self.assertEqual(data["default_voice"], "/upload/character/voice/import_voice.wav")
+
+    def test_roundtrip_with_voice(self):
+        """测试导出→导入包含音频的完整往返"""
+        export_dir = tempfile.mkdtemp(prefix="test_fm_rt_v_export_")
+        import_dir = tempfile.mkdtemp(prefix="test_fm_rt_v_import_")
+        try:
+            fm_export = FileManager(base_dir=export_dir)
+            fm_import = FileManager(base_dir=import_dir)
+            user_id, world_id = "rt_user", "rt_world"
+            fm_export._ensure_directories(user_id, world_id)
+
+            # 创建音频文件
+            voice_dir = Path(export_dir) / "upload" / "character" / "voice"
+            voice_dir.mkdir(parents=True, exist_ok=True)
+            voice_content = b'ROUNDTRIP_AUDIO' + b'\x00' * 200
+            (voice_dir / "rt_voice.wav").write_bytes(voice_content)
+
+            # 创建角色
+            base_path = fm_export._get_user_world_path(user_id, world_id)
+            char_data = {
+                "id": 99, "name": "往返音频角色", "user_id": 5,
+                "default_voice": "http://localhost:9003/upload/character/voice/rt_voice.wav"
+            }
+            (base_path / "characters" / "往返音频角色.json").write_text(
+                json.dumps(char_data, ensure_ascii=False), encoding='utf-8'
+            )
+
+            # 导出
+            zip_path = fm_export.export_world(user_id, world_id)
+
+            # 导入到不同世界
+            result = fm_import.import_world(user_id, "different_world", zip_path)
+            self.assertEqual(result["audios"], 1)
+            self.assertEqual(result["characters"], 1)
+            self.assertEqual(len(result["errors"]), 0)
+
+            # 验证音频已复制
+            import_voice = Path(import_dir) / "upload" / "character" / "voice" / "rt_voice.wav"
+            self.assertTrue(import_voice.exists())
+            self.assertEqual(import_voice.read_bytes(), voice_content)
+
+            # 验证角色数据
+            import_base = fm_import._get_user_world_path(user_id, "different_world")
+            with open(import_base / "characters" / "往返音频角色.json", 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                self.assertEqual(data["default_voice"], "/upload/character/voice/rt_voice.wav")
+                self.assertEqual(data["name"], "往返音频角色")
+                # id 和 user_id 应该被清除
+                self.assertNotIn("id", data)
+                self.assertNotIn("user_id", data)
+
+            os.unlink(zip_path)
+        finally:
+            shutil.rmtree(export_dir, ignore_errors=True)
+            shutil.rmtree(import_dir, ignore_errors=True)
+
+
 if __name__ == '__main__':
     unittest.main()
