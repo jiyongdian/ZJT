@@ -7965,7 +7965,11 @@ async def export_timeline_draft(
             logger.info(f"使用柱子系统处理时间轴，共 {len(payload.pillars)} 个柱子")
             
             # 按柱子顺序处理
-            sorted_pillars = sorted(payload.pillars, key=lambda p: (p.get('scriptId', 0), p.get('shotNumber', 0)))
+            sorted_pillars = sorted(payload.pillars, key=lambda p: (
+                    0 if p.get('scriptId') is None else 1,
+                    p.get('scriptId') or 0,
+                    p.get('shotNumber') or 0
+                ))
             current_time = 0
             
             for pillar in sorted_pillars:
