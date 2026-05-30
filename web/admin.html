@@ -3,9 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>管理后台 - 智剧通</title>
+    <title data-i18n="admin_panel">管理后台 - 智剧通</title>
     <link rel="stylesheet" href="/css/admin.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
+    <!-- i18n 支持 -->
+    <script src="/i18n/i18n-core.js?v=__VERSION__"></script>
+    <script src="/i18n/i18n-dom.js?v=__VERSION__"></script>
+    <link rel="stylesheet" href="/i18n/i18n-switcher.css?v=__VERSION__" />
+    <script src="/i18n/i18n-switcher.js?v=__VERSION__"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
@@ -16,8 +21,11 @@
         <!-- 侧边栏 -->
         <aside class="admin-sidebar">
             <div class="admin-logo">
-                <h1>智剧通</h1>
-                <span>管理后台</span>
+                <h1>{{ t('app_title') }}</h1>
+                <span>{{ t('admin_panel') }}</span>
+                <div class="admin-logo-actions">
+                    <div class="admin-i18n-switcher" id="i18nSwitcher"></div>
+                </div>
             </div>
             <ul class="admin-nav">
                 <li>
@@ -25,7 +33,7 @@
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                         </svg>
-                        <span>返回主页</span>
+                        <span>{{ t('back_to_home') }}</span>
                     </a>
                 </li>
                 <li>
@@ -33,7 +41,7 @@
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
                         </svg>
-                        <span>仪表盘</span>
+                        <span>{{ t('nav_dashboard') }}</span>
                     </a>
                 </li>
                 <li>
@@ -41,7 +49,7 @@
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                         </svg>
-                        <span>用户管理</span>
+                        <span>{{ t('nav_users') }}</span>
                     </a>
                 </li>
                 <li>
@@ -50,7 +58,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                         </svg>
-                        <span>系统配置</span>
+                        <span>{{ t('nav_config') }}</span>
                     </a>
                 </li>
                 <li>
@@ -58,7 +66,7 @@
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                         </svg>
-                        <span>签到管理</span>
+                        <span>{{ t('nav_checkin') }}</span>
                     </a>
                 </li>
                 <li>
@@ -66,7 +74,7 @@
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                         </svg>
-                        <span>实现方管理</span>
+                        <span>{{ t('nav_implementations') }}</span>
                     </a>
                 </li>
                 <li>
@@ -74,7 +82,7 @@
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                         </svg>
-                        <span>通知中心</span>
+                        <span>{{ t('nav_notifications') }}</span>
                         <span v-if="unreadCount > 0" class="notification-badge">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
                     </a>
                 </li>
@@ -85,16 +93,16 @@
         <main class="admin-main">
             <!-- 顶部栏 -->
             <header class="admin-header">
-                <h2 v-if="currentPage === 'dashboard'">仪表盘</h2>
-                <h2 v-else-if="currentPage === 'users'">用户管理</h2>
-                <h2 v-else-if="currentPage === 'config'">系统配置</h2>
-                <h2 v-else-if="currentPage === 'checkin'">签到管理</h2>
-                <h2 v-else-if="currentPage === 'implementations'">实现方管理</h2>
-                <h2 v-else-if="currentPage === 'notifications'">通知中心</h2>
-                
+                <h2 v-if="currentPage === 'dashboard'">{{ t('nav_dashboard') }}</h2>
+                <h2 v-else-if="currentPage === 'users'">{{ t('nav_users') }}</h2>
+                <h2 v-else-if="currentPage === 'config'">{{ t('nav_config') }}</h2>
+                <h2 v-else-if="currentPage === 'checkin'">{{ t('nav_checkin') }}</h2>
+                <h2 v-else-if="currentPage === 'implementations'">{{ t('nav_implementations') }}</h2>
+                <h2 v-else-if="currentPage === 'notifications'">{{ t('nav_notifications') }}</h2>
+
                 <div class="admin-user">
                     <span class="admin-user-name">{{ maskedPhone }}</span>
-                    <button class="admin-logout" @click="logout">退出</button>
+                    <button class="admin-logout" @click="logout">{{ t('logout') }}</button>
                 </div>
             </header>
 
@@ -102,19 +110,19 @@
             <section v-if="currentPage === 'dashboard'">
                 <div v-if="dashboard.loading" class="loading">
                     <div class="loading-spinner"></div>
-                    <p>加载中...</p>
+                    <p>{{ t('loading') }}</p>
                 </div>
                 <div v-else class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-card-label">用户总数</div>
+                        <div class="stat-card-label">{{ t('total_users') }}</div>
                         <div class="stat-card-value primary">{{ dashboard.totalUsers }}</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-card-label">3天活跃工作流</div>
+                        <div class="stat-card-label">{{ t('active_workflows_3d') }}</div>
                         <div class="stat-card-value success">{{ dashboard.activeWorkflows3d }}</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-card-label">月活跃用户</div>
+                        <div class="stat-card-label">{{ t('monthly_active_users') }}</div>
                         <div class="stat-card-value" :class="dashboard.monthlyActiveUsers?.count != null ? 'success' : ''">
                             {{ dashboard.monthlyActiveUsers?.count ?? '-' }}
                         </div>
@@ -125,10 +133,10 @@
                                 :disabled="dashboard.monthlyActiveUsers.loading"
                                 style="font-size: 12px; padding: 4px 12px;"
                             >
-                                {{ dashboard.monthlyActiveUsers.loading ? '查询中...' : '查询本月' }}
+                                {{ dashboard.monthlyActiveUsers.loading ? t('querying') : t('query_this_month') }}
                             </button>
                             <span v-if="dashboard.monthlyActiveUsers?.year && dashboard.monthlyActiveUsers?.month" style="font-size: 11px; color: #64748b; margin-left: 8px;">
-                                ({{ dashboard.monthlyActiveUsers.year }}年{{ dashboard.monthlyActiveUsers.month }}月)
+                                ({{ dashboard.monthlyActiveUsers.year }}-{{ dashboard.monthlyActiveUsers.month }})
                             </span>
                         </div>
                     </div>
@@ -137,31 +145,31 @@
                 <!-- 模型分析 -->
                 <div class="model-analysis-section">
                     <div class="model-analysis-header">
-                        <h3>模型成功率分析</h3>
+                        <h3>{{ t('model_success_rate') }}</h3>
                         <div class="time-range-tabs">
                             <button :class="{ active: dashboard.modelAnalysis.days === 1 }"
-                                    @click="setModelAnalysisDays(1)">今天</button>
+                                    @click="setModelAnalysisDays(1)">{{ t('time_today') }}</button>
                             <button :class="{ active: dashboard.modelAnalysis.days === 3 }"
-                                    @click="setModelAnalysisDays(3)">3天</button>
+                                    @click="setModelAnalysisDays(3)">{{ t('time_3days') }}</button>
                             <button :class="{ active: dashboard.modelAnalysis.days === 7 }"
-                                    @click="setModelAnalysisDays(7)">7天</button>
+                                    @click="setModelAnalysisDays(7)">{{ t('time_7days') }}</button>
                         </div>
                     </div>
 
                     <div v-if="dashboard.modelAnalysis.loading" class="loading">
                         <div class="loading-spinner"></div>
-                        <p>加载中...</p>
+                        <p>{{ t('loading') }}</p>
                     </div>
 
                     <div v-else-if="dashboard.modelAnalysis.models.length" class="table-container" style="padding: 0;">
                         <table class="admin-table model-analysis-table">
                             <thead>
                                 <tr>
-                                    <th>模型</th>
-                                    <th>总数</th>
-                                    <th>成功</th>
-                                    <th>失败</th>
-                                    <th>成功率</th>
+                                    <th>{{ t('model_col_model') }}</th>
+                                    <th>{{ t('model_col_total') }}</th>
+                                    <th>{{ t('model_col_success') }}</th>
+                                    <th>{{ t('model_col_fail') }}</th>
+                                    <th>{{ t('model_col_rate') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -170,7 +178,7 @@
                                         <td>
                                             <span class="expand-icon">{{ dashboard.modelAnalysis.expandedTypes[model.type] ? '&#9660;' : '&#9654;' }}</span>
                                             {{ model.name }}
-                                            <span v-if="model.providers.length > 1" class="provider-count">({{ model.providers.length }}个供应商)</span>
+                                            <span v-if="model.providers.length > 1" class="provider-count">{{ t('model_providers_count', { count: model.providers.length }) }}</span>
                                         </td>
                                         <td>{{ model.total }}</td>
                                         <td class="text-success">{{ model.success }}</td>
@@ -197,7 +205,7 @@
                                                     <div class="rate-bar" :style="{ width: provider.success_rate + '%' }"
                                                          :class="getRateClass(provider.success_rate)"></div>
                                                     <span class="rate-text">{{ provider.success_rate.toFixed(1) }}%</span>
-                                                    <span v-if="provider.avg_duration_ms" class="avg-duration">均耗{{ formatDuration(provider.avg_duration_ms) }}</span>
+                                                    <span v-if="provider.avg_duration_ms" class="avg-duration">{{ t('model_avg_duration', { duration: formatDuration(provider.avg_duration_ms) }) }}</span>
                                                 </div>
                                             </td>
                                         </tr>
@@ -208,84 +216,84 @@
                     </div>
 
                     <div v-else class="empty-state" style="padding: 30px; text-align: center; color: #94a3b8;">
-                        请选择时间范围查询模型分析数据
+                        {{ t('model_select_hint') }}
                     </div>
                 </div>
             </section>
             <section v-if="currentPage === 'users'">
                 <div class="table-container">
                     <div class="table-header">
-                        <h3>用户列表</h3>
+                        <h3>{{ t('users_title') }}</h3>
                     </div>
-                    
+
                     <!-- 搜索筛选 -->
                     <div class="table-filters">
-                        <input 
-                            type="text" 
-                            class="filter-input" 
-                            placeholder="搜索手机号..." 
+                        <input
+                            type="text"
+                            class="filter-input"
+                            :placeholder="t('search_phone_placeholder')"
                             v-model="users.keyword"
                             @keyup.enter="searchUsers"
                         >
                         <select class="filter-select" v-model="users.statusFilter" @change="searchUsers">
-                            <option value="">全部状态</option>
-                            <option value="1">正常</option>
-                            <option value="2">待审核</option>
-                            <option value="0">禁用</option>
+                            <option value="">{{ t('status_all') }}</option>
+                            <option value="1">{{ t('status_normal') }}</option>
+                            <option value="2">{{ t('status_pending') }}</option>
+                            <option value="0">{{ t('status_disabled') }}</option>
                         </select>
                         <select class="filter-select" v-model="users.roleFilter" @change="searchUsers">
-                            <option value="">全部角色</option>
-                            <option value="user">普通用户</option>
-                            <option value="admin">管理员</option>
+                            <option value="">{{ t('role_all') }}</option>
+                            <option value="user">{{ t('role_user') }}</option>
+                            <option value="admin">{{ t('role_admin') }}</option>
                         </select>
-                        <button class="filter-btn" @click="searchUsers">搜索</button>
+                        <button class="filter-btn" @click="searchUsers">{{ t('search_btn') }}</button>
                     </div>
                     
                     <!-- 表格 -->
                     <div v-if="users.loading" class="loading">
                         <div class="loading-spinner"></div>
-                        <p>加载中...</p>
+                        <p>{{ t('loading') }}</p>
                     </div>
                     <table v-else class="admin-table">
                         <thead>
                             <tr>
-                                <th>ID</th>
-                                <th>手机号</th>
-                                <th>角色</th>
-                                <th>算力</th>
-                                <th>状态</th>
-                                <th>注册时间</th>
-                                <th>操作</th>
+                                <th>{{ t('col_id') }}</th>
+                                <th>{{ t('col_phone') }}</th>
+                                <th>{{ t('col_role') }}</th>
+                                <th>{{ t('col_power') }}</th>
+                                <th>{{ t('col_status') }}</th>
+                                <th>{{ t('col_register_time') }}</th>
+                                <th>{{ t('col_actions') }}</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-if="users.list.length === 0">
-                                <td colspan="7" style="text-align: center; color: #64748b;">暂无数据</td>
+                                <td colspan="7" style="text-align: center; color: #64748b;">{{ t('no_data') }}</td>
                             </tr>
                             <tr v-for="user in users.list" :key="user.user_id">
                                 <td>{{ user.user_id }}</td>
                                 <td>{{ formatPhone(user.phone) }}</td>
                                 <td>
                                     <span class="status-badge" :class="{ admin: user.role === 'admin' }">
-                                        {{ user.role === 'admin' ? '管理员' : '用户' }}
+                                        {{ user.role === 'admin' ? t('user_role_admin') : t('user_role_user') }}
                                     </span>
                                 </td>
                                 <td>{{ user.computing_power || 0 }}</td>
                                 <td>
                                     <span class="status-badge" :class="{ active: user.status === 1, inactive: user.status === 0, pending: user.status === 2 }">
-                                        {{ user.status === 1 ? '正常' : user.status === 2 ? '待审核' : '禁用' }}
+                                        {{ user.status === 1 ? t('status_normal') : user.status === 2 ? t('status_pending') : t('status_disabled') }}
                                     </span>
                                 </td>
                                 <td>{{ formatDate(user.created_at) }}</td>
                                 <td>
-                                    <button class="action-btn primary" @click="viewUserDetail(user.user_id)">详情</button>
-                                    <button class="action-btn success" @click="openPowerModal(user)">调整算力</button>
+                                    <button class="action-btn primary" @click="viewUserDetail(user.user_id)">{{ t('btn_view_detail') }}</button>
+                                    <button class="action-btn success" @click="openPowerModal(user)">{{ t('btn_adjust_power') }}</button>
                                     <button
                                         v-if="user.status === 2"
                                         class="action-btn success"
                                         @click="approveUser(user.user_id)"
                                     >
-                                        允许登录
+                                        {{ t('btn_approve_login') }}
                                     </button>
                                     <button
                                         v-if="!isCommunityEdition"
@@ -293,41 +301,41 @@
                                         :class="user.zjt_token_enabled ? 'warning' : 'default'"
                                         @click="toggleZjtToken(user)"
                                     >
-                                        {{ user.zjt_token_enabled ? '智剧通Token(已开启)' : '智剧通Token(未开启)' }}
+                                        {{ user.zjt_token_enabled ? t('btn_zjt_token_on') : t('btn_zjt_token_off') }}
                                     </button>
                                     <button
                                         v-if="!isCommunityEdition && user.zjt_token_enabled"
                                         class="action-btn primary"
                                         @click="openZjtExpireModal(user)"
                                     >
-                                        调整有效期
+                                        {{ t('btn_adjust_expire') }}
                                     </button>
                                     <button
                                         class="action-btn"
                                         :class="user.status === 1 ? 'danger' : 'success'"
                                         @click="updateUserStatus(user.user_id, user.status)"
                                     >
-                                        {{ user.status === 1 ? '禁用' : '启用' }}
+                                        {{ user.status === 1 ? t('btn_disable') : t('btn_enable') }}
                                     </button>
                                     <button
                                         class="action-btn primary"
                                         @click="updateUserRole(user.user_id, user.role)"
                                         v-if="user.role !== 'admin'"
                                     >
-                                        设为管理员
+                                        {{ t('btn_set_admin') }}
                                     </button>
                                 </td>
                             </tr>
                         </tbody>
                     </table>
-                    
+
                     <!-- 分页 -->
                     <div class="pagination" v-if="users.total > 0">
-                        <button class="page-btn" @click="goToPage(1)" :disabled="users.page === 1">首页</button>
-                        <button class="page-btn" @click="goToPage(users.page - 1)" :disabled="users.page === 1">上一页</button>
-                        <span class="page-info">第 {{ users.page }} / {{ totalPages }} 页，共 {{ users.total }} 条</span>
-                        <button class="page-btn" @click="goToPage(users.page + 1)" :disabled="users.page >= totalPages">下一页</button>
-                        <button class="page-btn" @click="goToPage(totalPages)" :disabled="users.page >= totalPages">末页</button>
+                        <button class="page-btn" @click="goToPage(1)" :disabled="users.page === 1">{{ t('page_first') }}</button>
+                        <button class="page-btn" @click="goToPage(users.page - 1)" :disabled="users.page === 1">{{ t('page_prev') }}</button>
+                        <span class="page-info">{{ t('page_info', { current: users.page, total: totalPages, count: users.total }) }}</span>
+                        <button class="page-btn" @click="goToPage(users.page + 1)" :disabled="users.page >= totalPages">{{ t('page_next') }}</button>
+                        <button class="page-btn" @click="goToPage(totalPages)" :disabled="users.page >= totalPages">{{ t('page_last') }}</button>
                     </div>
                 </div>
             </section>
@@ -336,53 +344,53 @@
             <section v-if="currentPage === 'config'">
                 <div class="table-container">
                     <div class="table-header">
-                        <h3>配置列表</h3>
+                        <h3>{{ t('config_title') }}</h3>
                         <div class="table-actions">
                             <button class="action-btn warning" @click="openQuickConfigModal" style="font-weight: bold;">
-                                🚀 供应商快速配置
+                                🚀 {{ t('btn_quick_config') }}
                             </button>
                             <button class="action-btn primary" @click="initConfigs" :disabled="config.initLoading">
-                                {{ config.initLoading ? '初始化中...' : '初始化配置' }}
+                                {{ config.initLoading ? t('btn_init_loading') : t('btn_init_config') }}
                             </button>
                             <button class="action-btn success" @click="reloadConfigs" :disabled="config.reloadLoading">
-                                {{ config.reloadLoading ? '刷新中...' : '刷新缓存' }}
+                                {{ config.reloadLoading ? t('btn_reload_loading') : t('btn_reload_cache') }}
                             </button>
                         </div>
                     </div>
                     
                     <!-- 搜索筛选 -->
                     <div class="table-filters">
-                        <input 
-                            type="text" 
-                            class="filter-input" 
-                            placeholder="搜索配置键..." 
+                        <input
+                            type="text"
+                            class="filter-input"
+                            :placeholder="t('search_config_placeholder')"
                             v-model="config.keyword"
                             @keyup.enter="searchConfigs"
                             style="width: 300px;"
                         >
-                        <button class="filter-btn" @click="searchConfigs">搜索</button>
+                        <button class="filter-btn" @click="searchConfigs">{{ t('search_btn') }}</button>
                     </div>
                     
                     <!-- 表格 -->
                     <div v-if="config.loading" class="loading">
                         <div class="loading-spinner"></div>
-                        <p>加载中...</p>
+                        <p>{{ t('loading') }}</p>
                     </div>
                     <table v-else class="admin-table">
                         <thead>
                             <tr>
-                                <th>配置键</th>
-                                <th>当前值</th>
-                                <th>类型</th>
-                                <th>描述</th>
-                                <th>敏感</th>
-                                <th>更新时间</th>
-                                <th>操作</th>
+                                <th>{{ t('col_config_key') }}</th>
+                                <th>{{ t('col_config_value') }}</th>
+                                <th>{{ t('col_config_type') }}</th>
+                                <th>{{ t('col_config_desc') }}</th>
+                                <th>{{ t('col_config_sensitive') }}</th>
+                                <th>{{ t('col_config_update_time') }}</th>
+                                <th>{{ t('col_config_actions') }}</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-if="config.list.length === 0">
-                                <td colspan="7" style="text-align: center; color: #64748b;">暂无配置，请点击「初始化配置」按钮</td>
+                                <td colspan="7" style="text-align: center; color: #64748b;">{{ t('no_config_hint') }}</td>
                             </tr>
                             <tr v-for="item in config.list" :key="item.id">
                                 <td><code>{{ item.config_key }}</code></td>
@@ -390,7 +398,7 @@
                                     <template v-if="item.is_sensitive == 1 || item.is_sensitive === true">
                                         {{ maskSensitiveValue(item.config_value) }}
                                         <button class="action-btn" style="margin-left: 8px; padding: 4px 8px;" @click="showSensitiveValue(item)">
-                                            👁️ 查看
+                                            👁️ {{ t('btn_view') }}
                                         </button>
                                     </template>
                                     <span v-else>{{ formatConfigValue(item.config_value) }}</span>
@@ -401,16 +409,16 @@
                                 <td>{{ item.description || '-' }}</td>
                                 <td>
                                     <span class="status-badge" :class="{ sensitive: item.is_sensitive }">
-                                        {{ item.is_sensitive ? '是' : '否' }}
+                                        {{ item.is_sensitive ? t('yes') : t('no') }}
                                     </span>
                                 </td>
                                 <td>{{ formatDate(item.updated_at) }}</td>
                                 <td>
                                     <button class="action-btn primary" @click="openConfigEditModal(item)" :disabled="!item.editable">
-                                        编辑
+                                        {{ t('edit_btn') }}
                                     </button>
                                     <button class="action-btn" @click="viewConfigHistory(item)">
-                                        历史
+                                        {{ t('history_btn') }}
                                     </button>
                                 </td>
                             </tr>
@@ -419,11 +427,11 @@
                     
                     <!-- 分页 -->
                     <div class="pagination" v-if="config.total > 0">
-                        <button class="page-btn" @click="goToConfigPage(1)" :disabled="config.page === 1">首页</button>
-                        <button class="page-btn" @click="goToConfigPage(config.page - 1)" :disabled="config.page === 1">上一页</button>
-                        <span class="page-info">第 {{ config.page }} / {{ configTotalPages }} 页，共 {{ config.total }} 条</span>
-                        <button class="page-btn" @click="goToConfigPage(config.page + 1)" :disabled="config.page >= configTotalPages">下一页</button>
-                        <button class="page-btn" @click="goToConfigPage(configTotalPages)" :disabled="config.page >= configTotalPages">末页</button>
+                        <button class="page-btn" @click="goToConfigPage(1)" :disabled="config.page === 1">{{ t('page_first') }}</button>
+                        <button class="page-btn" @click="goToConfigPage(config.page - 1)" :disabled="config.page === 1">{{ t('page_prev') }}</button>
+                        <span class="page-info">{{ t('page_info', { current: config.page, total: configTotalPages, count: config.total }) }}</span>
+                        <button class="page-btn" @click="goToConfigPage(config.page + 1)" :disabled="config.page >= configTotalPages">{{ t('page_next') }}</button>
+                        <button class="page-btn" @click="goToConfigPage(configTotalPages)" :disabled="config.page >= configTotalPages">{{ t('page_last') }}</button>
                     </div>
                 </div>
             </section>
@@ -432,51 +440,51 @@
             <section v-if="currentPage === 'checkin'">
                 <div class="table-container" style="max-width: 800px;">
                     <div class="table-header">
-                        <h3>签到配置</h3>
+                        <h3>{{ t('checkin_title') }}</h3>
                         <div class="table-actions">
                             <button class="action-btn primary" @click="saveCheckinConfig" :disabled="checkin.loading">
-                                {{ checkin.loading ? '保存中...' : '保存配置' }}
+                                {{ checkin.loading ? t('btn_save_loading') : t('btn_save_config') }}
                             </button>
                         </div>
                     </div>
 
                     <div v-if="checkin.loading" class="loading">
                         <div class="loading-spinner"></div>
-                        <p>加载中...</p>
+                        <p>{{ t('loading') }}</p>
                     </div>
 
                     <div v-else class="checkin-config-form">
                         <div class="form-group">
-                            <label class="form-label"><input type="checkbox" v-model="checkin.enabled" /> 启用每日签到功能</label>
-                            <p class="form-hint">关闭后，用户将无法进行签到</p>
+                            <label class="form-label"><input type="checkbox" v-model="checkin.enabled" /> {{ t('checkin_enable') }}</label>
+                            <p class="form-hint">{{ t('checkin_enable_hint') }}</p>
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label">基础奖励算力</label>
+                            <label class="form-label">{{ t('checkin_base_reward') }}</label>
                             <input type="number" class="filter-input" v-model.number="checkin.baseReward" min="0" style="width: 120px;" />
-                            <p class="form-hint">用户每日签到可获得的基础算力值</p>
+                            <p class="form-hint">{{ t('checkin_base_reward_hint') }}</p>
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label"><input type="checkbox" v-model="checkin.streakBonusEnabled" /> 启用连续签到额外奖励</label>
+                            <label class="form-label"><input type="checkbox" v-model="checkin.streakBonusEnabled" /> {{ t('checkin_streak_enable') }}</label>
                         </div>
 
                         <div class="form-group" v-if="checkin.streakBonusEnabled">
-                            <label class="form-label">连续签到奖励配置</label>
+                            <label class="form-label">{{ t('checkin_streak_config') }}</label>
                             <div class="streak-bonus-table">
                                 <div class="streak-bonus-row header">
-                                    <span>连续天数</span>
-                                    <span>额外奖励</span>
-                                    <span>操作</span>
+                                    <span>{{ t('checkin_col_days') }}</span>
+                                    <span>{{ t('checkin_col_reward') }}</span>
+                                    <span>{{ t('checkin_col_actions') }}</span>
                                 </div>
                                 <div v-for="(item, index) in checkin.streakBonuses" :key="index" class="streak-bonus-row">
-                                    <input type="number" class="filter-input" v-model.number="item.days" min="1" placeholder="天数" />
-                                    <input type="number" class="filter-input" v-model.number="item.reward" min="0" placeholder="奖励" />
-                                    <button class="action-btn" @click="removeStreakBonus(index)">删除</button>
+                                    <input type="number" class="filter-input" v-model.number="item.days" min="1" :placeholder="t('checkin_days_placeholder')" />
+                                    <input type="number" class="filter-input" v-model.number="item.reward" min="0" :placeholder="t('checkin_reward_placeholder')" />
+                                    <button class="action-btn" @click="removeStreakBonus(index)">{{ t('delete_btn') }}</button>
                                 </div>
-                                <button class="action-btn primary" @click="addStreakBonus" style="margin-top: 8px;">+ 添加奖励阶梯</button>
+                                <button class="action-btn primary" @click="addStreakBonus" style="margin-top: 8px;">{{ t('btn_add_reward_tier') }}</button>
                             </div>
-                            <p class="form-hint">格式示例：连续3天额外奖励5算力，连续7天额外奖励15算力</p>
+                            <p class="form-hint">{{ t('checkin_streak_hint') }}</p>
                         </div>
                     </div>
                 </div>
@@ -486,17 +494,17 @@
             <section v-if="currentPage === 'implementations'">
                 <div class="table-container">
                     <div class="table-header">
-                        <h3>实现方管理</h3>
+                        <h3>{{ t('implementations_title') }}</h3>
                         <div class="table-actions">
                             <a href="https://www.bilibili.com/video/BV1e1ozB5Eqe/?vd_source=662c3bd9db6ca94732108f2de3d7641e"
                                target="_blank"
                                class="action-btn"
                                style="background: linear-gradient(135deg, #ec4899, #db2777); color: white; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;"
-                               title="查看供应商管理教学视频">
-                                &#127909; 教学视频
+                               :title="t('btn_tutorial_video')">
+                                &#127909; {{ t('btn_tutorial_video') }}
                             </a>
                             <button class="action-btn primary" @click="loadImplementations" :disabled="implementations.loading">
-                                {{ implementations.loading ? '刷新中...' : '刷新' }}
+                                {{ implementations.loading ? t('btn_reload_loading') : t('btn_refresh') }}
                             </button>
                         </div>
                     </div>
@@ -506,51 +514,51 @@
                         <input
                             type="text"
                             class="filter-input"
-                            placeholder="搜索实现方..."
+                            :placeholder="t('search_impl_placeholder')"
                             v-model="implementations.keyword"
                             @keyup.enter="searchImplementations"
                         >
-                        <button class="filter-btn" @click="searchImplementations">搜索</button>
+                        <button class="filter-btn" @click="searchImplementations">{{ t('search_btn') }}</button>
                     </div>
 
                     <!-- 使用说明 -->
                     <div class="info-box" style="margin-bottom: 16px; padding: 12px 16px; background: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 4px;">
                         <p style="margin: 0; color: #1e40af; font-size: 13px;">
-                            <strong>📋 使用说明：</strong>
+                            <strong>📋 {{ t('impl_usage_hint_title') }}</strong>
                         </p>
                         <ul style="margin: 8px 0 0 16px; padding: 0; color: #64748b; font-size: 13px; line-height: 1.6;">
-                            <li><strong>调整优先级：</strong>通过修改「排序」值来控制使用哪个实现方。排序值越小，优先级越高。系统会自动使用排序最小的实现方（显示「使用中」标签）。</li>
-                            <li><strong>修改算力：</strong>可以修改每个实现方的算力值。<span style="color: #dc2626;">⚠️ 请谨慎修改，错误的算力配置可能导致金额损失！</span></li>
+                            <li><strong>{{ t('impl_usage_hint_priority') }}</strong>{{ t('impl_usage_hint_priority_desc') }}</li>
+                            <li><strong>{{ t('impl_usage_hint_power') }}</strong>{{ t('impl_usage_hint_power_desc') }}<span style="color: #dc2626;">⚠️ {{ t('impl_usage_hint_power_warn') }}</span></li>
                         </ul>
                     </div>
 
                     <!-- 分组表格 -->
                     <div v-if="implementations.loading" class="loading">
                         <div class="loading-spinner"></div>
-                        <p>加载中...</p>
+                        <p>{{ t('loading') }}</p>
                     </div>
 
                     <div v-else class="implementation-groups">
                         <div v-if="filteredImplementationGroups.length === 0" style="text-align: center; color: #64748b; padding: 40px;">
-                            暂无实现方数据
+                            {{ t('impl_no_data') }}
                         </div>
 
                         <div v-for="group in filteredImplementationGroups" :key="group.driver_key" class="implementation-group">
                             <!-- 分组标题行 -->
                             <div class="group-header">
                                 <h4>{{ formatDriverKey(group.driver_key) }}</h4>
-                                <span class="group-count">{{ group.implementations.length }} 个实现方</span>
+                                <span class="group-count">{{ t('impl_count', { count: group.implementations.length }) }}</span>
                             </div>
 
                             <!-- 该组的实现方表格 -->
                             <table class="admin-table group-table">
                                 <thead>
                                     <tr>
-                                        <th class="sort-order-column">排序</th>
-                                        <th>名称</th>
-                                        <th>显示名称</th>
-                                        <th>算力配置</th>
-                                        <th>描述</th>
+                                        <th class="sort-order-column">{{ t('impl_col_sort') }}</th>
+                                        <th>{{ t('impl_col_name') }}</th>
+                                        <th>{{ t('impl_col_display_name') }}</th>
+                                        <th>{{ t('impl_col_power_config') }}</th>
+                                        <th>{{ t('impl_col_desc') }}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -576,12 +584,12 @@
                                         <td><code>{{ item.name }}</code></td>
                                         <td>
                                             {{ item.display_name }}
-                                            <span v-if="isDefaultImplementation(item, group)" class="implementation-in-use-label">使用中</span>
+                                            <span v-if="isDefaultImplementation(item, group)" class="implementation-in-use-label">{{ t('impl_in_use') }}</span>
                                         </td>
                                         <td>
                                             <div v-if="item.duration_powers && item.duration_powers.length > 0" class="duration-power-list">
                                                 <div v-for="dp in item.duration_powers" :key="dp.duration" class="duration-power-item">
-                                                    <span class="duration-label">{{ dp.duration }}秒:</span>
+                                                    <span class="duration-label">{{ dp.duration }}s:</span>
                                                     <input
                                                         type="number"
                                                         class="power-input"
@@ -590,14 +598,14 @@
                                                         min="0"
                                                         :disabled="implementations.updating === `${item.name}-${dp.duration}`"
                                                     >
-                                                    <span class="power-unit">算力</span>
+                                                    <span class="power-unit">{{ t('impl_power_unit') }}</span>
                                                     <button
                                                         class="action-btn small"
                                                         @click="resetToDefaultPower(item, dp.duration, group)"
                                                         :disabled="implementations.updating"
-                                                        title="恢复到代码默认值"
+                                                        :title="t('impl_reset_default_hint')"
                                                     >
-                                                        恢复默认
+                                                        {{ t('impl_reset_default') }}
                                                     </button>
                                                 </div>
                                             </div>
@@ -610,16 +618,16 @@
                                                     min="0"
                                                     :disabled="implementations.updating === item.name"
                                                 >
-                                                <span class="power-unit">算力</span>
+                                                <span class="power-unit">{{ t('impl_power_unit') }}</span>
                                                 <button
                                                     class="action-btn small"
                                                     @click="resetToDefaultPower(item, null, group)"
                                                     :disabled="implementations.updating"
-                                                    title="恢复到代码默认值"
+                                                    :title="t('impl_reset_default_hint')"
                                                 >
-                                                    恢复默认
+                                                    {{ t('impl_reset_default') }}
                                                 </button>
-                                                <span class="power-hint">(默认)</span>
+                                                <span class="power-hint">{{ t('impl_default_suffix') }}</span>
                                             </div>
                                         </td>
                                         <td>{{ item.description || '-' }}</td>
@@ -637,10 +645,10 @@
                 <div v-if="versionUpdate && versionUpdate.has_update" class="upgrade-banner">
                     <div class="upgrade-banner-icon">&#128293;</div>
                     <div class="upgrade-banner-content">
-                        <h4>发现新版本 v{{ versionUpdate.latest_version }}</h4>
+                        <h4>{{ t('version_new_version', { version: versionUpdate.latest_version }) }}</h4>
                         <pre class="release-notes">{{ versionUpdate.release_notes }}</pre>
                         <a v-if="versionUpdate.changelog_url" :href="versionUpdate.changelog_url"
-                           target="_blank" class="changelog-link">查看完整更新日志 &#8594;</a>
+                           target="_blank" class="changelog-link">{{ t('btn_view_changelog') }} &#8594;</a>
                     </div>
                 </div>
 
@@ -649,7 +657,7 @@
                      class="binary-deps-warning">
                     <div class="binary-deps-header">
                         <span class="binary-deps-icon">&#9888;&#65039;</span>
-                        <h4>此版本需要以下二进制工具</h4>
+                        <h4>{{ t('binary_deps_title') }}</h4>
                     </div>
                     <ul class="binary-deps-list">
                         <li v-for="dep in versionUpdate.required_binaries" :key="dep.name">
@@ -658,21 +666,21 @@
                                 <span class="binary-dep-desc">{{ dep.description }}</span>
                             </div>
                             <a v-if="dep.download_url" :href="dep.download_url" target="_blank" class="binary-dep-download">
-                                下载 &#8594;
+                                {{ t('binary_deps_download') }} &#8594;
                             </a>
                         </li>
                     </ul>
-                    <p class="binary-deps-hint">请手动下载并放置到对应目录后，再进行升级。</p>
+                    <p class="binary-deps-hint">{{ t('binary_deps_hint') }}</p>
                 </div>
 
                 <!-- 缺失的二进制依赖 -->
                 <div v-if="missingBinaries.length > 0" class="binary-deps-warning" style="border-left-color: #f59e0b;">
                     <div class="binary-deps-header">
                         <span class="binary-deps-icon">&#128230;</span>
-                        <h4>缺少以下二进制依赖</h4>
+                        <h4>{{ t('binary_missing_title') }}</h4>
                     </div>
                     <p style="color: #92400e; margin: 0 0 12px 0; font-size: 13px;">
-                        以下工具在系统中缺失，部分功能可能无法正常使用。请下载后放置到指定目录。
+                        {{ t('binary_missing_desc') }}
                     </p>
                     <ul class="binary-deps-list">
                         <li v-for="dep in missingBinaries" :key="dep.name">
@@ -680,12 +688,12 @@
                                 <strong>{{ dep.name }}</strong>
                                 <span class="binary-dep-desc">{{ dep.description }}</span>
                                 <div class="binary-dep-path">
-                                    <span style="color: #6b7280;">放置路径：</span>
+                                    <span style="color: #6b7280;">{{ t('binary_place_path') }}</span>
                                     <code>{{ dep.check_path }}</code>
                                 </div>
                             </div>
                             <a v-if="dep.download_url" :href="dep.download_url" target="_blank" class="binary-dep-download">
-                                下载 &#8594;
+                                {{ t('binary_deps_download') }} &#8594;
                             </a>
                         </li>
                     </ul>
@@ -694,16 +702,16 @@
                 <!-- 通知列表 -->
                 <div class="table-container">
                     <div class="table-header">
-                        <h3>系统通知</h3>
+                        <h3>{{ t('notifications_title') }}</h3>
                         <div class="table-actions">
                             <button class="action-btn" @click="markAllNotificationsRead" :disabled="notifications.length === 0">
-                                全部已读
+                                {{ t('btn_mark_all_read') }}
                             </button>
                         </div>
                     </div>
 
                     <div v-if="notifications.length === 0" class="empty-state">
-                        <p style="color: #94a3b8; padding: 40px; text-align: center;">暂无通知</p>
+                        <p style="color: #94a3b8; padding: 40px; text-align: center;">{{ t('no_notifications') }}</p>
                     </div>
 
                     <div v-for="n in notifications" :key="n.id"
@@ -715,9 +723,9 @@
                         <div class="notification-content">{{ n.content }}</div>
                         <div class="notification-meta">
                             <span class="notification-time">{{ formatDate(n.created_at) }}</span>
-                            <button v-if="!n.is_read" class="action-btn small" @click="markNotificationRead(n.id)">标为已读</button>
+                            <button v-if="!n.is_read" class="action-btn small" @click="markNotificationRead(n.id)">{{ t('btn_mark_read') }}</button>
                             <a v-if="n.link" :href="n.link" target="_blank" class="notification-link">
-                                {{ n.link_text || '查看详情' }} &#8594;
+                                {{ n.link_text || t('view_detail_link') }} &#8594;
                             </a>
                         </div>
                     </div>
@@ -727,7 +735,7 @@
 
         <!-- 底部版本信息 -->
         <footer class="admin-footer">
-            <span>智剧通管理后台</span>
+            <span>{{ t('footer_text') }}</span>
             <span v-if="appVersion" style="margin-left: 8px; color: #64748b;">v{{ appVersion }}</span>
         </footer>
 
@@ -735,32 +743,32 @@
         <div class="modal-overlay" v-if="powerModal.show" @click.self="closePowerModal">
             <div class="modal">
                 <div class="modal-header">
-                    <h3>调整算力</h3>
+                    <h3>{{ t('modal_adjust_power') }}</h3>
                     <button class="modal-close" @click="closePowerModal">&times;</button>
                 </div>
                 <div class="modal-body">
                     <div class="form-group">
-                        <label>用户</label>
+                        <label>{{ t('modal_user_label') }}</label>
                         <input type="text" :value="powerModal.userName" disabled>
                     </div>
                     <div class="form-group">
-                        <label>当前算力</label>
+                        <label>{{ t('modal_current_power') }}</label>
                         <input type="text" :value="powerModal.currentPower" disabled>
                     </div>
                     <div class="form-group">
-                        <label>调整数量 <span style="color: red;">*</span></label>
-                        <input type="number" v-model.number="powerModal.amount" placeholder="正数增加，负数扣减">
-                        <p class="form-hint">调整后算力: {{ Math.max(0, powerModal.currentPower + (powerModal.amount || 0)) }}</p>
+                        <label>{{ t('modal_adjust_amount') }} <span style="color: red;">*</span></label>
+                        <input type="number" v-model.number="powerModal.amount" :placeholder="t('modal_adjust_amount_hint')">
+                        <p class="form-hint">{{ t('modal_adjust_result', { value: Math.max(0, powerModal.currentPower + (powerModal.amount || 0)) }) }}</p>
                     </div>
                     <div class="form-group">
-                        <label>调整原因 <span style="color: red;">*</span></label>
-                        <textarea v-model="powerModal.reason" rows="3" placeholder="请输入调整原因"></textarea>
+                        <label>{{ t('modal_adjust_reason') }} <span style="color: red;">*</span></label>
+                        <textarea v-model="powerModal.reason" rows="3" :placeholder="t('modal_adjust_reason_placeholder')"></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="modal-btn cancel" @click="closePowerModal">取消</button>
+                    <button class="modal-btn cancel" @click="closePowerModal">{{ t('cancel_btn') }}</button>
                     <button class="modal-btn confirm" @click="submitPowerAdjust" :disabled="powerModal.loading">
-                        {{ powerModal.loading ? '提交中...' : '确认调整' }}
+                        {{ powerModal.loading ? t('btn_submit_loading') : t('btn_submit') }}
                     </button>
                 </div>
             </div>
@@ -770,28 +778,28 @@
         <div class="modal-overlay" v-if="zjtExpireModal.show" @click.self="closeZjtExpireModal">
             <div class="modal">
                 <div class="modal-header">
-                    <h3>调整智剧通Token过期时间</h3>
+                    <h3>{{ t('modal_adjust_token_expire') }}</h3>
                     <button class="modal-close" @click="closeZjtExpireModal">&times;</button>
                 </div>
                 <div class="modal-body">
                     <div class="form-group">
-                        <label>用户</label>
+                        <label>{{ t('modal_user_label') }}</label>
                         <input type="text" :value="zjtExpireModal.userName" disabled>
                     </div>
                     <div class="form-group">
-                        <label>当前过期时间</label>
+                        <label>{{ t('modal_current_expire') }}</label>
                         <input type="text" :value="zjtExpireModal.currentExpireAtDisplay" disabled>
                     </div>
                     <div class="form-group">
-                        <label>新过期时间</label>
-                        <input type="text" id="zjtExpireDatePicker" class="filter-input" readonly placeholder="留空表示永不过期">
-                        <p class="form-hint">留空表示永不过期</p>
+                        <label>{{ t('modal_new_expire') }}</label>
+                        <input type="text" id="zjtExpireDatePicker" class="filter-input" readonly :placeholder="t('modal_expire_placeholder')">
+                        <p class="form-hint">{{ t('modal_expire_placeholder') }}</p>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="modal-btn cancel" @click="closeZjtExpireModal">取消</button>
+                    <button class="modal-btn cancel" @click="closeZjtExpireModal">{{ t('cancel_btn') }}</button>
                     <button class="modal-btn confirm" @click="submitZjtExpireAdjust" :disabled="zjtExpireModal.loading">
-                        {{ zjtExpireModal.loading ? '保存中...' : '确认保存' }}
+                        {{ zjtExpireModal.loading ? t('btn_save_loading') : t('btn_save') }}
                     </button>
                 </div>
             </div>
@@ -801,7 +809,7 @@
         <div class="modal-overlay" v-if="userDetailModal.show" @click.self="closeUserDetailModal">
             <div class="modal">
                 <div class="modal-header">
-                    <h3>用户详情</h3>
+                    <h3>{{ t('modal_user_detail') }}</h3>
                     <button class="modal-close" @click="closeUserDetailModal">&times;</button>
                 </div>
                 <div class="modal-body">
@@ -810,37 +818,37 @@
                     </div>
                     <div v-else-if="userDetailModal.user">
                         <div class="form-group">
-                            <label>用户ID</label>
+                            <label>{{ t('modal_user_id') }}</label>
                             <input type="text" :value="userDetailModal.user.user_id" disabled>
                         </div>
                         <div class="form-group">
-                            <label>手机号</label>
+                            <label>{{ t('modal_phone') }}</label>
                             <input type="text" :value="userDetailModal.user.phone" disabled>
                         </div>
                         <div class="form-group">
-                            <label>角色</label>
-                            <input type="text" :value="userDetailModal.user.role === 'admin' ? '管理员' : '普通用户'" disabled>
+                            <label>{{ t('modal_role') }}</label>
+                            <input type="text" :value="userDetailModal.user.role === 'admin' ? t('user_role_admin') : t('user_role_user')" disabled>
                         </div>
                         <div class="form-group">
-                            <label>状态</label>
-                            <input type="text" :value="userDetailModal.user.status === 1 ? '正常' : '禁用'" disabled>
+                            <label>{{ t('modal_user_status') }}</label>
+                            <input type="text" :value="userDetailModal.user.status === 1 ? t('status_normal') : t('status_disabled')" disabled>
                         </div>
                         <div class="form-group">
-                            <label>算力</label>
+                            <label>{{ t('modal_user_power') }}</label>
                             <input type="text" :value="userDetailModal.user.computing_power || 0" disabled>
                         </div>
                         <div class="form-group">
-                            <label>邀请码</label>
+                            <label>{{ t('modal_invite_code') }}</label>
                             <input type="text" :value="userDetailModal.user.invite_code || '-'" disabled>
                         </div>
                         <div class="form-group">
-                            <label>注册时间</label>
+                            <label>{{ t('modal_register_time') }}</label>
                             <input type="text" :value="formatDate(userDetailModal.user.created_at)" disabled>
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="modal-btn cancel" @click="closeUserDetailModal">关闭</button>
+                    <button class="modal-btn cancel" @click="closeUserDetailModal">{{ t('close_btn') }}</button>
                 </div>
             </div>
         </div>
@@ -849,53 +857,53 @@
         <div class="modal-overlay" v-if="configEditModal.show" @click.self="closeConfigEditModal">
             <div class="modal">
                 <div class="modal-header">
-                    <h3>编辑配置</h3>
+                    <h3>{{ t('modal_edit_config') }}</h3>
                     <button class="modal-close" @click="closeConfigEditModal">&times;</button>
                 </div>
                 <div class="modal-body">
                     <div class="form-group">
-                        <label>配置键</label>
+                        <label>{{ t('modal_config_key') }}</label>
                         <input type="text" :value="configEditModal.configKey" disabled>
                     </div>
                     <div class="form-group">
-                        <label>类型</label>
+                        <label>{{ t('modal_config_type') }}</label>
                         <input type="text" :value="configEditModal.valueType" disabled>
                     </div>
                     <div class="form-group">
-                        <label>描述</label>
+                        <label>{{ t('modal_config_desc') }}</label>
                         <input type="text" :value="configEditModal.description" disabled>
                     </div>
                     <div class="form-group">
-                        <label>当前值 <span style="color: red;">*</span></label>
+                        <label>{{ t('modal_config_current_value') }} <span style="color: red;">*</span></label>
                         <!-- 布尔类型使用开关 -->
                         <div v-if="configEditModal.valueType === 'bool'" class="switch-container">
                             <label class="switch">
                                 <input type="checkbox" v-model="configEditModal.boolValue">
                                 <span class="slider"></span>
                             </label>
-                            <span>{{ configEditModal.boolValue ? '启用' : '禁用' }}</span>
+                            <span>{{ configEditModal.boolValue ? t('config_bool_enabled') : t('config_bool_disabled') }}</span>
                         </div>
                         <!-- 数字类型使用数字输入 -->
-                        <input v-else-if="configEditModal.valueType === 'int' || configEditModal.valueType === 'float'" 
-                               type="number" 
-                               v-model="configEditModal.value" 
+                        <input v-else-if="configEditModal.valueType === 'int' || configEditModal.valueType === 'float'"
+                               type="number"
+                               v-model="configEditModal.value"
                                :step="configEditModal.valueType === 'float' ? '0.01' : '1'">
                         <!-- JSON类型使用文本域 -->
-                        <textarea v-else-if="configEditModal.valueType === 'json'" 
-                                  v-model="configEditModal.value" 
+                        <textarea v-else-if="configEditModal.valueType === 'json'"
+                                  v-model="configEditModal.value"
                                   rows="5"
-                                  placeholder="请输入有效的JSON"></textarea>
+                                  :placeholder="t('config_json_placeholder')"></textarea>
                         <!-- 字符串类型 -->
                         <input v-else type="text" v-model="configEditModal.value">
                         <p class="form-hint" v-if="configEditModal.isSensitive" style="color: #f59e0b;">
-                            注意：敏感配置修改后历史记录将脱敏显示
+                            {{ t('config_sensitive_hint') }}
                         </p>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="modal-btn cancel" @click="closeConfigEditModal">取消</button>
+                    <button class="modal-btn cancel" @click="closeConfigEditModal">{{ t('cancel_btn') }}</button>
                     <button class="modal-btn confirm" @click="submitConfigEdit" :disabled="configEditModal.loading">
-                        {{ configEditModal.loading ? '保存中...' : '保存' }}
+                        {{ configEditModal.loading ? t('btn_save_loading') : t('save_btn') }}
                     </button>
                 </div>
             </div>
@@ -905,7 +913,7 @@
         <div class="modal-overlay" v-if="configHistoryModal.show" @click.self="closeConfigHistoryModal">
             <div class="modal modal-wide">
                 <div class="modal-header">
-                    <h3>修改历史 - {{ configHistoryModal.configKey }}</h3>
+                    <h3>{{ t('modal_config_history') }} - {{ configHistoryModal.configKey }}</h3>
                     <button class="modal-close" @click="closeConfigHistoryModal">&times;</button>
                 </div>
                 <div class="modal-body">
@@ -913,26 +921,26 @@
                         <div class="loading-spinner"></div>
                     </div>
                     <div v-else-if="configHistoryModal.list.length === 0" style="text-align: center; color: #64748b; padding: 20px;">
-                        暂无修改历史
+                        {{ t('no_config_history') }}
                     </div>
                     <div v-else class="history-timeline">
                         <div class="history-item" v-for="item in configHistoryModal.list" :key="item.id">
                             <div class="history-time">{{ formatDate(item.updated_at) }}</div>
                             <div class="history-content">
                                 <div class="history-change">
-                                    <span class="old-value">{{ item.old_value || '(空)' }}</span>
+                                    <span class="old-value">{{ item.old_value || t('status_empty') }}</span>
                                     <span class="arrow">→</span>
-                                    <span class="new-value">{{ item.new_value || '(空)' }}</span>
+                                    <span class="new-value">{{ item.new_value || t('status_empty') }}</span>
                                 </div>
                                 <div class="history-user" v-if="item.is_sensitive">
-                                    <span class="sensitive-tag">敏感配置已脱敏</span>
+                                    <span class="sensitive-tag">{{ t('config_history_desensitized') }}</span>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="modal-btn cancel" @click="closeConfigHistoryModal">关闭</button>
+                    <button class="modal-btn cancel" @click="closeConfigHistoryModal">{{ t('close_btn') }}</button>
                 </div>
             </div>
         </div>
@@ -941,24 +949,24 @@
         <div class="modal-overlay" v-if="sensitiveValueModal.show" @click.self="closeSensitiveValueModal">
             <div class="modal">
                 <div class="modal-header">
-                    <h3>查看配置值</h3>
+                    <h3>{{ t('modal_view_config_value') }}</h3>
                     <button class="modal-close" @click="closeSensitiveValueModal">&times;</button>
                 </div>
                 <div class="modal-body">
                     <div class="form-group">
-                        <label>配置键</label>
+                        <label>{{ t('modal_config_key') }}</label>
                         <input type="text" :value="sensitiveValueModal.configKey" disabled>
                     </div>
                     <div class="form-group">
-                        <label>完整值</label>
+                        <label>{{ t('modal_full_value') }}</label>
                         <div style="display: flex; gap: 8px;">
                             <input type="text" :value="sensitiveValueModal.value" readonly id="sensitiveValueInput" style="flex: 1;">
-                            <button class="action-btn primary" @click="copySensitiveValue">复制</button>
+                            <button class="action-btn primary" @click="copySensitiveValue">{{ t('btn_copy') }}</button>
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="modal-btn cancel" @click="closeSensitiveValueModal">关闭</button>
+                    <button class="modal-btn cancel" @click="closeSensitiveValueModal">{{ t('close_btn') }}</button>
                 </div>
             </div>
         </div>
@@ -967,11 +975,11 @@
         <div class="modal-overlay" v-if="quickConfigModal.show" @click.self="closeQuickConfigModal">
             <div class="modal qc-modal-wide">
                 <div class="qc-header">
-                    <h3>快速配置</h3>
+                    <h3>{{ t('modal_quick_config') }}</h3>
                     <div class="qc-header-right">
                         <div class="qc-progress">
-                            <span>已选: <strong class="selected">{{ selectedCount }}</strong></span>
-                            <span>已配置: <strong class="configured">{{ configuredCount }}</strong></span>
+                            <span>{{ t('quick_config_selected') }} <strong class="selected">{{ selectedCount }}</strong></span>
+                            <span>{{ t('quick_config_configured') }} <strong class="configured">{{ configuredCount }}</strong></span>
                             <div class="qc-progress-bar">
                                 <div class="qc-progress-fill" :style="{ width: progressBarWidth }"></div>
                             </div>
@@ -979,11 +987,11 @@
                         <a href="https://www.bilibili.com/video/BV1jpXPBBE7C/?vd_source=662c3bd9db6ca94732108f2de3d7641e"
                            target="_blank"
                            class="qc-guide-link"
-                           title="查看配置教学视频">
-                            &#127909; 教学视频
+                           :title="t('btn_tutorial_video')">
+                            &#127909; {{ t('btn_tutorial_video') }}
                         </a>
                         <button class="qc-quick-setup-btn" @click="handleQuickSetup">
-                            &#9889; 快速选择
+                            &#9889; {{ t('btn_quick_select') }}
                         </button>
                         <button class="modal-close" @click="closeQuickConfigModal">&times;</button>
                     </div>
@@ -1015,8 +1023,8 @@
                                     <div class="qc-card-info">
                                         <div class="qc-card-name">
                                             {{ provider.name }}
-                                            <span v-if="provider.isOfficialAPI" class="qc-badge qc-badge-official">ZJT官方API</span>
-                                            <span v-if="isCommunityEdition && provider.commercialOnly" class="qc-badge qc-badge-commercial">商业版专属</span>
+                                            <span v-if="provider.isOfficialAPI" class="qc-badge qc-badge-official">{{ t('badge_official_api') }}</span>
+                                            <span v-if="isCommunityEdition && provider.commercialOnly" class="qc-badge qc-badge-commercial">{{ t('badge_commercial_only') }}</span>
                                         </div>
                                         <div class="qc-card-desc">{{ provider.description }}</div>
                                         <div v-if="provider.impacts && provider.impacts.length" class="qc-card-impacts">
@@ -1027,7 +1035,7 @@
                                     </div>
                                 </div>
                                 <div class="qc-card-badges">
-                                    <span v-if="provider.lazyRecommended" class="qc-badge qc-badge-recommended">&#9733; 推荐</span>
+                                    <span v-if="provider.lazyRecommended" class="qc-badge qc-badge-recommended">&#9733; {{ t('badge_recommended') }}</span>
                                     <span v-if="quickConfigModal.selectedProviderIds.includes(provider.id)" class="qc-check">&#10003;</span>
                                 </div>
                             </button>
@@ -1044,8 +1052,8 @@
                         <!-- 空状态 -->
                         <div v-if="selectedProvidersDetail.length === 0" class="qc-empty-state">
                             <div class="qc-empty-icon">&#9888;</div>
-                            <p>请从左侧选择服务商进行配置</p>
-                            <p class="qc-empty-hint">或点击 "快速选择" 按钮自动选择推荐服务商</p>
+                            <p>{{ t('quick_config_empty_title') }}</p>
+                            <p class="qc-empty-hint">{{ t('quick_config_empty_hint') }}</p>
                         </div>
 
                         <!-- 服务商配置表单 -->
@@ -1056,17 +1064,16 @@
                                         <h4>{{ provider.icon }} {{ provider.name }}</h4>
                                         <p>{{ provider.description }}</p>
                                         <a v-if="provider.docUrl" :href="provider.docUrl" target="_blank" class="qc-register-link">
-                                            &#128279; 注册引导
+                                            &#128279; {{ t('btn_register_guide') }}
                                         </a>
                                     </div>
-                                    <span v-if="isProviderConfigured(provider.id)" class="qc-badge qc-badge-done">&#10003; 已配置</span>
+                                    <span v-if="isProviderConfigured(provider.id)" class="qc-badge qc-badge-done">&#10003; {{ t('badge_configured') }}</span>
                                 </div>
                                 <div class="qc-config-fields">
                                     <div v-for="field in provider.fields" :key="field.id" class="form-group">
                                         <label>
                                             {{ field.label }}
                                             <span v-if="field.required" style="color: red;">*</span>
-                                            <span v-if="field.readOnly" class="qc-readonly-badge">只读</span>
                                         </label>
                                         <input :type="field.type"
                                                :value="getFormField(provider.id, field.id)"
@@ -1082,7 +1089,7 @@
                                         <button class="modal-btn confirm"
                                                 @click="saveProviderConfig(provider.id)"
                                                 :disabled="quickConfigModal.saveLoading[provider.id]">
-                                            {{ quickConfigModal.saveLoading[provider.id] ? '保存中...' : '保存' }}
+                                            {{ quickConfigModal.saveLoading[provider.id] ? t('btn_save_loading') : t('save_btn') }}
                                         </button>
                                         <button v-if="provider.testEndpoint"
                                                 class="modal-btn cancel"
@@ -1090,13 +1097,13 @@
                                                 :disabled="quickConfigModal.testLoading[provider.id]">
                                             <template v-if="quickConfigModal.testLoading[provider.id]">
                                                 <span style="display:inline-block;width:12px;height:12px;border:2px solid #3b82f6;border-top-color:transparent;border-radius:50%;animation:qc-spin 0.6s linear infinite;vertical-align:middle;margin-right:4px;"></span>
-                                                测试中
+                                                {{ t('btn_testing') }}
                                             </template>
                                             <template v-else-if="quickConfigModal.testResults[provider.id]?.success">
-                                                &#10003; 成功
+                                                &#10003; {{ t('btn_test_success') }}
                                             </template>
                                             <template v-else>
-                                                测试连接
+                                                {{ t('btn_test_connection') }}
                                             </template>
                                         </button>
                                         <span v-if="quickConfigModal.testResults[provider.id]"
@@ -1104,7 +1111,7 @@
                                               :class="quickConfigModal.testResults[provider.id].success ? 'success' : 'error'">
                                             {{ quickConfigModal.testResults[provider.id].success ? '&#10003; ' : '&#10007; ' }}{{ quickConfigModal.testResults[provider.id].message }}
                                         </span>
-                                        <button class="qc-remove-btn" @click="removeProvider(provider.id)" title="移除">&#10005;</button>
+                                        <button class="qc-remove-btn" @click="removeProvider(provider.id)" :title="t('btn_remove')">&#10005;</button>
                                     </div>
                                 </div>
                             </div>
@@ -1115,7 +1122,7 @@
                                 class="qc-submit-all"
                                 @click="submitQuickConfig"
                                 :disabled="quickConfigModal.loading">
-                            {{ quickConfigModal.loading ? '保存中...' : '保存所有配置' }}
+                            {{ quickConfigModal.loading ? t('btn_save_loading') : t('btn_save_all_config') }}
                         </button>
                     </div>
                 </div>
@@ -1126,23 +1133,23 @@
         <div class="modal-overlay" v-if="guideModal.show" @click.self="guideModal.show = false">
             <div class="modal">
                 <div class="modal-header">
-                    <h3>🎉 配置完成</h3>
+                    <h3>🎉 {{ t('modal_config_complete') }}</h3>
                     <button class="modal-close" @click="guideModal.show = false">&times;</button>
                 </div>
                 <div class="modal-body" style="text-align: center; padding: 30px;">
                     <div style="font-size: 48px; margin-bottom: 20px;">📚</div>
-                    <h4 style="margin-bottom: 15px;">恭喜您完成系统配置！</h4>
+                    <h4 style="margin-bottom: 15px;">{{ t('config_complete_title') }}</h4>
                     <p style="color: #64748b; margin-bottom: 20px;">
-                        接下来，建议您查看使用手册，快速了解系统功能和操作方法。
+                        {{ t('config_complete_desc') }}
                     </p>
                     <a :href="userManualUrl" target="_blank" class="modal-btn confirm" style="display: inline-block; text-decoration: none;">
-                        📖 查看使用手册
+                        📖 {{ t('btn_view_manual') }}
                     </a>
                 </div>
                 <div class="modal-footer">
-                    <button class="modal-btn cancel" @click="guideModal.show = false">稍后查看</button>
+                    <button class="modal-btn cancel" @click="guideModal.show = false">{{ t('btn_view_later') }}</button>
                     <button class="modal-btn confirm" @click="guideModal.show = false; window.location.href = '/';">
-                        进入主页
+                        {{ t('btn_enter_home') }}
                     </button>
                 </div>
             </div>
@@ -1152,29 +1159,29 @@
         <div class="modal-overlay" v-if="implEditModal.show" @click.self="closeImplEditModal">
             <div class="modal">
                 <div class="modal-header">
-                    <h3>编辑实现方配置</h3>
+                    <h3>{{ t('modal_edit_impl') }}</h3>
                     <button class="modal-close" @click="closeImplEditModal">&times;</button>
                 </div>
                 <div class="modal-body">
                     <div class="form-group">
-                        <label>实现方名称</label>
+                        <label>{{ t('impl_name_label') }}</label>
                         <input type="text" :value="implEditModal.implementation?.name" disabled>
                     </div>
                     <div class="form-group">
-                        <label>显示名称</label>
+                        <label>{{ t('impl_display_name_label') }}</label>
                         <input type="text" :value="implEditModal.implementation?.display_name" disabled>
-                        <p class="form-hint">显示名称由系统自动管理，API聚合站点从配置读取</p>
+                        <p class="form-hint">{{ t('impl_display_name_hint') }}</p>
                     </div>
                     <div class="form-group">
-                        <label>排序顺序</label>
-                        <input type="number" v-model.number="implEditModal.sort_order" placeholder="数字越小越靠前">
-                        <p class="form-hint">用于在列表中排序，数字小的排在前面</p>
+                        <label>{{ t('impl_sort_order') }}</label>
+                        <input type="number" v-model.number="implEditModal.sort_order" :placeholder="t('impl_sort_order_hint')">
+                        <p class="form-hint">{{ t('impl_sort_order_hint') }}</p>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="modal-btn cancel" @click="closeImplEditModal">取消</button>
+                    <button class="modal-btn cancel" @click="closeImplEditModal">{{ t('cancel_btn') }}</button>
                     <button class="modal-btn confirm" @click="submitImplEdit" :disabled="implEditModal.loading">
-                        {{ implEditModal.loading ? '保存中...' : '保存' }}
+                        {{ implEditModal.loading ? t('btn_save_loading') : t('save_btn') }}
                     </button>
                 </div>
             </div>
@@ -1184,38 +1191,38 @@
         <div class="modal-overlay" v-if="implPowerModal.show" @click.self="closeImplPowerModal">
             <div class="modal">
                 <div class="modal-header">
-                    <h3>算力配置 - {{ implPowerModal.implementation?.display_name }}</h3>
+                    <h3>{{ t('modal_impl_power_config') }} - {{ implPowerModal.implementation?.display_name }}</h3>
                     <button class="modal-close" @click="closeImplPowerModal">&times;</button>
                 </div>
                 <div class="modal-body">
                     <div class="form-group">
-                        <label>实现方</label>
+                        <label>{{ t('impl_name_label') }}</label>
                         <input type="text" :value="implPowerModal.implementation?.name" disabled>
                     </div>
                     <div class="form-group">
-                        <label>默认算力</label>
+                        <label>{{ t('impl_default_power') }}</label>
                         <input type="text" :value="formatComputingPower(implPowerModal.implementation?.default_computing_power)" disabled>
-                        <p class="form-hint">代码中定义的默认算力值</p>
+                        <p class="form-hint">{{ t('impl_default_power_hint') }}</p>
                     </div>
                     <div class="form-group">
-                        <label>算力值 <span style="color: red;">*</span></label>
-                        <input type="number" v-model.number="implPowerModal.computing_power" placeholder="请输入算力值" min="0">
-                        <p class="form-hint">设置后将覆盖默认算力值，立即生效</p>
+                        <label>{{ t('impl_power_value') }} <span style="color: red;">*</span></label>
+                        <input type="number" v-model.number="implPowerModal.computing_power" :placeholder="t('impl_power_value_hint')" min="0">
+                        <p class="form-hint">{{ t('impl_power_value_hint') }}</p>
                     </div>
                     <div class="form-group">
-                        <label>时长配置（可选）</label>
+                        <label>{{ t('impl_duration_config') }}</label>
                         <select class="filter-select" v-model="implPowerModal.duration">
-                            <option :value="null">不限制时长（固定算力）</option>
-                            <option v-for="d in implPowerModal.durationOptions" :key="d" :value="d">{{ d }}秒</option>
+                            <option :value="null">{{ t('impl_no_duration') }}</option>
+                            <option v-for="d in implPowerModal.durationOptions" :key="d" :value="d">{{ t('impl_duration_seconds', { duration: d }) }}</option>
                         </select>
-                        <p class="form-hint" v-if="implPowerModal.durationOptions && implPowerModal.durationOptions.length > 0">该实现方支持按时长计费，可选择不同时长配置算力</p>
-                        <p class="form-hint" v-else>该实现方使用固定算力，无需选择时长</p>
+                        <p class="form-hint" v-if="implPowerModal.durationOptions && implPowerModal.durationOptions.length > 0">{{ t('impl_duration_billing_hint') }}</p>
+                        <p class="form-hint" v-else>{{ t('impl_fixed_power_hint') }}</p>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="modal-btn cancel" @click="closeImplPowerModal">取消</button>
+                    <button class="modal-btn cancel" @click="closeImplPowerModal">{{ t('cancel_btn') }}</button>
                     <button class="modal-btn confirm" @click="submitImplPower" :disabled="implPowerModal.loading">
-                        {{ implPowerModal.loading ? '保存中...' : '保存' }}
+                        {{ implPowerModal.loading ? t('btn_save_loading') : t('save_btn') }}
                     </button>
                 </div>
             </div>

@@ -303,11 +303,7 @@
         state.selectedConnId = null;
         state.selectedImgConnId = null;
         hideConnDeleteBtn();
-        renderConnections();
-        renderImageConnections();
-        renderFirstFrameConnections();
-        renderVideoConnections();
-        renderReferenceConnections();
+        renderAllConnections();
         // 开始平移画布
         state.panning = {
           startX: e.clientX,
@@ -322,89 +318,7 @@
     // 删除按钮点击事件
     connDeleteBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if(state.selectedConnId !== null){
-        removeConnection(state.selectedConnId);
-      } else if(state.selectedImgConnId !== null){
-        const conn = state.imageConnections.find(c => c.id === state.selectedImgConnId);
-        state.imageConnections = state.imageConnections.filter(c => c.id !== state.selectedImgConnId);
-        state.selectedImgConnId = null;
-        hideConnDeleteBtn();
-        renderImageConnections();
-        // 如果删除的是 extracted 类型的连接，清除 extract_frame 节点的引用
-        if(conn && conn.portType === 'extracted'){
-          const fromNode = state.nodes.find(n => n.id === conn.from);
-          if(fromNode && fromNode.type === 'extract_frame'){
-            fromNode.data.extractedImageNodeId = null;
-          }
-        }
-        // 如果删除的是图生视频节点的首尾帧连接，清除URL并更新算力
-        if(conn && conn.to) {
-          const targetNode = state.nodes.find(n => n.id === conn.to);
-          if(targetNode && targetNode.type === 'image_to_video'){
-            if(conn.portType === 'start') {
-              targetNode.data.startUrl = '';
-            } else if(conn.portType === 'end') {
-              targetNode.data.endUrl = '';
-            } else if(conn.portType === 'ref-image') {
-              const fromNode = state.nodes.find(n => n.id === conn.from);
-              if(fromNode && targetNode.data.referenceUrls){
-                const idx = targetNode.data.referenceUrls.indexOf(fromNode.data.url);
-                if(idx >= 0) targetNode.data.referenceUrls.splice(idx, 1);
-                // 使用节点注册的预览更新函数（包含计数器更新）
-                const targetEl = document.querySelector(`.node[data-node-id="${conn.to}"]`);
-                if(targetEl && typeof targetEl._updateReferencePreview === 'function') {
-                  targetEl._updateReferencePreview();
-                }
-              }
-            }
-            console.log(`[删除图片连接] 清除图生视频节点 ${conn.to} 的 ${conn.portType} URL，准备更新算力`);
-            // 更新目标节点的算力显示（使用canvas.js中定义的函数）
-            if(typeof updateImageToVideoComputingPower === 'function') {
-              updateImageToVideoComputingPower(conn.to);
-            } else {
-              console.log(`[删除图片连接] WARNING: updateImageToVideoComputingPower 函数不存在`);
-            }
-          }
-        }
-        try{ autoSaveWorkflow(); } catch(e){}
-      } else if(state.selectedFirstFrameConnId !== null){
-        removeFirstFrameConnection(state.selectedFirstFrameConnId);
-      } else if(state.selectedVideoConnId !== null){
-        state.videoConnections = state.videoConnections.filter(c => c.id !== state.selectedVideoConnId);
-        state.selectedVideoConnId = null;
-        hideConnDeleteBtn();
-        renderVideoConnections();
-      } else if(state.selectedReferenceConnId !== null){
-        const conn = state.referenceConnections.find(c => c.id === state.selectedReferenceConnId);
-        state.referenceConnections = state.referenceConnections.filter(c => c.id !== state.selectedReferenceConnId);
-        state.selectedReferenceConnId = null;
-        hideConnDeleteBtn();
-        renderReferenceConnections();
-        // 更新目标节点的参考图显示
-        if(conn){
-          const targetNode = state.nodes.find(n => n.id === conn.to);
-          if(targetNode && targetNode.updateReferenceImages){
-            targetNode.updateReferenceImages();
-          }
-        }
-        try{ autoSaveWorkflow(); } catch(e){}
-      } else if(state.selectedAudioConnId !== null){
-        const conn = state.audioConnections.find(c => c.id === state.selectedAudioConnId);
-        state.audioConnections = state.audioConnections.filter(c => c.id !== state.selectedAudioConnId);
-        state.selectedAudioConnId = null;
-        hideConnDeleteBtn();
-        renderAudioConnections();
-        // 从目标节点的 audioUrls 中移除对应的音频
-        if(conn){
-          const fromNode = state.nodes.find(n => n.id === conn.from);
-          const targetNode = state.nodes.find(n => n.id === conn.to);
-          if(fromNode && targetNode && targetNode.data.audioUrls){
-            const idx = targetNode.data.audioUrls.findIndex(a => a.url === fromNode.data.url);
-            if(idx >= 0) targetNode.data.audioUrls.splice(idx, 1);
-          }
-        }
-        try{ autoSaveWorkflow(); } catch(e){}
-      }
+      deleteSelectedConnection();
     });
 
     // Ctrl+Z 撤销
@@ -423,78 +337,9 @@
       if(e.key === 'Delete' || e.key === 'Backspace'){
         // 不在输入框内时才响应
         if(document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
-        
-        if(state.selectedConnId !== null){
+
+        if(deleteSelectedConnection()){
           e.preventDefault();
-          removeConnection(state.selectedConnId);
-        } else if(state.selectedImgConnId !== null){
-          e.preventDefault();
-          const conn = state.imageConnections.find(c => c.id === state.selectedImgConnId);
-          state.imageConnections = state.imageConnections.filter(c => c.id !== state.selectedImgConnId);
-          state.selectedImgConnId = null;
-          hideConnDeleteBtn();
-          renderImageConnections();
-          // 如果删除的是 extracted 类型的连接，清除 extract_frame 节点的引用
-          if(conn && conn.portType === 'extracted'){
-            const fromNode = state.nodes.find(n => n.id === conn.from);
-            if(fromNode && fromNode.type === 'extract_frame'){
-              fromNode.data.extractedImageNodeId = null;
-            }
-          }
-          // 如果删除的是图生视频节点的首尾帧连接，清除URL并更新算力
-          if(conn && conn.to) {
-            const targetNode = state.nodes.find(n => n.id === conn.to);
-            if(targetNode && targetNode.type === 'image_to_video'){
-              if(conn.portType === 'start') {
-                targetNode.data.startUrl = '';
-              } else if(conn.portType === 'end') {
-                targetNode.data.endUrl = '';
-              } else if(conn.portType === 'ref-image') {
-                const fromNode = state.nodes.find(n => n.id === conn.from);
-                if(fromNode && targetNode.data.referenceUrls){
-                  const idx = targetNode.data.referenceUrls.indexOf(fromNode.data.url);
-                  if(idx >= 0) targetNode.data.referenceUrls.splice(idx, 1);
-                  // 使用节点注册的预览更新函数（包含计数器更新）
-                  const targetEl = document.querySelector(`.node[data-node-id="${conn.to}"]`);
-                  if(targetEl && typeof targetEl._updateReferencePreview === 'function') {
-                    targetEl._updateReferencePreview();
-                  }
-                }
-              }
-              console.log(`[键盘删除图片连接] 清除图生视频节点 ${conn.to} 的 ${conn.portType} URL，准备更新算力`);
-              // 更新目标节点的算力显示（使用canvas.js中定义的函数）
-              if(typeof updateImageToVideoComputingPower === 'function') {
-                updateImageToVideoComputingPower(conn.to);
-              } else {
-                console.log(`[键盘删除图片连接] WARNING: updateImageToVideoComputingPower 函数不存在`);
-              }
-            }
-          }
-          try{ autoSaveWorkflow(); } catch(e){}
-        } else if(state.selectedFirstFrameConnId !== null){
-          e.preventDefault();
-          removeFirstFrameConnection(state.selectedFirstFrameConnId);
-        } else if(state.selectedVideoConnId !== null){
-          e.preventDefault();
-          state.videoConnections = state.videoConnections.filter(c => c.id !== state.selectedVideoConnId);
-          state.selectedVideoConnId = null;
-          hideConnDeleteBtn();
-          renderVideoConnections();
-        } else if(state.selectedReferenceConnId !== null){
-          e.preventDefault();
-          const conn = state.referenceConnections.find(c => c.id === state.selectedReferenceConnId);
-          state.referenceConnections = state.referenceConnections.filter(c => c.id !== state.selectedReferenceConnId);
-          state.selectedReferenceConnId = null;
-          hideConnDeleteBtn();
-          renderReferenceConnections();
-          // 更新目标节点的参考图显示
-          if(conn){
-            const targetNode = state.nodes.find(n => n.id === conn.to);
-            if(targetNode && targetNode.updateReferenceImages){
-              targetNode.updateReferenceImages();
-            }
-          }
-          try{ autoSaveWorkflow(); } catch(e){}
         } else if(state.timeline.selectedClipId !== null){
           e.preventDefault();
           removeFromTimeline(state.timeline.selectedClipId);
@@ -583,11 +428,7 @@
             }
           }
         }
-        renderConnections();
-        renderImageConnections();
-        renderFirstFrameConnections();
-        renderVideoConnections();
-        renderReferenceConnections();
+        renderAllConnections();
         return;
       }
       // 绘制选择框
@@ -622,19 +463,10 @@
         state.panX = Math.min(0, state.panning.origPanX + dx * zoom);
         state.panY = Math.min(0, state.panning.origPanY + dy * zoom);
         applyTransform();
-        renderImageConnections();
-        renderFirstFrameConnections();
-        renderVideoConnections();
-        renderAudioConnections();
-        renderReferenceConnections();
+        renderAllConnections();
         // 更新删除按钮位置（如果有选中的连接线）
         if(state.selectedConnId !== null){
           renderConnections();
-          renderImageConnections();
-          renderFirstFrameConnections();
-          renderVideoConnections();
-          renderAudioConnections();
-          renderReferenceConnections();
         }
       }
       // 拖动节点（支持批量拖动）
@@ -671,12 +503,7 @@
           }
         }
         state.drag.moved = true;
-        renderConnections();
-        renderImageConnections();
-        renderFirstFrameConnections();
-        renderVideoConnections();
-        renderAudioConnections();
-        renderReferenceConnections();
+        renderAllConnections();
       }
       // 拖拽创建连接线时显示虚线预览
       if(state.connecting){
@@ -702,10 +529,7 @@
             if(!node.data.startFile){
               const startPort = toEl.querySelector('.start-image-port');
               if(startPort){
-                const rect = startPort.getBoundingClientRect();
-                const portX = (rect.left + rect.width/2 - containerRect.left - state.panX) / state.zoom;
-                const portY = (rect.top + rect.height/2 - containerRect.top - state.panY) / state.zoom;
-                const dist = Math.sqrt(Math.pow(toX - portX, 2) + Math.pow(toY - portY, 2));
+                const { dist, x: portX, y: portY } = getPortDistance(startPort, toX, toY);
                 if(dist < nearestDist){
                   nearestDist = dist;
                   nearestImgPort = { nodeId: node.id, portType: 'start', x: portX, y: portY };
@@ -716,10 +540,7 @@
             if(!node.data.endFile){
               const endPort = toEl.querySelector('.end-image-port');
               if(endPort){
-                const rect = endPort.getBoundingClientRect();
-                const portX = (rect.left + rect.width/2 - containerRect.left - state.panX) / state.zoom;
-                const portY = (rect.top + rect.height/2 - containerRect.top - state.panY) / state.zoom;
-                const dist = Math.sqrt(Math.pow(toX - portX, 2) + Math.pow(toY - portY, 2));
+                const { dist, x: portX, y: portY } = getPortDistance(endPort, toX, toY);
                 if(dist < nearestDist){
                   nearestDist = dist;
                   nearestImgPort = { nodeId: node.id, portType: 'end', x: portX, y: portY };
@@ -730,10 +551,7 @@
             if(node.data.imageMode === 'multi_reference'){
               const refImgPort = toEl.querySelector('.ref-image-input-port');
               if(refImgPort){
-                const rect = refImgPort.getBoundingClientRect();
-                const portX = (rect.left + rect.width/2 - containerRect.left - state.panX) / state.zoom;
-                const portY = (rect.top + rect.height/2 - containerRect.top - state.panY) / state.zoom;
-                const dist = Math.sqrt(Math.pow(toX - portX, 2) + Math.pow(toY - portY, 2));
+                const { dist, x: portX, y: portY } = getPortDistance(refImgPort, toX, toY);
                 if(dist < nearestDist){
                   nearestDist = dist;
                   nearestImgPort = { nodeId: node.id, portType: 'ref-image', x: portX, y: portY };
@@ -750,10 +568,7 @@
             if(!toEl) continue;
             const portEl = toEl.querySelector('.first-frame-port');
             if(!portEl) continue;
-            const rect = portEl.getBoundingClientRect();
-            const portX = (rect.left + rect.width/2 - containerRect.left - state.panX) / state.zoom;
-            const portY = (rect.top + rect.height/2 - containerRect.top - state.panY) / state.zoom;
-            const dist = Math.sqrt(Math.pow(toX - portX, 2) + Math.pow(toY - portY, 2));
+            const { dist, x: portX, y: portY } = getPortDistance(portEl, toX, toY);
             if(dist < nearestFirstFrameDist){
               nearestFirstFrameDist = dist;
               nearestFirstFramePort = { nodeId: node.id, x: portX, y: portY };
@@ -772,10 +587,7 @@
             if(!toEl) continue;
             const portEl = toEl.querySelector('.port.reference');
             if(!portEl) continue;
-            const rect = portEl.getBoundingClientRect();
-            const portX = (rect.left + rect.width/2 - containerRect.left - state.panX) / state.zoom;
-            const portY = (rect.top + rect.height/2 - containerRect.top - state.panY) / state.zoom;
-            const dist = Math.sqrt(Math.pow(toX - portX, 2) + Math.pow(toY - portY, 2));
+            const { dist, x: portX, y: portY } = getPortDistance(portEl, toX, toY);
             if(dist < nearestRefDist){
               nearestRefDist = dist;
               nearestRefPort = { nodeId: node.id, x: portX, y: portY };
@@ -796,10 +608,7 @@
             if(!toEl) continue;
             const portEl = toEl.querySelector('.port.input');
             if(!portEl) continue;
-            const rect = portEl.getBoundingClientRect();
-            const portX = (rect.left + rect.width/2 - containerRect.left - state.panX) / state.zoom;
-            const portY = (rect.top + rect.height/2 - containerRect.top - state.panY) / state.zoom;
-            const dist = Math.sqrt(Math.pow(toX - portX, 2) + Math.pow(toY - portY, 2));
+            const { dist, x: portX, y: portY } = getPortDistance(portEl, toX, toY);
             if(dist < nearestDist){
               nearestDist = dist;
               nearestPort = { nodeId: node.id, x: portX, y: portY };
@@ -857,10 +666,7 @@
             if(!toEl) continue;
             const portEl = toEl.querySelector('.audio-input-port');
             if(!portEl) continue;
-            const rect = portEl.getBoundingClientRect();
-            const portX = (rect.left + rect.width/2 - containerRect.left - state.panX) / state.zoom;
-            const portY = (rect.top + rect.height/2 - containerRect.top - state.panY) / state.zoom;
-            const dist = Math.sqrt(Math.pow(toX - portX, 2) + Math.pow(toY - portY, 2));
+            const { dist, x: portX, y: portY } = getPortDistance(portEl, toX, toY);
             if(dist < nearestAudioDist){
               nearestAudioDist = dist;
               nearestAudioInputPort = { nodeId: node.id, x: portX, y: portY };
@@ -965,11 +771,7 @@
           toX: targetX,
           toY: targetY
         });
-        renderImageConnections();
-        renderFirstFrameConnections();
-        renderVideoConnections();
-        renderAudioConnections();
-        renderReferenceConnections();
+        renderAllConnections();
       }
     });
 
@@ -1031,10 +833,7 @@
 
         // 辅助：计算鼠标到端口中心的距离
         function distToPort(portEl){
-          const rect = portEl.getBoundingClientRect();
-          const px = (rect.left + rect.width/2 - containerRect.left - state.panX) / state.zoom;
-          const py = (rect.top + rect.height/2 - containerRect.top - state.panY) / state.zoom;
-          return { dist: Math.sqrt(Math.pow(mouseX - px, 2) + Math.pow(mouseY - py, 2)), x: px, y: py };
+          return getPortDistance(portEl, mouseX, mouseY);
         }
 
         // 辅助：在 image_to_video 节点中查找最近的可见端口
@@ -1113,7 +912,7 @@
                     targetEl._updateReferencePreview();
                   }
                 }
-                try{ autoSaveWorkflow(); } catch(e){}
+                safeAutoSave()
                 imgConnected = true;
               }
             }
@@ -1215,7 +1014,7 @@
                   nearestReferencePort.node.updateReferenceImages();
                 }
                 renderReferenceConnections();
-                try{ autoSaveWorkflow(); } catch(e){}
+                safeAutoSave()
               }
             }
           }
@@ -1309,7 +1108,7 @@
                     targetEl._updateVideoPreview();
                   }
                 }
-                try{ autoSaveWorkflow(); } catch(e){}
+                safeAutoSave()
               }
             } else if(nearestVideoInputPort){
               const exists = state.videoConnections.some(c => c.from === fromNode.id && c.to === nearestVideoInputPort.nodeId);
@@ -1325,7 +1124,7 @@
                   });
                   renderVideoConnections();
                   showToast('视频已连接作为情感参考', 'success');
-                  try{ autoSaveWorkflow(); } catch(e){}
+                  safeAutoSave()
                 }
               }
             } else {
@@ -1384,7 +1183,7 @@
                     targetEl._updateAudioPreview();
                   }
                 }
-                try{ autoSaveWorkflow(); } catch(e){}
+                safeAutoSave()
               }
             }
           }
@@ -1396,12 +1195,7 @@
         }
         
         state.connecting = null;
-        renderConnections();
-        renderImageConnections();
-        renderFirstFrameConnections();
-        renderVideoConnections();
-        renderReferenceConnections();
-        renderAudioConnections();
+        renderAllConnections();
       }
     });
 
@@ -1437,11 +1231,7 @@
       state.panY = Math.min(0, -(canvasY - containerRect.height / state.zoom / 2) * state.zoom);
       
       applyTransform();
-      renderConnections();
-      renderImageConnections();
-      renderFirstFrameConnections();
-      renderVideoConnections();
-      renderReferenceConnections();
+      renderAllConnections();
       renderMinimap();
     });
 
@@ -1479,7 +1269,7 @@
         });
         renderTimeline();
         showToast('时间轴已清空', 'success');
-        try{ autoSaveWorkflow(); } catch(e){}
+        safeAutoSave()
       }
     });
 
@@ -2170,7 +1960,7 @@
       
       setSelected(id);
       showToast('角色已添加', 'success');
-      try { autoSaveWorkflow(); } catch(e) {}
+      safeAutoSave();
       return id;
     }
     
@@ -2466,7 +2256,7 @@
       
       setSelected(id);
       showToast('场景已添加', 'success');
-      try { autoSaveWorkflow(); } catch(e) {}
+      safeAutoSave();
       return id;
     }
     
@@ -2594,7 +2384,7 @@
       
       setSelected(id);
       showToast('道具已添加', 'success');
-      try { autoSaveWorkflow(); } catch(e) {}
+      safeAutoSave();
       return id;
     }
     
@@ -3569,7 +3359,7 @@
             }
           }
 
-          try { autoSaveWorkflow(); } catch (e) {}
+          safeAutoSave();
 
           const propsModalWorld = document.getElementById('propsWorldSelect');
           if (propsModalWorld && propsModalWorld.value) {
@@ -4364,7 +4154,7 @@
           
           document.getElementById('editCharacterModal').classList.remove('show');
           currentEditingCharacterNodeId = null;
-          try { autoSaveWorkflow(); } catch(e) {}
+          safeAutoSave();
         } else {
           showToast(result.message || '更新失败', 'error');
         }

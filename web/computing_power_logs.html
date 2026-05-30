@@ -242,25 +242,25 @@
 <body>
   <div id="app" class="container">
     <div class="header">
-      <h1 class="title">算力日志</h1>
+      <h1 class="title">{{ $t('computing_power_logs') || '算力日志' }}</h1>
     </div>
 
     <!-- 筛选标签 -->
     <div class="tabs">
       <div class="tab" :class="{ active: currentBehavior === 'all' }" @click="changeBehavior('all')">
-        全部
+        {{ $t('all') || '全部' }}
       </div>
       <div class="tab" :class="{ active: currentBehavior === 'increase' }" @click="changeBehavior('increase')">
-        增加
+        {{ $t('increase') || '增加' }}
       </div>
       <div class="tab" :class="{ active: currentBehavior === 'deduct' }" @click="changeBehavior('deduct')">
-        扣除
+        {{ $t('deduct') || '扣除' }}
       </div>
     </div>
 
     <!-- 日志列表 -->
     <div v-if="loading" class="loading">
-      加载中...
+      {{ $t('loading_dots') || '加载中...' }}
     </div>
 
     <!-- 错误提示 -->
@@ -270,22 +270,22 @@
 
     <div v-else-if="logs.length === 0" class="empty">
       <div class="empty-icon">📋</div>
-      <div class="empty-text">暂无算力日志</div>
+      <div class="empty-text">{{ $t('no_logs') || '暂无算力日志' }}</div>
     </div>
 
     <div v-else class="logs-container">
       <div v-for="log in logs" :key="log.id" class="log-item">
         <div class="log-info">
           <div class="log-behavior" :class="log.behavior">
-            {{ log.behavior === 'increase' ? '➕ 增加' : '➖ 扣除' }}
+            {{ log.behavior === 'increase' ? $t('log_increase') : $t('log_deduct') }}
           </div>
           <div v-if="log.from !== null && log.to !== null" class="log-change" style="font-size: 13px; color: var(--text); margin-bottom: 6px; padding: 4px 8px; background: rgba(34, 197, 94, 0.1); border-radius: 4px; display: inline-block; font-weight: 500;">
-            <span style="color: var(--muted); font-size: 12px;">算力变化：</span>
-            <span style="color: var(--muted);">{{ log.from }}</span> 
-            <span style="color: var(--primary); margin: 0 4px;">→</span> 
+            <span style="color: var(--muted); font-size: 12px;">{{ $t('power_change') || '算力变化：' }}</span>
+            <span style="color: var(--muted);">{{ log.from }}</span>
+            <span style="color: var(--primary); margin: 0 4px;">→</span>
             <span style="color: var(--primary); font-weight: 600;">{{ log.to }}</span>
           </div>
-          <div class="log-description">{{ log.note || '无描述' }}</div>
+          <div class="log-description">{{ log.note || $t('no_description') || '无描述' }}</div>
         </div>
         <div class="log-meta">
           <div class="log-amount" :class="log.behavior">
@@ -298,12 +298,13 @@
 
     <!-- 分页 -->
     <div v-if="totalPages > 1" class="pagination">
-      <button @click="prevPage" :disabled="currentPage === 1">上一页</button>
-      <span class="page-info">第 {{ currentPage }} / {{ totalPages }} 页</span>
-      <button @click="nextPage" :disabled="currentPage === totalPages">下一页</button>
+      <button @click="prevPage" :disabled="currentPage === 1">{{ $t('previous_page') || '上一页' }}</button>
+      <span class="page-info">{{ formatPageInfo() }}</span>
+      <button @click="nextPage" :disabled="currentPage === totalPages">{{ $t('next_page') || '下一页' }}</button>
     </div>
   </div>
 
+  <script src="/i18n/i18n-core.js"></script>
   <script src="/js/vue.global.prod.js"></script>
   <script src="/js/axios.min.js"></script>
   <script>
@@ -320,22 +321,46 @@
           totalCount: 0,
           currentBehavior: 'all', // 'all', 'increase', 'deduct'
           loading: false,
-          error: ''
+          error: '',
+          messages: {}
         };
       },
       mounted() {
-        // 从 localStorage 获取 auth_token（与父页面同源，共享 localStorage）
-        this.authToken = localStorage.getItem('auth_token') || '';
+        // 初始化 i18n
+        this.initI18n().then(() => {
+          // 从 localStorage 获取 auth_token（与父页面同源，共享 localStorage）
+          this.authToken = localStorage.getItem('auth_token') || '';
 
-        if (!this.authToken) {
-          this.error = '缺少认证信息，请从主页面打开';
-          return;
-        }
+          if (!this.authToken) {
+            this.error = this.$t('missing_auth') || '缺少认证信息，请从主页面打开';
+            return;
+          }
 
-        // 加载数据
-        this.fetchLogs();
+          // 加载数据
+          this.fetchLogs();
+        });
       },
       methods: {
+        async initI18n() {
+          if (window.ZJTi18n) {
+            const locale = localStorage.getItem('zjt_locale') || 'zh-CN';
+            await window.ZJTi18n.setLocale(locale, ['common']);
+            this.messages = window.ZJTi18n.getMessages ? window.ZJTi18n.getMessages() : {};
+          }
+        },
+
+        $t(key, defaultValue = '') {
+          if (window.ZJTi18n) {
+            return window.ZJTi18n.t(key) || defaultValue;
+          }
+          return defaultValue;
+        },
+
+        formatPageInfo() {
+          const template = this.$t('page_info') || '第 {current} / {total} 页';
+          return template.replace('{current}', this.currentPage).replace('{total}', this.totalPages);
+        },
+
         async fetchLogs() {
           this.loading = true;
           this.error = '';
@@ -364,14 +389,14 @@
               this.totalCount = data.total || 0;
               this.totalPages = Math.ceil(this.totalCount / this.pageSize);
             } else {
-              this.error = response.data.message || '获取日志失败';
+              this.error = response.data.message || (this.$t('fetch_logs_failed') || '获取日志失败');
             }
           } catch (error) {
             console.error('获取算力日志失败:', error);
             if (error.response && error.response.data) {
-              this.error = error.response.data.message || '获取日志失败';
+              this.error = error.response.data.message || (this.$t('fetch_logs_failed') || '获取日志失败');
             } else {
-              this.error = '网络错误，请稍后重试';
+              this.error = this.$t('network_error_retry') || '网络错误，请稍后重试';
             }
           } finally {
             this.loading = false;
@@ -380,7 +405,7 @@
 
         changeBehavior(behavior) {
           if (this.currentBehavior === behavior) return;
-          
+
           this.currentBehavior = behavior;
           this.currentPage = 1; // 重置到第一页
           this.fetchLogs();

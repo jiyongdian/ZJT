@@ -88,12 +88,8 @@
 
       applyTransform();
       updateZoomLevel();
-      renderConnections();
+      renderAllConnections();
       renderMinimap();
-      renderImageConnections();
-      renderFirstFrameConnections();
-      renderVideoConnections();
-      renderReferenceConnections();
     }
 
     function zoomIn(){
@@ -112,11 +108,7 @@
         nodeEl.classList.toggle('selected', nid === id);
       }
       setTimeout(() => {
-        if(typeof renderConnections === 'function') renderConnections();
-        if(typeof renderImageConnections === 'function') renderImageConnections();
-        if(typeof renderReferenceConnections === 'function') renderReferenceConnections();
-        if(typeof renderFirstFrameConnections === 'function') renderFirstFrameConnections();
-        if(typeof renderVideoConnections === 'function') renderVideoConnections();
+        if(typeof renderAllConnections === 'function') renderAllConnections();
         if(typeof renderMinimap === 'function') renderMinimap();
       }, 250);
     }
@@ -145,11 +137,7 @@
       applyTransform();
       setSelected(nodeId);
       bringNodeToFront(nodeId);
-      renderConnections();
-      renderImageConnections();
-      renderFirstFrameConnections();
-      renderVideoConnections();
-      renderReferenceConnections();
+      renderAllConnections();
       renderMinimap();
       // 添加闪烁动画提示
       if(el){
@@ -169,9 +157,7 @@
         nodeEl.classList.remove('selected');
       }
       setTimeout(() => {
-        if(typeof renderConnections === 'function') renderConnections();
-        if(typeof renderImageConnections === 'function') renderImageConnections();
-        if(typeof renderReferenceConnections === 'function') renderReferenceConnections();
+        if(typeof renderAllConnections === 'function') renderAllConnections();
       }, 250);
     }
 
@@ -183,9 +169,7 @@
         nodeEl.classList.toggle('selected', nodeIds.includes(nid));
       }
       setTimeout(() => {
-        if(typeof renderConnections === 'function') renderConnections();
-        if(typeof renderImageConnections === 'function') renderImageConnections();
-        if(typeof renderReferenceConnections === 'function') renderReferenceConnections();
+        if(typeof renderAllConnections === 'function') renderAllConnections();
       }, 250);
     }
 
@@ -195,9 +179,7 @@
         const nodeEl = canvasEl.querySelector(`.node[data-node-id="${nodeId}"]`);
         if(nodeEl) nodeEl.classList.add('selected');
         setTimeout(() => {
-          if(typeof renderConnections === 'function') renderConnections();
-          if(typeof renderImageConnections === 'function') renderImageConnections();
-          if(typeof renderReferenceConnections === 'function') renderReferenceConnections();
+          if(typeof renderAllConnections === 'function') renderAllConnections();
         }, 250);
       }
     }
@@ -207,9 +189,7 @@
       const nodeEl = canvasEl.querySelector(`.node[data-node-id="${nodeId}"]`);
       if(nodeEl) nodeEl.classList.remove('selected');
       setTimeout(() => {
-        if(typeof renderConnections === 'function') renderConnections();
-        if(typeof renderImageConnections === 'function') renderImageConnections();
-        if(typeof renderReferenceConnections === 'function') renderReferenceConnections();
+        if(typeof renderAllConnections === 'function') renderAllConnections();
       }, 250);
     }
 
@@ -382,11 +362,13 @@
         const computingPowerDetail = videoEl.querySelector('.computing-power-detail');
 
         if(computingPowerValue) {
-          computingPowerValue.textContent = `${totalPower} 算力`;
+          computingPowerValue.textContent = window.t ? window.t('computing_power_value', { power: totalPower }) : `${totalPower} 算力`;
+          computingPowerValue.setAttribute('data-i18n-params', JSON.stringify({ power: totalPower }));
           console.log(`[updateImageToVideoComputingPower] 节点${videoNodeId} 更新为 ${totalPower} 算力`);
         }
         if(computingPowerDetail) {
-          computingPowerDetail.textContent = `单个 ${singlePower} 算力 × ${count} 个 = ${totalPower} 算力`;
+          computingPowerDetail.textContent = window.t ? window.t('computing_power_detail', { individual: singlePower, count: count, total: totalPower }) : `单个 ${singlePower} 算力 × ${count} 个 = ${totalPower} 算力`;
+          computingPowerDetail.setAttribute('data-i18n-params', JSON.stringify({ individual: singlePower, count: count, total: totalPower }));
         }
       } catch(e) {
         console.error(`[updateImageToVideoComputingPower] 手动计算失败:`, e);
@@ -506,15 +488,10 @@
         }
       });
       
-      renderConnections();
+      renderAllConnections();
       renderMinimap();
-      renderImageConnections();
-      renderFirstFrameConnections();
-      renderVideoConnections();
-      renderAudioConnections();
-      renderReferenceConnections();
 
       // 自动保存
-      try{ autoSaveWorkflow(); } catch(e){}
+      safeAutoSave();
     }
 

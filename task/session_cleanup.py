@@ -11,6 +11,10 @@ logger = logging.getLogger(__name__)
 
 # 营销图片存储的基础目录（相对于应用根目录）
 _MARKETING_PIC_RELATIVE_DIR = os.path.join('upload', 'marketing', 'pic')
+# 营销视频存储的基础目录（相对于应用根目录）
+_MARKETING_VIDEO_RELATIVE_DIR = os.path.join('upload', 'marketing', 'video')
+# 营销音频存储的基础目录（相对于应用根目录）
+_MARKETING_AUDIO_RELATIVE_DIR = os.path.join('upload', 'marketing', 'audio')
 
 
 def cleanup_expired_sessions(app=None):
@@ -43,6 +47,18 @@ def cleanup_expired_sessions(app=None):
             _cleanup_orphan_marketing_images()
         except Exception as e:
             logger.error(f"[Session Cleanup] Failed to cleanup orphan marketing images: {e}")
+
+        # 清理孤立的营销视频目录
+        try:
+            _cleanup_orphan_marketing_videos()
+        except Exception as e:
+            logger.error(f"[Session Cleanup] Failed to cleanup orphan marketing videos: {e}")
+
+        # 清理孤立的营销音频目录
+        try:
+            _cleanup_orphan_marketing_audios()
+        except Exception as e:
+            logger.error(f"[Session Cleanup] Failed to cleanup orphan marketing audios: {e}")
 
         return deleted_count
 
@@ -102,3 +118,103 @@ def _cleanup_orphan_marketing_images():
         logger.info(f"[Session Cleanup] Cleaned up {cleaned}/{total} orphan marketing image directories")
     else:
         logger.debug(f"[Session Cleanup] No orphan marketing image directories found ({total} directories checked)")
+
+
+def _cleanup_orphan_marketing_videos():
+    """
+    清理孤立的营销视频目录
+
+    扫描 upload/marketing/video/ 目录下的所有子目录（即 session_id 目录），
+    如果对应的 session 在数据库中不存在，则删除该目录。
+    用于清理历史遗留的孤立数据。
+    """
+    app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    base_dir = os.path.join(app_dir, _MARKETING_VIDEO_RELATIVE_DIR)
+
+    if not os.path.isdir(base_dir):
+        return
+
+    cleaned = 0
+    total = 0
+
+    try:
+        entries = os.listdir(base_dir)
+    except Exception as e:
+        logger.error(f"[Session Cleanup] Failed to list marketing video directory: {e}")
+        return
+
+    for entry in entries:
+        entry_path = os.path.join(base_dir, entry)
+        if not os.path.isdir(entry_path):
+            continue
+
+        total += 1
+
+        # 检查数据库中是否存在该 session
+        try:
+            exists = ChatSessionsModel.session_exists(entry)
+        except Exception as e:
+            logger.warning(f"[Session Cleanup] 无法确认 session {entry} 是否存在，跳过清理: {e}")
+            continue
+
+        if not exists:
+            try:
+                shutil.rmtree(entry_path)
+                cleaned += 1
+                logger.info(f"[Session Cleanup] Removed orphan marketing video directory: {entry}")
+            except Exception as e:
+                logger.error(f"[Session Cleanup] Failed to remove orphan directory {entry}: {e}")
+
+    if cleaned > 0:
+        logger.info(f"[Session Cleanup] Cleaned up {cleaned}/{total} orphan marketing video directories")
+    else:
+        logger.debug(f"[Session Cleanup] No orphan marketing video directories found ({total} directories checked)")
+
+
+def _cleanup_orphan_marketing_audios():
+    """
+    清理孤立的营销音频目录
+
+    扫描 upload/marketing/audio/ 目录下的所有子目录（即 session_id 目录），
+    如果对应的 session 在数据库中不存在，则删除该目录。
+    """
+    app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    base_dir = os.path.join(app_dir, _MARKETING_AUDIO_RELATIVE_DIR)
+
+    if not os.path.isdir(base_dir):
+        return
+
+    cleaned = 0
+    total = 0
+
+    try:
+        entries = os.listdir(base_dir)
+    except Exception as e:
+        logger.error(f"[Session Cleanup] Failed to list marketing audio directory: {e}")
+        return
+
+    for entry in entries:
+        entry_path = os.path.join(base_dir, entry)
+        if not os.path.isdir(entry_path):
+            continue
+
+        total += 1
+
+        try:
+            exists = ChatSessionsModel.session_exists(entry)
+        except Exception as e:
+            logger.warning(f"[Session Cleanup] 无法确认 session {entry} 是否存在，跳过清理: {e}")
+            continue
+
+        if not exists:
+            try:
+                shutil.rmtree(entry_path)
+                cleaned += 1
+                logger.info(f"[Session Cleanup] Removed orphan marketing audio directory: {entry}")
+            except Exception as e:
+                logger.error(f"[Session Cleanup] Failed to remove orphan directory {entry}: {e}")
+
+    if cleaned > 0:
+        logger.info(f"[Session Cleanup] Cleaned up {cleaned}/{total} orphan marketing audio directories")
+    else:
+        logger.debug(f"[Session Cleanup] No orphan marketing audio directories found ({total} directories checked)")

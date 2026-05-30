@@ -146,6 +146,10 @@ async def upload_local_images_to_cdn(
     if not image_urls:
         return image_urls
 
+    # project_root 为空时，使用当前工作目录作为兜底
+    if not project_root:
+        project_root = os.getcwd()
+
     result_urls = []
     storage = get_file_storage(config)
 
@@ -165,13 +169,21 @@ async def upload_local_images_to_cdn(
         try:
             # 判断是本地文件还是局域网URL
             if is_local_file_path(image_path):
-                # 本地文件路径
-                if not os.path.exists(image_path):
+                # 本地文件路径 — 如果原始路径不存在，尝试拼接项目根目录
+                resolved_path = image_path
+                if not os.path.exists(resolved_path):
+                    if project_root:
+                        candidate = os.path.join(project_root, image_path.lstrip('/').lstrip('\\'))
+                        if os.path.exists(candidate):
+                            resolved_path = candidate
+                if not os.path.exists(resolved_path):
                     error_msg = f"本地图片文件不存在: {image_path}"
+                    if resolved_path != image_path:
+                        error_msg += f" (尝试解析: {resolved_path})"
                     logger.error(error_msg)
                     raise RuntimeError(error_msg)
-                file_to_upload = image_path
-                filename = os.path.basename(image_path)
+                file_to_upload = resolved_path
+                filename = os.path.basename(resolved_path)
             else:
                 # 局域网URL，优先尝试映射到本地文件
                 local_file = try_map_url_to_local_file(image_path, config, project_root)
@@ -285,14 +297,22 @@ async def resolve_url_to_local_file(
     """
     if not url:
         return None
-    
+
+    # project_root 为空时，使用当前工作目录作为兜底
+    if not project_root:
+        project_root = os.getcwd()
+
     # 如果是本地文件路径，直接返回
     if is_local_file_path(url):
         if os.path.exists(url):
             return url
-        else:
-            logger.warning(f"本地文件不存在: {url}")
-            return None
+        # 尝试拼接项目根目录
+        if project_root:
+            candidate = os.path.join(project_root, url.lstrip('/').lstrip('\\'))
+            if os.path.exists(candidate):
+                return candidate
+        logger.warning(f"本地文件不存在: {url}")
+        return None
     
     # 如果是 URL，尝试映射到本地文件
     local_file = try_map_url_to_local_file(url, config, project_root)

@@ -16,7 +16,7 @@ from tests.base.base_video_driver_test import BaseVideoDriverTest
 from task.visual_task import _submit_new_task
 from model.ai_tools import AIToolsModel
 from model.tasks import TasksModel
-from model.runninghub_slots import RunningHubSlotsModel
+from model.runninghub_slots import RunningHubSlotsModel, RunningHubSlot
 from config.constant import (
     AI_TOOL_STATUS_PENDING,
     AI_TOOL_STATUS_PROCESSING,
@@ -41,7 +41,7 @@ class TestRunningHubSlotRelease(BaseVideoDriverTest):
     def _create_task_with_slot(self, ai_tool_type):
         """
         创建任务并获取槽位
-        
+
         Returns:
             tuple: (task_id, task_table_id)
         """
@@ -61,14 +61,14 @@ class TestRunningHubSlotRelease(BaseVideoDriverTest):
         # 获取 Task
         task = TasksModel.get_by_task_id(task_id)
         task_table_id = task.id
-        
+
         # 获取槽位
         slot_acquired = RunningHubSlotsModel.try_acquire_slot(
-            task_table_id=task_table_id,
-            task_id=task_id,
-            task_type=ai_tool_type
+            task_id=task_table_id,
+            task_type=ai_tool_type,
+            source=RunningHubSlot.SOURCE_TASK
         )
-        
+
         self.assertTrue(slot_acquired, "槽位获取失败")
 
         return task_id, task_table_id
@@ -236,8 +236,8 @@ class TestRunningHubSlotRelease(BaseVideoDriverTest):
             # 验证槽位的 project_id 已更新
             from model.runninghub_slots import execute_query
             slot = execute_query(
-                "SELECT * FROM runninghub_slots WHERE task_table_id = %s",
-                (task_table_id,),
+                "SELECT * FROM runninghub_slots WHERE task_id = %s AND source = %s",
+                (task_table_id, 'task'),
                 fetch_one=True
             )
             self.assertEqual(slot['project_id'], project_id, "槽位的 project_id 应该已更新")

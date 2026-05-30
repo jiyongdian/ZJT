@@ -231,8 +231,10 @@
               const singlePower = calculateVideoGenerationPower(videoModel, duration);
               const count = node.data.drawCount || 1;
               const totalPower = singlePower * count;
-              computingPowerValue.textContent = `${totalPower} 算力`;
-              computingPowerDetail.textContent = `单个 ${singlePower} 算力 × ${count} 个 = ${totalPower} 算力`;
+              computingPowerValue.textContent = window.t ? window.t('computing_power_value', { power: totalPower }) : `${totalPower} 算力`;
+              computingPowerValue.setAttribute('data-i18n-params', JSON.stringify({ power: totalPower }));
+              computingPowerDetail.textContent = window.t ? window.t('computing_power_detail', { individual: singlePower, count: count, total: totalPower }) : `单个 ${singlePower} 算力 × ${count} 个 = ${totalPower} 算力`;
+              computingPowerDetail.setAttribute('data-i18n-params', JSON.stringify({ individual: singlePower, count: count, total: totalPower }));
             }
           }
         }
@@ -255,8 +257,10 @@
               const singlePower = calculateVideoGenerationPower(videoModel, duration);
               const count = node.data.videoDrawCount || 1;
               const totalPower = singlePower * count;
-              computingPowerValue.textContent = `${totalPower} 算力`;
-              computingPowerDetail.textContent = `单个 ${singlePower} 算力 × ${count} 个 = ${totalPower} 算力`;
+              computingPowerValue.textContent = window.t ? window.t('shot_frame_computing_power_value', { power: totalPower }) : `${totalPower} 算力`;
+              computingPowerValue.setAttribute('data-i18n-params', JSON.stringify({ power: totalPower }));
+              computingPowerDetail.textContent = window.t ? window.t('shot_frame_computing_power_detail', { individual: singlePower, count: count, total: totalPower }) : `单个 ${singlePower} 算力 × ${count} 个 = ${totalPower} 算力`;
+              computingPowerDetail.setAttribute('data-i18n-params', JSON.stringify({ individual: singlePower, count: count, total: totalPower }));
             }
           }
         }
@@ -1077,7 +1081,7 @@
                 if(migrated){
                   console.log('[恢复工作流] 历史数据迁移成功');
                   renderTimeline();
-                  try{ autoSaveWorkflow(); } catch(e){}
+                  safeAutoSave()
                 }
               }
             }, 500);
@@ -1088,12 +1092,7 @@
         }
         
         // 重新渲染
-        renderConnections();
-        renderImageConnections();
-        renderFirstFrameConnections();
-        renderVideoConnections();
-        renderReferenceConnections();
-        renderAudioConnections();
+        renderAllConnections();
         renderMinimap();
         
         // 恢复完成后，更新所有分镜节点的图片选择菜单和角色节点的按钮状态
@@ -1137,18 +1136,25 @@
       }
     }
 
-    // 恢复单个节点
+    // 恢复单个节点（优先使用注册表，未注册的走旧逻辑）
     function restoreNode(nodeData){
+      // 兼容旧的 image_edit 节点，转换为新的 image 节点
+      if(nodeData.type === 'image_edit'){
+        nodeData.type = 'image';
+        nodeData.data.url = nodeData.data.imageUrl || nodeData.data.url || '';
+      }
+
+      // 优先从注册表查找
+      if(typeof restoreNodeByRegistry === 'function' && restoreNodeByRegistry(nodeData)){
+        return;
+      }
+
+      // 未注册的节点类型走旧逻辑
       if(nodeData.type === 'image_to_video'){
         createImageToVideoNodeWithData(nodeData);
       } else if(nodeData.type === 'video'){
         createVideoNodeWithData(nodeData);
       } else if(nodeData.type === 'image'){
-        createImageNodeWithData(nodeData);
-      } else if(nodeData.type === 'image_edit'){
-        // 兼容旧的 image_edit 节点，转换为新的 image 节点
-        nodeData.type = 'image';
-        nodeData.data.url = nodeData.data.imageUrl || nodeData.data.url || '';
         createImageNodeWithData(nodeData);
       } else if(nodeData.type === 'script'){
         createScriptNodeWithData(nodeData);
@@ -1162,16 +1168,6 @@
         createLocationNodeWithData(nodeData);
       } else if(nodeData.type === 'props'){
         createPropsNodeWithData(nodeData);
-      } else if(nodeData.type === 'text_to_speech'){
-        createTextToSpeechNodeWithData(nodeData);
-      } else if(nodeData.type === 'dialogue_group'){
-        createDialogueGroupNodeWithData(nodeData);
-      } else if(nodeData.type === 'text'){
-        createTextNodeWithData(nodeData);
-      } else if(nodeData.type === 'extract_frame'){
-        createExtractFrameNodeWithData(nodeData);
-      } else if(nodeData.type === 'camera_control'){
-        createCameraControlNodeWithData(nodeData);
       } else if(nodeData.type === 'audio'){
         createAudioNodeWithData(nodeData);
       }
@@ -1521,22 +1517,26 @@
             videoModelSelect.innerHTML = '';
             
             if(window.TaskConfig && window.TaskConfig.isLoaded()) {
-              const options = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+              const category = imageMode === 'text_to_video' ? 'text_to_video' : 'image_to_video';
+              const options = window.TaskConfig.getModelOptionsForCategory(category);
               let firstAvailable = null;
-              
+
               options.forEach(opt => {
-                const config = modelConfigs[opt.value];
-                const supportedModes = config?.supported_image_modes || ['first_last_frame'];
-                const supportsCurrentMode = supportedModes.includes(imageMode);
-                
                 const optEl = document.createElement('option');
                 optEl.value = opt.value;
-                optEl.textContent = supportsCurrentMode ? opt.label : opt.label + ' (不支持当前模式)';
-                optEl.disabled = !supportsCurrentMode;
-                videoModelSelect.appendChild(optEl);
-                
-                if(supportsCurrentMode && !firstAvailable) {
-                  firstAvailable = opt.value;
+
+                if(imageMode === 'text_to_video') {
+                  optEl.textContent = opt.label;
+                  videoModelSelect.appendChild(optEl);
+                  if(!firstAvailable) firstAvailable = opt.value;
+                } else {
+                  const config = modelConfigs[opt.value];
+                  const supportedModes = config?.supported_image_modes || ['first_last_frame'];
+                  const supportsCurrentMode = supportedModes.includes(imageMode);
+                  optEl.textContent = supportsCurrentMode ? opt.label : opt.label + ' (不支持当前模式)';
+                  optEl.disabled = !supportsCurrentMode;
+                  videoModelSelect.appendChild(optEl);
+                  if(supportsCurrentMode && !firstAvailable) firstAvailable = opt.value;
                 }
               });
               
@@ -1609,7 +1609,7 @@
           
           // 更新抽卡次数标签
           const genCountLabel = el.querySelector('.gen-count-label');
-          if(genCountLabel) genCountLabel.textContent = `抽卡次数：X${node.data.drawCount}`;
+          if(genCountLabel) { const _t = window.t ? window.t('draw_count_x', { count: node.data.drawCount }) : null; genCountLabel.textContent = (_t && _t !== 'draw_count_x') ? _t : `抽卡次数：X${node.data.drawCount}`; }
           
           // 更新算力显示
           const computingPowerValue = el.querySelector('.computing-power-value');
@@ -1621,8 +1621,10 @@
             const singlePower = calculateVideoGenerationPower(videoModel, duration);
             const count = node.data.drawCount || 1;
             const totalPower = singlePower * count;
-            computingPowerValue.textContent = `${totalPower} 算力`;
-            computingPowerDetail.textContent = `单个 ${singlePower} 算力 × ${count} 个 = ${totalPower} 算力`;
+            computingPowerValue.textContent = window.t ? window.t('computing_power_value', { power: totalPower }) : `${totalPower} 算力`;
+            computingPowerValue.setAttribute('data-i18n-params', JSON.stringify({ power: totalPower }));
+            computingPowerDetail.textContent = window.t ? window.t('computing_power_detail', { individual: singlePower, count: count, total: totalPower }) : `单个 ${singlePower} 算力 × ${count} 个 = ${totalPower} 算力`;
+            computingPowerDetail.setAttribute('data-i18n-params', JSON.stringify({ individual: singlePower, count: count, total: totalPower }));
           }
           
           // 更新首帧图片
@@ -1650,7 +1652,17 @@
             if(endPreviewRow) endPreviewRow.style.display = 'flex';
             if(endImagePort) endImagePort.classList.add('disabled');
           }
-          
+
+          // 首尾帧同时存在时，预览图高度减半
+          const _startRow = el.querySelector('.start-preview-row');
+          const _endRow = el.querySelector('.end-preview-row');
+          const _bothVisible = _startRow && _endRow && _startRow.style.display !== 'none' && _endRow.style.display !== 'none';
+          const _maxH = _bothVisible ? '100px' : '200px';
+          const _startImg = el.querySelector('.start-preview');
+          const _endImg = el.querySelector('.end-preview');
+          if(_startImg) _startImg.style.maxHeight = _maxH;
+          if(_endImg) _endImg.style.maxHeight = _maxH;
+
           // 更新图片模式UI
           const imageModeSelect = el.querySelector('.image-mode-select');
           const imageModeHint = el.querySelector('.image-mode-hint');
@@ -1663,7 +1675,8 @@
           const imageMode = node.data.imageMode || 'first_last_frame';
           const imageModeHints = {
             'first_last_frame': '第一张为首帧，第二张（可选）为尾帧',
-            'multi_reference': '所有图片作为风格参考'
+            'multi_reference': '所有图片作为风格参考',
+            'text_to_video': '纯文本生成视频，无需上传图片'
           };
           
           if(imageModeSelect) imageModeSelect.value = imageMode;
@@ -1899,9 +1912,7 @@
       }
 
       // 重新渲染所有连接线
-      if(typeof renderImageConnections === 'function') renderImageConnections();
-      if(typeof renderAudioConnections === 'function') renderAudioConnections();
-      if(typeof renderVideoConnections === 'function') renderVideoConnections();
+      if(typeof renderAllConnections === 'function') renderAllConnections();
     }
 
     // 带数据创建视频节点（复用createVideoNode的逻辑）
@@ -2009,7 +2020,7 @@
             }
           }
           if(ratioEl) ratioEl.value = node.data.ratio;
-          if(drawCountLabel) drawCountLabel.textContent = `抽卡次数：X${node.data.drawCount}`;
+          if(drawCountLabel) { const _t = window.t ? window.t('draw_count_x', { count: node.data.drawCount }) : null; drawCountLabel.textContent = (_t && _t !== 'draw_count_x') ? _t : `抽卡次数：X${node.data.drawCount}`; }
           if(titleEl && nodeData.title) titleEl.textContent = nodeData.title;
 
           if(node.data.url || node.data.preview){
@@ -2021,56 +2032,6 @@
               if(previewRow) previewRow.style.display = 'flex';
             }
           }
-        }
-      }
-    }
-
-    // 带数据创建相机控制节点
-    function createCameraControlNodeWithData(nodeData){
-      const savedNextNodeId = state.nextNodeId;
-      state.nextNodeId = nodeData.id;
-
-      createCameraControlNode({ x: nodeData.x, y: nodeData.y });
-
-      state.nextNodeId = Math.max(savedNextNodeId, nodeData.id + 1);
-
-      const node = state.nodes.find(n => n.id === nodeData.id);
-      if(node && nodeData.data){
-        Object.assign(node.data, nodeData.data);
-
-        const el = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
-        if(el){
-          // 恢复相机参数到 UI
-          const hSlider = el.querySelector('.camera-ctrl-horizontal-angle-slider');
-          const hInput = el.querySelector('.camera-ctrl-horizontal-angle');
-          const vSlider = el.querySelector('.camera-ctrl-vertical-angle-slider');
-          const vInput = el.querySelector('.camera-ctrl-vertical-angle');
-          const zSlider = el.querySelector('.camera-ctrl-zoom-slider');
-          const zInput = el.querySelector('.camera-ctrl-zoom');
-
-          if(node.data.camera){
-            if(hSlider) hSlider.value = node.data.camera.horizontal_angle ?? 0;
-            if(hInput) hInput.value = node.data.camera.horizontal_angle ?? 0;
-            if(vSlider) vSlider.value = node.data.camera.vertical_angle ?? 0;
-            if(vInput) vInput.value = node.data.camera.vertical_angle ?? 0;
-            if(zSlider) zSlider.value = node.data.camera.zoom ?? 5.0;
-            if(zInput) zInput.value = node.data.camera.zoom ?? 5.0;
-          }
-
-          // 恢复抽卡次数标签
-          const drawCountLabel = el.querySelector('.camera-ctrl-draw-count-label');
-          if(drawCountLabel) drawCountLabel.textContent = `抽卡次数：X${node.data.drawCount || 1}`;
-
-          // 恢复标题
-          if(nodeData.title){
-            node.title = nodeData.title;
-            const titleEl = el.querySelector('.node-title');
-            if(titleEl) titleEl.textContent = nodeData.title;
-          }
-
-          // 更新源图缩略图
-          const updateSourceThumbnail = el._updateSourceThumbnail;
-          if(typeof updateSourceThumbnail === 'function') updateSourceThumbnail();
         }
       }
     }
@@ -2559,15 +2520,15 @@
           if(nodeData.data.drawCount){
             const drawCountLabel = nodeEl.querySelector('.shot-frame-draw-count-label');
             if(drawCountLabel){
-              drawCountLabel.textContent = `抽卡次数：X${nodeData.data.drawCount}`;
+              { const _t = window.t ? window.t('draw_count_x', { count: nodeData.data.drawCount }) : null; drawCountLabel.textContent = (_t && _t !== 'draw_count_x') ? _t : `抽卡次数：X${nodeData.data.drawCount}`; }
             }
           }
-          
+
           // 恢复视频抽卡次数显示
           if(nodeData.data.videoDrawCount){
             const videoDrawCountLabel = nodeEl.querySelector('.shot-frame-video-draw-count-label');
             if(videoDrawCountLabel){
-              videoDrawCountLabel.textContent = `抽卡次数：X${nodeData.data.videoDrawCount}`;
+              { const _t = window.t ? window.t('draw_count_x', { count: nodeData.data.videoDrawCount }) : null; videoDrawCountLabel.textContent = (_t && _t !== 'draw_count_x') ? _t : `抽卡次数：X${nodeData.data.videoDrawCount}`; }
             }
           }
           
@@ -2589,10 +2550,30 @@
           const videoModelEl = nodeEl.querySelector('.shot-frame-video-model');
           const videoDurationEl = nodeEl.querySelector('.shot-frame-video-duration');
           
+          // 恢复视频生成模式（先恢复模式，再填充模型列表）
+          if(nodeData.data.videoMode) {
+            node.data.videoMode = nodeData.data.videoMode;
+            const modeBtns = nodeEl.querySelectorAll('.video-mode-btn');
+            modeBtns.forEach(btn => {
+              const isActive = btn.dataset.mode === nodeData.data.videoMode;
+              btn.style.background = isActive ? '#3b82f6' : '#f3f4f6';
+              btn.style.color = isActive ? 'white' : '#666';
+            });
+          }
+
+          // 根据模式重新填充视频模型列表，再恢复选中值
+          if(node.populateVideoModelOptions) {
+            node.populateVideoModelOptions();
+          }
           if(videoModelEl && nodeData.data.videoModel){
             videoModelEl.value = nodeData.data.videoModel;
           }
-          
+
+          // 恢复模式相关 UI 状态
+          if(node.updateModeUI) {
+            node.updateModeUI();
+          }
+
           // 先更新时长选项（基于视频模型），再设置时长值
           if(videoDurationEl){
             const videoModel = nodeData.data.videoModel || 'wan22';

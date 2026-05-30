@@ -472,8 +472,8 @@ class TestBuildCreateRequestMultiReference(unittest.TestCase):
         self.assertEqual(len(audio_items), 0)
 
     @patch('task.visual_drivers.seedance_volcengine_v1_driver.compress_and_upload_image_sync')
-    def test_no_reference_images_returns_error(self, mock_compress):
-        """多参考图模式但没有参考图：返回错误"""
+    def test_no_reference_images_builds_request(self, mock_compress):
+        """多参考图模式但没有参考图：仍然构建请求（图片可选，视频/音频可独立使用）"""
         ai_tool = _make_ai_tool(
             image_path=None,
             extra_config={'image_mode': 'multi_reference'},
@@ -483,12 +483,13 @@ class TestBuildCreateRequestMultiReference(unittest.TestCase):
             'mode': 'multi_reference', 'first_frame': None, 'last_frame': None, 'reference_images': []
         }):
             result = self.driver.build_create_request(ai_tool)
-            self.assertFalse(result['success'])
-            self.assertIn('参考图', result['error'])
+            self.assertIn('url', result)
+            self.assertIn('method', result)
+            self.assertIn('json', result)
 
     @patch('task.visual_drivers.seedance_volcengine_v1_driver.compress_and_upload_image_sync')
-    def test_all_reference_images_compress_failure(self, mock_compress):
-        """所有参考图压缩失败：返回错误"""
+    def test_all_reference_images_compress_failure_builds_request(self, mock_compress):
+        """所有参考图压缩失败：仍然构建请求（跳过失败的图片）"""
         mock_compress.return_value = (False, None, '压缩失败')
         ai_tool = _make_ai_tool(
             image_path=None,
@@ -497,8 +498,12 @@ class TestBuildCreateRequestMultiReference(unittest.TestCase):
         )
 
         result = self.driver.build_create_request(ai_tool)
-        self.assertFalse(result['success'])
-        self.assertIn('参考图处理失败', result['error'])
+        self.assertIn('url', result)
+        self.assertIn('method', result)
+        self.assertIn('json', result)
+        # content 中不应有 image_url（所有图片压缩失败被跳过）
+        image_items = [c for c in result['json']['content'] if c.get('type') == 'image_url']
+        self.assertEqual(len(image_items), 0)
 
 
 class TestBuildCreateRequestFallback(unittest.TestCase):

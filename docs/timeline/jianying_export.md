@@ -90,9 +90,13 @@
 
 在视频工作流页面，点击"导出到剪影"按钮：
 
-1. 输入剪影草稿路径前缀（如：`C:\Users\Administrator\AppData\Local\JianyingPro\User Data\Projects\com.lveditor.draft`）
-2. 系统收集时间轴数据（视频片段、音频片段、柱子信息）
-3. 发送到后端 `/api/export_timeline_draft` 接口
+1. 弹出导出对话框，输入剪影草稿路径前缀（如：`C:\Users\Administrator\AppData\Local\JianyingPro\User Data\Projects\com.lveditor.draft`）
+   - 系统会从 Cookie 中读取上次保存的路径（有效期 90 天），自动填充到输入框
+   - 对话框中包含获取剪影草稿路径的图文说明
+2. 点击"开始导出"按钮
+3. 系统自动保存路径到 Cookie（`jianying_draft_path`），有效期 3 个月
+4. 系统收集时间轴数据（视频片段、音频片段、柱子信息）
+5. 发送到后端 `/api/export_timeline_draft` 接口
 
 ### 2. 后端处理
 

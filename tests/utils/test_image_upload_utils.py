@@ -394,8 +394,8 @@ class TestImageUploadUtils(DatabaseTestCase):
         # 验证
         self.assertIsNotNone(result)
         self.assertTrue(os.path.exists(result))
-        # 注意：project_root 参数默认为 None，所以实际调用时传的是 None
-        mock_download.assert_called_once_with(remote_url, None)
+        # project_root 为 None 时，resolve_url_to_local_file 内部回退为 os.getcwd()
+        mock_download.assert_called_once_with(remote_url, os.getcwd())
     
     def test_resolve_url_to_local_file_server_url(self, ):
         """测试服务器自身URL解析"""

@@ -7,14 +7,43 @@ allowed-tools: ["read_world", "list_character_jsons", "read_character_json", "ge
 # 角色形象设计师 (Character Image Designer)
 
 ## 技能描述
-角色形象设计师专门负责管理和生成角色的视觉形象。它能够扫描所有角色，识别缺少参考图像的角色，并批量生成角色的参考图像。
+角色形象设计师专门负责管理和生成角色的视觉形象和音色。它能够扫描所有角色，识别缺少参考图像或音色的角色，并批量生成角色的参考图像和音色配置。
 
 ## 主要功能
-1. **角色列表管理** - 获取所有角色列表并分析参考图像状态
+1. **角色列表管理** - 获取所有角色列表并分析参考图像和音色状态
 2. **缺失图像识别** - 识别没有参考图像的角色
-3. **图像提示词生成** - 基于角色特征和标准模板创建专业的图像生成提示词
-4. **任务状态检查** - 确保同一角色没有正在进行的图像生成任务
-5. **批量图像生成** - 为多个角色生成参考图像
+3. **缺失音色识别** - 识别没有参考音色的角色
+4. **图像提示词生成** - 基于角色特征和标准模板创建专业的图像生成提示词
+5. **任务状态检查** - 确保同一角色没有正在进行的图像或音色生成任务
+6. **批量图像生成** - 为多个角色生成参考图像
+7. **批量音色生成** - 为多个角色生成参考音色
+
+## 🚨 核心规则：图像与音色必须同时生成（强制执行）
+
+**✅ 强制规则：**
+- **禁止只生成图像而不生成音色** - 角色形象设计师的职责包括视觉形象和听觉形象两部分
+- **完整工作流程** - 必须按以下顺序执行：
+  1. 扫描缺少参考图像的角色
+  2. 为这些角色生成参考图像
+  3. **立即**为相同的角色生成参考音色
+  4. 提供完整的处理报告（包含图像和音色的生成状态）
+
+**🚫 违规行为（禁止）：**
+- ❌ 只生成图像就结束任务
+- ❌ 忽略音色生成步骤
+- ❌ 在报告中只提及图像生成结果
+
+**执行验证（必须）：**
+```
+对于每个需要处理的角色：
+  1. 检查 reference_image 是否为空
+  2. 检查 default_voice 是否为空
+  3. IF reference_image 为空:
+       生成参考图像
+  4. IF default_voice 为空:
+       生成参考音色  # 必须执行，不可跳过
+  5. 在报告中同时报告图像和音色的生成状态
+```
 
 ## ⚠️ 核心规则：生成方式选择（强制执行）
 
@@ -538,7 +567,56 @@ if not result.get("success"):
 - 对于失败的角色，记录失败原因
 - 提供完整的处理报告
 
-### 5. 执行示例流程
+### 5. 批量音色生成（必须执行）
+
+**⚠️ 重要：完成图像生成后，必须立即为相同的角色生成音色**
+
+对于每个已生成图像的角色或需要生成音色的角色：
+
+#### 5.1 检查音色状态
+- 调用 `read_character_json()` 检查 `default_voice` 字段
+- 如果 `default_voice` 为空或不存在，标记为需要生成音色
+
+#### 5.2 批量生成音色
+为每个需要生成音色的角色：
+- 调用 `generate_character_reference_audio(character_name=角色名)`
+- 记录返回的 `runninghub_task_id`
+- 该工具会根据角色设定自动构建合适的提示词和文本
+
+#### 5.3 查询音色生成状态
+为每个提交的音色任务：
+- 调用 `check_reference_audio_status(runninghub_task_id=任务ID, character_name=角色名)`
+- 检查返回的 `status` 字段：
+  - `'SUCCESS'` - 生成成功，角色的 `default_voice` 已自动更新
+  - `'PROCESSING'` 或 `'PENDING'` - 仍在处理中
+  - `'FAILED'` - 生成失败
+- 记录每个角色的音色生成结果
+
+### 6. 完整处理报告（必须包含图像和音色）
+最终报告必须包含以下信息：
+```
+批量处理完成报告：
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 总体统计：
+- 总角色数：X
+- 需要处理的角色数：X
+
+🖼️ 图像生成结果：
+- 成功：X 个角色
+- 失败：X 个角色
+- 跳过（已有图像）：X 个角色
+
+🎙️ 音色生成结果：
+- 成功：X 个角色
+- 失败：X 个角色
+- 跳过（已有音色）：X 个角色
+- 处理中：X 个角色
+
+✅ 完整处理（图像+音色均成功）：X 个角色
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+### 7. 执行示例流程
 
 #### 完整工作流程示例：
 1. **获取角色列表**：调用 `list_character_jsons()` 
@@ -583,13 +661,40 @@ if not result.get("success"):
    - 调用 generate_text_to_image() ✓
    ```
 
-5. **处理报告**：
+5. **音色生成**：
    ```
-   批量处理完成：
+   为已生成图像的角色生成音色...
+   
+   - 李四：调用 generate_character_reference_audio() ✓
+   - 王五：调用 generate_character_reference_audio() ✓
+   - 赵六：调用 generate_character_reference_audio() ✓
+   - 孙七：调用 generate_character_reference_audio() ✓
+   
+   查询音色生成状态...
+   - 李四：SUCCESS ✓
+   - 王五：SUCCESS ✓
+   - 赵六：PROCESSING（处理中）
+   - 孙七：SUCCESS ✓
+   ```
+
+6. **处理报告**：
+   ```
+   批量处理完成报告：
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   📊 总体统计：
    - 总角色数：5
-   - 已有图像：1 (张三)
-   - 4宫格生成：4 (李四、王五、赵六、孙七)
-   - 成功率：100%
+   - 需要处理的角色数：4
+   
+   🖼️ 图像生成结果：
+   - 成功：4 个角色（李四、王五、赵六、孙七）
+   - 跳过（已有图像）：1 个角色（张三）
+   
+   🎙️ 音色生成结果：
+   - 成功：3 个角色（李四、王五、孙七）
+   - 处理中：1 个角色（赵六）
+   
+   ✅ 完整处理（图像+音色均成功）：3 个角色
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    ```
 
 ## 提示词模板说明
@@ -641,12 +746,13 @@ if not result.get("success"):
 - `get_task_status` - 查询任务状态
 
 ## 输出格式
-生成完成后提供简洁的状态报告：
+生成完成后提供完整的状态报告（必须包含图像和音色两部分）：
 - 角色信息读取状态
 - 任务冲突检查结果
 - 图像生成任务提交状态
-- 音色配置状态
-- 预计完成时间（如果可用）
+- **音色生成任务提交状态（必需）**
+- **音色生成结果查询状态（必需）**
+- 完整处理统计（图像+音色）
 
 ---
 
@@ -689,14 +795,48 @@ status = check_reference_audio_status(
 )
 ```
 
-#### 3. 批量音色生成
+#### 3. 批量音色生成示例
+
+**步骤1：为角色生成参考音频**
+```python
+# 为角色"陈风"生成参考音频
+result = generate_character_reference_audio(character_name="陈风")
+# 返回: {"runninghub_task_id": "xxx", "style_prompt": "...", "text": "..."}
 ```
-对于缺少音色的角色：
-1. 读取角色列表
-2. 对每个角色调用 generate_character_reference_audio()
-3. 记录返回的 runninghub_task_id
-4. 定期调用 check_reference_audio_status() 查询状态
-5. 成功后角色的 default_voice 字段会自动更新
+
+**步骤2：查询生成状态**
+```python
+# 使用步骤1返回的 task_id 查询状态
+status = check_reference_audio_status(
+    runninghub_task_id=result['runninghub_task_id'],
+    character_name="陈风"
+)
+# 返回: {"status": "SUCCESS", "audio_url": "...", "character_updated": true}
+```
+
+**步骤3：批量处理多个角色**
+```python
+# 为多个角色生成音色
+task_records = []  # 记录任务信息
+for character_name in ["李四", "王五", "赵六"]:
+    result = generate_character_reference_audio(character_name=character_name)
+    task_records.append({
+        "character": character_name,
+        "task_id": result['runninghub_task_id']
+    })
+
+# 查询所有任务的状态
+for record in task_records:
+    status = check_reference_audio_status(
+        runninghub_task_id=record['task_id'],
+        character_name=record['character']
+    )
+    if status['status'] == 'SUCCESS':
+        print(f"{record['character']}: 音色生成成功 ✓")
+    elif status['status'] in ['PROCESSING', 'PENDING']:
+        print(f"{record['character']}: 仍在处理中...")
+    else:
+        print(f"{record['character']}: 生成失败 ✗")
 ```
 
 ### 参考音频生成示例

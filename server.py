@@ -51,6 +51,7 @@ from config.constant import (
     AI_TOOL_STATUS_PROCESSING,
     AI_TOOL_STATUS_COMPLETED,
     AI_TOOL_STATUS_FAILED,
+    AI_TOOL_STATUS_WAITING_PARAM_PREPARE,
     AI_AUDIO_STATUS_PENDING,
     AI_AUDIO_STATUS_COMPLETED,
     AI_AUDIO_STATUS_FAILED,
@@ -240,8 +241,8 @@ def _get_processed_html(file_path: str) -> bytes:
     # 检查是否启用了缓存失效功能
     if CACHE_BUST_ENABLED:
         # 匹配 <script src="..."> 和 <link ... href="..."> 中引用的 .js 和 .css 文件
-        # 只匹配以 /js/ 或 /css/ 开头的本地引用
-        pattern = r'(<(?:script|link)[^>]*(?:src|href)=")(/(?:js|css)/[^"]+)(")'
+        # 只匹配以 /js/、/css/ 或 /i18n/ 开头的本地引用
+        pattern = r'(<(?:script|link)[^>]*(?:src|href)=")(/(?:js|css|i18n)/[^"]+)(")'
 
         def replace_with_version(match):
             prefix = match.group(1)
@@ -252,6 +253,12 @@ def _get_processed_html(file_path: str) -> bytes:
             return f'{prefix}{path}?v={STATIC_VERSION}{suffix}'
 
         content = re.sub(pattern, replace_with_version, content)
+
+        # 注入版本号到 JS 变量，用于 i18n JSON 等动态 fetch 的缓存失效
+        content = content.replace(
+            "window.__STATIC_VERSION = window.__STATIC_VERSION || '';",
+            f"window.__STATIC_VERSION = window.__STATIC_VERSION || '{STATIC_VERSION}';"
+        )
 
     # 仅在启用 cache_bust 时才缓存处理结果
     if CACHE_BUST_ENABLED:
@@ -1260,6 +1267,12 @@ async def image_edit(
                         task_id=id,
                         status=TASK_STATUS_QUEUED
                     )
+                    # 创建 param_prepare 流水线步骤（如人脸遮盖）
+                    try:
+                        from task.pipeline_processor import PipelineProcessor
+                        PipelineProcessor.create_param_prepare_steps(id, image_edit_type)
+                    except Exception as e:
+                        logger.warning(f"Failed to create param_prepare steps for ai_tool {id}: {e}")
                     project_ids.append(id)
                 except Exception as db_error:
                     logger.error(f"Failed to create database record: {db_error}")
@@ -1376,6 +1389,12 @@ async def text_to_image(
                         task_id=id,
                         status=TASK_STATUS_QUEUED
                     )
+                    # 创建 param_prepare 流水线步骤
+                    try:
+                        from task.pipeline_processor import PipelineProcessor
+                        PipelineProcessor.create_param_prepare_steps(id, text_to_image_type)
+                    except Exception as e:
+                        logger.warning(f"Failed to create param_prepare steps for ai_tool {id}: {e}")
                     project_ids.append(id)
                 except Exception as db_error:
                     logger.error(f"Failed to create database record: {db_error}")
@@ -1691,6 +1710,12 @@ async def ai_app_run(
                         task_id=id,
                         status=TASK_STATUS_QUEUED
                     )
+                    # 创建 param_prepare 流水线步骤
+                    try:
+                        from task.pipeline_processor import PipelineProcessor
+                        PipelineProcessor.create_param_prepare_steps(id, text_to_video_type)
+                    except Exception as e:
+                        logger.warning(f"Failed to create param_prepare steps for ai_tool {id}: {e}")
                     project_ids.append(id)
                 except Exception as db_error:
                     logger.error(f"Failed to create database record: {db_error}")
@@ -1764,11 +1789,15 @@ async def ai_app_run_image(
         logger.info(f"AI app run image request - prompt: {prompt}, task_id: {task_id}, ratio: {ratio}, duration: {duration_seconds}, count: {count}, user_id: {user_id}, image_mode: {image_mode}")
 
         # 解析 @ 引用（如果有 media_references）
+        media_refs_map = {}  # {displayName: fileUrl}
         if media_references:
             try:
                 refs = json.loads(media_references)
                 if isinstance(refs, list):
-                    logger.info(f"Media references: {[r.get('displayName') for r in refs]}")
+                    for r in refs:
+                        if r.get('displayName') and r.get('fileUrl'):
+                            media_refs_map[r['displayName']] = r['fileUrl']
+                    logger.info(f"Media references: {list(media_refs_map.keys())}")
             except (json.JSONDecodeError, TypeError):
                 pass
         
@@ -1823,9 +1852,9 @@ async def ai_app_run_image(
         elif image_mode == 'multi_reference':
             # 多参考图模式：所有图片存入 reference_images
             all_refs = main_image_list + ref_image_list
-            if not all_refs:
+            if not all_refs and not task_config.supports_ref_audio_video:
                 raise HTTPException(status_code=400, detail="多参考图模式需要至少1张参考图")
-            reference_images_json = json.dumps(all_refs)
+            reference_images_json = json.dumps(all_refs) if all_refs else None
             
         elif image_mode == 'first_last_with_ref':
             # 首尾帧+参考图模式
@@ -1933,21 +1962,48 @@ async def ai_app_run_image(
                         # 构建 extra_config，包含 image_mode
                         extra_config_data = {'image_mode': image_mode}
                         extra_config_json = json.dumps(extra_config_data)
-                        
-                        id = AIToolsModel.create(
-                            prompt=prompt,
-                            user_id=user_id,
-                            type=image_to_video_type,
-                            image_path=image_path,
-                            ratio=ratio,
-                            duration=duration_seconds,
-                            transaction_id=transaction_id,
-                            status=AI_TOOL_STATUS_PENDING,
-                            extra_config=extra_config_json,
-                            reference_images=reference_images_json,
-                            audio_path=audio_path,
-                            video_path=video_path
+
+                        # 判断是否需要创建 pipeline steps（Seedance 2.0 + RunningHub 配置）
+                        SEEDANCE_2_0_IDS = {TaskTypeId.SEEDANCE_2_0_FAST_IMAGE_TO_VIDEO, TaskTypeId.SEEDANCE_2_0_IMAGE_TO_VIDEO}
+                        runninghub_api_key = get_dynamic_config_value("runninghub", "api_key", default=None)
+                        need_pipeline_steps = (
+                            image_to_video_type in SEEDANCE_2_0_IDS
+                            and runninghub_api_key
                         )
+                        logger.info(f"Pipeline steps condition check: image_to_video_type={image_to_video_type}, in_SEEDANCE_2_0={image_to_video_type in SEEDANCE_2_0_IDS}, has_api_key={bool(runninghub_api_key)}, need_pipeline_steps={need_pipeline_steps}")
+
+                        if need_pipeline_steps:
+                            # 在同一事务中创建 ai_tools 和 face_mask pipeline steps
+                            id = AIToolsModel.create_with_pipeline_steps(
+                                prompt=prompt,
+                                user_id=user_id,
+                                type=image_to_video_type,
+                                image_path=image_path,
+                                ratio=ratio,
+                                duration=duration_seconds,
+                                transaction_id=transaction_id,
+                                status=AI_TOOL_STATUS_WAITING_PARAM_PREPARE,
+                                extra_config=extra_config_json,
+                                reference_images=reference_images_json,
+                                audio_path=audio_path,
+                                video_path=video_path
+                            )
+                        else:
+                            # 普通创建（无 pipeline steps）
+                            id = AIToolsModel.create(
+                                prompt=prompt,
+                                user_id=user_id,
+                                type=image_to_video_type,
+                                image_path=image_path,
+                                ratio=ratio,
+                                duration=duration_seconds,
+                                transaction_id=transaction_id,
+                                status=AI_TOOL_STATUS_PENDING,
+                                extra_config=extra_config_json,
+                                reference_images=reference_images_json,
+                                audio_path=audio_path,
+                                video_path=video_path
+                            )
                         TasksModel.create(
                             task_type=TASK_TYPE_GENERATE_VIDEO,
                             task_id=id,
@@ -1957,7 +2013,7 @@ async def ai_app_run_image(
                     except Exception as db_error:
                         logger.error(f"Failed to create database record for task {i+1}: {db_error}")
                         # Don't fail the request if database insert fails
-                        
+
             except Exception as task_error:
                 logger.error(f"Task {i+1} failed: {task_error}")
                 continue  # Continue with next task
@@ -3765,7 +3821,13 @@ async def digital_human_generate(
                     task_id=id,
                     status=TASK_STATUS_QUEUED
                 )
-                
+                # 创建 param_prepare 流水线步骤
+                try:
+                    from task.pipeline_processor import PipelineProcessor
+                    PipelineProcessor.create_param_prepare_steps(id, task_type)
+                except Exception as e:
+                    logger.warning(f"Failed to create param_prepare steps for ai_tool {id}: {e}")
+
                 return JSONResponse({
                     "success": True,
                     "project_id": id,
@@ -7903,7 +7965,11 @@ async def export_timeline_draft(
             logger.info(f"使用柱子系统处理时间轴，共 {len(payload.pillars)} 个柱子")
             
             # 按柱子顺序处理
-            sorted_pillars = sorted(payload.pillars, key=lambda p: (p.get('scriptId', 0), p.get('shotNumber', 0)))
+            sorted_pillars = sorted(payload.pillars, key=lambda p: (
+                    0 if p.get('scriptId') is None else 1,
+                    p.get('scriptId') or 0,
+                    p.get('shotNumber') or 0
+                ))
             current_time = 0
             
             for pillar in sorted_pillars:

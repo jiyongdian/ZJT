@@ -231,7 +231,7 @@ class MediaCacheManager:
 
                     # 写入文件
                     with open(file_path, 'wb') as f:
-                        async for chunk in response.content.iter_chunked(8192):
+                        async for chunk in response.content.iter_chunked(65536):
                             f.write(chunk)
 
             # 获取文件大小

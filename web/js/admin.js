@@ -26,8 +26,8 @@ const PROVIDER_DEFINITIONS = [
     // ===== 大模型服务商 =====
     {
         id: 'huoshan',
-        name: '火山引擎',
-        description: '火山引擎 Doubao 大模型，高性能、低延迟',
+        nameKey: 'provider_huoshan_name',
+        descKey: 'provider_huoshan_desc',
         category: 'llm',
         icon: '🔥',
         docUrl: 'https://console.volcengine.com/ark',
@@ -35,17 +35,17 @@ const PROVIDER_DEFINITIONS = [
         displayOrder: 4,
         baseName: 'huoshan',
         isOfficialAPI: false,
-        impacts: ['剧本创作', 'AI对话'],
+        impactsKey: 'provider_huoshan_impacts',
         fields: [
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true, helpText: '从火山引擎控制台获取' }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true, helpTextKey: 'field_api_key_help_volcengine' }
         ],
         configKeyMap: { api_key: 'volcengine.api_key' },
         testEndpoint: null
     },
     {
         id: 'ywapi',
-        name: '智剧通API',
-        description: '智剧通API 官方平台，支持多种模型和服务',
+        nameKey: 'provider_ywapi_name',
+        descKey: 'provider_ywapi_desc',
         category: 'llm',
         icon: '☁️',
         docUrl: 'https://yw.perseids.cn/register?aff=hE0h',
@@ -53,20 +53,20 @@ const PROVIDER_DEFINITIONS = [
         displayOrder: 1,
         baseName: 'ywapi',
         isOfficialAPI: true,
-        showInCategories: ['llm', 'image', 'video'],  // 在所有三个分类中显示
-        impacts: ['剧本创作', 'AI对话', 'Nano Banana图片编辑', '生视频模型'],
+        showInCategories: ['llm', 'image', 'video'],
+        impactsKey: 'provider_ywapi_impacts',
         fields: [
-            { id: 'name', label: '站点名称', type: 'text', placeholder: '智剧通API', required: false, readOnly: true, defaultValue: '智剧通API' },
+            { id: 'name', labelKey: 'field_ywapi_name_label', type: 'text', placeholderKey: 'field_ywapi_name_placeholder', required: false, readOnly: true, defaultValue: '智剧通API' },
             { id: 'base_url', label: 'Base URL', type: 'text', placeholder: 'https://yw.perseids.cn', required: true, readOnly: true, defaultValue: 'https://yw.perseids.cn' },
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true }
         ],
         configKeyMap: { name: 'api_aggregator.site_0.name', base_url: 'api_aggregator.site_0.base_url', api_key: 'api_aggregator.site_0.api_key' },
         testEndpoint: null
     },
     {
         id: 'google',
-        name: 'Google/Gemini',
-        description: 'Google Gemini 大模型，支持多种 AI 能力',
+        nameKey: 'provider_google_name',
+        descKey: 'provider_google_desc',
         category: 'llm',
         icon: '✨',
         docUrl: 'https://jiekou.ai/user/register?invited_code=119T5V',
@@ -74,18 +74,18 @@ const PROVIDER_DEFINITIONS = [
         displayOrder: 5,
         baseName: 'google',
         isOfficialAPI: false,
-        impacts: ['剧本创作', 'AI对话', '剧本拆分'],
+        impactsKey: 'provider_google_impacts',
         fields: [
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 Google API Key', required: true, helpText: '支持第三方代理服务' },
-            { id: 'base_url', label: 'Base URL (可选)', type: 'url', placeholder: 'https://api.jiekou.ai', required: false, helpText: '可使用第三方代理服务，留空使用默认值' }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder_google', required: true, helpTextKey: 'field_api_key_help_third_party' },
+            { id: 'base_url', labelKey: 'field_base_url_label_optional', type: 'url', placeholder: 'https://api.jiekou.ai', required: false, helpTextKey: 'field_base_url_placeholder' }
         ],
         configKeyMap: { api_key: 'llm.google.api_key', base_url: 'llm.google.gemini_base_url' },
         testEndpoint: 'google'
     },
     {
         id: 'claude',
-        name: 'Claude',
-        description: 'Anthropic Claude 大模型，擅长长文本推理与创作',
+        nameKey: 'provider_claude_name',
+        descKey: 'provider_claude_desc',
         category: 'llm',
         icon: '🟣',
         docUrl: 'https://jiekou.ai/user/register?invited_code=119T5V',
@@ -93,18 +93,18 @@ const PROVIDER_DEFINITIONS = [
         displayOrder: 6,
         baseName: 'claude',
         isOfficialAPI: false,
-        impacts: ['剧本创作', 'AI对话', '剧本拆分'],
+        impactsKey: 'provider_claude_impacts',
         fields: [
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 Claude API Key', required: true, helpText: '支持第三方代理服务' },
-            { id: 'base_url', label: 'Base URL (可选)', type: 'url', placeholder: 'https://api.jiekou.ai/openai', required: false, helpText: '可使用第三方代理服务，留空使用默认值' }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder_claude', required: true, helpTextKey: 'field_api_key_help_third_party' },
+            { id: 'base_url', labelKey: 'field_base_url_label_optional', type: 'url', placeholder: 'https://api.jiekou.ai/openai', required: false, helpTextKey: 'field_base_url_placeholder' }
         ],
         configKeyMap: { api_key: 'llm.claude.api_key', base_url: 'llm.claude.base_url' },
         testEndpoint: null
     },
     {
         id: 'qwen',
-        name: 'Qwen',
-        description: '通义千问大模型，阿里云百炼平台',
+        nameKey: 'provider_qwen_name',
+        descKey: 'provider_qwen_desc',
         category: 'llm',
         icon: '🧠',
         docUrl: 'https://dashscope.console.aliyun.com/apiKey',
@@ -112,18 +112,18 @@ const PROVIDER_DEFINITIONS = [
         displayOrder: 3,
         baseName: 'qwen',
         isOfficialAPI: false,
-        impacts: ['剧本创作', 'AI对话', '剧本拆分'],
+        impactsKey: 'provider_qwen_impacts',
         fields: [
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 Qwen API Key', required: true },
-            { id: 'base_url', label: 'Base URL (可选)', type: 'url', placeholder: 'https://dashscope.aliyuncs.com/compatible-mode/v1', required: false, helpText: '可使用第三方代理服务，留空使用默认值' }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder_qwen', required: true },
+            { id: 'base_url', labelKey: 'field_base_url_label_optional', type: 'url', placeholder: 'https://dashscope.aliyuncs.com/compatible-mode/v1', required: false, helpTextKey: 'field_base_url_placeholder' }
         ],
         configKeyMap: { api_key: 'llm.qwen.api_key', base_url: 'llm.qwen.base_url' },
         testEndpoint: 'qwen'
     },
     {
         id: 'deepseek',
-        name: 'DeepSeek',
-        description: 'DeepSeek 大模型，高性价比推理与创作',
+        nameKey: 'provider_deepseek_name',
+        descKey: 'provider_deepseek_desc',
         category: 'llm',
         icon: '🔍',
         docUrl: 'https://platform.deepseek.com/api_keys',
@@ -131,10 +131,10 @@ const PROVIDER_DEFINITIONS = [
         displayOrder: 2,
         baseName: 'deepseek',
         isOfficialAPI: false,
-        impacts: ['剧本创作', 'AI对话', '剧本拆分'],
+        impactsKey: 'provider_deepseek_impacts',
         fields: [
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 DeepSeek API Key', required: true },
-            { id: 'base_url', label: 'Base URL (可选)', type: 'url', placeholder: 'https://api.deepseek.com', required: false, helpText: '可使用第三方代理服务，留空使用默认值' }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder_deepseek', required: true },
+            { id: 'base_url', labelKey: 'field_base_url_label_optional', type: 'url', placeholder: 'https://api.deepseek.com', required: false, helpTextKey: 'field_base_url_placeholder' }
         ],
         configKeyMap: { api_key: 'llm.deepseek.api_key', base_url: 'llm.deepseek.base_url' },
         testEndpoint: null
@@ -143,8 +143,8 @@ const PROVIDER_DEFINITIONS = [
     // ===== 生图服务商 =====
     {
         id: 'duomi',
-        name: '多米',
-        description: '多米 AI 生图平台，高质量图像生成',
+        nameKey: 'provider_duomi_name',
+        descKey: 'provider_duomi_image_desc',
         category: 'image',
         icon: '🎨',
         docUrl: 'https://duomiapi.com/user/register?cps=U4GgW1Fx',
@@ -152,17 +152,17 @@ const PROVIDER_DEFINITIONS = [
         displayOrder: 4,
         baseName: 'duomi',
         isOfficialAPI: false,
-        impacts: ['Nano Banana图片编辑', 'Sora2/Kling/Veo3视频生成'],
+        impactsKey: 'provider_duomi_image_impacts',
         fields: [
-            { id: 'token', label: 'Token', type: 'text', placeholder: '请输入 Duomi API Token', required: true, helpText: '获取方式：快速注册' }
+            { id: 'token', label: 'Token', type: 'text', placeholderKey: 'field_token_placeholder_duomi', required: true, helpTextKey: 'field_token_help_quick_register' }
         ],
         configKeyMap: { token: 'duomi.token' },
         testEndpoint: null
     },
     {
         id: 'huoshan_image',
-        name: '火山引擎',
-        description: '火山引擎 AI 生图，支持文生图、图生图',
+        nameKey: 'provider_huoshan_name',
+        descKey: 'provider_huoshan_image_desc',
         category: 'image',
         icon: '🔥',
         docUrl: 'https://console.volcengine.com/ark',
@@ -170,48 +170,72 @@ const PROVIDER_DEFINITIONS = [
         displayOrder: 1,
         baseName: 'huoshan',
         isOfficialAPI: false,
-        impacts: ['Seedream 5.0 文生图'],
+        impactsKey: 'provider_huoshan_image_impacts',
         fields: [
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true, helpText: '从火山引擎控制台获取' }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true, helpTextKey: 'field_api_key_help_volcengine' }
         ],
         configKeyMap: { api_key: 'volcengine.api_key' },
         testEndpoint: null,
         _sharedWith: 'huoshan'
     },
     {
+        id: 'huoshan_oversea_image',
+        nameKey: 'provider_huoshan_oversea_name',
+        descKey: 'provider_huoshan_oversea_image_desc',
+        category: 'image',
+        icon: '🌍',
+        docUrl: 'https://console.volcengine.com/ark',
+        lazyRecommended: false,
+        displayOrder: 2,
+        baseName: 'huoshan_oversea',
+        isOfficialAPI: false,
+        impactsKey: 'provider_huoshan_oversea_image_impacts',
+        fields: [
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true },
+            { id: 'base_url', label: 'Base URL', type: 'url', placeholder: 'https://ark.ap-southeast.bytepluses.com', required: false }
+        ],
+        configKeyMap: { api_key: 'volcengine_oversea.api_key', base_url: 'volcengine_oversea.base_url' },
+        testEndpoint: null,
+        _sharedWith: 'huoshan_oversea'
+    },
+    {
         id: 'site_1_image',
-        name: '聚合站 1',
-        description: 'API 聚合站点 1，支持多种生图模型',
+        nameKey: 'provider_site_name',
+        nameKeyParams: { n: 1 },
+        descKey: 'provider_site_image_desc',
+        descKeyParams: { n: 1 },
         category: 'image',
         icon: '🔗',
         lazyRecommended: false,
         displayOrder: 10,
         baseName: 'site_1',
         isOfficialAPI: false,
-        impacts: ['生图模型'],
+        impactsKey: 'provider_site_image_impacts',
         fields: [
-            { id: 'name', label: '站点名称', type: 'text', placeholder: '如：聚合站1', required: false, helpText: '用于标识该聚合站点' },
+            { id: 'name', labelKey: 'field_site_name_label', type: 'text', placeholderKey: 'field_site_name_placeholder', placeholderParams: { n: 1 }, required: false, helpTextKey: 'field_site_name_help' },
             { id: 'base_url', label: 'Base URL', type: 'url', placeholder: 'https://api.example.com', required: true },
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true }
         ],
         configKeyMap: { name: 'api_aggregator.site_1.name', base_url: 'api_aggregator.site_1.base_url', api_key: 'api_aggregator.site_1.api_key' },
         testEndpoint: null
     },
     {
         id: 'site_2_image',
-        name: '聚合站 2',
-        description: 'API 聚合站点 2，支持多种生图模型',
+        nameKey: 'provider_site_name',
+        nameKeyParams: { n: 2 },
+        descKey: 'provider_site_image_desc',
+        descKeyParams: { n: 2 },
         category: 'image',
         icon: '🔗',
         lazyRecommended: false,
         displayOrder: 11,
         baseName: 'site_2',
         isOfficialAPI: false,
-        impacts: ['生图模型'],
+        impactsKey: 'provider_site_image_impacts',
         fields: [
-            { id: 'name', label: '站点名称', type: 'text', placeholder: '如：聚合站2', required: false, helpText: '用于标识该聚合站点' },
+            { id: 'name', labelKey: 'field_site_name_label', type: 'text', placeholderKey: 'field_site_name_placeholder', placeholderParams: { n: 2 }, required: false, helpTextKey: 'field_site_name_help' },
             { id: 'base_url', label: 'Base URL', type: 'url', placeholder: 'https://api.example.com', required: true },
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true }
         ],
         configKeyMap: { name: 'api_aggregator.site_2.name', base_url: 'api_aggregator.site_2.base_url', api_key: 'api_aggregator.site_2.api_key' },
         testEndpoint: null,
@@ -219,19 +243,21 @@ const PROVIDER_DEFINITIONS = [
     },
     {
         id: 'site_3_image',
-        name: '聚合站 3',
-        description: 'API 聚合站点 3，支持多种生图模型',
+        nameKey: 'provider_site_name',
+        nameKeyParams: { n: 3 },
+        descKey: 'provider_site_image_desc',
+        descKeyParams: { n: 3 },
         category: 'image',
         icon: '🔗',
         lazyRecommended: false,
         displayOrder: 12,
         baseName: 'site_3',
         isOfficialAPI: false,
-        impacts: ['生图模型'],
+        impactsKey: 'provider_site_image_impacts',
         fields: [
-            { id: 'name', label: '站点名称', type: 'text', placeholder: '如：聚合站3', required: false, helpText: '用于标识该聚合站点' },
+            { id: 'name', labelKey: 'field_site_name_label', type: 'text', placeholderKey: 'field_site_name_placeholder', placeholderParams: { n: 3 }, required: false, helpTextKey: 'field_site_name_help' },
             { id: 'base_url', label: 'Base URL', type: 'url', placeholder: 'https://api.example.com', required: true },
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true }
         ],
         configKeyMap: { name: 'api_aggregator.site_3.name', base_url: 'api_aggregator.site_3.base_url', api_key: 'api_aggregator.site_3.api_key' },
         testEndpoint: null,
@@ -239,19 +265,21 @@ const PROVIDER_DEFINITIONS = [
     },
     {
         id: 'site_4_image',
-        name: '聚合站 4',
-        description: 'API 聚合站点 4，支持多种生图模型',
+        nameKey: 'provider_site_name',
+        nameKeyParams: { n: 4 },
+        descKey: 'provider_site_image_desc',
+        descKeyParams: { n: 4 },
         category: 'image',
         icon: '🔗',
         lazyRecommended: false,
         displayOrder: 13,
         baseName: 'site_4',
         isOfficialAPI: false,
-        impacts: ['生图模型'],
+        impactsKey: 'provider_site_image_impacts',
         fields: [
-            { id: 'name', label: '站点名称', type: 'text', placeholder: '如：聚合站4', required: false, helpText: '用于标识该聚合站点' },
+            { id: 'name', labelKey: 'field_site_name_label', type: 'text', placeholderKey: 'field_site_name_placeholder', placeholderParams: { n: 4 }, required: false, helpTextKey: 'field_site_name_help' },
             { id: 'base_url', label: 'Base URL', type: 'url', placeholder: 'https://api.example.com', required: true },
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true }
         ],
         configKeyMap: { name: 'api_aggregator.site_4.name', base_url: 'api_aggregator.site_4.base_url', api_key: 'api_aggregator.site_4.api_key' },
         testEndpoint: null,
@@ -259,19 +287,21 @@ const PROVIDER_DEFINITIONS = [
     },
     {
         id: 'site_5_image',
-        name: '聚合站 5',
-        description: 'API 聚合站点 5，支持多种生图模型',
+        nameKey: 'provider_site_name',
+        nameKeyParams: { n: 5 },
+        descKey: 'provider_site_image_desc',
+        descKeyParams: { n: 5 },
         category: 'image',
         icon: '🔗',
         lazyRecommended: false,
         displayOrder: 14,
         baseName: 'site_5',
         isOfficialAPI: false,
-        impacts: ['生图模型'],
+        impactsKey: 'provider_site_image_impacts',
         fields: [
-            { id: 'name', label: '站点名称', type: 'text', placeholder: '如：聚合站5', required: false, helpText: '用于标识该聚合站点' },
+            { id: 'name', labelKey: 'field_site_name_label', type: 'text', placeholderKey: 'field_site_name_placeholder', placeholderParams: { n: 5 }, required: false, helpTextKey: 'field_site_name_help' },
             { id: 'base_url', label: 'Base URL', type: 'url', placeholder: 'https://api.example.com', required: true },
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true }
         ],
         configKeyMap: { name: 'api_aggregator.site_5.name', base_url: 'api_aggregator.site_5.base_url', api_key: 'api_aggregator.site_5.api_key' },
         testEndpoint: null,
@@ -281,8 +311,8 @@ const PROVIDER_DEFINITIONS = [
     // ===== 生视频服务商 =====
     {
         id: 'duomi_video',
-        name: '多米',
-        description: '多米 AI 生视频平台',
+        nameKey: 'provider_duomi_name',
+        descKey: 'provider_duomi_video_desc',
         category: 'video',
         icon: '🎨',
         docUrl: 'https://duomiapi.com/user/register?cps=U4GgW1Fx',
@@ -290,9 +320,9 @@ const PROVIDER_DEFINITIONS = [
         displayOrder: 1,
         baseName: 'duomi',
         isOfficialAPI: false,
-        impacts: ['Sora2/Kling/Veo3视频生成'],
+        impactsKey: 'provider_duomi_video_impacts',
         fields: [
-            { id: 'token', label: 'Token', type: 'text', placeholder: '请输入 Duomi API Token', required: true }
+            { id: 'token', label: 'Token', type: 'text', placeholderKey: 'field_token_placeholder_duomi', required: true }
         ],
         configKeyMap: { token: 'duomi.token' },
         testEndpoint: null,
@@ -300,8 +330,8 @@ const PROVIDER_DEFINITIONS = [
     },
     {
         id: 'runninghub',
-        name: 'RunningHub',
-        description: 'RunningHub AI 生视频服务',
+        nameKey: 'provider_runninghub_name',
+        descKey: 'provider_runninghub_desc',
         category: 'video',
         icon: '🚀',
         docUrl: 'https://www.runninghub.cn/?inviteCode=quacwnzc',
@@ -309,17 +339,17 @@ const PROVIDER_DEFINITIONS = [
         displayOrder: 2,
         baseName: 'runninghub',
         isOfficialAPI: false,
-        impacts: ['LTX2.0视频', 'Wan2.2视频', '数字人合成', '相机多角度控制'],
+        impactsKey: 'provider_runninghub_impacts',
         fields: [
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '请输入 RunningHub API Key', required: true, helpText: '获取方式：快速注册' }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder_runninghub', required: true, helpTextKey: 'field_token_help_quick_register' }
         ],
         configKeyMap: { api_key: 'runninghub.api_key' },
         testEndpoint: null
     },
     {
         id: 'huoshan_video',
-        name: '火山引擎',
-        description: '火山引擎 AI 生视频，支持文生视频',
+        nameKey: 'provider_huoshan_name',
+        descKey: 'provider_huoshan_video_desc',
         category: 'video',
         icon: '🔥',
         docUrl: 'https://console.volcengine.com/ark',
@@ -327,48 +357,72 @@ const PROVIDER_DEFINITIONS = [
         displayOrder: 4,
         baseName: 'huoshan',
         isOfficialAPI: false,
-        impacts: ['Seedance 1.5 2.0 视频'],
+        impactsKey: 'provider_huoshan_video_impacts',
         fields: [
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true, helpText: '从火山引擎控制台获取' }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true, helpTextKey: 'field_api_key_help_volcengine' }
         ],
         configKeyMap: { api_key: 'volcengine.api_key' },
         testEndpoint: null,
         _sharedWith: 'huoshan'
     },
     {
+        id: 'huoshan_oversea_video',
+        nameKey: 'provider_huoshan_oversea_name',
+        descKey: 'provider_huoshan_oversea_video_desc',
+        category: 'video',
+        icon: '🌍',
+        docUrl: 'https://console.volcengine.com/ark',
+        lazyRecommended: false,
+        displayOrder: 5,
+        baseName: 'huoshan_oversea',
+        isOfficialAPI: false,
+        impactsKey: 'provider_huoshan_oversea_video_impacts',
+        fields: [
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true },
+            { id: 'base_url', label: 'Base URL', type: 'url', placeholder: 'https://ark.ap-southeast.bytepluses.com', required: false }
+        ],
+        configKeyMap: { api_key: 'volcengine_oversea.api_key', base_url: 'volcengine_oversea.base_url' },
+        testEndpoint: null,
+        _sharedWith: 'huoshan_oversea'
+    },
+    {
         id: 'site_1_video',
-        name: '聚合站 1',
-        description: 'API 聚合站点 1，支持多种生视频模型',
+        nameKey: 'provider_site_name',
+        nameKeyParams: { n: 1 },
+        descKey: 'provider_site_video_desc',
+        descKeyParams: { n: 1 },
         category: 'video',
         icon: '🔗',
         lazyRecommended: false,
         displayOrder: 10,
         baseName: 'site_1',
         isOfficialAPI: false,
-        impacts: ['生视频模型'],
+        impactsKey: 'provider_site_video_impacts',
         fields: [
-            { id: 'name', label: '站点名称', type: 'text', placeholder: '如：聚合站1', required: false, helpText: '用于标识该聚合站点' },
+            { id: 'name', labelKey: 'field_site_name_label', type: 'text', placeholderKey: 'field_site_name_placeholder', placeholderParams: { n: 1 }, required: false, helpTextKey: 'field_site_name_help' },
             { id: 'base_url', label: 'Base URL', type: 'url', placeholder: 'https://api.example.com', required: true },
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true }
         ],
         configKeyMap: { name: 'api_aggregator.site_1.name', base_url: 'api_aggregator.site_1.base_url', api_key: 'api_aggregator.site_1.api_key' },
         testEndpoint: null
     },
     {
         id: 'site_2_video',
-        name: '聚合站 2',
-        description: 'API 聚合站点 2，支持多种生视频模型',
+        nameKey: 'provider_site_name',
+        nameKeyParams: { n: 2 },
+        descKey: 'provider_site_video_desc',
+        descKeyParams: { n: 2 },
         category: 'video',
         icon: '🔗',
         lazyRecommended: false,
         displayOrder: 11,
         baseName: 'site_2',
         isOfficialAPI: false,
-        impacts: ['生视频模型'],
+        impactsKey: 'provider_site_video_impacts',
         fields: [
-            { id: 'name', label: '站点名称', type: 'text', placeholder: '如：聚合站2', required: false, helpText: '用于标识该聚合站点' },
+            { id: 'name', labelKey: 'field_site_name_label', type: 'text', placeholderKey: 'field_site_name_placeholder', placeholderParams: { n: 2 }, required: false, helpTextKey: 'field_site_name_help' },
             { id: 'base_url', label: 'Base URL', type: 'url', placeholder: 'https://api.example.com', required: true },
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true }
         ],
         configKeyMap: { name: 'api_aggregator.site_2.name', base_url: 'api_aggregator.site_2.base_url', api_key: 'api_aggregator.site_2.api_key' },
         testEndpoint: null,
@@ -376,19 +430,21 @@ const PROVIDER_DEFINITIONS = [
     },
     {
         id: 'site_3_video',
-        name: '聚合站 3',
-        description: 'API 聚合站点 3，支持多种生视频模型',
+        nameKey: 'provider_site_name',
+        nameKeyParams: { n: 3 },
+        descKey: 'provider_site_video_desc',
+        descKeyParams: { n: 3 },
         category: 'video',
         icon: '🔗',
         lazyRecommended: false,
         displayOrder: 12,
         baseName: 'site_3',
         isOfficialAPI: false,
-        impacts: ['生视频模型'],
+        impactsKey: 'provider_site_video_impacts',
         fields: [
-            { id: 'name', label: '站点名称', type: 'text', placeholder: '如：聚合站3', required: false, helpText: '用于标识该聚合站点' },
+            { id: 'name', labelKey: 'field_site_name_label', type: 'text', placeholderKey: 'field_site_name_placeholder', placeholderParams: { n: 3 }, required: false, helpTextKey: 'field_site_name_help' },
             { id: 'base_url', label: 'Base URL', type: 'url', placeholder: 'https://api.example.com', required: true },
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true }
         ],
         configKeyMap: { name: 'api_aggregator.site_3.name', base_url: 'api_aggregator.site_3.base_url', api_key: 'api_aggregator.site_3.api_key' },
         testEndpoint: null,
@@ -396,19 +452,21 @@ const PROVIDER_DEFINITIONS = [
     },
     {
         id: 'site_4_video',
-        name: '聚合站 4',
-        description: 'API 聚合站点 4，支持多种生视频模型',
+        nameKey: 'provider_site_name',
+        nameKeyParams: { n: 4 },
+        descKey: 'provider_site_video_desc',
+        descKeyParams: { n: 4 },
         category: 'video',
         icon: '🔗',
         lazyRecommended: false,
         displayOrder: 13,
         baseName: 'site_4',
         isOfficialAPI: false,
-        impacts: ['生视频模型'],
+        impactsKey: 'provider_site_video_impacts',
         fields: [
-            { id: 'name', label: '站点名称', type: 'text', placeholder: '如：聚合站4', required: false, helpText: '用于标识该聚合站点' },
+            { id: 'name', labelKey: 'field_site_name_label', type: 'text', placeholderKey: 'field_site_name_placeholder', placeholderParams: { n: 4 }, required: false, helpTextKey: 'field_site_name_help' },
             { id: 'base_url', label: 'Base URL', type: 'url', placeholder: 'https://api.example.com', required: true },
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true }
         ],
         configKeyMap: { name: 'api_aggregator.site_4.name', base_url: 'api_aggregator.site_4.base_url', api_key: 'api_aggregator.site_4.api_key' },
         testEndpoint: null,
@@ -416,19 +474,21 @@ const PROVIDER_DEFINITIONS = [
     },
     {
         id: 'site_5_video',
-        name: '聚合站 5',
-        description: 'API 聚合站点 5，支持多种生视频模型',
+        nameKey: 'provider_site_name',
+        nameKeyParams: { n: 5 },
+        descKey: 'provider_site_video_desc',
+        descKeyParams: { n: 5 },
         category: 'video',
         icon: '🔗',
         lazyRecommended: false,
         displayOrder: 14,
         baseName: 'site_5',
         isOfficialAPI: false,
-        impacts: ['生视频模型'],
+        impactsKey: 'provider_site_video_impacts',
         fields: [
-            { id: 'name', label: '站点名称', type: 'text', placeholder: '如：聚合站5', required: false, helpText: '用于标识该聚合站点' },
+            { id: 'name', labelKey: 'field_site_name_label', type: 'text', placeholderKey: 'field_site_name_placeholder', placeholderParams: { n: 5 }, required: false, helpTextKey: 'field_site_name_help' },
             { id: 'base_url', label: 'Base URL', type: 'url', placeholder: 'https://api.example.com', required: true },
-            { id: 'api_key', label: 'API Key', type: 'text', placeholder: '输入您的 API Key', required: true }
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true }
         ],
         configKeyMap: { name: 'api_aggregator.site_5.name', base_url: 'api_aggregator.site_5.base_url', api_key: 'api_aggregator.site_5.api_key' },
         testEndpoint: null,
@@ -438,8 +498,8 @@ const PROVIDER_DEFINITIONS = [
     // ===== 其他推荐服务 =====
     {
         id: 'vidu',
-        name: 'Vidu',
-        description: 'Vidu 视频生成平台',
+        nameKey: 'provider_vidu_name',
+        descKey: 'provider_vidu_desc',
         category: 'other',
         icon: '🎬',
         docUrl: 'https://platform.vidu.cn/api-keys',
@@ -447,14 +507,29 @@ const PROVIDER_DEFINITIONS = [
         displayOrder: 1,
         baseName: 'vidu',
         isOfficialAPI: false,
-        impacts: ['Vidu视频生成'],
+        impactsKey: 'provider_vidu_impacts',
         fields: [
-            { id: 'token', label: 'Token', type: 'text', placeholder: '请输入 Vidu API Token', required: true, helpText: '获取方式：快速注册' }
+            { id: 'token', label: 'Token', type: 'text', placeholderKey: 'field_token_placeholder_vidu', required: true, helpTextKey: 'field_token_help_quick_register' }
         ],
         configKeyMap: { token: 'vidu.token' },
         testEndpoint: null
     }
 ];
+
+// 翻译 provider 定义中的 i18n key
+function translateProvider(p, tFn) {
+    const translated = { ...p };
+    translated.name = p.nameKey ? tFn(p.nameKey, p.nameKeyParams || {}) : (p.name || '');
+    translated.description = p.descKey ? tFn(p.descKey, p.descKeyParams || {}) : (p.description || '');
+    translated.impacts = p.impactsKey ? tFn(p.impactsKey).split(',').map(s => s.trim()) : (p.impacts || []);
+    translated.fields = p.fields.map(f => ({
+        ...f,
+        label: f.labelKey ? tFn(f.labelKey) : (f.label || ''),
+        placeholder: f.placeholderKey ? tFn(f.placeholderKey, f.placeholderParams || {}) : (f.placeholder || ''),
+        helpText: f.helpTextKey ? tFn(f.helpTextKey) : (f.helpText || '')
+    }));
+    return translated;
+}
 
 // 构建 configKey -> { providerId, fieldId } 的反向映射
 const CONFIG_KEY_TO_PROVIDER_FIELD = {};
@@ -473,6 +548,9 @@ const AdminApp = {
 
             // 版本号
             appVersion: '',
+
+            // i18n locale (reactive for computed properties)
+            locale: localStorage.getItem('zjt_locale') || 'zh-CN',
 
             // 当前页面
             currentPage: 'dashboard',
@@ -709,9 +787,9 @@ const AdminApp = {
             const result = {};
             Object.keys(CATEGORY_LABELS).forEach(cat => {
                 // 支持 showInCategories 属性，让一个 provider 可以在多个分类中显示
-                result[cat] = sortByOrder(PROVIDER_DEFINITIONS.filter(p => 
+                result[cat] = sortByOrder(PROVIDER_DEFINITIONS.filter(p =>
                     p.category === cat || (p.showInCategories && p.showInCategories.includes(cat))
-                ));
+                ).map(p => translateProvider(p, this.t.bind(this))));
             });
             return result;
         },
@@ -721,6 +799,8 @@ const AdminApp = {
         },
 
         selectedProvidersDetail() {
+            // 依赖 locale 使其在语言切换时响应式更新
+            const _ = this.locale;
             // 按 baseName 分组，合并同组的字段和配置
             const groups = {};
             const fieldIds = {};
@@ -734,7 +814,7 @@ const AdminApp = {
                 if (!groups[base]) {
                     groups[base] = { ...p, fields: [...p.fields], configKeyMap: { ...p.configKeyMap } };
                     fieldIds[base] = new Set(p.fields.map(f => f.id));
-                    impactSets[base] = new Set(p.impacts || []);
+                    impactSets[base] = new Set(p.impactsKey ? this.t(p.impactsKey).split(',').map(s => s.trim()) : (p.impacts || []));
                 } else {
                     // 合并字段（按 field.id 去重）
                     p.fields.forEach(field => {
@@ -745,12 +825,15 @@ const AdminApp = {
                         }
                     });
                     // 合并 impacts
-                    (p.impacts || []).forEach(imp => impactSets[base].add(imp));
+                    const pImpacts = p.impactsKey ? this.t(p.impactsKey).split(',').map(s => s.trim()) : (p.impacts || []);
+                    pImpacts.forEach(imp => impactSets[base].add(imp));
                     groups[base].impacts = [...impactSets[base]];
                 }
             });
 
-            return Object.values(groups).sort((a, b) =>
+            // 翻译并返回
+            const tFn = this.t.bind(this);
+            return Object.values(groups).map(g => translateProvider(g, tFn)).sort((a, b) =>
                 (a.displayOrder || 999) - (b.displayOrder || 999)
             );
         },
@@ -793,18 +876,75 @@ const AdminApp = {
         },
 
         // 暴露常量给模板
-        categoryLabels() { return CATEGORY_LABELS; },
-        categoryDescriptions() { return CATEGORY_DESCRIPTIONS; }
+        categoryLabels() {
+            // 依赖 locale 使其在语言切换时响应式更新
+            const _ = this.locale;
+            return {
+                llm: this.t('category_llm'),
+                image: this.t('category_image'),
+                video: this.t('category_video'),
+                other: this.t('category_other')
+            };
+        },
+        categoryDescriptions() {
+            const _ = this.locale;
+            return {
+                llm: this.t('category_llm_desc'),
+                image: this.t('category_image_desc'),
+                video: this.t('category_video_desc'),
+                other: this.t('category_other_desc')
+            };
+        }
     },
     
     mounted() {
-        this.initAuth();
-        this.fetchServerConfig();
-        this.pollNotifications();
-        this.notificationsPollTimer = setInterval(() => this.pollNotifications(), 30000);
+        this.initI18n().then(() => {
+            this.initAuth();
+            this.fetchServerConfig();
+            this.pollNotifications();
+            this.notificationsPollTimer = setInterval(() => this.pollNotifications(), 30000);
+        });
     },
-    
+
     methods: {
+        // i18n 翻译方法（引用 this.locale 使其响应式）
+        t(key, params = {}) {
+            // this.locale 是响应式依赖，语言切换时会触发模板重新渲染
+            const _ = this.locale;
+            if (window.ZJTi18n) {
+                return window.ZJTi18n.t(key, params) || key;
+            }
+            return key;
+        },
+
+        // 初始化 i18n
+        async initI18n() {
+            if (window.ZJTi18n) {
+                const locale = localStorage.getItem('zjt_locale') || 'zh-CN';
+                await window.ZJTi18n.setLocale(locale, ['admin', 'common']);
+                this.locale = locale;
+
+                // 监听语言变化事件（由切换器触发）
+                window.ZJTi18n.on('locale-changed', (data) => {
+                    this.locale = data.locale || window.ZJTi18n.getLocale();
+                    this.$nextTick(() => {
+                        if (window.ZJTi18nDOM) {
+                            window.ZJTi18nDOM.scanDOM(document.body);
+                        }
+                    });
+                });
+
+                this.$nextTick(() => {
+                    if (window.ZJTi18nDOM) {
+                        window.ZJTi18nDOM.scanDOM(document.body);
+                    }
+                    if (window.ZJTi18nSwitcher) {
+                        window.ZJTi18nSwitcher.render('i18nSwitcher');
+                    }
+                });
+            }
+        },
+
         // 初始化智剧通日期选择器
         initZjtDatePicker() {
             const elem = document.getElementById("zjtExpireDatePicker");
@@ -848,7 +988,7 @@ const AdminApp = {
             this.authToken = localStorage.getItem('auth_token') || '';
             
             if (!this.authToken) {
-                this.showToast('请先登录', 'error');
+                this.showToast(this.t('toast_login_required'), 'error');
                 setTimeout(() => {
                     window.location.href = '/?login=1&redirect_url=/admin';
                 }, 1500);
@@ -891,17 +1031,17 @@ const AdminApp = {
                 console.error('Admin verification failed:', error);
                 const detail = error?.response?.data?.detail || '';
                 if (detail.includes('管理员权限') || error?.response?.status === 403) {
-                    this.showToast('您没有管理员权限', 'error');
+                    this.showToast(this.t('toast_no_admin_permission'), 'error');
                     setTimeout(() => {
                         window.location.href = '/';
                     }, 1500);
                 } else if (error?.response?.status === 401) {
-                    this.showToast('登录已过期，请重新登录', 'error');
+                    this.showToast(this.t('toast_login_expired'), 'error');
                     setTimeout(() => {
                         window.location.href = '/?login=1&redirect_url=/admin';
                     }, 1500);
                 } else {
-                    this.showToast('加载失败: ' + detail, 'error');
+                    this.showToast(this.t('toast_load_failed') + ': ' + detail, 'error');
                 }
             }
         },
@@ -916,7 +1056,7 @@ const AdminApp = {
                 setTimeout(() => {
                     this.openQuickConfigModal();
                     // 显示欢迎提示
-                    this.showToast('🎉 欢迎！您是系统首位管理员，请先完成快速配置', 'success');
+                    this.showToast(this.t('toast_welcome_admin'), 'success');
                 }, 500);
                 // 清除 URL 参数
                 window.history.replaceState({}, document.title, '/admin');
@@ -953,7 +1093,7 @@ const AdminApp = {
                 }
             } catch (error) {
                 console.error('Load dashboard failed:', error);
-                this.showToast('加载仪表盘失败', 'error');
+                this.showToast(this.t('toast_load_dashboard_failed'), 'error');
             } finally {
                 this.dashboard.loading = false;
             }
@@ -977,7 +1117,7 @@ const AdminApp = {
                 }
             } catch (error) {
                 console.error('Load monthly active users failed:', error);
-                this.showToast('查询月活跃用户失败', 'error');
+                this.showToast(this.t('toast_query_monthly_failed'), 'error');
             } finally {
                 this.dashboard.monthlyActiveUsers.loading = false;
             }
@@ -997,7 +1137,7 @@ const AdminApp = {
                 }
             } catch (error) {
                 console.error('Load model analysis failed:', error);
-                this.showToast('加载模型分析失败', 'error');
+                this.showToast(this.t('toast_load_model_failed'), 'error');
             } finally {
                 this.dashboard.modelAnalysis.loading = false;
             }
@@ -1062,7 +1202,7 @@ const AdminApp = {
                 }
             } catch (error) {
                 console.error('Load users failed:', error);
-                this.showToast('加载用户列表失败', 'error');
+                this.showToast(this.t('toast_load_users_failed'), 'error');
             } finally {
                 this.users.loading = false;
             }
@@ -1096,7 +1236,7 @@ const AdminApp = {
                 }
             } catch (error) {
                 console.error('Load user detail failed:', error);
-                this.showToast('加载用户详情失败', 'error');
+                this.showToast(this.t('toast_load_user_detail_failed'), 'error');
                 this.userDetailModal.show = false;
             } finally {
                 this.userDetailModal.loading = false;
@@ -1112,7 +1252,7 @@ const AdminApp = {
         // 更新用户状态
         // 审批用户（允许待审核用户登录）
         async approveUser(userId) {
-            if (!confirm('确定允许该用户登录吗？')) {
+            if (!confirm(this.t('confirm_approve_login'))) {
                 return;
             }
 
@@ -1123,37 +1263,38 @@ const AdminApp = {
                 );
 
                 if (response.data.code === 0) {
-                    this.showToast('已允许登录', 'success');
+                    this.showToast(this.t('toast_login_approved'), 'success');
                     this.loadUsers();
                 }
             } catch (error) {
                 console.error('Approve user failed:', error);
-                const detail = error?.response?.data?.detail || '操作失败';
+                const detail = error?.response?.data?.detail || this.t('error_operation_failed');
                 this.showToast(detail, 'error');
             }
         },
 
         async updateUserStatus(userId, currentStatus) {
             const newStatus = currentStatus === 1 ? 0 : 1;
-            const action = newStatus === 0 ? '禁用' : '启用';
-            
-            if (!confirm(`确定要${action}该用户吗？`)) {
+            const actionKey = newStatus === 0 ? 'btn_disable' : 'btn_enable';
+            const successKey = newStatus === 0 ? 'toast_disable_success' : 'toast_enable_success';
+
+            if (!confirm(this.t('confirm_user_action', { action: this.t(actionKey) }))) {
                 return;
             }
-            
+
             try {
-                const response = await axios.put(`/api/admin/users/${userId}/status`, 
+                const response = await axios.put(`/api/admin/users/${userId}/status`,
                     { status: newStatus },
                     { headers: { 'Authorization': `Bearer ${this.authToken}` } }
                 );
-                
+
                 if (response.data.code === 0) {
-                    this.showToast(`${action}成功`, 'success');
+                    this.showToast(this.t(successKey), 'success');
                     this.loadUsers();
                 }
             } catch (error) {
                 console.error('Update user status failed:', error);
-                const detail = error?.response?.data?.detail || '操作失败';
+                const detail = error?.response?.data?.detail || this.t('error_operation_failed');
                 this.showToast(detail, 'error');
             }
         },
@@ -1161,25 +1302,25 @@ const AdminApp = {
         // 更新用户角色
         async updateUserRole(userId, currentRole) {
             const newRole = currentRole === 'admin' ? 'user' : 'admin';
-            const action = newRole === 'admin' ? '设为管理员' : '取消管理员';
-            
-            if (!confirm(`确定要${action}吗？`)) {
+            const actionKey = newRole === 'admin' ? 'btn_set_admin' : 'btn_set_admin';
+
+            if (!confirm(this.t('confirm_action', { action: this.t(actionKey) }))) {
                 return;
             }
-            
+
             try {
-                const response = await axios.put(`/api/admin/users/${userId}/role`, 
+                const response = await axios.put(`/api/admin/users/${userId}/role`,
                     { role: newRole },
                     { headers: { 'Authorization': `Bearer ${this.authToken}` } }
                 );
-                
+
                 if (response.data.code === 0) {
-                    this.showToast(`${action}成功`, 'success');
+                    this.showToast(this.t('toast_adjust_success'), 'success');
                     this.loadUsers();
                 }
             } catch (error) {
                 console.error('Update user role failed:', error);
-                const detail = error?.response?.data?.detail || '操作失败';
+                const detail = error?.response?.data?.detail || this.t('error_operation_failed');
                 this.showToast(detail, 'error');
             }
         },
@@ -1207,12 +1348,12 @@ const AdminApp = {
         // 提交算力调整
         async submitPowerAdjust() {
             if (!this.powerModal.reason.trim()) {
-                this.showToast('请填写调整原因', 'error');
+                this.showToast(this.t('toast_fill_reason'), 'error');
                 return;
             }
             
             if (this.powerModal.amount === 0) {
-                this.showToast('调整数量不能为0', 'error');
+                this.showToast(this.t('toast_amount_cannot_be_zero'), 'error');
                 return;
             }
             
@@ -1230,13 +1371,13 @@ const AdminApp = {
                 
                 if (response.data.code === 0) {
                     const data = response.data.data;
-                    this.showToast(`算力调整成功: ${data.old_power} → ${data.new_power}`, 'success');
+                    this.showToast(this.t('toast_power_adjusted') + `: ${data.old_power} → ${data.new_power}`, 'success');
                     this.closePowerModal();
                     this.loadUsers();
                 }
             } catch (error) {
                 console.error('Adjust power failed:', error);
-                const detail = error?.response?.data?.detail || '调整失败';
+                const detail = error?.response?.data?.detail || this.t('error_adjust_failed');
                 this.showToast(detail, 'error');
             } finally {
                 this.powerModal.loading = false;
@@ -1246,9 +1387,9 @@ const AdminApp = {
         // 切换用户智剧通Token启用状态
         async toggleZjtToken(user) {
             const newEnabled = !user.zjt_token_enabled;
-            const action = newEnabled ? '启用' : '禁用';
+            const actionKey = newEnabled ? 'btn_enable' : 'btn_disable';
 
-            if (!confirm(`确定要${action}该用户的智剧通Token功能吗？`)) {
+            if (!confirm(this.t('confirm_zjt_token_action', { action: this.t(actionKey) }))) {
                 return;
             }
 
@@ -1271,7 +1412,7 @@ const AdminApp = {
                             { headers: { 'Authorization': `Bearer ${this.authToken}` } }
                         );
                     }
-                    this.showToast(`智剧通Token已${action}，有效期1年`, 'success');
+                    this.showToast(this.t('toast_zjt_token_action', { action: this.t(actionKey) }), 'success');
                     this.loadUsers();
                 }
             } catch (error) {
@@ -1307,13 +1448,13 @@ const AdminApp = {
                         const day = String(date.getDate()).padStart(2, '0');
                         this.zjtExpireModal.newExpireAt = `${year}-${month}-${day}`;
                     } else {
-                        this.zjtExpireModal.currentExpireAtDisplay = '永不过期';
+                        this.zjtExpireModal.currentExpireAtDisplay = this.t('status_expire_never');
                         this.zjtExpireModal.newExpireAt = '';
                     }
                 }
             } catch (error) {
                 console.error('Get ZJT token config failed:', error);
-                this.zjtExpireModal.currentExpireAtDisplay = '未设置';
+                this.zjtExpireModal.currentExpireAtDisplay = this.t('status_not_set');
                 this.zjtExpireModal.newExpireAt = '';
             }
 
@@ -1348,7 +1489,7 @@ const AdminApp = {
 
         // 提交智剧通Token有效期调整
         async submitZjtExpireAdjust() {
-            if (!confirm('确定要调整智剧通Token有效期吗？')) {
+            if (!confirm(this.t('confirm_adjust_zjt_expire'))) {
                 return;
             }
 
@@ -1362,13 +1503,13 @@ const AdminApp = {
                 );
 
                 if (response.data.code === 0) {
-                    this.showToast(response.data.message || '智剧通Token有效期已调整', 'success');
+                    this.showToast(response.data.message || this.t('toast_zjt_expire_adjusted'), 'success');
                     this.closeZjtExpireModal();
                     this.loadUsers();
                 }
             } catch (error) {
                 console.error('Adjust ZJT expire failed:', error);
-                const detail = error?.response?.data?.detail || '保存失败';
+                const detail = error?.response?.data?.detail || this.t('error_save_failed');
                 this.showToast(detail, 'error');
             } finally {
                 this.zjtExpireModal.loading = false;
@@ -1377,7 +1518,7 @@ const AdminApp = {
 
         // 退出登录
         logout() {
-            if (!confirm('确定要退出登录吗？')) {
+            if (!confirm(this.t('confirm_logout'))) {
                 return;
             }
             
@@ -1403,7 +1544,8 @@ const AdminApp = {
         formatDate(dateStr) {
             if (!dateStr) return '-';
             const date = new Date(dateStr);
-            return date.toLocaleString('zh-CN', {
+            const locale = this.locale === 'en' ? 'en-US' : 'zh-CN';
+            return date.toLocaleString(locale, {
                 year: 'numeric',
                 month: '2-digit',
                 day: '2-digit',
@@ -1444,7 +1586,7 @@ const AdminApp = {
                 }
             } catch (error) {
                 console.error('Load configs failed:', error);
-                this.showToast('加载配置列表失败', 'error');
+                this.showToast(this.t('toast_load_config_failed'), 'error');
             } finally {
                 this.config.loading = false;
             }
@@ -1465,7 +1607,7 @@ const AdminApp = {
         
         // 初始化配置
         async initConfigs() {
-            if (!confirm('确定要初始化配置吗？这将从配置文件导入默认配置到数据库（仅新增，不覆盖已存在的配置）')) {
+            if (!confirm(this.t('confirm_init_config'))) {
                 return;
             }
             
@@ -1481,7 +1623,7 @@ const AdminApp = {
                 }
             } catch (error) {
                 console.error('Init configs failed:', error);
-                const detail = error?.response?.data?.detail || '初始化失败';
+                const detail = error?.response?.data?.detail || this.t('error_init_failed');
                 this.showToast(detail, 'error');
             } finally {
                 this.config.initLoading = false;
@@ -1497,11 +1639,11 @@ const AdminApp = {
                 });
                 
                 if (response.data.code === 0) {
-                    this.showToast('配置缓存已刷新', 'success');
+                    this.showToast(this.t('toast_cache_refreshed'), 'success');
                 }
             } catch (error) {
                 console.error('Reload configs failed:', error);
-                const detail = error?.response?.data?.detail || '刷新失败';
+                const detail = error?.response?.data?.detail || this.t('error_refresh_failed');
                 this.showToast(detail, 'error');
             } finally {
                 this.config.reloadLoading = false;
@@ -1550,7 +1692,7 @@ const AdminApp = {
                 }
             } catch (error) {
                 console.error('Load checkin config failed:', error);
-                this.showToast('加载签到配置失败', 'error');
+                this.showToast(this.t('toast_load_checkin_failed'), 'error');
             } finally {
                 this.checkin.loading = false;
             }
@@ -1588,14 +1730,14 @@ const AdminApp = {
                 if (response.data.code === 0) {
                     const errors = response.data.data.errors || [];
                     if (errors.length > 0) {
-                        this.showToast(`部分配置保存失败: ${errors.join(', ')}`, 'error');
+                        this.showToast(this.t('toast_partial_save_failed') + `: ${errors.join(', ')}`, 'error');
                     } else {
-                        this.showToast('签到配置保存成功', 'success');
+                        this.showToast(this.t('toast_checkin_saved'), 'success');
                     }
                 }
             } catch (error) {
                 console.error('Save checkin config failed:', error);
-                const detail = error?.response?.data?.detail || '保存失败';
+                const detail = error?.response?.data?.detail || this.t('error_save_failed');
                 this.showToast(detail, 'error');
             } finally {
                 this.checkin.loading = false;
@@ -1616,7 +1758,7 @@ const AdminApp = {
         openConfigEditModal(item) {
             // 检查是否为社区版本且该配置为商业版专属
             if (this.isCommunityEdition && this.isCommercialOnlyConfig(item.config_key)) {
-                this.showToast('该配置需要商业版本才能修改，请联系管理员升级', 'error');
+                this.showToast(this.t('toast_commercial_only_modify'), 'error');
                 return;
             }
 
@@ -1677,7 +1819,7 @@ const AdminApp = {
                 try {
                     JSON.parse(value);
                 } catch (e) {
-                    this.showToast('JSON格式不正确', 'error');
+                    this.showToast(this.t('toast_json_invalid'), 'error');
                     return;
                 }
             }
@@ -1691,13 +1833,13 @@ const AdminApp = {
                 );
                 
                 if (response.data.code === 0) {
-                    this.showToast('配置更新成功', 'success');
+                    this.showToast(this.t('toast_config_updated'), 'success');
                     this.closeConfigEditModal();
                     this.loadConfigs();
                 }
             } catch (error) {
                 console.error('Update config failed:', error);
-                const detail = error?.response?.data?.detail || '更新失败';
+                const detail = error?.response?.data?.detail || this.t('error_update_failed');
                 this.showToast(detail, 'error');
             } finally {
                 this.configEditModal.loading = false;
@@ -1720,7 +1862,7 @@ const AdminApp = {
                 }
             } catch (error) {
                 console.error('Load config history failed:', error);
-                this.showToast('加载配置历史失败', 'error');
+                this.showToast(this.t('toast_load_history_failed'), 'error');
                 this.configHistoryModal.show = false;
             } finally {
                 this.configHistoryModal.loading = false;
@@ -1757,7 +1899,7 @@ const AdminApp = {
                 }
             } catch (error) {
                 console.error('Failed to get raw config value:', error);
-                this.showToast('获取配置值失败', 'error');
+                this.showToast(this.t('toast_get_config_value_failed'), 'error');
             }
         },
         
@@ -1774,7 +1916,7 @@ const AdminApp = {
             if (input) {
                 input.select();
                 document.execCommand('copy');
-                this.showToast('已复制到剪贴板', 'success');
+                this.showToast(this.t('toast_copied'), 'success');
             }
         },
         
@@ -1874,7 +2016,7 @@ const AdminApp = {
         toggleProviderSelection(providerId) {
             const provider = PROVIDER_DEFINITIONS.find(p => p.id === providerId);
             if (provider && provider.commercialOnly && this.isCommunityEdition) {
-                this.showToast('该配置需要商业版本才能使用，请联系管理员升级', 'error');
+                this.showToast(this.t('toast_commercial_only_use'), 'error');
                 return;
             }
 
@@ -1904,7 +2046,7 @@ const AdminApp = {
             if (!this.quickConfigModal.originalValues['ywapi']) {
                 this.quickConfigModal.originalValues['ywapi'] = {};
             }
-            this.showToast('已自动选择智剧通API', 'success');
+            this.showToast(this.t('toast_auto_selected_zjt'), 'success');
         },
 
         // 移除已选服务商
@@ -1955,7 +2097,7 @@ const AdminApp = {
             const baseUrl = (formData['base_url'] || '').trim().toLowerCase();
             if (baseUrl.includes('ai.comfly.chat')) {
                 if (provider.baseName !== 'site_2') {
-                    this.showToast('ai.comfly.chat 只允许配置在聚合站2中', 'error');
+                    this.showToast(this.t('toast_aggregator_site2_only'), 'error');
                     return;
                 }
             }
@@ -1972,7 +2114,7 @@ const AdminApp = {
             });
 
             if (configs.length === 0) {
-                this.showToast('配置未发生变化', 'success');
+                this.showToast(this.t('toast_config_unchanged'), 'success');
                 return;
             }
 
@@ -1987,7 +2129,7 @@ const AdminApp = {
                 if (response.data.code === 0) {
                     const data = response.data.data;
                     const updatedCount = data.results.filter(r => r.status === 'updated').length;
-                    this.showToast(`${provider.name} 配置已保存 (${updatedCount} 项更新)`, 'success');
+                    this.showToast(this.t('toast_config_saved') + ` (${updatedCount} 项更新)`, 'success');
                     // 更新原始值
                     configs.forEach(c => {
                         const mapping = CONFIG_KEY_TO_PROVIDER_FIELD[c.key];
@@ -2002,7 +2144,7 @@ const AdminApp = {
                 }
             } catch (error) {
                 console.error('Save provider config failed:', error);
-                const detail = error?.response?.data?.detail || '保存失败';
+                const detail = error?.response?.data?.detail || this.t('error_save_failed');
                 this.showToast(detail, 'error');
             } finally {
                 this.quickConfigModal.saveLoading[providerId] = false;
@@ -2045,7 +2187,7 @@ const AdminApp = {
                 }
             } catch (error) {
                 console.error('Test connection failed:', error);
-                const detail = error?.response?.data?.detail || '测试失败';
+                const detail = error?.response?.data?.detail || this.t('error_test_failed');
                 this.quickConfigModal.testResults[providerId] = {
                     success: false,
                     message: detail
@@ -2079,7 +2221,7 @@ const AdminApp = {
             });
 
             if (configs.length === 0) {
-                this.showToast('配置未发生变化', 'success');
+                this.showToast(this.t('toast_config_unchanged'), 'success');
                 this.closeQuickConfigModal();
                 return;
             }
@@ -2098,11 +2240,11 @@ const AdminApp = {
                     const errors = data.errors || [];
 
                     if (errors.length > 0) {
-                        this.showToast(`部分配置更新失败: ${errors.join(', ')}`, 'error');
+                        this.showToast(this.t('toast_partial_update_failed') + `: ${errors.join(', ')}`, 'error');
                     } else if (updatedCount > 0) {
-                        this.showToast(`成功更新 ${updatedCount} 条配置`, 'success');
+                        this.showToast(this.t('toast_success_updated', { count: updatedCount }), 'success');
                     } else {
-                        this.showToast('配置未发生变化', 'success');
+                        this.showToast(this.t('toast_config_unchanged'), 'success');
                     }
 
                     this.closeQuickConfigModal();
@@ -2113,7 +2255,7 @@ const AdminApp = {
                 }
             } catch (error) {
                 console.error('Submit quick config failed:', error);
-                const detail = error?.response?.data?.detail || '保存失败';
+                const detail = error?.response?.data?.detail || this.t('error_save_failed');
                 this.showToast(detail, 'error');
             } finally {
                 this.quickConfigModal.loading = false;
@@ -2122,7 +2264,7 @@ const AdminApp = {
 
         // 显示 jiekou 注册提示（保留兼容）
         showJiekouTip() {
-            const confirmed = confirm('💡 提示：\n\njiekou 注册需要 Google 或 GitHub 账号，但注册即送 $1 代金券！\n\n点击"确定"前往注册页面');
+            const confirmed = confirm(this.t('confirm_jiekou_tip'));
             if (confirmed) {
                 window.open('https://jiekou.ai/user/register?invited_code=119T5V', '_blank');
             }
@@ -2149,7 +2291,7 @@ const AdminApp = {
                 }
             } catch (error) {
                 console.error('Load implementations failed:', error);
-                this.showToast('加载实现方列表失败', 'error');
+                this.showToast(this.t('toast_load_impl_failed'), 'error');
             } finally {
                 this.implementations.loading = false;
             }
@@ -2166,7 +2308,7 @@ const AdminApp = {
         async updateSortOrder(implementation, newSortOrder, group) {
             const sortOrder = parseInt(newSortOrder);
             if (isNaN(sortOrder) || sortOrder < 0) {
-                this.showToast('请输入有效的排序值', 'error');
+                this.showToast(this.t('toast_invalid_sort_value'), 'error');
                 // 恢复原值
                 this.loadImplementations();
                 return;
@@ -2190,14 +2332,14 @@ const AdminApp = {
                     implementation.sort_order = sortOrder;
                     // 重新加载以获取排序后的数据
                     await this.loadImplementations();
-                    this.showToast('排序已更新', 'success');
+                    this.showToast(this.t('toast_sort_updated'), 'success');
                 } else {
-                    this.showToast(response.data.message || '更新失败', 'error');
+                    this.showToast(response.data.message || this.t('error_update_failed'), 'error');
                     this.loadImplementations();
                 }
             } catch (error) {
                 console.error('Update sort order failed:', error);
-                const detail = error?.response?.data?.detail || '更新失败';
+                const detail = error?.response?.data?.detail || this.t('error_update_failed');
                 this.showToast(detail, 'error');
                 this.loadImplementations();
             } finally {
@@ -2273,13 +2415,13 @@ const AdminApp = {
                 });
 
                 if (response.data.code === 0) {
-                    this.showToast('配置更新成功', 'success');
+                    this.showToast(this.t('toast_config_updated'), 'success');
                     this.closeImplEditModal();
                     this.loadImplementations();
                 }
             } catch (error) {
                 console.error('Update implementation failed:', error);
-                const detail = error?.response?.data?.detail || '更新失败';
+                const detail = error?.response?.data?.detail || this.t('error_update_failed');
                 this.showToast(detail, 'error');
             } finally {
                 this.implEditModal.loading = false;
@@ -2288,11 +2430,10 @@ const AdminApp = {
 
         // 快速切换实现方启用状态
         async toggleImplementation(impl, group) {
-            const action = impl.enabled ? '禁用' : '启用';
+            const actionKey = impl.enabled ? 'btn_disable' : 'btn_enable';
             const newEnabled = !impl.enabled;
-            console.log(`准备${action}实现方: ${impl.name}, 当前状态: ${impl.enabled}, 新状态: ${newEnabled}`);
 
-            if (!confirm(`确定要${action}实现方 "${impl.display_name}" 吗？`)) {
+            if (!confirm(this.t('confirm_impl_action', { action: this.t(actionKey), name: impl.display_name }))) {
                 return;
             }
 
@@ -2305,19 +2446,17 @@ const AdminApp = {
                     headers: { 'Authorization': `Bearer ${this.authToken}` }
                 });
 
-                console.log('后端响应:', response.data);
-
                 if (response.data.code === 0) {
-                    this.showToast(`${action}成功`, 'success');
+                    this.showToast(this.t('toast_impl_toggled', { action: this.t(actionKey) }), 'success');
                     // 重新加载数据以获取最新状态
                     await this.loadImplementations();
                     console.log('数据重新加载完成');
                 } else {
-                    this.showToast(response.data.message || '操作失败', 'error');
+                    this.showToast(response.data.message || this.t('toast_impl_action_failed'), 'error');
                 }
             } catch (error) {
                 console.error('Toggle implementation failed:', error);
-                const detail = error?.response?.data?.detail || '操作失败';
+                const detail = error?.response?.data?.detail || this.t('error_operation_failed');
                 this.showToast(detail, 'error');
             }
         },
@@ -2364,7 +2503,7 @@ const AdminApp = {
         // 提交算力配置
         async submitImplPower() {
             if (this.implPowerModal.computing_power < 0) {
-                this.showToast('算力值不能为负数', 'error');
+                this.showToast(this.t('toast_power_cannot_be_negative'), 'error');
                 return;
             }
 
@@ -2384,13 +2523,13 @@ const AdminApp = {
                 });
 
                 if (response.data.code === 0) {
-                    this.showToast('算力配置更新成功', 'success');
+                    this.showToast(this.t('toast_power_saved'), 'success');
                     this.closeImplPowerModal();
                     this.loadImplementations();
                 }
             } catch (error) {
                 console.error('Update power failed:', error);
-                const detail = error?.response?.data?.detail || '更新失败';
+                const detail = error?.response?.data?.detail || this.t('error_update_failed');
                 this.showToast(detail, 'error');
             } finally {
                 this.implPowerModal.loading = false;
@@ -2401,7 +2540,7 @@ const AdminApp = {
         async updateDurationPower(implementation, duration, value, group) {
             const computingPower = parseInt(value);
             if (isNaN(computingPower) || computingPower < 0) {
-                this.showToast('请输入有效的算力值', 'error');
+                this.showToast(this.t('toast_invalid_power_value'), 'error');
                 // 恢复原值
                 this.loadImplementations();
                 return;
@@ -2428,15 +2567,15 @@ const AdminApp = {
                     if (dp) {
                         dp.computing_power = computingPower;
                     }
-                    this.showToast(`${duration}秒算力已更新为 ${computingPower}`, 'success');
+                    this.showToast(this.t('toast_duration_power_updated', { duration: duration, power: computingPower }), 'success');
                 } else {
                     // 更新失败，恢复原值
-                    this.showToast(response.data.message || '更新失败', 'error');
+                    this.showToast(response.data.message || this.t('error_update_failed'), 'error');
                     this.loadImplementations();
                 }
             } catch (error) {
                 console.error('Update duration power failed:', error);
-                const detail = error?.response?.data?.detail || '更新失败';
+                const detail = error?.response?.data?.detail || this.t('error_update_failed');
                 this.showToast(detail, 'error');
                 // 出错时恢复原值
                 this.loadImplementations();
@@ -2449,7 +2588,7 @@ const AdminApp = {
         async updateDefaultPower(implementation, value, group) {
             const computingPower = parseInt(value);
             if (isNaN(computingPower) || computingPower < 0) {
-                this.showToast('请输入有效的算力值', 'error');
+                this.showToast(this.t('toast_invalid_power_value'), 'error');
                 // 恢复原值
                 this.loadImplementations();
                 return;
@@ -2472,15 +2611,15 @@ const AdminApp = {
                 if (response.data.code === 0) {
                     // 更新本地数据
                     implementation.current_default_power = computingPower;
-                    this.showToast(`默认算力已更新为 ${computingPower}`, 'success');
+                    this.showToast(this.t('toast_default_power_updated', { power: computingPower }), 'success');
                 } else {
                     // 更新失败，恢复原值
-                    this.showToast(response.data.message || '更新失败', 'error');
+                    this.showToast(response.data.message || this.t('error_update_failed'), 'error');
                     this.loadImplementations();
                 }
             } catch (error) {
                 console.error('Update default power failed:', error);
-                const detail = error?.response?.data?.detail || '更新失败';
+                const detail = error?.response?.data?.detail || this.t('error_update_failed');
                 this.showToast(detail, 'error');
                 // 出错时恢复原值
                 this.loadImplementations();
@@ -2504,7 +2643,7 @@ const AdminApp = {
                 }
 
                 // 确认操作
-                if (!confirm(`确定要将 "${implementation.display_name}" 的算力恢复到默认值 ${defaultPower} 吗？\n这将删除当前的数据库配置。`)) {
+                if (!confirm(this.t('confirm_restore_power', { name: implementation.display_name, power: defaultPower }))) {
                     return;
                 }
 
@@ -2523,11 +2662,11 @@ const AdminApp = {
 
                     // 更新本地显示
                     implementation.current_default_power = defaultPower;
-                    this.showToast(`已恢复到默认算力 ${defaultPower}`, 'success');
+                    this.showToast(this.t('toast_restored_default_power', { power: defaultPower }), 'success');
 
                 } catch (error) {
                     console.error('Reset default power failed:', error);
-                    const detail = error?.response?.data?.detail || '恢复失败';
+                    const detail = error?.response?.data?.detail || this.t('error_restore_failed');
                     this.showToast(detail, 'error');
                 } finally {
                     this.implementations.updating = null;
@@ -2547,7 +2686,7 @@ const AdminApp = {
                 }
 
                 // 确认操作
-                if (!confirm(`确定要将 "${implementation.display_name}" 的 ${duration}秒 算力恢复到默认值 ${defaultPower} 吗？\n这将删除当前的数据库配置。`)) {
+                if (!confirm(this.t('confirm_restore_duration_power', { name: implementation.display_name, duration: duration, power: defaultPower }))) {
                     return;
                 }
 
@@ -2570,11 +2709,11 @@ const AdminApp = {
                     if (dp) {
                         dp.computing_power = defaultPower;
                     }
-                    this.showToast(`${duration}秒算力已恢复到默认值 ${defaultPower}`, 'success');
+                    this.showToast(this.t('toast_duration_power_restored', { duration: duration, power: defaultPower }), 'success');
 
                 } catch (error) {
                     console.error('Reset duration power failed:', error);
-                    const detail = error?.response?.data?.detail || '恢复失败';
+                    const detail = error?.response?.data?.detail || this.t('error_restore_failed');
                     this.showToast(detail, 'error');
                 } finally {
                     this.implementations.updating = null;

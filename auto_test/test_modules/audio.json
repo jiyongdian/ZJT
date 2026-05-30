@@ -1,0 +1,966 @@
+{
+  "id": "audio",
+  "name": "音频模块",
+  "description": "TTS文本转语音、参考音频上传、对白组批量生成、情绪控制、音频播放等功能的端到端测试",
+  "features": [
+    {
+      "id": "audio_001",
+      "name": "TTS文本转语音生成",
+      "description": "验证用户可以通过audio-generate接口提交文本转语音任务，系统正确返回任务ID并生成音频",
+      "priority": "P0",
+      "page_url": "/video-workflow?id={workflow_id}",
+      "api_endpoint": "POST /api/audio-generate",
+      "pass": false,
+      "remark": "",
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "导航到工作流编辑器页面",
+          "mcp_tool": "mcp1_browser_navigate",
+          "mcp_params": {
+            "url": "${config.base_url}/video-workflow?id=1"
+          },
+          "expected_result": "页面开始加载",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "等待页面加载完成",
+          "mcp_tool": "mcp1_browser_wait_for",
+          "mcp_params": {
+            "text": "保存",
+            "time": 10
+          },
+          "expected_result": "页面加载完成",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "调用TTS生成API",
+          "mcp_tool": "mcp1_browser_evaluate",
+          "mcp_params": {
+            "function": "async () => { const formData = new FormData(); formData.append('text', '你好，这是一个测试语音'); formData.append('user_id', localStorage.getItem('user_id')); formData.append('auth_token', localStorage.getItem('auth_token')); const resp = await fetch('/api/audio-generate', {method: 'POST', body: formData}); return await resp.json(); }"
+          },
+          "verify": "返回结果 success 为 true，包含 audio_id 或 task_id",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 4,
+          "action": "验证音频生成完成",
+          "mcp_tool": "mcp1_browser_wait_for",
+          "mcp_params": {
+            "time": 10
+          },
+          "expected_result": "音频生成任务提交成功",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    },
+    {
+      "id": "audio_002",
+      "name": "对话组节点添加",
+      "description": "验证用户可以在工作流编辑器中添加对话组节点，节点正确显示在画布上",
+      "priority": "P0",
+      "page_url": "/video-workflow?id={workflow_id}",
+      "pass": false,
+      "remark": "",
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "导航到工作流编辑器页面",
+          "mcp_tool": "mcp1_browser_navigate",
+          "mcp_params": {
+            "url": "${config.base_url}/video-workflow?id=1"
+          },
+          "expected_result": "页面开始加载",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "等待页面加载完成",
+          "mcp_tool": "mcp1_browser_wait_for",
+          "mcp_params": {
+            "text": "保存",
+            "time": 10
+          },
+          "expected_result": "页面加载完成",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "点击添加按钮打开节点菜单",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "添加按钮",
+            "ref": "<添加按钮ref>"
+          },
+          "expected_result": "弹出节点添加菜单",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 4,
+          "action": "获取菜单快照",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "菜单中包含「对话组」或「对白组」选项",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 5,
+          "action": "点击对话组选项",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "对话组选项",
+            "ref": "<对话组选项ref>"
+          },
+          "expected_result": "对话组节点被添加到画布上",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 6,
+          "action": "获取画布快照验证节点",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "画布上显示对话组节点，包含「对话列表」标签、「参考音频」区域、「生成全部」按钮",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    },
+    {
+      "id": "audio_003",
+      "name": "参考音频上传到对话组节点",
+      "description": "验证用户可以在对话组节点中上传参考音频，音频正确显示在列表中，支持预览播放",
+      "priority": "P0",
+      "page_url": "/video-workflow?id={workflow_id}",
+      "pass": false,
+      "remark": "",
+      "prerequisites": [
+        "audio_002"
+      ],
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "在对话组节点中找到参考音频区域",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "对话组节点中存在「参考音频」区域和「添加音频」按钮",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "点击添加音频按钮",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "添加音频按钮",
+            "ref": "<添加音频按钮ref>"
+          },
+          "expected_result": "弹出文件选择对话框或显示音频上传界面",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "选择测试音频文件",
+          "mcp_tool": "mcp1_browser_evaluate",
+          "mcp_params": {
+            "function": "() => { const input = document.querySelector('.dialogue-ref-audio-input, input[type=file][accept*=audio]'); if(input) { const dt = new DataTransfer(); const file = new File(['test'], 'test_ref.mp3', {type: 'audio/mpeg'}); dt.items.add(file); input.files = dt.files; input.dispatchEvent(new Event('change', {bubbles: true})); return true; } return false; }"
+          },
+          "verify": "文件选择成功，返回 true",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 4,
+          "action": "等待文件处理完成",
+          "mcp_tool": "mcp1_browser_wait_for",
+          "mcp_params": {
+            "time": 3
+          },
+          "expected_result": "音频文件被处理",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 5,
+          "action": "获取快照验证音频添加",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "参考音频列表中显示新添加的音频项，包含音频播放器和角色名输入框",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 6,
+          "action": "输入角色名称",
+          "mcp_tool": "mcp1_browser_type",
+          "mcp_params": {
+            "element": "角色名输入框",
+            "ref": "<角色名输入框ref>",
+            "text": "主角"
+          },
+          "expected_result": "角色名输入框显示「主角」",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 7,
+          "action": "验证音频预览播放器",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "音频项中包含 <audio> 播放器元素，支持播放/暂停操作",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    },
+    {
+      "id": "audio_004",
+      "name": "参考音频数量限制验证",
+      "description": "验证对话组节点最多支持6个参考音频，超出限制时显示错误提示",
+      "priority": "P1",
+      "page_url": "/video-workflow?id={workflow_id}",
+      "pass": false,
+      "remark": "",
+      "prerequisites": [
+        "audio_003"
+      ],
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "尝试添加第7个参考音频",
+          "mcp_tool": "mcp1_browser_evaluate",
+          "mcp_params": {
+            "function": "() => { const btn = document.querySelector('.dialogue-add-ref-audio-btn'); return btn ? !btn.disabled : null; }"
+          },
+          "verify": "当已有6个音频时，添加按钮应被禁用或点击后显示限制提示",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "点击添加音频按钮（如果可用）",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "添加音频按钮",
+            "ref": "<添加音频按钮ref>"
+          },
+          "expected_result": "显示「最多支持6个参考音频」的提示，或按钮已禁用不可点击",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "获取快照验证限制提示",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "参考音频列表旁显示「最多6个音频」的提示文字，或添加按钮处于禁用状态",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    },
+    {
+      "id": "audio_005",
+      "name": "对白组单条音频生成",
+      "description": "验证对话组节点中可以对单条对白生成音频，生成后音频结果显示在对应对白项中",
+      "priority": "P0",
+      "page_url": "/video-workflow?id={workflow_id}",
+      "api_endpoint": "POST /api/audio-generate",
+      "pass": false,
+      "remark": "",
+      "prerequisites": [
+        "audio_002"
+      ],
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "确保对话组节点有对白数据",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "对话组节点的对话列表中至少有一条对白记录，显示角色名和对白文本",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "点击第一条对白的「生成音频」按钮",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "生成音频按钮",
+            "ref": "<生成音频按钮ref>"
+          },
+          "expected_result": "按钮变为加载状态，显示「生成中...」",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "检查API请求",
+          "mcp_tool": "mcp1_browser_network_requests",
+          "mcp_params": {
+            "filter": "/api/audio-generate"
+          },
+          "verify": "存在 POST /api/audio-generate 请求，包含 text 和 ref_audio_url 参数",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 4,
+          "action": "等待音频生成完成",
+          "mcp_tool": "mcp1_browser_wait_for",
+          "mcp_params": {
+            "time": 15
+          },
+          "expected_result": "音频生成完成",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 5,
+          "action": "获取快照验证音频结果",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "对白项下方显示音频结果区域，包含 <audio> 播放器和「下载」按钮",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    },
+    {
+      "id": "audio_006",
+      "name": "对白组批量生成全部音频",
+      "description": "验证点击「生成全部」按钮后，对话组中所有对白项的音频被批量生成",
+      "priority": "P0",
+      "page_url": "/video-workflow?id={workflow_id}",
+      "api_endpoint": "POST /api/audio-generate",
+      "pass": false,
+      "remark": "",
+      "prerequisites": [
+        "audio_002"
+      ],
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "确保对话组节点有多条对白数据",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "对话组节点的对话列表中有多条对白记录",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "点击「生成全部」按钮",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "生成全部按钮",
+            "ref": "<生成全部按钮ref>"
+          },
+          "expected_result": "按钮变为加载状态，显示「生成中...」，所有对白项的生成按钮也被激活",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "检查批量生成API请求",
+          "mcp_tool": "mcp1_browser_network_requests",
+          "mcp_params": {
+            "filter": "/api/audio-generate"
+          },
+          "verify": "存在多个 POST /api/audio-generate 请求，每个请求对应一条对白",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 4,
+          "action": "等待所有音频生成完成",
+          "mcp_tool": "mcp1_browser_wait_for",
+          "mcp_params": {
+            "time": 60
+          },
+          "expected_result": "所有对白的音频生成完成",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 5,
+          "action": "获取快照验证批量结果",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "所有对白项下方都显示音频结果区域，每个都包含 <audio> 播放器",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 6,
+          "action": "验证生成全部按钮恢复",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "「生成全部」按钮恢复为可点击状态，显示「生成全部」文字",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    },
+    {
+      "id": "audio_007",
+      "name": "情绪控制方式切换",
+      "description": "验证对话组节点支持多种情绪控制方式切换，不同方式显示不同的控制参数",
+      "priority": "P1",
+      "page_url": "/video-workflow?id={workflow_id}",
+      "pass": false,
+      "remark": "",
+      "prerequisites": [
+        "audio_002"
+      ],
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "在对话组节点中找到情感控制方式选择器",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "对话组节点中存在「情感控制方式」下拉选择器，默认值为「与参考音频相同」",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "切换到「使用情感参考音频」",
+          "mcp_tool": "mcp1_browser_select",
+          "mcp_params": {
+            "element": "情感控制方式选择器",
+            "ref": "<选择器ref>",
+            "value": "1"
+          },
+          "expected_result": "选择器切换为「使用情感参考音频」",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "获取快照验证情感参考音频区域显示",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "显示「情感参考音频」上传区域，包含文件选择器和预览播放器",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 4,
+          "action": "切换到「使用情感向量」",
+          "mcp_tool": "mcp1_browser_select",
+          "mcp_params": {
+            "element": "情感控制方式选择器",
+            "ref": "<选择器ref>",
+            "value": "2"
+          },
+          "expected_result": "选择器切换为「使用情感向量」",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 5,
+          "action": "获取快照验证情感向量控制区域显示",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "显示「情感向量控制」区域，包含8个滑块（喜、怒、哀、惧、厌恶、低落、惊喜、平静）和情感权重滑块",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 6,
+          "action": "调整情感向量滑块",
+          "mcp_tool": "mcp1_browser_evaluate",
+          "mcp_params": {
+            "function": "() => { const slider = document.querySelector('.dialogue-emo-vec-slider[data-index=\"0\"]'); if(slider) { slider.value = 0.8; slider.dispatchEvent(new Event('input', {bubbles: true})); return true; } return false; }"
+          },
+          "verify": "「喜」滑块值更新为 0.80，情感向量总和更新",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 7,
+          "action": "获取快照验证滑块值更新",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "「喜」旁边的数值显示为 0.80，情感向量总和相应更新",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 8,
+          "action": "切换回「与参考音频相同」",
+          "mcp_tool": "mcp1_browser_select",
+          "mcp_params": {
+            "element": "情感控制方式选择器",
+            "ref": "<选择器ref>",
+            "value": "0"
+          },
+          "expected_result": "选择器切换回「与参考音频相同」，情感相关控制区域隐藏",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    },
+    {
+      "id": "audio_008",
+      "name": "情绪向量总和限制验证",
+      "description": "验证情感向量总和不能超过1.5，超出时显示警告提示",
+      "priority": "P1",
+      "page_url": "/video-workflow?id={workflow_id}",
+      "pass": false,
+      "remark": "",
+      "prerequisites": [
+        "audio_007"
+      ],
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "切换到「使用情感向量」模式",
+          "mcp_tool": "mcp1_browser_select",
+          "mcp_params": {
+            "element": "情感控制方式选择器",
+            "ref": "<选择器ref>",
+            "value": "2"
+          },
+          "expected_result": "情感向量控制区域显示",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "将多个滑块调高使总和超过1.5",
+          "mcp_tool": "mcp1_browser_evaluate",
+          "mcp_params": {
+            "function": "() => { const sliders = document.querySelectorAll('.dialogue-emo-vec-slider'); if(sliders.length >= 3) { sliders[0].value = 0.6; sliders[0].dispatchEvent(new Event('input', {bubbles: true})); sliders[1].value = 0.5; sliders[1].dispatchEvent(new Event('input', {bubbles: true})); sliders[2].value = 0.5; sliders[2].dispatchEvent(new Event('input', {bubbles: true})); return true; } return false; }"
+          },
+          "verify": "三个滑块值分别设置为 0.6、0.5、0.5，总和为 1.6",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "获取快照验证警告显示",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "显示「情感向量之和不能超过1.5」的红色警告文字，总和数值显示为 1.60",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 4,
+          "action": "调整滑块使总和回到1.5以内",
+          "mcp_tool": "mcp1_browser_evaluate",
+          "mcp_params": {
+            "function": "() => { const slider = document.querySelector('.dialogue-emo-vec-slider[data-index=\"2\"]'); if(slider) { slider.value = 0.3; slider.dispatchEvent(new Event('input', {bubbles: true})); return true; } return false; }"
+          },
+          "verify": "第三个滑块值调整为 0.3，总和变为 1.4",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 5,
+          "action": "获取快照验证警告消失",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "红色警告文字消失，总和数值显示为 1.40",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    },
+    {
+      "id": "audio_009",
+      "name": "情绪参考音频上传",
+      "description": "验证在「使用情感参考音频」模式下，用户可以上传情绪参考音频文件",
+      "priority": "P1",
+      "page_url": "/video-workflow?id={workflow_id}",
+      "pass": false,
+      "remark": "",
+      "prerequisites": [
+        "audio_007"
+      ],
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "切换到「使用情感参考音频」模式",
+          "mcp_tool": "mcp1_browser_select",
+          "mcp_params": {
+            "element": "情感控制方式选择器",
+            "ref": "<选择器ref>",
+            "value": "1"
+          },
+          "expected_result": "情感参考音频上传区域显示",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "选择情感参考音频文件",
+          "mcp_tool": "mcp1_browser_evaluate",
+          "mcp_params": {
+            "function": "() => { const input = document.querySelector('.dialogue-emo-ref-audio-input'); if(input) { const dt = new DataTransfer(); const file = new File(['test'], 'emotion_ref.mp3', {type: 'audio/mpeg'}); dt.items.add(file); input.files = dt.files; input.dispatchEvent(new Event('change', {bubbles: true})); return true; } return false; }"
+          },
+          "verify": "文件选择成功，返回 true",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "获取快照验证预览显示",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "情感参考音频预览区域显示 <audio> 播放器和「清除音频」按钮",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 4,
+          "action": "点击清除音频按钮",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "清除音频按钮",
+            "ref": "<清除音频按钮ref>"
+          },
+          "expected_result": "情感参考音频被清除",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 5,
+          "action": "获取快照验证音频已清除",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "情感参考音频预览区域隐藏，文件选择器恢复为空",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    },
+    {
+      "id": "audio_010",
+      "name": "音频播放功能",
+      "description": "验证生成的音频可以通过播放器控件正常播放、暂停和下载",
+      "priority": "P0",
+      "page_url": "/video-workflow?id={workflow_id}",
+      "pass": false,
+      "remark": "",
+      "prerequisites": [
+        "audio_005"
+      ],
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "在对话组节点中找到已生成的音频播放器",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "对白项的音频结果区域包含 <audio> 播放器元素",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "验证音频播放器属性",
+          "mcp_tool": "mcp1_browser_evaluate",
+          "mcp_params": {
+            "function": "() => { const audio = document.querySelector('.dialogue-result audio'); if(audio) { return { controls: audio.controls, src: audio.src ? 'has_src' : 'no_src', tagName: audio.tagName }; } return null; }"
+          },
+          "verify": "返回结果中 controls 为 true，src 为 has_src，tagName 为 AUDIO",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "验证下载按钮可见",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "音频结果区域包含「下载」按钮",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 4,
+          "action": "点击下载按钮",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "下载按钮",
+            "ref": "<下载按钮ref>"
+          },
+          "expected_result": "触发音频文件下载，或在新窗口中打开音频文件",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    },
+    {
+      "id": "audio_011",
+      "name": "参考音频匹配优先级验证",
+      "description": "验证音频生成时，系统优先使用对话组节点的参考音频，其次使用角色库的参考音频",
+      "priority": "P1",
+      "page_url": "/video-workflow?id={workflow_id}",
+      "pass": false,
+      "remark": "",
+      "prerequisites": [
+        "audio_003",
+        "audio_005"
+      ],
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "在对话组节点中为角色上传参考音频",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "参考音频列表中存在角色「主角」的参考音频",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "生成该角色的对白音频",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "主角对白的生成音频按钮",
+            "ref": "<生成音频按钮ref>"
+          },
+          "expected_result": "音频生成请求被发送",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "检查API请求中的参考音频参数",
+          "mcp_tool": "mcp1_browser_network_requests",
+          "mcp_params": {
+            "filter": "/api/audio-generate"
+          },
+          "verify": "POST /api/audio-generate 请求中包含 ref_audio_url 参数，值为对话组节点中上传的参考音频URL",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 4,
+          "action": "等待音频生成完成",
+          "mcp_tool": "mcp1_browser_wait_for",
+          "mcp_params": {
+            "time": 15
+          },
+          "expected_result": "音频生成完成",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 5,
+          "action": "获取快照验证音频结果",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "对白项显示音频结果，音频使用了对话组节点的参考音频（而非角色库的）",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    },
+    {
+      "id": "audio_012",
+      "name": "对话组节点数据重新加载恢复",
+      "description": "验证保存并重新加载工作流后，对话组节点的参考音频、情绪设置等数据正确恢复",
+      "priority": "P1",
+      "page_url": "/video-workflow?id={workflow_id}",
+      "pass": false,
+      "remark": "",
+      "prerequisites": [
+        "audio_003",
+        "audio_007"
+      ],
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "记录当前对话组节点状态",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "记录对话组节点的参考音频列表、情感控制方式等状态",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "保存工作流",
+          "mcp_tool": "mcp1_browser_click",
+          "mcp_params": {
+            "element": "保存按钮",
+            "ref": "<保存按钮ref>"
+          },
+          "expected_result": "工作流保存成功",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 3,
+          "action": "等待保存完成",
+          "mcp_tool": "mcp1_browser_wait_for",
+          "mcp_params": {
+            "time": 3
+          },
+          "expected_result": "保存操作完成",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 4,
+          "action": "刷新页面重新加载工作流",
+          "mcp_tool": "mcp1_browser_evaluate",
+          "mcp_params": {
+            "function": "() => location.reload()"
+          },
+          "expected_result": "页面开始重新加载",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 5,
+          "action": "等待页面加载完成",
+          "mcp_tool": "mcp1_browser_wait_for",
+          "mcp_params": {
+            "text": "保存",
+            "time": 10
+          },
+          "expected_result": "页面加载完成",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 6,
+          "action": "获取快照验证节点数据恢复",
+          "mcp_tool": "mcp1_browser_snapshot",
+          "mcp_params": {},
+          "verify": "对话组节点重新加载后，参考音频列表、情感控制方式、对话列表等数据与步骤1记录的状态一致",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    },
+    {
+      "id": "audio_013",
+      "name": "角色参考音频生成",
+      "description": "验证可以通过API为角色生成参考音频，异步任务正确提交并可通过状态接口查询结果",
+      "priority": "P1",
+      "page_url": "/video-workflow?id={workflow_id}",
+      "api_endpoint": "POST /api/script-writer/characters/reference-audio, GET /api/script-writer/characters/reference-audio-status/{task_id}",
+      "pass": false,
+      "remark": "",
+      "test_steps": [
+        {
+          "step": 1,
+          "action": "调用角色参考音频生成API",
+          "mcp_tool": "mcp1_browser_evaluate",
+          "mcp_params": {
+            "function": "async () => { const resp = await fetch('/api/script-writer/characters/reference-audio', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({world_id: 1, character_name: '测试角色', text: '这是一段测试文本'}), credentials: 'include'}); return await resp.json(); }"
+          },
+          "verify": "返回结果 success 为 true，包含 task_id",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        },
+        {
+          "step": 2,
+          "action": "轮询任务状态",
+          "mcp_tool": "mcp1_browser_evaluate",
+          "mcp_params": {
+            "function": "async () => { await new Promise(r => setTimeout(r, 5000)); const resp = await fetch('/api/script-writer/characters/reference-audio-status/{task_id}', {credentials: 'include'}); return await resp.json(); }"
+          },
+          "verify": "返回结果包含任务状态（pending/processing/completed/failed）",
+          "pass": false,
+          "remark": "",
+          "is_processed": false
+        }
+      ],
+      "is_processed": false
+    }
+  ]
+}

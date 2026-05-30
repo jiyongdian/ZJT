@@ -284,10 +284,14 @@ class DatabaseTestCase(unittest.TestCase):
             conn.close()
 
     def setUp(self):
-        """每个测试用例开始前：开启事务"""
+        """每个测试用例开始前：清除全局缓存，开启事务"""
+        # 清除动态配置缓存，防止前序测试 mock 的值污染后续测试
+        from config.config_util import _dynamic_config_cache
+        _dynamic_config_cache.clear()
+
         import pymysql
         from pymysql.cursors import DictCursor
-        
+
         self._connection = pymysql.connect(
             host=TEST_DB_CONFIG['host'],
             port=TEST_DB_CONFIG['port'],

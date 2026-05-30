@@ -1075,6 +1075,48 @@ class FileManager:
     # 匹配 reference_image URL 的正则：{SERVER_HOST}/upload/{type}/pic/{filename}
     _IMAGE_URL_PATTERN = re.compile(r'/upload/(character|location|props)/pic/([^"\s\'}\]]+)')
 
+    # 匹配 default_voice URL 的正则：{SERVER_HOST}/upload/character/voice/{filename}
+    _VOICE_URL_PATTERN = re.compile(r'/upload/character/voice/([^"\s\'}\]]+)')
+
+    # 音频扩展名白名单
+    _AUDIO_EXTENSIONS = {'.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac'}
+
+    # 导出时需要清除的数据库字段
+    _DB_ID_FIELDS = {'id', 'world_id', 'user_id', 'create_time', 'update_time'}
+
+    def _strip_db_ids(self, data: Any) -> Any:
+        """
+        清除 JSON 顶层 dict 中的数据库 ID 字段，避免跨世界导入时 ID 冲突。
+        仅清除顶层字段，不递归处理嵌套 dict。
+        """
+        if isinstance(data, dict):
+            return {k: v for k, v in data.items() if k not in self._DB_ID_FIELDS}
+        return data
+
+    def _collect_voice_from_url(self, url: str) -> Optional[Tuple[str, Path]]:
+        """
+        从音频 URL 中提取文件名和实际文件路径。
+
+        Args:
+            url: 音频 URL，如 http://host/upload/character/voice/voice_001.wav
+
+        Returns:
+            (filename, file_path) 或 None
+        """
+        if not url or not isinstance(url, str):
+            return None
+        match = self._VOICE_URL_PATTERN.search(url)
+        if not match:
+            return None
+        filename = match.group(1)
+        ext = os.path.splitext(filename)[1].lower()
+        if ext not in self._AUDIO_EXTENSIONS:
+            return None
+        file_path = self.base_dir / UploadPathConstants.UPLOAD_ROOT / UploadPathConstants.CHARACTER_VOICE_DIR / filename
+        if file_path.exists():
+            return (filename, file_path)
+        return None
+
     def _collect_image_from_url(self, url: str) -> Optional[Tuple[str, str, Path]]:
         """
         从图片 URL 中提取类型、文件名和实际文件路径
@@ -1098,15 +1140,19 @@ class FileManager:
         return None
 
     def _rewrite_image_urls(self, data: Any, image_mapping: Dict[str, str], collected: Set[str],
-                             zipf: Optional[zipfile.ZipFile] = None) -> Any:
+                             zipf: Optional[zipfile.ZipFile] = None,
+                             audio_mapping: Optional[Dict[str, str]] = None,
+                             collected_audios: Optional[Set[str]] = None) -> Any:
         """
-        递归扫描 JSON 数据，替换图片 URL 为相对路径，并收集图片到 zip
+        递归扫描 JSON 数据，替换图片/音频 URL 为相对路径，并收集文件到 zip
 
         Args:
             data: JSON 数据（dict/list/str/其他）
             image_mapping: URL → 相对路径 的映射表（会被修改）
             collected: 已收集的图片文件名集合（会被修改）
-            zipf: zipfile 对象，如果提供则将图片写入 zip
+            zipf: zipfile 对象，如果提供则将图片/音频写入 zip
+            audio_mapping: 音频 filename → original_url_path 的映射表
+            collected_audios: 已收集的音频文件名集合
 
         Returns:
             处理后的数据
@@ -1147,11 +1193,33 @@ class FileManager:
                         else:
                             new_list.append(item)
                     result[key] = new_list
+                elif key == 'default_voice' and isinstance(value, str) and value.strip():
+                    # 角色默认音频
+                    if audio_mapping is not None and collected_audios is not None:
+                        info = self._collect_voice_from_url(value)
+                        if info:
+                            filename, file_path = info
+                            rel_path = f"audios/{filename}"
+                            if filename not in collected_audios and zipf:
+                                zipf.write(file_path, rel_path)
+                                collected_audios.add(filename)
+                            result[key] = rel_path
+                            audio_mapping[filename] = f"/upload/character/voice/{filename}"
+                        else:
+                            result[key] = value
+                    else:
+                        result[key] = value
                 else:
-                    result[key] = self._rewrite_image_urls(value, image_mapping, collected, zipf)
+                    result[key] = self._rewrite_image_urls(
+                        value, image_mapping, collected, zipf,
+                        audio_mapping=audio_mapping, collected_audios=collected_audios
+                    )
             return result
         elif isinstance(data, list):
-            return [self._rewrite_image_urls(item, image_mapping, collected, zipf) for item in data]
+            return [self._rewrite_image_urls(
+                item, image_mapping, collected, zipf,
+                audio_mapping=audio_mapping, collected_audios=collected_audios
+            ) for item in data]
         else:
             return data
 
@@ -1176,11 +1244,13 @@ class FileManager:
 
         collected_images: Set[str] = set()
         image_mapping: Dict[str, str] = {}  # filename → original_url_path
+        collected_audios: Set[str] = set()
+        audio_mapping: Dict[str, str] = {}  # filename → original_url_path
 
         export_subdirs = ['characters', 'locations', 'props', 'scripts', 'worlds']
 
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            # 1. 打包各子目录的 JSON 文件（重写图片 URL）
+            # 1. 打包各子目录的 JSON 文件（重写图片/音频 URL，清除数据库 ID）
             for subdir in export_subdirs:
                 subdir_path = base_path / subdir
                 if not subdir_path.exists():
@@ -1189,8 +1259,13 @@ class FileManager:
                     try:
                         json_content = json_file.read_text(encoding='utf-8')
                         data = json.loads(json_content)
-                        # 重写 URL 并收集图片
-                        data = self._rewrite_image_urls(data, image_mapping, collected_images, zipf)
+                        # 重写 URL 并收集图片和音频
+                        data = self._rewrite_image_urls(
+                            data, image_mapping, collected_images, zipf,
+                            audio_mapping=audio_mapping, collected_audios=collected_audios
+                        )
+                        # 清除数据库 ID 字段
+                        data = self._strip_db_ids(data)
                         zipf.writestr(
                             f"{subdir}/{json_file.name}",
                             json.dumps(data, ensure_ascii=False, indent=2)
@@ -1210,6 +1285,13 @@ class FileManager:
                     json.dumps(image_mapping, ensure_ascii=False, indent=2)
                 )
 
+            # 3.5 写入 audio_mapping.json（导入时用于还原音频 URL）
+            if audio_mapping:
+                zipf.writestr(
+                    "audio_mapping.json",
+                    json.dumps(audio_mapping, ensure_ascii=False, indent=2)
+                )
+
             # 4. 写入 metadata.json
             metadata = {
                 "export_version": "1.0",
@@ -1217,15 +1299,17 @@ class FileManager:
                 "world_id": str(world_id),
                 "user_id": str(user_id),
                 "image_count": len(collected_images),
+                "audio_count": len(collected_audios),
                 "subdirs": export_subdirs
             }
             zipf.writestr("metadata.json", json.dumps(metadata, ensure_ascii=False, indent=2))
 
-        logger.info(f"世界导出完成: {zip_path} (图片 {len(collected_images)} 张)")
+        logger.info(f"世界导出完成: {zip_path} (图片 {len(collected_images)} 张, 音频 {len(collected_audios)} 个)")
         return str(zip_path)
 
     def _restore_image_urls(self, data: Any, reverse_mapping: Dict[str, str],
-                              uploaded: Dict[str, str], upload_base: Path) -> Any:
+                              uploaded: Dict[str, str], upload_base: Path,
+                              audio_mapping: Optional[Dict[str, str]] = None) -> Any:
         """
         递归扫描 JSON 数据，将相对路径还原为完整 URL，并复制图片到 upload 目录
 
@@ -1234,6 +1318,7 @@ class FileManager:
             reverse_mapping: 相对路径(filename) → 原始 URL路径 的映射
             uploaded: filename → 新的完整URL路径 的映射（会被修改）
             upload_base: upload 根目录
+            audio_mapping: 音频 filename → 原始 URL路径 的映射
 
         Returns:
             处理后的数据
@@ -1267,11 +1352,24 @@ class FileManager:
                         else:
                             new_list.append(item)
                     result[key] = new_list
+                elif key == 'default_voice' and isinstance(value, str) and audio_mapping:
+                    # 还原角色音频 URL
+                    audio_filename = value.replace('audios/', '') if value.startswith('audios/') else None
+                    if audio_filename and audio_filename in audio_mapping:
+                        result[key] = audio_mapping[audio_filename]
+                    else:
+                        result[key] = value
                 else:
-                    result[key] = self._restore_image_urls(value, reverse_mapping, uploaded, upload_base)
+                    result[key] = self._restore_image_urls(
+                        value, reverse_mapping, uploaded, upload_base,
+                        audio_mapping=audio_mapping
+                    )
             return result
         elif isinstance(data, list):
-            return [self._restore_image_urls(item, reverse_mapping, uploaded, upload_base) for item in data]
+            return [self._restore_image_urls(
+                item, reverse_mapping, uploaded, upload_base,
+                audio_mapping=audio_mapping
+            ) for item in data]
         else:
             return data
 
@@ -1293,7 +1391,7 @@ class FileManager:
         upload_base = self.base_dir / UploadPathConstants.UPLOAD_ROOT
         result = {
             "scripts": 0, "characters": 0, "locations": 0, "props": 0,
-            "worlds": 0, "images": 0, "errors": []
+            "worlds": 0, "images": 0, "audios": 0, "errors": []
         }
 
         with zipfile.ZipFile(zip_path, 'r') as zipf:
@@ -1304,6 +1402,14 @@ class FileManager:
                     image_mapping = json.loads(zipf.read("image_mapping.json").decode('utf-8'))
                 except Exception as e:
                     logger.warning(f"读取 image_mapping.json 失败: {e}")
+
+            # 1.5 读取 audio_mapping.json
+            audio_mapping = {}
+            if "audio_mapping.json" in zipf.namelist():
+                try:
+                    audio_mapping = json.loads(zipf.read("audio_mapping.json").decode('utf-8'))
+                except Exception as e:
+                    logger.warning(f"读取 audio_mapping.json 失败: {e}")
 
             # 2. 复制图片到 upload 目录
             uploaded_images: Dict[str, str] = {}  # filename → url_path
@@ -1336,6 +1442,28 @@ class FileManager:
 
                 uploaded_images[filename] = url_path
 
+            # 2.5 复制音频到 upload 目录
+            for zip_name in zipf.namelist():
+                if not zip_name.startswith('audios/'):
+                    continue
+                audio_filename = zip_name[len('audios/'):]
+                if not audio_filename or audio_filename.endswith('/'):
+                    continue
+                if audio_filename not in audio_mapping:
+                    continue
+
+                dest_dir = upload_base / UploadPathConstants.CHARACTER_VOICE_DIR
+                dest_dir.mkdir(parents=True, exist_ok=True)
+                dest_file = dest_dir / audio_filename
+
+                if not dest_file.exists():
+                    try:
+                        audio_data = zipf.read(zip_name)
+                        dest_file.write_bytes(audio_data)
+                        result["audios"] += 1
+                    except Exception as e:
+                        result["errors"].append(f"音频导入失败 {audio_filename}: {e}")
+
             # 3. 导入各子目录的 JSON 文件
             subdir_map = {
                 'characters': 'characters',
@@ -1358,13 +1486,20 @@ class FileManager:
                     content = zipf.read(zip_name).decode('utf-8')
                     data = json.loads(content)
 
-                    # 还原图片 URL
-                    data = self._restore_image_urls(data, image_mapping, uploaded_images, upload_base)
+                    # 还原图片和音频 URL
+                    data = self._restore_image_urls(
+                        data, image_mapping, uploaded_images, upload_base,
+                        audio_mapping=audio_mapping
+                    )
 
                     # 写入文件
                     dest_dir = base_path / subdir
                     dest_dir.mkdir(parents=True, exist_ok=True)
-                    dest_file = dest_dir / filename
+                    # 对于 worlds 子目录，重写文件名为目标世界 ID
+                    actual_filename = filename
+                    if subdir == 'worlds':
+                        actual_filename = f"world_{world_id}.json"
+                    dest_file = dest_dir / actual_filename
                     dest_file.write_text(
                         json.dumps(data, ensure_ascii=False, indent=2),
                         encoding='utf-8'

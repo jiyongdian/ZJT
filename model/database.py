@@ -104,11 +104,11 @@ def execute_update(sql, params=None):
 def execute_insert(sql, params=None):
     """
     Execute an INSERT query and return the last inserted ID
-    
+
     Args:
         sql: SQL query string
         params: Query parameters (tuple or dict)
-    
+
     Returns:
         Last inserted ID
     """
@@ -117,3 +117,60 @@ def execute_insert(sql, params=None):
         cursor.execute(sql, params or ())
         conn.commit()
         return cursor.lastrowid
+
+
+@contextmanager
+def transaction():
+    """
+    事务上下文管理器，在同一连接内执行多个操作，自动处理 commit/rollback
+
+    用法:
+        with transaction() as conn:
+            cursor = conn.cursor()
+            cursor.execute(sql1, params1)
+            cursor.execute(sql2, params2)
+            # 自动 commit，异常时自动 rollback
+
+    Returns:
+        数据库连接对象
+    """
+    with get_db_connection() as conn:
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+
+
+def execute_insert_in_transaction(conn, sql, params=None):
+    """
+    在指定事务连接内执行 INSERT，返回 lastrowid
+
+    Args:
+        conn: transaction() 上下文中的连接对象
+        sql: SQL query string
+        params: Query parameters (tuple or dict)
+
+    Returns:
+        Last inserted ID
+    """
+    cursor = conn.cursor()
+    cursor.execute(sql, params or ())
+    return cursor.lastrowid
+
+
+def execute_update_in_transaction(conn, sql, params=None):
+    """
+    在指定事务连接内执行 UPDATE/DELETE，返回 affected rows
+
+    Args:
+        conn: transaction() 上下文中的连接对象
+        sql: SQL query string
+        params: Query parameters (tuple or dict)
+
+    Returns:
+        Number of affected rows
+    """
+    cursor = conn.cursor()
+    return cursor.execute(sql, params or ())

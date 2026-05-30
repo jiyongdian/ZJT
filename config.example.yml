@@ -103,6 +103,11 @@ vidu:
 volcengine:
   api_key: ""  # 火山引擎 API Key（用于 Seedream 5.0 文生图）
 
+volcengine_oversea:
+  api_key: ""  # 火山引擎海外版 API Key（用于 Seedream/Seedance 海外版）
+  base_url: "https://ark.ap-southeast.bytepluses.com"  # 火山引擎海外版 API 基础 URL
+  model_aliases: {}  # 模型别名映射，如 {"doubao-seedance-2-0-260128": "doubao-seedance-2-0-260519"}
+
 pay:
   wxpay:
       #公众账号ID
@@ -185,6 +190,8 @@ task_queue:
 # Upload file size limits (in MB)
 upload:
   max_image_size_mb: 10  # 角色、场景、道具的参考图片最大大小限制（MB）
+  max_video_size_mb: 50  # Agent 对话模式上传视频最大大小限制（MB）
+  max_video_duration_seconds: 15  # Agent 对话模式上传视频最大时长（秒）
 
 # Frontend debug mode
 frontend:
@@ -211,12 +218,6 @@ alembic:
 edition:
   mode: "community"
   shared_space: false  # 商业版是否使用共享空间模式（true=所有用户共享数据，false=按用户隔离，默认false）
-
-# Enterprise 模块版本兼容性配置
-# 当 enterprise/ 目录存在时，主仓库会校验 enterprise 模块版本是否在此范围内
-enterprise:
-  min_version: "1.0.0"
-  max_version: "1.0.0"
 
 file_storage:
   # Qiniu cloud storage configuration

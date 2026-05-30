@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>智剧通 AI短剧制作平台</title>
+  <title data-i18n="page_title">智剧通 AI短剧制作平台</title>
   <meta name="description" content="智剧通是专业的AI短剧制作平台，提供图片编辑、AI文生图、AI视频生成、图片生成视频、数字人视频、音频生成等一站式AI创作工具。" />
   <meta name="keywords" content="AI短剧,AI视频,AI图片,文生图,图生视频,数字人,音频生成,视频工作流" />
   
@@ -21,6 +21,13 @@
   
   <link rel="icon" href="/files/logo.ico" type="image/vnd.microsoft.icon"/>
   <link rel="stylesheet" href="/css/index.css" />
+
+  <!-- i18n 支持 -->
+  <script src="/i18n/i18n-core.js?v=__VERSION__"></script>
+  <script src="/i18n/i18n-vue-plugin.js?v=__VERSION__"></script>
+  <script src="/i18n/i18n-dom.js?v=__VERSION__"></script>
+  <link rel="stylesheet" href="/i18n/i18n-switcher.css?v=__VERSION__" />
+  <script src="/i18n/i18n-switcher.js?v=__VERSION__"></script>
 </head>
 <body>
   <div id="app" class="container" v-cloak>
@@ -30,37 +37,38 @@
           <img src="/files/logo.svg" alt="Logo" style="width: 48px; height: 48px;" />
           <div class="header-title-group">
             <div class="title">{{ mainTitle }}</div>
-            <div class="subtitle" v-if="route.name==='list'">AI短剧制作平台</div>
+            <div class="subtitle" v-if="route.name==='list'">{{ $t('subtitle') }}</div>
           </div>
         </div>
         <div style="display: flex; gap: 10px; align-items: center;">
-          <button class="btn secondary" v-if="route.name!=='list'" @click="goHome">返回</button>
+          <button class="btn secondary" v-if="route.name!=='list'" @click="goHome">{{ $t('back') }}</button>
           <template v-if="isLoggedIn">
             <div class="user-info-wrapper">
-              <span class="user-phone clickable" @click="openInviteModal" title="点击查看邀请码">{{ maskedPhone }}</span>
+              <span class="user-phone clickable" @click="openInviteModal" :title="$t('invite_code')">{{ maskedPhone }}</span>
               <div class="computing-power-display">
                 <template v-if="checkinStatus.checkin_enabled">
-                  <button class="checkin-badge" v-if="!checkinStatus.checked_in_today" @click="performCheckin" :disabled="checkinLoading" title="点击签到领算力">
-                    签到
+                  <button class="checkin-badge" v-if="!checkinStatus.checked_in_today" @click="performCheckin" :disabled="checkinLoading" :title="$t('check_in_tip')">
+                    {{ $t('check_in') }}
                   </button>
-                  <span class="checkin-badge checked" v-else title="今日已签到">
-                    已签
+                  <span class="checkin-badge checked" v-else :title="$t('checked_in_today')">
+                    {{ $t('checked_in') }}
                   </span>
                 </template>
-                <span class="clickable" @click="openComputingPowerLogs" title="点击查看算力日志">
-                  算力: <span class="computing-power-value">{{ computingPower !== null ? computingPower : '加载中...' }}</span>
+                <span class="clickable" @click="openComputingPowerLogs" :title="$t('click_power_logs')">
+                  {{ $t('power') }}: <span class="computing-power-value">{{ computingPower !== null ? computingPower : $t('loading') }}</span>
                 </span>
-                <button class="refresh-btn" @click="fetchComputingPower" title="刷新算力">
+                <button class="refresh-btn" @click="fetchComputingPower" :title="$t('refresh')">
                   ↻
                 </button>
               </div>
-              <button class="btn secondary" @click="handleRechargeClick" style="margin-top: 8px; font-size: 12px; padding: 4px 12px;">算力充值</button>
+              <button class="btn secondary" @click="handleRechargeClick" style="margin-top: 8px; font-size: 12px; padding: 4px 12px;">{{ $t('recharge') }}</button>
             </div>
-            <a v-if="userRole === 'admin'" href="/admin" class="btn secondary" style="text-decoration: none;">管理后台</a>
-            <button class="btn secondary" @click="showUserSettingsModal">设置</button>
-            <button class="btn secondary" @click="handleLogout">登出</button>
+            <a v-if="userRole === 'admin'" href="/admin" class="btn secondary" style="text-decoration: none;">{{ $t('admin_panel') }}</a>
+            <button class="btn secondary" @click="showUserSettingsModal">{{ $t('settings') }}</button>
+            <button class="btn secondary" @click="handleLogout">{{ $t('logout') }}</button>
           </template>
-          <button class="btn" v-else @click="showLoginModal = true">登录</button>
+          <button class="btn" v-else @click="showLoginModal = true">{{ $t('login') }}</button>
+          <div class="language-switcher-container"></div>
         </div>
       </header>
 
@@ -322,40 +330,40 @@
     <div class="modal-overlay" v-if="showLoginModal" @click.self="closeModal">
       <div class="modal" style="position: relative;">
         <button class="modal-close" @click="closeModal">×</button>
-        <div class="modal-title">{{ authMode === 'login' ? '用户登录' : (authMode === 'register' ? '用户注册' : '重置密码') }}</div>
-        
+        <div class="modal-title">{{ authMode === 'login' ? $t('user_login') : (authMode === 'register' ? $t('user_register') : $t('reset_password')) }}</div>
+
         <!-- Tab Switcher -->
         <div class="modal-tabs">
           <button class="modal-tab" :class="{active: authMode === 'login'}" @click="switchAuthMode('login')">
-            登录
+            {{ $t('login') }}
           </button>
           <button class="modal-tab" :class="{active: authMode === 'register'}" @click="switchAuthMode('register')">
-            注册
+            {{ $t('register') }}
           </button>
           <button class="modal-tab" :class="{active: authMode === 'reset'}" @click="switchAuthMode('reset')">
-            重置密码
+            {{ $t('reset_password') }}
           </button>
         </div>
 
         <!-- Login Form -->
         <div v-if="authMode === 'login'">
           <div class="field">
-            <label class="label">手机号</label>
-            <input class="input" type="tel" v-model="loginForm.phone" placeholder="请输入手机号" maxlength="11" />
+            <label class="label">{{ $t('phone') }}</label>
+            <input class="input" type="tel" v-model="loginForm.phone" :placeholder="$t('enter_phone')" maxlength="11" />
           </div>
           <div class="field">
-            <label class="label">密码</label>
-            <input class="input" type="password" v-model="loginForm.password" placeholder="请输入密码" @keyup.enter="handleLogin" />
+            <label class="label">{{ $t('password') }}</label>
+            <input class="input" type="password" v-model="loginForm.password" :placeholder="$t('enter_password')" @keyup.enter="handleLogin" />
           </div>
           <div v-if="loginShowTerms" class="terms-checkbox">
             <input type="checkbox" id="login-terms" v-model="loginForm.termsAgreed" />
             <label for="login-terms" style="cursor: pointer;">
-              我已阅读并同意 <span class="terms-link" @click.stop="showTermsModal = true">《AI工具服务使用条款》</span>
+              {{ $t('agree_with_terms') }} <span class="terms-link" @click.stop="showTermsModal = true">{{ $t('service_terms') }}</span>
             </label>
           </div>
           <div class="field" style="margin-top: 20px;">
             <button class="btn" style="width: 100%;" @click="handleLogin" :disabled="loginLoading">
-              {{ loginLoading ? '登录中...' : '登录' }}
+              {{ loginLoading ? $t('logging_in') : $t('login') }}
             </button>
           </div>
           <div class="status danger" v-if="loginError" style="text-align: center; margin-top: 10px;">{{ loginError }}</div>
@@ -364,48 +372,48 @@
         <!-- Register Form -->
         <div v-if="authMode === 'register'">
           <div class="field">
-            <label class="label">手机号</label>
-            <input class="input" type="tel" v-model="registerForm.phone" placeholder="请输入手机号" maxlength="11" />
+            <label class="label">{{ $t('phone') }}</label>
+            <input class="input" type="tel" v-model="registerForm.phone" :placeholder="$t('enter_phone')" maxlength="11" />
           </div>
           <div class="field">
-            <label class="label">验证码</label>
+            <label class="label">{{ $t('verification_code') }}</label>
             <div class="row">
-              <input class="input" type="text" v-model="registerForm.code" placeholder="请输入验证码" maxlength="6" />
+              <input class="input" type="text" v-model="registerForm.code" :placeholder="$t('enter_verification_code')" maxlength="6" />
               <button class="code-btn" @click="sendVerificationCode" :disabled="codeSending || codeCountdown > 0">
-                {{ codeCountdown > 0 ? `${codeCountdown}秒后重试` : (codeSending ? '发送中...' : '发送验证码') }}
+                {{ codeCountdown > 0 ? codeCountdown + 's' : (codeSending ? $t('sending') : $t('send_code')) }}
               </button>
             </div>
           </div>
           <div class="field">
-            <label class="label">密码</label>
-            <input class="input" type="password" v-model="registerForm.password" placeholder="请输入密码" />
+            <label class="label">{{ $t('password') }}</label>
+            <input class="input" type="password" v-model="registerForm.password" :placeholder="$t('enter_password')" />
           </div>
           <!-- 本地模式提示 -->
           <div v-if="isLocal" class="field">
             <div class="local-mode-tip" style="background: #e8f5e9; padding: 12px; border-radius: 6px; margin-bottom: 10px;">
               <p style="margin: 0; color: #2e7d32; font-size: 13px;">
-                <strong>本地模式：</strong>您的数据（包括算力）都存储您自己的电脑中，您可以在后台修改或通知管理员(第一位用户)修改。
+                <strong>{{ $t('local_mode_title') }}</strong>{{ $t('local_mode_desc') }}
               </p>
             </div>
           </div>
           <!-- 非本地模式显示邀请码 -->
           <div class="field" v-if="!isLocal">
-            <label class="label">邀请码（选填）</label>
-            <input class="input" type="text" v-model="registerForm.inviteCode" placeholder="请输入邀请码" maxlength="10" @keyup.enter="handleRegister" />
+            <label class="label">{{ $t('invite_code_optional') }}</label>
+            <input class="input" type="text" v-model="registerForm.inviteCode" :placeholder="$t('enter_invite_code')" maxlength="10" @keyup.enter="handleRegister" />
             <div class="invite-tip">
               <span class="tip-icon">🎁</span>
-              <span class="tip-text">填写邀请码，额外赠送 <strong>25 算力</strong></span>
+              <span class="tip-text">{{ $t('invite_tip_text') }}<strong> 25 {{ $t('power') }}</strong></span>
             </div>
           </div>
           <div class="terms-checkbox">
             <input type="checkbox" id="register-terms" v-model="registerForm.termsAgreed" />
             <label for="register-terms" style="cursor: pointer;">
-              我已阅读并同意 <span class="terms-link" @click.stop="showTermsModal = true">《AI工具服务使用条款》</span>
+              {{ $t('agree_terms') }} <span class="terms-link" @click.stop="showTermsModal = true">{{ $t('ai_service_terms') }}</span>
             </label>
           </div>
           <div class="field" style="margin-top: 20px;">
             <button class="btn" style="width: 100%;" @click="handleRegister" :disabled="registerLoading">
-              {{ registerLoading ? '注册中...' : '注册' }}
+              {{ registerLoading ? $t('registering') : $t('register') }}
             </button>
           </div>
           <div class="status danger" v-if="registerError" style="text-align: center; margin-top: 10px;">{{ registerError }}</div>
@@ -414,29 +422,29 @@
         <!-- Reset Password Form -->
         <div v-if="authMode === 'reset'">
           <div class="field">
-            <label class="label">手机号</label>
-            <input class="input" type="tel" v-model="resetForm.phone" placeholder="请输入手机号" maxlength="11" />
+            <label class="label">{{ $t('phone') }}</label>
+            <input class="input" type="tel" v-model="resetForm.phone" :placeholder="$t('enter_phone')" maxlength="11" />
           </div>
           <div class="field">
-            <label class="label">验证码</label>
+            <label class="label">{{ $t('verification_code') }}</label>
             <div class="row">
-              <input class="input" type="text" v-model="resetForm.code" placeholder="请输入验证码" maxlength="6" />
+              <input class="input" type="text" v-model="resetForm.code" :placeholder="$t('enter_verification_code')" maxlength="6" />
               <button class="code-btn" @click="sendResetCode" :disabled="resetCodeSending || resetCodeCountdown > 0">
-                {{ resetCodeCountdown > 0 ? `${resetCodeCountdown}秒后重试` : (resetCodeSending ? '发送中...' : '发送验证码') }}
+                {{ resetCodeCountdown > 0 ? resetCodeCountdown + $t('seconds_retry') : (resetCodeSending ? $t('sending') : $t('send_code')) }}
               </button>
             </div>
           </div>
           <div class="field">
-            <label class="label">新密码</label>
-            <input class="input" type="password" v-model="resetForm.newPassword" placeholder="请输入新密码" />
+            <label class="label">{{ $t('new_password') }}</label>
+            <input class="input" type="password" v-model="resetForm.newPassword" :placeholder="$t('enter_new_password')" />
           </div>
           <div class="field">
-            <label class="label">确认新密码</label>
-            <input class="input" type="password" v-model="resetForm.confirmPassword" placeholder="请再次输入新密码" @keyup.enter="handleResetPassword" />
+            <label class="label">{{ $t('confirm_password') }}</label>
+            <input class="input" type="password" v-model="resetForm.confirmPassword" :placeholder="$t('enter_confirm_password')" @keyup.enter="handleResetPassword" />
           </div>
           <div class="field" style="margin-top: 20px;">
             <button class="btn" style="width: 100%;" @click="handleResetPassword" :disabled="resetLoading">
-              {{ resetLoading ? '重置中...' : '重置密码' }}
+              {{ resetLoading ? $t('resetting') : $t('reset_button') }}
             </button>
           </div>
           <div class="status danger" v-if="resetError" style="text-align: center; margin-top: 10px;">{{ resetError }}</div>
@@ -448,10 +456,10 @@
     <div class="modal-overlay" v-if="showTermsModal" @click.self="showTermsModal = false">
       <div class="modal terms-modal" style="position: relative;">
         <button class="modal-close" @click="showTermsModal = false">×</button>
-        <div class="modal-title">AI工具服务使用条款</div>
+        <div class="modal-title">{{ $t('ai_service_terms') }}</div>
         <div class="terms-content" v-html="termsContent"></div>
         <div style="padding: 16px; text-align: center;">
-          <button class="btn" style="width: 100%;" @click="showTermsModal = false">我已阅读</button>
+          <button class="btn" style="width: 100%;" @click="showTermsModal = false">{{ $t('have_read') }}</button>
         </div>
       </div>
     </div>
@@ -675,23 +683,23 @@
     <div class="modal-overlay" v-if="showModeSelectModal" @click.self="creationMode ? showModeSelectModal = false : null">
       <div class="modal" style="position: relative; max-width: 500px;">
         <button class="modal-close" v-if="creationMode" @click="showModeSelectModal = false">×</button>
-        <div class="modal-title" style="text-align: center;">选择创作模式</div>
+        <div class="modal-title" style="text-align: center;">{{ $t('select_creation_mode') }}</div>
         <div style="padding: 20px;">
-          <p style="text-align: center; color: var(--muted); margin-bottom: 24px;">请选择您的创作模式</p>
+          <p style="text-align: center; color: var(--muted); margin-bottom: 24px;">{{ $t('select_creation_mode_desc') }}</p>
           <div class="mode-select-list">
             <div class="mode-select-item" :class="{active: creationMode === 'short_drama'}" @click="selectCreationMode('short_drama')">
               <div class="mode-select-icon">🎬</div>
               <div class="mode-select-content">
-                <div class="mode-select-title">短剧模式</div>
-                <div class="mode-select-desc">适用于AI短剧创作，包含剧本、角色、场景、视频生成全流程</div>
+                <div class="mode-select-title">{{ $t('mode_short_drama') }}</div>
+                <div class="mode-select-desc">{{ $t('mode_short_drama_desc') }}</div>
               </div>
               <div class="mode-select-check" v-if="creationMode === 'short_drama'">✓</div>
             </div>
             <div class="mode-select-item" :class="{active: creationMode === 'marketing'}" @click="selectCreationMode('marketing')">
               <div class="mode-select-icon">🎯</div>
               <div class="mode-select-content">
-                <div class="mode-select-title">营销模式 <span class="beta-tag">Beta</span></div>
-                <div class="mode-select-desc">适用于营销内容创作，包含带货脚本、广告创意、产品文案等全流程</div>
+                <div class="mode-select-title">{{ $t('mode_marketing') }} <span class="beta-tag">Beta</span></div>
+                <div class="mode-select-desc">{{ $t('mode_marketing_desc') }}</div>
               </div>
               <div class="mode-select-check" v-if="creationMode === 'marketing'">✓</div>
             </div>
@@ -730,10 +738,10 @@
         <!-- 短剧模式内容 -->
         <!-- 当前模式显示 -->
           <div class="current-mode-bar">
-            <span class="current-mode-label">当前模式：</span>
-            <span class="current-mode-value" v-if="$root.creationMode === 'marketing'">🎯 营销模式</span>
-            <span class="current-mode-value" v-else>🎬 短剧模式</span>
-            <button class="mode-switch-btn" @click.stop="$root.showModeSelectModal = true">切换模式</button>
+            <span class="current-mode-label">{{ $t('current_mode') }}</span>
+            <span class="current-mode-value" v-if="$root.creationMode === 'marketing'">🎯 {{ $t('mode_marketing') }}</span>
+            <span class="current-mode-value" v-else>🎬 {{ $t('mode_short_drama') }}</span>
+            <button class="mode-switch-btn" @click.stop="$root.showModeSelectModal = true">{{ $t('switch_mode') }}</button>
           </div>
 
           <!-- 开始创作大横幅 -->
@@ -742,20 +750,20 @@
               <template v-if="$root.creationMode === 'marketing'">
                 <div class="banner-title-row">
                   <span class="banner-sparkle">🎯</span>
-                  <h1 class="banner-title">开始营销创作</h1>
+                  <h1 class="banner-title">{{ $t('banner_title_marketing') }}</h1>
                   <span class="banner-sparkle">🎯</span>
                 </div>
-                <p class="banner-desc">AI 智能营销助手，一键生成带货脚本、广告创意、产品文案，让营销更高效</p>
-                <p class="banner-subtitle">→ 点击开启您的营销创作之旅</p>
+                <p class="banner-desc">{{ $t('banner_desc_marketing') }}</p>
+                <p class="banner-subtitle">{{ $t('banner_subtitle_marketing') }}</p>
               </template>
               <template v-else>
                 <div class="banner-title-row">
                   <span class="banner-sparkle">✨</span>
-                  <h1 class="banner-title">开始创作</h1>
+                  <h1 class="banner-title">{{ $t('start_creation') }}</h1>
                   <span class="banner-sparkle">✨</span>
                 </div>
-                <p class="banner-desc">创建新的短剧工作流，一站式完成剧本、角色、场景到视频的全流程制作</p>
-                <p class="banner-subtitle">→ 点击开始您的创作之旅</p>
+                <p class="banner-desc">{{ $t('creation_desc') }}</p>
+                <p class="banner-subtitle">→ {{ $t('click_start_journey') }}</p>
               </template>
             </div>
           </div>
@@ -766,12 +774,12 @@
               <div class="feature-card-header">
                 <div class="feature-card-icon blue">📹</div>
                 <div class="feature-card-info">
-                  <div class="feature-card-title">视频工作流</div>
-                  <div class="feature-card-subtitle">空画布 + 节点式工作流编辑</div>
+                  <div class="feature-card-title">{{ $t('video_workflow') }}</div>
+                  <div class="feature-card-subtitle">{{ $t('video_workflow_desc') }}</div>
                 </div>
               </div>
               <div class="feature-card-body">
-                <p class="feature-card-desc">创建和管理视频的视频项目</p>
+                <p class="feature-card-desc">{{ $t('video_workflow_detail') }}</p>
               </div>
               <div class="feature-card-footer">
                 <span class="feature-card-link">→</span>
@@ -781,12 +789,12 @@
               <div class="feature-card-header">
                 <div class="feature-card-icon purple">✨</div>
                 <div class="feature-card-info">
-                  <div class="feature-card-title">剧本智能创作系统</div>
-                  <div class="feature-card-subtitle">AI智能体生成 · 人物 · 场景 · 道具</div>
+                  <div class="feature-card-title">{{ $t('script_system') }}</div>
+                  <div class="feature-card-subtitle">{{ $t('script_system_desc') }}</div>
                 </div>
               </div>
               <div class="feature-card-body">
-                <p class="feature-card-desc">一键创作完整的短剧素材</p>
+                <p class="feature-card-desc">{{ $t('script_system_detail') }}</p>
               </div>
               <div class="feature-card-footer">
                 <span class="feature-card-link">→</span>
@@ -800,8 +808,8 @@
               <div class="ai-tools-left">
                 <div class="ai-tools-icon">🤖</div>
                 <div class="ai-tools-info">
-                  <span class="ai-tools-title">AI 工具箱</span>
-                  <span class="ai-tools-subtitle" v-if="!aiToolsExpanded">展开查看所有可用工具</span>
+                  <span class="ai-tools-title">{{ $t('ai_toolbox') }}</span>
+                  <span class="ai-tools-subtitle" v-if="!aiToolsExpanded">{{ $t('ai_toolbox_desc') }}</span>
                 </div>
               </div>
               <div class="ai-tools-toggle" :class="{expanded: aiToolsExpanded}">
@@ -815,57 +823,57 @@
                 <div class="tool-card" @click="$router.push({name:'image-edit'})">
                   <div class="tool-card-icon blue">🖼️</div>
                   <div class="tool-card-info">
-                    <div class="tool-card-title">图片编辑</div>
-                    <div class="tool-card-desc">上传图片 + 提示词</div>
+                    <div class="tool-card-title">{{ $t('image_edit') }}</div>
+                    <div class="tool-card-desc">{{ $t('image_edit_desc') }}</div>
                   </div>
                 </div>
                 <div class="tool-card" @click="$router.push({name:'text-to-image'})">
                   <div class="tool-card-icon purple">🎨</div>
                   <div class="tool-card-info">
-                    <div class="tool-card-title">AI文生图</div>
-                    <div class="tool-card-desc">输入文本提示词生成图片</div>
+                    <div class="tool-card-title">{{ $t('ai_text_to_image') }}</div>
+                    <div class="tool-card-desc">{{ $t('ai_text_to_image_desc') }}</div>
                   </div>
                 </div>
                 <div class="tool-card" @click="$router.push({name:'ai-video-gen'})">
                   <div class="tool-card-icon orange">📹</div>
                   <div class="tool-card-info">
-                    <div class="tool-card-title">AI视频生成</div>
-                    <div class="tool-card-desc">输入文本提示词生成视频</div>
+                    <div class="tool-card-title">{{ $t('ai_video_generation') }}</div>
+                    <div class="tool-card-desc">{{ $t('ai_video_generation_desc') }}</div>
                   </div>
                 </div>
                 <div class="tool-card" @click="$router.push({name:'image-to-video'})">
                   <div class="tool-card-icon green">🎬</div>
                   <div class="tool-card-info">
-                    <div class="tool-card-title">图片生成视频</div>
-                    <div class="tool-card-desc">上传图片 + 提示词生成视频</div>
+                    <div class="tool-card-title">{{ $t('image_to_video') }}</div>
+                    <div class="tool-card-desc">{{ $t('image_to_video_desc') }}</div>
                   </div>
                 </div>
                 <div class="tool-card" @click="$router.push({name:'video-enhance'})">
                   <div class="tool-card-icon yellow">✨</div>
                   <div class="tool-card-info">
-                    <div class="tool-card-title">视频高清修复</div>
-                    <div class="tool-card-desc">上传模糊视频进行高清修复</div>
+                    <div class="tool-card-title">{{ $t('video_enhance') }}</div>
+                    <div class="tool-card-desc">{{ $t('video_enhance_desc') }}</div>
                   </div>
                 </div>
                 <div class="tool-card" @click="$router.push({name:'audio-generate'})">
                   <div class="tool-card-icon purple">🎵</div>
                   <div class="tool-card-info">
-                    <div class="tool-card-title">AI音频生成</div>
-                    <div class="tool-card-desc">输入文本生成语音，支持声音克隆</div>
+                    <div class="tool-card-title">{{ $t('audio_generation') }}</div>
+                    <div class="tool-card-desc">{{ $t('audio_generation_desc') }}</div>
                   </div>
                 </div>
                 <div class="tool-card" @click="$router.push({name:'digital-human'})">
                   <div class="tool-card-icon pink">👤</div>
                   <div class="tool-card-info">
-                    <div class="tool-card-title">在线图片数字人</div>
-                    <div class="tool-card-desc">上传图片+文本+音频生成数字人</div>
+                    <div class="tool-card-title">{{ $t('digital_human') }}</div>
+                    <div class="tool-card-desc">{{ $t('digital_human_desc') }}</div>
                   </div>
                 </div>
                 <div class="tool-card" @click="$router.push({name:'skill-config'})">
                   <div class="tool-card-icon teal">⚙️</div>
                   <div class="tool-card-info">
-                    <div class="tool-card-title">技能配置</div>
-                    <div class="tool-card-desc">自定义 AI 专家的能力</div>
+                    <div class="tool-card-title">{{ $t('skill_config') }}</div>
+                    <div class="tool-card-desc">{{ $t('skill_config_desc') }}</div>
                   </div>
                 </div>
               </div>
@@ -894,7 +902,7 @@
         const userId = localStorage.getItem('user_id');
 
         if (!authToken || !userId) {
-          alert('请先登录');
+          alert(this.$t('need_login') || '请先登录');
           return;
         }
 
@@ -939,11 +947,11 @@
         return !!this.imageFile && !!this.audioFile && !!this.text.trim() && !this.loading && this.text.length <= 1000;
       },
       statusText() {
-        if (this.status === 'submitted') return '任务已提交，正在生成数字人视频...';
-        if (this.status === 'QUEUED') return '任务排队中...';
+        if (this.status === 'submitted') return this.$t('task_submitted') + '数字人视频...';
+        if (this.status === 'QUEUED') return this.$t('loading');
         if (this.status === 'RUNNING') return '正在生成数字人视频...';
         if (this.status === 'SUCCESS') return '数字人视频生成完成！';
-        if (this.status === 'FAILED') return '任务失败';
+        if (this.status === 'FAILED') return this.$t('error');
         return '';
       },
       aspectRatioOptions() {
@@ -1225,80 +1233,80 @@
     template: `
       <div class="form">
         <div class="field">
-          <label class="label">上传图片 <span style="color: red;">*</span></label>
+          <label class="label">{{ $t('digital_human_image') }} <span style="color: red;">*</span></label>
           <input class="input" type="file" accept="image/*" @change="onImageFile" :disabled="loading" />
-          <div class="muted" style="margin-top: 4px;">上传数字人的图片</div>
+          <div class="muted" style="margin-top: 4px;">{{ $t('digital_human_image_tip') }}</div>
         </div>
-        
+
         <div class="field">
-          <label class="label">讲话文本 <span style="color: red;">*</span></label>
-          <textarea class="input" v-model="text" placeholder="输入数字人要讲的话（最多1000个字）" rows="5" :disabled="loading"></textarea>
+          <label class="label">{{ $t('speech_text') }} <span style="color: red;">*</span></label>
+          <textarea class="input" v-model="text" :placeholder="$t('max_characters')" rows="5" :disabled="loading"></textarea>
           <div class="muted" style="margin-top: 4px;">
-            当前字数: {{ text.length }}/1000
-            <span v-if="text.length > 1000" style="color: var(--danger); margin-left: 8px;">文本超出限制！</span>
+            {{ $t('current_characters') }}: {{ text.length }}/1000
+            <span v-if="text.length > 1000" style="color: var(--danger); margin-left: 8px;">{{ $t('text_exceeded') }}</span>
           </div>
         </div>
-        
+
         <div class="field">
-          <label class="label">参考音频 <span style="color: red;">*</span></label>
+          <label class="label">{{ $t('reference_audio') }} <span style="color: red;">*</span></label>
           <input class="input" type="file" accept="audio/*" @change="onAudioFile" :disabled="loading" />
-          <div class="muted" style="margin-top: 4px;">上传参考音频文件，用于声音克隆</div>
+          <div class="muted" style="margin-top: 4px;">{{ $t('audio_cloning_tip') }}</div>
         </div>
-        
+
         <div class="field">
-          <label class="label">视频比例</label>
+          <label class="label">{{ $t('video_ratio') }}</label>
           <select class="input" v-model="aspectRatio" :disabled="loading">
             <option v-for="opt in aspectRatioOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
           </select>
         </div>
-        
+
         <div class="field" style="background: #1a1f2e; padding: 12px; border-radius: 8px; border: 1px solid var(--border);">
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="color: var(--muted); font-size: 14px;">算力消耗：</span>
-            <span style="color: #60a5fa; font-weight: bold; font-size: 16px;">{{ computingPower }} 算力</span>
+            <span style="color: var(--muted); font-size: 14px;">{{ $t('power_consumption') }}：</span>
+            <span style="color: #60a5fa; font-weight: bold; font-size: 16px;">{{ computingPower }} {{ $t('power_unit') }}</span>
           </div>
         </div>
-        
+
         <div class="field">
           <div class="row">
             <button class="btn" :disabled="!canSubmit" @click="submit">
-              {{ loading ? '生成中...' : '开始生成' }}
+              {{ loading ? $t('generating') : $t('start_generating') }}
             </button>
             <button class="btn secondary" @click="showHistory = true; fetchHistory()" :disabled="historyLoading">
-              {{ historyLoading ? '加载中...' : '历史记录' }}
+              {{ historyLoading ? $t('loading') : $t('history') }}
             </button>
           </div>
         </div>
-        
+
         <div v-if="statusText" class="status" :class="{'success': status==='SUCCESS', 'danger': status==='FAILED'}">
           {{ statusText }}
         </div>
-        
+
         <div v-if="error && !loading" class="status danger">{{ error }}</div>
-        
+
         <div v-if="results.length" class="results">
-          <div class="result-title">生成结果</div>
+          <div class="result-title">{{ $t('generate_result') }}</div>
           <div v-for="(result, idx) in results" :key="idx" class="result-item">
             <video :src="result.file_url" controls style="width:100%; max-height:400px; border-radius:8px;"></video>
             <div style="margin-top:8px; display:flex; gap:8px;">
-              <button class="btn secondary" @click="downloadVideo(result.file_url, idx)">下载视频</button>
-              <span v-if="result.task_cost_time" class="muted">耗时: {{ result.task_cost_time }}秒</span>
+              <button class="btn secondary" @click="downloadVideo(result.file_url, idx)">{{ $t('download_video') }}</button>
+              <span v-if="result.task_cost_time" class="muted">{{ $t('cost_time') }}: {{ result.task_cost_time }}{{ $t('seconds') }}</span>
             </div>
           </div>
         </div>
-        
+
         <div class="modal-overlay" v-if="showHistory" @click.self="closeHistory">
           <div class="modal" style="max-width: 800px; max-height: 80vh; overflow-y: auto;" @scroll="handleHistoryScroll">
             <button class="modal-close" @click="closeHistory">×</button>
-            <div class="modal-title">数字人生成历史记录</div>
+            <div class="modal-title">{{ $t('digital_human_history') }}</div>
             <div v-if="historyList.length === 0 && !historyLoading" style="text-align: center; padding: 40px; color: var(--muted);">
-              暂无历史记录
+              {{ $t('no_history_records') }}
             </div>
             <div v-for="(item, idx) in historyList" :key="idx" style="padding: 16px; border-bottom: 1px solid var(--border);">
               <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
                 <div style="flex: 1;">
                   <div style="font-size: 14px; color: var(--text); margin-bottom: 4px;">{{ item.prompt }}</div>
-                  <div style="font-size: 12px; color: var(--muted);">比例: {{ item.ratio || '-' }}</div>
+                  <div style="font-size: 12px; color: var(--muted);">{{ $t('ratio') }}: {{ item.ratio || '-' }}</div>
                 </div>
                 <span :style="{color: getHistoryStatusColor(item.status), fontSize: '12px', fontWeight: '600'}">
                   {{ getHistoryStatusText(item.status) }}
@@ -1306,14 +1314,14 @@
               </div>
               <div v-if="item.result_url" style="margin-top: 8px;">
                 <video :src="item.result_url" controls style="width: 100%; max-height: 200px; border-radius: 8px;"></video>
-                <button class="btn secondary" style="margin-top: 8px; font-size: 12px;" @click="downloadHistoryVideo(item, idx)">下载视频</button>
+                <button class="btn secondary" style="margin-top: 8px; font-size: 12px;" @click="downloadHistoryVideo(item, idx)">{{ $t('download_video') }}</button>
               </div>
               <div style="font-size: 11px; color: var(--muted); margin-top: 8px;">
-                创建时间: {{ new Date(item.create_time).toLocaleString() }}
+                {{ $t('create_time') }}: {{ new Date(item.create_time).toLocaleString() }}
               </div>
             </div>
             <div v-if="historyLoading" style="text-align: center; padding: 20px; color: var(--muted);">
-              加载中...
+              {{ $t('loading') }}
             </div>
           </div>
         </div>
@@ -1356,10 +1364,10 @@
       },
       emoControlOptions() {
         return [
-          { value: 0, label: '与参考音频相同' },
-          { value: 1, label: '使用情感参考音频' },
-          { value: 2, label: '使用情感向量' },
-          { value: 3, label: '使用情感描述文本' }
+          { value: 0, label: this.$t('same_as_reference') },
+          { value: 1, label: this.$t('use_emotion_reference') },
+          { value: 2, label: this.$t('use_emotion_vector') },
+          { value: 3, label: this.$t('use_emotion_description') }
         ];
       },
       emoVecLabels() {
@@ -1372,9 +1380,9 @@
         return this.emoVecSum <= 1.5;
       },
       statusText() {
-        if (this.status === 'submitted') return '任务已提交，正在生成音频...';
-        if (this.loading) return '正在生成音频，请稍候...';
-        if (this.result) return '音频生成完成！';
+        if (this.status === 'submitted') return this.$t('audio_submit_text');
+        if (this.loading) return this.$t('audio_generating');
+        if (this.result) return this.$t('audio_generate_complete');
         return '';
       }
     },
@@ -1582,43 +1590,43 @@
     template: `
       <div class="form">
         <div class="field">
-          <label class="label">生成文本 <span style="color: red;">*</span></label>
-          <textarea class="input" v-model="text" placeholder="输入要转换为语音的文本" rows="4"></textarea>
+          <label class="label">{{ $t('generate_text') }} <span style="color: red;">*</span></label>
+          <textarea class="input" v-model="text" :placeholder="$t('enter_text_to_speech')" rows="4"></textarea>
         </div>
-        
+
         <div class="field">
-          <label class="label">参考音频（可选）</label>
+          <label class="label">{{ $t('reference_audio') }}（{{ $t('optional') }}）</label>
           <input type="file" @change="onRefAudioFile" accept="audio/*" class="input" :disabled="loading">
-          <div class="muted" style="margin-top: 4px;">上传参考音频进行声音克隆（时长不超过20秒）</div>
+          <div class="muted" style="margin-top: 4px;">{{ $t('audio_cloning_tip') }}（{{ $t('max_20_seconds') }}）</div>
         </div>
-        
+
         <div class="field">
-          <label class="label">情感控制方式</label>
+          <label class="label">{{ $t('emotion_control_method') }}</label>
           <select class="input" v-model="emoControlMethod">
             <option v-for="opt in emoControlOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
           </select>
         </div>
-        
+
         <div class="field" v-if="emoControlMethod === 1">
           <label class="label">情感参考音频</label>
           <div style="margin-bottom: 8px;">
             <label style="display: inline-flex; align-items: center; margin-right: 16px; cursor: pointer;">
               <input type="radio" v-model="emoRefType" value="file" style="margin-right: 4px;" :disabled="loading">
-              <span>上传音频文件</span>
+              <span>{{ $t('upload_audio_file') }}</span>
             </label>
             <label style="display: inline-flex; align-items: center; cursor: pointer;">
               <input type="radio" v-model="emoRefType" value="video_url" style="margin-right: 4px;" :disabled="loading">
-              <span>视频链接</span>
+              <span>{{ $t('video_link') }}</span>
             </label>
           </div>
           <input v-if="emoRefType === 'file'" type="file" @change="onEmoRefAudioFile" accept="audio/*" class="input" :disabled="loading">
-          <input v-if="emoRefType === 'video_url'" type="text" v-model="emoRefVideoUrl" placeholder="输入视频链接（支持40MB以内，20秒以内的视频）" class="input" :disabled="loading">
-          <div class="muted" style="margin-top: 4px;" v-if="emoRefType === 'file'">上传情感参考音频文件（时长不超过20秒）</div>
-          <div class="muted" style="margin-top: 4px;" v-if="emoRefType === 'video_url'">输入视频链接，将自动提取音频（视频大小限制40MB，时长不超过20秒）</div>
+          <input v-if="emoRefType === 'video_url'" type="text" v-model="emoRefVideoUrl" :placeholder="$t('enter_video_url')" class="input" :disabled="loading">
+          <div class="muted" style="margin-top: 4px;" v-if="emoRefType === 'file'">{{ $t('emotion_reference_audio') }}</div>
+          <div class="muted" style="margin-top: 4px;" v-if="emoRefType === 'video_url'">{{ $t('extract_audio_auto') }}</div>
         </div>
-        
+
         <div class="field" v-if="emoControlMethod === 2">
-          <label class="label">情感向量控制</label>
+          <label class="label">{{ $t('emotion_vector_control') }}</label>
           <div style="margin-bottom: 16px;">
             <div v-for="(label, idx) in emoVecLabels" :key="idx" style="margin-bottom: 12px;">
               <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
@@ -1629,39 +1637,39 @@
             </div>
           </div>
           <div class="muted" style="margin-top: 8px;">
-            当前总和: <span :style="{color: emoVecValid ? 'var(--success)' : 'var(--danger)', fontWeight: 'bold'}">{{ emoVecSum.toFixed(2) }}</span> / 1.5
-            <span v-if="!emoVecValid" style="color: var(--danger); margin-left: 8px;">⚠️ 情感向量之和不能超过1.5</span>
+            {{ $t('emotion_sum') }}: <span :style="{color: emoVecValid ? 'var(--success)' : 'var(--danger)', fontWeight: 'bold'}">{{ emoVecSum.toFixed(2) }}</span> / 1.5
+            <span v-if="!emoVecValid" style="color: var(--danger); margin-left: 8px;">{{ $t('emotion_exceeded') }}</span>
           </div>
         </div>
-        
+
         <div class="field" v-if="emoControlMethod === 3">
-          <label class="label">情感描述文本</label>
-          <input class="input" v-model="emoText" placeholder="描述期望的情感，例如：开心、悲伤、愤怒" />
+          <label class="label">{{ $t('description') }}</label>
+          <input class="input" v-model="emoText" :placeholder="$t('emotion_description_text')" />
         </div>
-        
+
         <div class="field" v-if="emoControlMethod === 1">
-          <label class="label">情感权重 ({{ emoWeight }})</label>
+          <label class="label">{{ $t('emotion_weight') }} ({{ emoWeight }})</label>
           <input type="range" v-model.number="emoWeight" min="0" max="1.6" step="0.1" style="width: 100%;" />
-          <div class="muted" style="margin-top: 4px;">调整情感的强度，0为无情感，1.6为最强情感</div>
+          <div class="muted" style="margin-top: 4px;">{{ $t('emotion_strength') }}</div>
         </div>
-        
+
         <div class="field">
           <button class="btn" @click="submit" :disabled="!canSubmit">
-            {{ loading ? '生成中...' : '开始生成' }}
+            {{ loading ? $t('generating') : $t('start_generating') }}
           </button>
         </div>
-        
+
         <div v-if="statusText" class="status" :class="{'success': result, 'danger': status==='FAILED'}">
           {{ statusText }}
         </div>
-        
+
         <div v-if="error && !loading" class="status danger">{{ error }}</div>
-        
+
         <div v-if="result" class="results" style="display: block; padding: 16px;">
-          <div class="result-title" style="margin-bottom: 12px; font-weight: 600;">生成结果</div>
+          <div class="result-title" style="margin-bottom: 12px; font-weight: 600;">{{ $t('generate_result') }}</div>
           <div class="result-item" style="display: block; width: 100%;">
             <audio :src="result.file_url" controls style="width:50%; max-width:50%; display:block; margin-bottom:12px;"></audio>
-            <button class="btn secondary" @click="downloadAudio(result.file_url)">下载音频</button>
+            <button class="btn secondary" @click="downloadAudio(result.file_url)">{{ $t('download_audio') }}</button>
           </div>
         </div>
       </div>
@@ -1696,42 +1704,42 @@
     computed: {
       canSubmit() { return !!this.videoId.trim() && !!this.prompt.trim() && !this.loading },
       statusText() {
-        if (['SUCCESS', 'completed'].includes(this.status)) return 'Remix完成！';
-        if (['FAILED'].includes(this.status)) return this.error || '任务失败';
-        if (['QUEUED', 'RUNNING'].includes(this.status) || this.loading) return '正在Remix视频，请稍候...';
+        if (['SUCCESS', 'completed'].includes(this.status)) return this.$t('remix_complete') || 'Remix完成！';
+        if (['FAILED'].includes(this.status)) return this.error || this.$t('remix_task_failed') || '任务失败';
+        if (['QUEUED', 'RUNNING'].includes(this.status) || this.loading) return this.$t('remix_video_generating') || '正在Remix视频，请稍候...';
         return '';
       },
       aspectRatioOptions() {
         return [
-          { value: '16:9', label: '16:9 (横屏)' },
-          { value: '9:16', label: '9:16 (竖屏)' },
-          { value: '1:1', label: '1:1 (方形)' }
+          { value: '16:9', label: this.$t('screen_16_9') || '16:9 (横屏)' },
+          { value: '9:16', label: this.$t('screen_9_16') || '9:16 (竖屏)' },
+          { value: '1:1', label: this.$t('screen_1_1') || '1:1 (方形)' }
         ];
       },
       durationOptions() {
         return [
-          { value: 10, label: '10秒' },
-          { value: 15, label: '15秒' }
+          { value: 10, label: this.$t('duration_10s') || '10秒' },
+          { value: 15, label: this.$t('duration_15s') || '15秒' }
         ];
       },
       countOptions() {
         return [
-          { value: 1, label: '1个' },
-          { value: 2, label: '2个' },
-          { value: 3, label: '3个' },
-          { value: 4, label: '4个' }
+          { value: 1, label: this.$t('count_1') || '1个' },
+          { value: 2, label: this.$t('count_2') || '2个' },
+          { value: 3, label: this.$t('count_3') || '3个' },
+          { value: 4, label: this.$t('count_4') || '4个' }
         ];
       }
     },
     methods: {
       async submit(){
         if(!this.canSubmit) return;
-        this.loading = true; 
-        this.error=''; 
-        this.results=[]; 
+        this.loading = true;
+        this.error='';
+        this.results=[];
         this.projectIds=[];
         this.status='';
-        
+
         try {
           const form = new FormData();
           form.append('video_id', this.videoId);
@@ -1970,32 +1978,32 @@
     template: `
       <div class="form">
         <div class="field">
-          <label class="label">视频ID <span style="color: red;">*</span></label>
-          <input class="input" v-model="videoId" placeholder="输入要重新编辑的视频ID" />
-          <div class="muted" style="margin-top: 4px;">例如: 09fe0989-90ce-593a-e9d4-921a62ac617f</div>
+          <label class="label">{{ $t('video_id_label') || '视频ID' }} <span style="color: red;">*</span></label>
+          <input class="input" v-model="videoId" :placeholder="$t('video_id_placeholder') || '输入要重新编辑的视频ID'" />
+          <div class="muted" style="margin-top: 4px;">{{ $t('video_id_example') || '例如: 09fe0989-90ce-593a-e9d4-921a62ac617f' }}</div>
         </div>
-        
+
         <div class="field">
-          <label class="label">编辑提示词 <span style="color: red;">*</span></label>
-          <textarea class="input" v-model="prompt" placeholder="描述你想要的编辑效果，例如：黑夜变白天" rows="3"></textarea>
+          <label class="label">{{ $t('video_remix_label') || '编辑提示词' }} <span style="color: red;">*</span></label>
+          <textarea class="input" v-model="prompt" :placeholder="$t('edit_prompt_placeholder') || '描述你想要的编辑效果，例如：黑夜变白天'" rows="3"></textarea>
         </div>
-        
+
         <div class="field">
-          <label class="label">视频比例</label>
+          <label class="label">{{ $t('aspect_ratio_label') || '视频比例' }}</label>
           <select class="input" v-model="aspectRatio">
             <option v-for="opt in aspectRatioOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
           </select>
         </div>
-        
+
         <div class="field">
-          <label class="label">视频时长</label>
+          <label class="label">{{ $t('video_duration_label') || '视频时长' }}</label>
           <select class="input" v-model="duration">
             <option v-for="opt in durationOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
           </select>
         </div>
-        
+
         <div class="field">
-          <label class="label">生成数量</label>
+          <label class="label">{{ $t('generation_count_label') || '生成数量' }}</label>
           <select class="input" v-model="count">
             <option v-for="opt in countOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
           </select>
@@ -2004,10 +2012,10 @@
         <div class="field">
           <div class="row">
             <button class="btn" @click="submit" :disabled="!canSubmit">
-              {{ loading ? 'Remix中...' : '开始 Remix' }}
+              {{ loading ? ($t('remix_processing') || 'Remix中...') : ($t('remix_start') || '开始 Remix') }}
             </button>
             <button class="btn secondary" @click="showHistory = true; fetchHistory()" :disabled="historyLoading">
-              {{ historyLoading ? '加载中...' : '历史记录' }}
+              {{ historyLoading ? ($t('loading') || '加载中...') : ($t('history') || '历史记录') }}
             </button>
           </div>
         </div>
@@ -2019,12 +2027,12 @@
         <div v-if="error && !loading" class="status danger">{{ error }}</div>
 
         <div v-if="results.length" class="results">
-          <div class="result-title">生成结果 ({{ results.length }}个)</div>
+          <div class="result-title">{{ $t('generation_results') || '生成结果' }} ({{ results.length }}{{ $t('items') || '个' }})</div>
           <div v-for="(r, idx) in results" :key="idx" class="result-item">
             <video :src="r.file_url" controls style="width:100%; max-height:400px; border-radius:8px;"></video>
             <div style="margin-top:8px; display:flex; gap:8px;">
-              <button class="btn secondary" @click="downloadVideo(r.file_url, idx)">下载视频</button>
-              <span v-if="r.task_cost_time" class="muted">耗时: {{ r.task_cost_time }}秒</span>
+              <button class="btn secondary" @click="downloadVideo(r.file_url, idx)">{{ $t('download_video_button') || '下载视频' }}</button>
+              <span v-if="r.task_cost_time" class="muted">{{ $t('cost_time') || '耗时' }}: {{ r.task_cost_time }}{{ $t('seconds') || '秒' }}</span>
             </div>
           </div>
         </div>
@@ -2032,9 +2040,9 @@
         <div class="modal-overlay" v-if="showHistory" @click.self="closeHistory">
           <div class="modal" style="max-width: 800px; max-height: 80vh; overflow-y: auto;" @scroll="handleHistoryScroll">
             <button class="modal-close" @click="closeHistory">×</button>
-            <div class="modal-title">Remix 历史记录</div>
+            <div class="modal-title">{{ $t('remix_history') || 'Remix 历史记录' }}</div>
             <div v-if="historyList.length === 0 && !historyLoading" style="text-align: center; padding: 40px; color: var(--muted);">
-              暂无历史记录
+              {{ $t('no_history') || '暂无历史记录' }}
             </div>
             <div v-for="(item, idx) in historyList" :key="idx" style="padding: 16px; border-bottom: 1px solid var(--border);">
               <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
@@ -2042,7 +2050,7 @@
                   <div style="font-size: 14px; color: var(--text); margin-bottom: 4px;">{{ item.prompt }}</div>
                   <div style="font-size: 12px; color: var(--muted);">{{ item.message }}</div>
                   <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
-                    比例: {{ item.ratio || '-' }} | 时长: {{ item.duration || '-' }}秒
+                    {{ $t('aspect_ratio_label') || '比例' }}: {{ item.ratio || '-' }} | {{ $t('duration_label') || '时长' }}: {{ item.duration || '-' }}{{ $t('seconds') || '秒' }}
                   </div>
                 </div>
                 <span :style="{color: getHistoryStatusColor(item.status), fontSize: '12px', fontWeight: '600'}">
@@ -2051,14 +2059,14 @@
               </div>
               <div v-if="item.result_url" style="margin-top: 8px;">
                 <video :src="item.result_url" controls style="width: 100%; max-height: 200px; border-radius: 8px;"></video>
-                <button class="btn secondary" style="margin-top: 8px; font-size: 12px;" @click="downloadHistoryVideo(item, idx)">下载视频</button>
+                <button class="btn secondary" style="margin-top: 8px; font-size: 12px;" @click="downloadHistoryVideo(item, idx)">{{ $t('download_video_button') || '下载视频' }}</button>
               </div>
               <div style="font-size: 11px; color: var(--muted); margin-top: 8px;">
-                创建时间: {{ new Date(item.create_time).toLocaleString() }}
+                {{ $t('created_time_display') || '创建时间' }}: {{ new Date(item.create_time).toLocaleString() }}
               </div>
             </div>
             <div v-if="historyLoading" style="text-align: center; padding: 20px; color: var(--muted);">
-              加载中...
+              {{ $t('loading') || '加载中...' }}
             </div>
           </div>
         </div>
@@ -2093,11 +2101,11 @@
       canSubmit() { return !!this.file && !this.loading },
       statusText() {
         switch(this.status) {
-          case 'submitted': return '任务已提交，等待处理...';
-          case 'QUEUED': return '任务排队中...';
-          case 'RUNNING': return '正在修复视频...';
-          case 'SUCCESS': return '修复完成！';
-          case 'FAILED': return '任务失败';
+          case 'submitted': return this.$t('video_enhance_status_submitted') || '任务已提交，等待处理...';
+          case 'QUEUED': return this.$t('video_enhance_status_queued') || '任务排队中...';
+          case 'RUNNING': return this.$t('video_enhance_status_running') || '正在修复视频...';
+          case 'SUCCESS': return this.$t('video_enhance_status_success') || '修复完成！';
+          case 'FAILED': return this.$t('video_enhance_status_failed') || '任务失败';
           default: return '';
         }
       }
@@ -2110,7 +2118,7 @@
 
         const userId = localStorage.getItem('user_id');
         if (!userId) {
-          this.error = '请先登录后再使用视频修复功能';
+          this.error = this.$t('video_enhance_login_required') || '请先登录后再使用视频修复功能';
           return;
         }
 
@@ -2317,17 +2325,17 @@
       <div>
         <div class="form">
           <div class="field">
-            <label class="label">上传视频</label>
+            <label class="label">{{ $t('upload_video') || '上传视频' }}</label>
             <input type="file" @change="onFile" accept="video/*" class="input" :disabled="loading">
           </div>
 
           <div class="field">
             <div class="row">
               <button class="btn" :disabled="!canSubmit" @click="submit">
-                {{ loading ? '处理中...' : '开始修复' }}
+                {{ loading ? ($t('video_enhance_processing') || '处理中...') : ($t('video_enhance_start') || '开始修复') }}
               </button>
               <button class="btn secondary" @click="showHistory = true; fetchHistory()" :disabled="historyLoading">
-                {{ historyLoading ? '加载中...' : '历史记录' }}
+                {{ historyLoading ? ($t('loading') || '加载中...') : ($t('video_enhance_history') || '历史记录') }}
               </button>
             </div>
           </div>
@@ -2350,14 +2358,14 @@
             <div style="position: relative;">
               <div style="display: flex; justify-content: space-between; align-items: flex-start; padding-right: 40px; margin-bottom: 12px;">
                 <div style="display: flex; align-items: flex-start; gap: 12px;">
-                  <div class="modal-title">历史记录 (共 {{ historyTotal }} 条)</div>
+                  <div class="modal-title">{{ $t('history') || '历史记录' }} ({{ $t('total_records') || '共' }} {{ historyTotal }} {{ $t('items') || '条' }})</div>
                   <button
                     class="btn secondary"
                     @click="fetchHistory(true)"
                     :disabled="historyLoading"
                     style="display: inline-flex; align-items: center; justify-content: center; padding: 4px 12px; font-size: 12px;"
                   >
-                    {{ historyLoading ? '刷新中...' : '刷新' }}
+                    {{ historyLoading ? ($t('refreshing') || '刷新中...') : ($t('refresh') || '刷新') }}
                   </button>
                 </div>
                 <button class="modal-close" @click="closeHistory">×</button>
@@ -2365,14 +2373,14 @@
             </div>
             
             <div v-if="historyList.length === 0" style="padding: 40px; text-align: center; color: var(--muted);">
-              暂无历史记录
+              {{ $t('no_history') }}
             </div>
             
             <div v-else style="padding: 16px;">
               <div v-for="(item, idx) in historyList" :key="item.id" style="margin-bottom: 16px; padding: 12px; background: #0b1220; border: 1px solid var(--border); border-radius: 8px;">
                 <div style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
                   <div>
-                    <strong>类型:</strong> 视频高清修复
+                    <strong>{{ $t('type_label') || '类型' }}:</strong> {{ $t('video_enhance_type') || '视频高清修复' }}
                   </div>
                   <span :style="{
                     padding: '4px 12px',
@@ -2388,13 +2396,13 @@
                   </span>
                 </div>
                 <div style="display: flex; gap: 16px; font-size: 13px; color: var(--muted); margin-bottom: 8px;">
-                  <span>创建时间: {{ item.create_time ? new Date(item.create_time).toLocaleString('zh-CN') : '未知' }}</span>
+                  <span>{{ $t('created_time_display') || '创建时间' }}: {{ item.create_time ? new Date(item.create_time).toLocaleString('zh-CN') : ($t('unknown') || '未知') }}</span>
                 </div>
                 <div v-if="item.image_path" style="margin-top: 8px;">
                   <video :src="item.image_path" controls style="max-width: 240px; border-radius: 8px; margin-bottom: 8px;"></video>
                 </div>
                 <div v-if="item.result_url" style="margin-top: 8px;">
-                  <button class="btn secondary" @click="downloadHistoryVideo(item, idx)" style="display: inline-block; text-decoration: none; margin-top: 8px;">下载修复视频</button>
+                  <button class="btn secondary" @click="downloadHistoryVideo(item, idx)" style="display: inline-block; text-decoration: none; margin-top: 8px;">{{ $t('download_enhanced_video') || '下载修复视频' }}</button>
                 </div>
               </div>
             </div>
@@ -3039,12 +3047,12 @@
       <div>
         <div class="form">
           <div class="field">
-            <label class="label">上传图片 (最多5张，可多次选择累加)</label>
+            <label class="label">{{ $t('upload_image_max') }}</label>
             <input class="input" type="file" accept="image/*" multiple @change="onFile" />
             <div v-if="files.length > 0" style="margin-top: 10px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <div style="font-size: 13px; color: var(--muted);">已选择 {{ files.length }}/5 张图片:</div>
-                <button @click="clearAllFiles" class="btn secondary" style="font-size: 12px; padding: 4px 10px;">清空全部</button>
+                <div style="font-size: 13px; color: var(--muted);">{{ $t('selected_images') }} {{ files.length }}/5 {{ $t('upload_image_tips') }}</div>
+                <button @click="clearAllFiles" class="btn secondary" style="font-size: 12px; padding: 4px 10px;">{{ $t('clear_all') }}</button>
               </div>
               <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                 <div v-for="(file, index) in files" :key="index" style="position: relative; display: inline-block; padding: 6px 12px; background: #0b1220; border: 1px solid var(--border); border-radius: 6px; font-size: 12px;">
@@ -3056,46 +3064,46 @@
           </div>
 
           <div class="field">
-            <label class="label">提示词</label>
-            <textarea class="textarea" v-model.trim="prompt" placeholder="请输入对图片的编辑指令，例如：将人物制作成为手办"></textarea>
+            <label class="label">{{ $t('prompt') }}</label>
+            <textarea class="textarea" v-model.trim="prompt" :placeholder="$t('edit_instruction')"></textarea>
           </div>
 
           <div class="field">
-            <label class="label">模型选择</label>
+            <label class="label">{{ $t('model_selection') }}</label>
             <select class="input" v-model="model">
               <option v-for="opt in modelOptions" :key="opt.value" :value="opt.value" :disabled="opt.disabled">{{ opt.label }}</option>
             </select>
           </div>
 
           <div class="field">
-            <label class="label">图片比例</label>
+            <label class="label">{{ $t('aspect_ratio') }}</label>
             <select class="input" v-model="ratio">
               <option v-for="opt in ratioOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
           </div>
 
           <div class="field" v-if="imageSizeOptions.length > 0">
-            <label class="label">分辨率</label>
+            <label class="label">{{ $t('resolution') }}</label>
             <select class="input" v-model="imageSize">
               <option v-for="opt in imageSizeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
           </div>
 
           <div class="field">
-            <label class="label">生成数量</label>
+            <label class="label">{{ $t('number_of_images') }}</label>
             <select class="input" v-model.number="count">
               <option v-for="opt in countOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
           </div>
 
           <div class="field" v-if="supportsRefAudioVideo">
-            <label class="label">参考音频（可选）</label>
+            <label class="label">{{ $t('reference_audio') }}（{{ $t('optional') }}）</label>
             <input type="file" @change="onRefAudioFile" accept="audio/*" multiple class="input" :disabled="loading">
-            <div class="muted" style="margin-top: 4px;">可上传多个参考音频文件</div>
+            <div class="muted" style="margin-top: 4px;">{{ $t('upload_image_tips') }}</div>
             <div v-if="refAudioFiles.length > 0" style="margin-top: 10px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <div style="font-size: 13px; color: var(--muted);">已选择 {{ refAudioFiles.length }} 个音频:</div>
-                <button @click="clearAllRefAudioFiles" class="btn secondary" style="font-size: 12px; padding: 4px 10px;">清空全部</button>
+                <div style="font-size: 13px; color: var(--muted);">{{ $t('selected_images') }} {{ refAudioFiles.length }} {{ $t('audio') }}:</div>
+                <button @click="clearAllRefAudioFiles" class="btn secondary" style="font-size: 12px; padding: 4px 10px;">{{ $t('clear_all') }}</button>
               </div>
               <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                 <div v-for="(file, index) in refAudioFiles" :key="index" style="position: relative; display: inline-block; padding: 6px 12px; background: #0b1220; border: 1px solid var(--border); border-radius: 6px; font-size: 12px;">
@@ -3107,13 +3115,13 @@
           </div>
 
           <div class="field" v-if="supportsRefAudioVideo">
-            <label class="label">参考视频（可选）</label>
+            <label class="label">{{ $t('video') }}（{{ $t('optional') }}）</label>
             <input type="file" @change="onRefVideoFile" accept="video/*" multiple class="input" :disabled="loading">
-            <div class="muted" style="margin-top: 4px;">可上传多个参考视频文件</div>
+            <div class="muted" style="margin-top: 4px;">{{ $t('upload_video_tips') }}</div>
             <div v-if="refVideoFiles.length > 0" style="margin-top: 10px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <div style="font-size: 13px; color: var(--muted);">已选择 {{ refVideoFiles.length }} 个视频:</div>
-                <button @click="clearAllRefVideoFiles" class="btn secondary" style="font-size: 12px; padding: 4px 10px;">清空全部</button>
+                <div style="font-size: 13px; color: var(--muted);">{{ $t('selected_images') }} {{ refVideoFiles.length }} {{ $t('video') }}:</div>
+                <button @click="clearAllRefVideoFiles" class="btn secondary" style="font-size: 12px; padding: 4px 10px;">{{ $t('clear_all') }}</button>
               </div>
               <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                 <div v-for="(file, index) in refVideoFiles" :key="index" style="position: relative; display: inline-block; padding: 6px 12px; background: #0b1220; border: 1px solid var(--border); border-radius: 6px; font-size: 12px;">
@@ -3126,36 +3134,36 @@
 
           <div class="field">
             <div class="row">
-              <button class="btn" :disabled="!canSubmit" @click="submit">{{ loading ? '提交中…' : '提交任务' }}</button>
-              <button class="btn secondary" @click="fetchHistory" :disabled="historyLoading">{{ historyLoading ? '加载中...' : '历史记录' }}</button>
+              <button class="btn" :disabled="!canSubmit" @click="submit">{{ loading ? $t('uploading') : $t('submit_task') }}</button>
+              <button class="btn secondary" @click="fetchHistory" :disabled="historyLoading">{{ historyLoading ? $t('loading') : $t('history') }}</button>
             </div>
           </div>
         </div>
 
-        <div class="status" v-if="projectId">任务 ID：{{ projectId }}</div>
+        <div class="status" v-if="projectId">{{ $t('task_id') }}：{{ projectId }}</div>
         <div class="status" v-if="statusText">{{ statusText }}</div>
         <div class="status danger" v-if="error">{{ error }}</div>
 
         <div class="preview" v-if="results.length">
           <div class="imgbox" v-for="(result, i) in results" :key="i">
             <!-- Original Image -->
-            <div style="margin-bottom: 8px; font-weight: bold; color: var(--primary); text-align: center;">原始图片 #{{ i + 1 }}</div>
+            <div style="margin-bottom: 8px; font-weight: bold; color: var(--primary); text-align: center;">{{ $t('original_image') }} #{{ i + 1 }}</div>
             <img :src="result.file_url" :alt="'result-'+i" />
             <div style="padding: 8px; text-align: center;">
-              <button class="btn secondary" @click="downloadImage(result.file_url, i)">下载图片</button>
+              <button class="btn secondary" @click="downloadImage(result.file_url, i)">{{ $t('download_image') }}</button>
               <button class="btn" @click="upscaleImage(result.project_id, i)" :disabled="upscalingImages[i]" style="margin-left: 8px; display: none;">
-                {{ upscalingImages[i] ? '高清放大中...' : '高清放大' }}
+                {{ upscalingImages[i] ? $t('upscaling') : $t('download_image_hd') }}
               </button>
-              <div class="muted" style="margin-top: 4px; font-size: 11px;">耗时: {{ result.task_cost_time }}s</div>
+              <div class="muted" style="margin-top: 4px; font-size: 11px;">{{ $t('cost_time') }}: {{ result.task_cost_time }}s</div>
             </div>
-            
+
             <!-- Upscaled Image (shown below original) -->
             <div v-if="upscaleResults[i]" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); display: none;">
-              <div style="margin-bottom: 8px; font-weight: bold; color: #10b981; text-align: center;">高清放大结果</div>
+              <div style="margin-bottom: 8px; font-weight: bold; color: #10b981; text-align: center;">{{ $t('upscale_result') }}</div>
               <img :src="upscaleResults[i].file_url" :alt="'upscale-result-'+i" />
               <div style="padding: 8px; text-align: center;">
-                <button class="btn secondary" @click="downloadImage(upscaleResults[i].file_url, i)">下载高清图</button>
-                <div class="muted" style="margin-top: 4px; font-size: 11px;">耗时: {{ upscaleResults[i].task_cost_time }}s</div>
+                <button class="btn secondary" @click="downloadImage(upscaleResults[i].file_url, i)">{{ $t('download_hd_image') }}</button>
+                <div class="muted" style="margin-top: 4px; font-size: 11px;">{{ $t('cost_time') }}: {{ upscaleResults[i].task_cost_time }}s</div>
               </div>
             </div>
           </div>
@@ -3167,14 +3175,14 @@
             <div style="position: relative;">
               <div style="display: flex; justify-content: space-between; align-items: flex-start; padding-right: 40px; margin-bottom: 12px;">
                 <div style="display: flex; align-items: flex-start; gap: 12px;">
-                  <div class="modal-title">历史记录 (共 {{ historyTotal }} 条)</div>
+                  <div class="modal-title">{{ $t('history_modal_title') }} ({{ $t('total_records') }} {{ historyTotal }})</div>
                   <button
                     class="btn secondary"
                     @click="fetchHistory(false)"
                     :disabled="historyLoading"
                     style="display: inline-flex; align-items: center; justify-content: center; padding: 4px 12px; font-size: 12px;"
                   >
-                    {{ historyLoading ? '刷新中...' : '刷新' }}
+                    {{ historyLoading ? $t('refreshing') : $t('refresh') }}
                   </button>
                 </div>
                 <button class="modal-close" @click="closeHistory">×</button>
@@ -3182,58 +3190,58 @@
             </div>
             
             <div v-if="historyList.length === 0" style="padding: 40px; text-align: center; color: var(--muted);">
-              暂无历史记录
+              {{ $t('no_history') }}
             </div>
             
             <div v-else style="padding: 16px;">
               <div v-for="item in historyList" :key="item.id" style="margin-bottom: 16px; padding: 12px; background: #0b1220; border: 1px solid var(--border); border-radius: 8px;">
                 <div style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
                   <div>
-                    <strong>提示词:</strong> {{ item.prompt }}
+                    <strong>{{ $t('prompt_label') }}</strong> {{ item.prompt }}
                   </div>
                   <span :style="{ padding: '4px 12px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', backgroundColor: getStatusColor(item.status) + '20', color: getStatusColor(item.status), border: '1px solid ' + getStatusColor(item.status), cursor: item.status == -1 && item.message ? 'help' : 'default' }" :title="item.status == -1 && item.message ? item.message : ''">
                     {{ getStatusText(item.status) }}
                   </span>
                 </div>
                 <div style="display: flex; gap: 16px; font-size: 13px; color: var(--muted); margin-bottom: 8px;">
-                  <span v-if="item.type == 1">类型: 图片编辑</span>
-                  <span v-else-if="item.type == 4">类型: 高清放大</span>
-                  <span>比例: {{ getRatioLabel(item.ratio) }}</span>
-                  <span>创建时间: {{ item.create_time ? new Date(item.create_time).toLocaleString('zh-CN') : '未知' }}</span>
-                  <span v-if="item.model_name">模型: {{ item.model_name }}</span>
-                  <span v-if="item.implementation_name">驱动: {{ item.implementation_name }}</span>
+                  <span v-if="item.type == 1">{{ $t('type_label') }}: {{ $t('type_image_edit') }}</span>
+                  <span v-else-if="item.type == 4">{{ $t('type_label') }}: {{ $t('type_upscale') }}</span>
+                  <span>{{ $t('ratio') }}: {{ getRatioLabel(item.ratio) }}</span>
+                  <span>{{ $t('create_time') }}: {{ item.create_time ? new Date(item.create_time).toLocaleString('zh-CN') : $t('unknown') }}</span>
+                  <span v-if="item.model_name">{{ $t('model') }}: {{ item.model_name }}</span>
+                  <span v-if="item.implementation_name">{{ $t('driver') }}: {{ item.implementation_name }}</span>
                 </div>
                 <div v-if="item.reference_images || item.image_path || item.audio_path || item.video_path" style="margin-top: 8px;">
-                  <span style="font-size: 13px; color: var(--muted);">参考素材:</span>
+                  <span style="font-size: 13px; color: var(--muted);">{{ $t('reference_materials') }}:</span>
                   <div style="display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; align-items: center;">
                     <template v-for="(img, idx) in (item.reference_images ? JSON.parse(item.reference_images) : (item.image_path ? item.image_path.split(',') : []))" :key="idx">
                       <img v-if="img" :src="img" style="width: 60px; height: 60px; object-fit: cover; border-radius: 4px; border: 1px solid var(--border); cursor: pointer;"
                            @click="window.open(img, '_blank')" />
                     </template>
                     <div v-if="item.audio_path" style="padding: 4px 10px; background: #1a2530; border: 1px solid #10b981; border-radius: 4px; font-size: 12px;">
-                      <span style="color: #34d399;">🎵 音频</span>
-                      <a :href="item.audio_path" target="_blank" style="color: #60a5fa; margin-left: 4px; text-decoration: none;">查看</a>
+                      <span style="color: #34d399;">{{ $t('audio') }}</span>
+                      <a :href="item.audio_path" target="_blank" style="color: #60a5fa; margin-left: 4px; text-decoration: none;">{{ $t('view') }}</a>
                     </div>
                     <div v-if="item.video_path" style="padding: 4px 10px; background: #1a2530; border: 1px solid #f59e0b; border-radius: 4px; font-size: 12px;">
-                      <span style="color: #fbbf24;">🎬 视频</span>
-                      <a :href="item.video_path" target="_blank" style="color: #60a5fa; margin-left: 4px; text-decoration: none;">查看</a>
+                      <span style="color: #fbbf24;">{{ $t('video') }}</span>
+                      <a :href="item.video_path" target="_blank" style="color: #60a5fa; margin-left: 4px; text-decoration: none;">{{ $t('view') }}</a>
                     </div>
                   </div>
                 </div>
                 <div v-if="item.result_url" style="margin-top: 8px;">
-                  <a :href="item.result_url" target="_blank" class="btn secondary" style="display: inline-block; text-decoration: none;">查看结果</a>
-                  <button v-if="item.type == 1" class="btn" @click="upscaleHistoryImage(item)" style="margin-left: 8px; display: none;">高清放大</button>
+                  <a :href="item.result_url" target="_blank" class="btn secondary" style="display: inline-block; text-decoration: none;">{{ $t('view_result') }}</a>
+                  <button v-if="item.type == 1" class="btn" @click="upscaleHistoryImage(item)" style="margin-left: 8px; display: none;">{{ $t('download_image_hd') }}</button>
                 </div>
               </div>
-              
+
               <!-- Loading indicator -->
               <div v-if="historyLoading" style="text-align: center; padding: 20px; color: var(--muted);">
-                加载中...
+                {{ $t('loading') }}
               </div>
-              
+
               <!-- End indicator -->
               <div v-else-if="historyList.length >= historyTotal" style="text-align: center; padding: 20px; color: var(--muted);">
-                已加载全部数据
+                {{ $t('all_data_loaded') }}
               </div>
             </div>
           </div>
@@ -3679,33 +3687,33 @@
       <div>
         <div class="form">
           <div class="field">
-            <label class="label">提示词 <span style="color: red;">*</span></label>
-            <textarea class="textarea" v-model.trim="prompt" placeholder="请输入图片描述，例如：中文海报:ai视频生成器,智能角色" rows="4"></textarea>
+            <label class="label">{{ $t('prompt') }} <span style="color: red;">*</span></label>
+            <textarea class="textarea" v-model.trim="prompt" :placeholder="$t('prompt_placeholder')" rows="4"></textarea>
           </div>
 
           <div class="field">
-            <label class="label">模型选择</label>
+            <label class="label">{{ $t('model_selection') }}</label>
             <select class="input" v-model="model">
               <option v-for="opt in modelOptions" :key="opt.value" :value="opt.value" :disabled="opt.disabled">{{ opt.label }}</option>
             </select>
           </div>
 
           <div class="field">
-            <label class="label">宽高比</label>
+            <label class="label">{{ $t('aspect_ratio') }}</label>
             <select class="input" v-model="aspectRatio">
               <option v-for="opt in aspectRatioOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
           </div>
 
           <div class="field" v-if="imageSizeOptions.length > 0">
-            <label class="label">分辨率</label>
+            <label class="label">{{ $t('resolution') }}</label>
             <select class="input" v-model="imageSize">
               <option v-for="opt in imageSizeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
           </div>
 
           <div class="field">
-            <label class="label">生成数量</label>
+            <label class="label">{{ $t('number_of_images') }}</label>
             <select class="input" v-model.number="count">
               <option v-for="opt in countOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
@@ -3713,8 +3721,8 @@
 
           <div class="field">
             <div class="row">
-              <button class="btn" :disabled="!canSubmit" @click="submit">{{ loading ? '生成中...' : '开始生成' }}</button>
-              <button class="btn secondary" @click="fetchHistory" :disabled="historyLoading">{{ historyLoading ? '加载中...' : '历史记录' }}</button>
+              <button class="btn" :disabled="!canSubmit" @click="submit">{{ loading ? $t('generating') : $t('start_generating') }}</button>
+              <button class="btn secondary" @click="fetchHistory" :disabled="historyLoading">{{ historyLoading ? $t('loading_more') : $t('history') }}</button>
             </div>
           </div>
         </div>
@@ -3725,11 +3733,11 @@
 
         <div class="preview" v-if="results.length">
           <div class="imgbox" v-for="(result, i) in results" :key="i">
-            <div style="margin-bottom: 8px; font-weight: bold; color: var(--primary); text-align: center;">生成结果 #{{ i + 1 }}</div>
+            <div style="margin-bottom: 8px; font-weight: bold; color: var(--primary); text-align: center;">{{ $t('generation_result') }} #{{ i + 1 }}</div>
             <img :src="result.file_url" :alt="'result-'+i" />
             <div style="padding: 8px; text-align: center;">
-              <button class="btn secondary" @click="downloadImage(result.file_url, i)">下载图片</button>
-              <div class="muted" style="margin-top: 4px; font-size: 11px;" v-if="result.task_cost_time">耗时: {{ result.task_cost_time }}s</div>
+              <button class="btn secondary" @click="downloadImage(result.file_url, i)">{{ $t('download_image') }}</button>
+              <div class="muted" style="margin-top: 4px; font-size: 11px;" v-if="result.task_cost_time">{{ $t('time_cost') }}: {{ result.task_cost_time }}s</div>
             </div>
           </div>
         </div>
@@ -3740,14 +3748,14 @@
             <div style="position: relative;">
               <div style="display: flex; justify-content: space-between; align-items: flex-start; padding-right: 40px; margin-bottom: 12px;">
                 <div style="display: flex; align-items: flex-start; gap: 12px;">
-                  <div class="modal-title">历史记录 (共 {{ historyTotal }} 条)</div>
+                  <div class="modal-title">{{ $t('history_modal_title') }} ({{ $t('total_records') }} {{ historyTotal }})</div>
                   <button
                     class="btn secondary"
                     @click="fetchHistory(false)"
                     :disabled="historyLoading"
                     style="display: inline-flex; align-items: center; justify-content: center; padding: 4px 12px; font-size: 12px;"
                   >
-                    {{ historyLoading ? '刷新中...' : '刷新' }}
+                    {{ historyLoading ? $t('refreshing') : $t('refresh') }}
                   </button>
                 </div>
                 <button class="modal-close" @click="closeHistory">×</button>
@@ -3755,35 +3763,35 @@
             </div>
             
             <div v-if="historyList.length === 0" style="padding: 40px; text-align: center; color: var(--muted);">
-              暂无历史记录
+              {{ $t('no_history') }}
             </div>
             
             <div v-else style="padding: 16px;">
               <div v-for="item in historyList" :key="item.id" style="margin-bottom: 16px; padding: 12px; background: #0b1220; border: 1px solid var(--border); border-radius: 8px;">
                 <div style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
                   <div>
-                    <strong>提示词:</strong> {{ item.prompt }}
+                    <strong>{{ $t('prompt_label') }}</strong> {{ item.prompt }}
                   </div>
                   <span :style="{ padding: '4px 12px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', backgroundColor: getStatusColor(item.status) + '20', color: getStatusColor(item.status), border: '1px solid ' + getStatusColor(item.status), cursor: item.status == -1 && item.message ? 'help' : 'default' }" :title="item.status == -1 && item.message ? item.message : ''">
                     {{ getStatusText(item.status) }}
                   </span>
                 </div>
                 <div style="display: flex; gap: 16px; font-size: 13px; color: var(--muted); margin-bottom: 8px;">
-                  <span>类型: 文生图</span>
-                  <span>宽高比: {{ getAspectRatioLabel(item.ratio) }}</span>
-                  <span>创建时间: {{ item.create_time ? new Date(item.create_time).toLocaleString('zh-CN') : '未知' }}</span>
+                  <span>{{ $t('type_label') }}: {{ $t('text_to_image') }}</span>
+                  <span>{{ $t('aspect_ratio_label') }}: {{ getAspectRatioLabel(item.ratio) }}</span>
+                  <span>{{ $t('created_at') }}: {{ item.create_time ? new Date(item.create_time).toLocaleString('zh-CN') : $t('unknown') }}</span>
                 </div>
                 <div v-if="item.result_url" style="margin-top: 8px;">
-                  <a :href="item.result_url" target="_blank" class="btn secondary" style="display: inline-block; text-decoration: none;">查看结果</a>
+                  <a :href="item.result_url" target="_blank" class="btn secondary" style="display: inline-block; text-decoration: none;">{{ $t('view_result') }}</a>
                 </div>
               </div>
               
               <div v-if="historyLoading" style="text-align: center; padding: 20px; color: var(--muted);">
-                加载中...
+                {{ $t('loading_more') }}
               </div>
-              
+
               <div v-else-if="historyList.length >= historyTotal" style="text-align: center; padding: 20px; color: var(--muted);">
-                已加载全部数据
+                {{ $t('all_data_loaded') }}
               </div>
             </div>
           </div>
@@ -3956,8 +3964,8 @@
       imageModeOptions() {
         // 显示图片模式供用户选择
         return [
-          { value: 'first_last_frame', label: '首尾帧模式', desc: '第一张为首帧，第二张为尾帧（可选）' },
-          { value: 'multi_reference', label: '多参考图模式', desc: '所有图片作为风格参考' }
+          { value: 'first_last_frame', label: this.$t('first_last_frame_mode') || '首尾帧模式', desc: this.$t('first_last_frame_desc') || '第一张为首帧，第二张为尾帧（可选）' },
+          { value: 'multi_reference', label: this.$t('multi_reference_mode') || '多参考图模式', desc: this.$t('multi_reference_desc') || '所有图片作为风格参考' }
           // { value: 'first_last_with_ref', label: '首尾帧+参考图', desc: '首尾帧控制动作，参考图控制风格' }  // 暂无模型支持
         ];
       },
@@ -3971,15 +3979,15 @@
         return 5;
       },
       filesLabel() {
-        if (this.imageMode === 'first_last_frame') return this.supportsLastFrame ? '上传首尾帧图片 (1-2张)' : '上传首帧图片 (1张)';
-        if (this.imageMode === 'multi_reference') return `上传参考图片 (1-${this.maxFilesForMode}张)`;
-        if (this.imageMode === 'first_last_with_ref') return '上传首尾帧图片 (1-2张)';
-        return '上传图片';
+        if (this.imageMode === 'first_last_frame') return this.supportsLastFrame ? (this.$t('first_last_frame_mode') || '上传首尾帧图片 (1-2张)') : (this.$t('upload_image') || '上传首帧图片 (1张)');
+        if (this.imageMode === 'multi_reference') return `${this.$t('reference_images_label') || '上传参考图片'} (1-${this.maxFilesForMode}${this.$t('images') || '张'})`;
+        if (this.imageMode === 'first_last_with_ref') return this.$t('upload_image_to_video') || '上传首尾帧图片 (1-2张)';
+        return this.$t('upload_image') || '上传图片';
       },
       filesHint() {
-        if (this.imageMode === 'first_last_frame') return this.supportsLastFrame ? '第一张为首帧，第二张（可选）为尾帧' : '该模型仅支持首帧图';
-        if (this.imageMode === 'multi_reference') return '多张图片将作为风格参考';
-        if (this.imageMode === 'first_last_with_ref') return '第一张为首帧，第二张（可选）为尾帧';
+        if (this.imageMode === 'first_last_frame') return this.supportsLastFrame ? (this.$t('first_last_frame_desc') || '第一张为首帧，第二张（可选）为尾帧') : (this.$t('files_hint') || '该模型仅支持首帧图');
+        if (this.imageMode === 'multi_reference') return this.$t('multi_reference_desc') || '多张图片将作为风格参考';
+        if (this.imageMode === 'first_last_with_ref') return this.$t('first_last_frame_desc') || '第一张为首帧，第二张（可选）为尾帧';
         return '';
       },
       statusText() {
@@ -4010,14 +4018,14 @@
         const config = this.modelConfigs[this.videoModel];
         if (!config || !config.ratios) {
           return [
-            { value: '9:16', label: '竖屏' },
-            { value: '16:9', label: '横屏' }
+            { value: '9:16', label: this.$t('vertical_screen') || '竖屏' },
+            { value: '16:9', label: this.$t('horizontal_screen') || '横屏' }
           ];
         }
         const labelMap = {
-          '9:16': '竖屏',
-          '16:9': '横屏',
-          '1:1': '正方形'
+          '9:16': this.$t('vertical_screen') || '竖屏',
+          '16:9': this.$t('horizontal_screen') || '横屏',
+          '1:1': this.$t('square') || '正方形'
         };
         return config.ratios.map(ratio => ({
           value: ratio,
@@ -4028,27 +4036,27 @@
         const config = this.modelConfigs[this.videoModel];
         if (!config || !config.durations) {
           return [
-            { value: 5, label: '5秒' },
-            { value: 10, label: '10秒' }
+            { value: 5, label: `5${this.$t('duration_seconds') || '秒'}` },
+            { value: 10, label: `10${this.$t('duration_seconds') || '秒'}` }
           ];
         }
         // LTX2 特殊标签
         const ltx2Labels = {
-          5: '5秒 (121帧)',
-          8: '8秒 (201帧)',
-          10: '10秒 (241帧)'
+          5: `5${this.$t('duration_seconds') || '秒'} (121${this.$t('images') || '帧'})`,
+          8: `8${this.$t('duration_seconds') || '秒'} (201${this.$t('images') || '帧'})`,
+          10: `10${this.$t('duration_seconds') || '秒'} (241${this.$t('images') || '帧'})`
         };
         return config.durations.map(duration => ({
           value: duration,
-          label: this.videoModel === 'ltx2' ? (ltx2Labels[duration] || `${duration}秒`) : `${duration}秒`
+          label: this.videoModel === 'ltx2' ? (ltx2Labels[duration] || `${duration}${this.$t('duration_seconds') || '秒'}`) : `${duration}${this.$t('duration_seconds') || '秒'}`
         }));
       },
       countOptions() {
         return [
-          { value: 1, label: '1个' },
-          { value: 2, label: '2个' },
-          { value: 3, label: '3个' },
-          { value: 4, label: '4个' }
+          { value: 1, label: `1${this.$t('items') || '个'}` },
+          { value: 2, label: `2${this.$t('items') || '个'}` },
+          { value: 3, label: `3${this.$t('items') || '个'}` },
+          { value: 4, label: `4${this.$t('items') || '个'}` }
         ];
       },
       computingPower() {
@@ -4887,7 +4895,7 @@
         <div class="form">
           <!-- 图片模式选择 -->
           <div class="field">
-            <label class="label">图片模式</label>
+            <label class="label">{{ $t('image_mode_label') || '图片模式' }}</label>
             <select class="input" v-model="imageMode" @change="onImageModeChange">
               <option v-for="opt in imageModeOptions" :key="opt.value" :value="opt.value">
                 {{ opt.label }}
@@ -4902,12 +4910,12 @@
           <div class="field">
             <label class="label">{{ filesLabel }}</label>
             <input class="input" type="file" accept="image/*" multiple @change="onFile" />
-            <div class="muted" v-if="videoModel === 'sora2'" style="margin-top:6px; color: #fca5a5;">⚠️ 注意：请勿上传真人图片</div>
+            <div class="muted" v-if="videoModel === 'sora2'" style="margin-top:6px; color: #fca5a5;">⚠️ {{ $t('sora2_warning_images') || '注意：请勿上传真人图片' }}</div>
             <div class="muted" style="margin-top:6px; color: var(--muted);">{{ filesHint }}</div>
             <div v-if="imageMediaItems.length > 0" style="margin-top: 10px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <div style="font-size: 13px; color: var(--muted);">已选择 {{ imageMediaItems.length }}/{{ maxFilesForMode }} 张图片:</div>
-                <button @click="clearAllFiles" class="btn secondary" style="font-size: 12px; padding: 4px 10px;">清空全部</button>
+                <div style="font-size: 13px; color: var(--muted);">{{ $t('selected_count') || '已选择' }} {{ imageMediaItems.length }}/{{ maxFilesForMode }} {{ $t('images') || '张图片' }}:</div>
+                <button @click="clearAllFiles" class="btn secondary" style="font-size: 12px; padding: 4px 10px;">{{ $t('clear_all') || '清空全部' }}</button>
               </div>
               <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                 <div v-for="(item, index) in imageMediaItems" :key="item.id" style="position: relative; display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; background: #0b1220; border: 1px solid var(--border); border-radius: 8px; font-size: 12px;">
@@ -4925,13 +4933,13 @@
 
           <!-- 参考音频上传 -->
           <div class="field" v-if="supportsRefAudioVideo">
-            <label class="label">参考音频（可选）</label>
+            <label class="label">{{ $t('reference_audio_label') || '参考音频（可选）' }}</label>
             <input type="file" @change="onAudioFile" accept="audio/*" multiple class="input" :disabled="loading">
-            <div class="muted" style="margin-top: 4px;">可上传多个参考音频文件</div>
+            <div class="muted" style="margin-top: 4px;">{{ $t('reference_audio_multiple') || '可上传多个参考音频文件' }}</div>
             <div v-if="audioMediaItems.length > 0" style="margin-top: 10px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <div style="font-size: 13px; color: var(--muted);">已选择 {{ audioMediaItems.length }} 个音频:</div>
-                <button @click="clearAllAudioFiles" class="btn secondary" style="font-size: 12px; padding: 4px 10px;">清空全部</button>
+                <div style="font-size: 13px; color: var(--muted);">{{ $t('audio_count') || '已选择' }} {{ audioMediaItems.length }} {{ $t('audio_items') || '个音频' }}:</div>
+                <button @click="clearAllAudioFiles" class="btn secondary" style="font-size: 12px; padding: 4px 10px;">{{ $t('clear_all') || '清空全部' }}</button>
               </div>
               <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                 <div v-for="(item, index) in audioMediaItems" :key="item.id" :style="{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: '#0b1220', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px', opacity: item.validating ? 0.6 : 1 }">
@@ -4949,13 +4957,13 @@
 
           <!-- 参考视频上传 -->
           <div class="field" v-if="supportsRefAudioVideo">
-            <label class="label">参考视频（可选）</label>
+            <label class="label">{{ $t('reference_video_label') || '参考视频（可选）' }}</label>
             <input type="file" @change="onVideoFile" accept="video/*" multiple class="input" :disabled="loading">
-            <div class="muted" style="margin-top: 4px;">可上传多个参考视频文件</div>
+            <div class="muted" style="margin-top: 4px;">{{ $t('reference_video_multiple') || '可上传多个参考视频文件' }}</div>
             <div v-if="videoMediaItems.length > 0" style="margin-top: 10px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <div style="font-size: 13px; color: var(--muted);">已选择 {{ videoMediaItems.length }} 个视频:</div>
-                <button @click="clearAllVideoFiles" class="btn secondary" style="font-size: 12px; padding: 4px 10px;">清空全部</button>
+                <div style="font-size: 13px; color: var(--muted);">{{ $t('video_count') || '已选择' }} {{ videoMediaItems.length }} {{ $t('video_items') || '个视频' }}:</div>
+                <button @click="clearAllVideoFiles" class="btn secondary" style="font-size: 12px; padding: 4px 10px;">{{ $t('clear_all') || '清空全部' }}</button>
               </div>
               <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                 <div v-for="(item, index) in videoMediaItems" :key="item.id" :style="{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: '#0b1220', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px', opacity: item.validating ? 0.6 : 1 }">
@@ -4976,13 +4984,13 @@
 
           <!-- 参考图上传（仅 first_last_with_ref 模式显示） -->
           <div class="field" v-if="imageMode === 'first_last_with_ref'">
-            <label class="label">上传参考图 (0-3张，用于风格参考)</label>
+            <label class="label">{{ $t('reference_images_label') || '上传参考图 (0-3张，用于风格参考)' }}</label>
             <input class="input" type="file" accept="image/*" multiple @change="onReferenceFile" />
-            <div class="muted" style="margin-top:6px; color: var(--muted);">参考图用于控制视频风格，可选</div>
+            <div class="muted" style="margin-top:6px; color: var(--muted);">{{ $t('reference_images_desc') || '参考图用于控制视频风格，可选' }}</div>
             <div v-if="referenceFiles.length > 0" style="margin-top: 10px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <div style="font-size: 13px; color: var(--muted);">已选择 {{ referenceFiles.length }}/3 张参考图:</div>
-                <button @click="clearAllReferenceFiles" class="btn secondary" style="font-size: 12px; padding: 4px 10px;">清空全部</button>
+                <div style="font-size: 13px; color: var(--muted);">{{ $t('reference_images_count') || '已选择' }} {{ referenceFiles.length }}{{ $t('reference_images_max') || '/3' }} {{ $t('reference_images_display') || '张参考图' }}:</div>
+                <button @click="clearAllReferenceFiles" class="btn secondary" style="font-size: 12px; padding: 4px 10px;">{{ $t('clear_all') || '清空全部' }}</button>
               </div>
               <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                 <div v-for="(file, index) in referenceFiles" :key="'ref-'+index" style="position: relative; display: inline-block; padding: 6px 12px; background: #1a2530; border: 1px solid #3b82f6; border-radius: 6px; font-size: 12px;">
@@ -4994,9 +5002,9 @@
           </div>
 
           <div class="field" style="position: relative;">
-            <label class="label">视频提示词</label>
+            <label class="label">{{ $t('video_prompt_label') || '视频提示词' }}</label>
             <div style="position: relative;">
-              <textarea ref="promptTextarea" class="textarea" v-model.trim="prompt" placeholder="请输入视频内容描述，输入 @ 引用媒体文件..." @input="onPromptInput" @keydown="onPromptKeydown" @blur="onPromptBlur"></textarea>
+              <textarea ref="promptTextarea" class="textarea" v-model.trim="prompt" :placeholder="$t('video_prompt_placeholder') || '请输入视频内容描述，输入 @ 引用媒体文件...'" @input="onPromptInput" @keydown="onPromptKeydown" @blur="onPromptBlur"></textarea>
               <!-- @ 引用下拉框 -->
               <div v-if="mentionDropdown.visible && filteredMentionItems.length > 0" class="mention-dropdown" @mousedown.prevent>
                 <div v-for="(item, idx) in filteredMentionItems" :key="item.id"
@@ -5011,24 +5019,24 @@
                 </div>
               </div>
             </div>
-            <div class="muted" style="margin-top:6px; color: var(--muted); font-size: 12px;">💡 输入 <b>@</b> 可引用已上传的图片、视频、音频文件</div>
-            <div class="muted" v-if="videoModel === 'sora2'" style="margin-top:6px; color: #fca5a5;">⚠️ 注意：1 不要有 有拟人化的内容  2 不要侵犯版权</div>
+            <div class="muted" style="margin-top:6px; color: var(--muted); font-size: 12px;">{{ $t('at_reference_hint') }}</div>
+            <div class="muted" v-if="videoModel === 'sora2'" style="margin-top:6px; color: #fca5a5;">⚠️ {{ $t('sora2_warning_content') || '注意：1 不要有 有拟人化的内容  2 不要侵犯版权' }}</div>
           </div>
 
           <div class="field">
-            <label class="label">视频模型</label>
+            <label class="label">{{ $t('video_model_label') || '视频模型' }}</label>
             <select class="input" v-model="videoModel">
               <option v-for="opt in videoModelOptions" :key="opt.value" :value="opt.value" :disabled="opt.disabled">
-                {{ opt.label }}{{ !opt.supportsMode ? ' (不支持当前模式)' : '' }}
+                {{ opt.label }}{{ !opt.supportsMode ? ' (' + ($t('unsupported_mode') || '不支持当前模式') + ')' : '' }}
               </option>
             </select>
             <div class="muted" v-if="videoModelOptions.filter(o => o.supportsMode).length === 0" style="margin-top:6px; color: #fca5a5;">
-              ⚠️ 当前没有模型支持所选的图片模式
+              {{ $t('no_model_support_mode') || '⚠️ 当前没有模型支持所选的图片模式' }}
             </div>
           </div>
 
           <div class="field" v-if="videoModel !== 'vidu'">
-            <label class="label">视频模式</label>
+            <label class="label">{{ $t('video_mode_label') || '视频模式' }}</label>
             <select class="input" v-model="model">
               <option v-for="opt in modelOptions" :key="opt.value" :value="opt.value">
                 {{ opt.label }}
@@ -5037,7 +5045,7 @@
           </div>
 
           <div class="field">
-            <label class="label">视频时长</label>
+            <label class="label">{{ $t('duration_label') || '视频时长' }}</label>
             <select class="input" v-model.number="durationSeconds">
               <option v-for="opt in durationOptions" :key="opt.value" :value="opt.value">
                 {{ opt.label }}
@@ -5046,7 +5054,7 @@
           </div>
 
           <div class="field">
-            <label class="label">生成数量</label>
+            <label class="label">{{ $t('generation_count_label') || '生成数量' }}</label>
             <select class="input" v-model.number="count">
               <option v-for="opt in countOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
@@ -5054,53 +5062,53 @@
 
           <div class="field" style="background: #1a1f2e; padding: 12px; border-radius: 8px; border: 1px solid var(--border);">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="color: var(--muted); font-size: 14px;">算力消耗：</span>
-              <span style="color: #60a5fa; font-weight: bold; font-size: 16px;">{{ totalComputingPower }} 算力</span>
+              <span style="color: var(--muted); font-size: 14px;">{{ $t('power_consumption_label') || '算力消耗：' }}</span>
+              <span style="color: #60a5fa; font-weight: bold; font-size: 16px;">{{ totalComputingPower }} {{ $t('power_unit') || '算力' }}</span>
             </div>
             <div style="margin-top: 6px; font-size: 12px; color: var(--muted);">
-              单个 {{ computingPower }} 算力 × {{ count }} 个 = {{ totalComputingPower }} 算力
+              {{ $t('single_power') || '单个' }} {{ computingPower }} {{ $t('power_unit') || '算力' }} × {{ count }} {{ $t('multiply_count') || '个' }} = {{ totalComputingPower }} {{ $t('total_power') || '算力' }}
             </div>
           </div>
 
           <div class="field">
             <div class="row">
-              <button class="btn" :class="{ 'btn-disabled': !canSubmit }" @click="handleSubmit">{{ loading ? '生成中…' : '开始生成' }}</button>
-              <button class="btn secondary" @click="fetchHistory" :disabled="historyLoading">{{ historyLoading ? '加载中...' : '历史记录' }}</button>
+              <button class="btn" :class="{ 'btn-disabled': !canSubmit }" @click="handleSubmit">{{ loading ? ($t('generating') || '生成中…') : ($t('start_generate_button') || '开始生成') }}</button>
+              <button class="btn secondary" @click="fetchHistory" :disabled="historyLoading">{{ historyLoading ? ($t('loading') || '加载中...') : ($t('history') || '历史记录') }}</button>
             </div>
           </div>
         </div>
 
-        <div class="status" v-if="projectId">任务 ID：{{ projectId }}</div>
+        <div class="status" v-if="projectId">{{ $t('task_id_display') || '任务 ID：' }}{{ projectId }}</div>
         <div class="status" v-if="statusText">{{ statusText }}</div>
         <div class="status danger" v-if="error">{{ error }}</div>
 
         <div class="preview" v-if="results.length">
           <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px;">
             <div v-for="(result, i) in results" :key="i" style="border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: #0b1220;">
-              <div style="margin-bottom: 12px; font-size: 14px; font-weight: bold; color: var(--muted);">视频 #{{ i + 1 }}</div>
+              <div style="margin-bottom: 12px; font-size: 14px; font-weight: bold; color: var(--muted);">{{ $t('hd_video') || '视频' }} #{{ i + 1 }}</div>
 
               <!-- 原视频 -->
               <div style="margin-bottom: 16px;">
-                <div style="margin-bottom: 8px; font-weight: bold; color: var(--primary); text-align: center;">原视频</div>
+                <div style="margin-bottom: 8px; font-weight: bold; color: var(--primary); text-align: center;">{{ $t('original_image') || '原视频' }}</div>
                 <video :src="result.file_url" controls style="width: 100%; border-radius: 8px;"></video>
                 <div style="padding: 8px; text-align: center;">
-                  <button class="btn secondary" @click="downloadVideo(result.file_url, i)" style="font-size: 12px; padding: 6px 12px;">下载视频</button>
+                  <button class="btn secondary" @click="downloadVideo(result.file_url, i)" style="font-size: 12px; padding: 6px 12px;">{{ $t('download_original_video') || '下载视频' }}</button>
                   <button class="btn" @click="enhanceVideo(result, i)" :disabled="enhancingVideos[i]" style="font-size: 12px; padding: 6px 12px; margin-left: 8px;">
-                    {{ enhancingVideos[i] ? '处理中...' : '高清放大' }}
+                    {{ enhancingVideos[i] ? ($t('enhance_processing') || '处理中...') : ($t('enhance_button') || '高清放大') }}
                   </button>
-                  <div class="muted" style="margin-top: 4px; font-size: 11px;">耗时: {{ result.task_cost_time || '未知' }}</div>
+                  <div class="muted" style="margin-top: 4px; font-size: 11px;">{{ $t('cost_time') || '耗时' }}: {{ result.task_cost_time || ($t('unknown') || '未知') }}</div>
                 </div>
               </div>
 
               <!-- 高清视频 -->
               <div v-if="result.enhancedVideo" style="border-top: 1px solid var(--border); padding-top: 16px;">
-                <div style="margin-bottom: 8px; font-weight: bold; color: #10b981; text-align: center;">高清视频</div>
+                <div style="margin-bottom: 8px; font-weight: bold; color: #10b981; text-align: center;">{{ $t('hd_video') || '高清视频' }}</div>
                 <video :src="result.enhancedVideo.file_url || result.enhancedVideo" controls style="width: 100%; border-radius: 8px;"></video>
                 <div style="padding: 8px; text-align: center;">
                   <button class="btn secondary" @click="downloadVideo(result.enhancedVideo.file_url || result.enhancedVideo, i, true)" style="font-size: 12px; padding: 6px 12px;">
-                    下载高清视频
+                    {{ $t('download_enhanced_video') || '下载高清视频' }}
                   </button>
-                  <div class="muted" style="margin-top: 4px; font-size: 11px;">耗时: {{ result.enhancedVideo.task_cost_time || '未知' }}</div>
+                  <div class="muted" style="margin-top: 4px; font-size: 11px;">{{ $t('cost_time') || '耗时' }}: {{ result.enhancedVideo.task_cost_time || ($t('unknown') || '未知') }}</div>
                 </div>
               </div>
             </div>
@@ -5113,9 +5121,9 @@
             <div style="position: relative;">
               <div style="display: flex; justify-content: space-between; align-items: flex-start; padding-right: 40px; margin-bottom: 12px;">
                 <div style="display: flex; align-items: flex-start; gap: 12px;">
-                  <div class="modal-title">历史记录 (共 {{ historyTotal }} 条)</div>
+                  <div class="modal-title">{{ $t('history') || '历史记录' }} ({{ $t('total_records') || '共' }} {{ historyTotal }} {{ $t('items') || '条' }})</div>
                   <button class="btn secondary" @click="fetchHistory(false)" :disabled="historyLoading" style="display: inline-flex; align-items: center; justify-content: center; padding: 4px 12px; font-size: 12px;">
-                    {{ historyLoading ? '刷新中...' : '刷新' }}
+                    {{ historyLoading ? ($t('refreshing') || '刷新中...') : ($t('refresh') || '刷新') }}
                   </button>
                 </div>
                 <button class="modal-close" @click="closeHistory">×</button>
@@ -5123,62 +5131,62 @@
             </div>
 
             <div v-if="historyList.length === 0" style="padding: 40px; text-align: center; color: var(--muted);">
-              暂无历史记录
+              {{ $t('no_history') }}
             </div>
             
             <div v-else style="padding: 16px;">
               <div v-for="item in historyList" :key="item.id" style="margin-bottom: 16px; padding: 12px; background: #0b1220; border: 1px solid var(--border); border-radius: 8px;">
                 <div style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
                   <div>
-                    <strong>提示词:</strong> {{ item.prompt }}
+                    <strong>{{ $t('prompt_label') }}</strong> {{ item.prompt }}
                   </div>
                   <span :style="{ padding: '4px 12px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', backgroundColor: getStatusColor(item.status) + '20', color: getStatusColor(item.status), border: '1px solid ' + getStatusColor(item.status), cursor: item.status == -1 && item.message ? 'help' : 'default' }" :title="item.status == -1 && item.message ? item.message : ''">
                     {{ getStatusText(item.status) }}
                   </span>
                 </div>
                 <div style="display: flex; gap: 16px; font-size: 13px; color: var(--muted); margin-bottom: 8px;">
-                  <span>类型: {{ getHistoryTypeText(item.type) }}</span>
-                  <span>模式: {{ getModelLabel(item) }}</span>
-                  <span>时长: {{ getDurationText(item) }}</span>
-                  <span>创建时间: {{ item.create_time ? new Date(item.create_time).toLocaleString('zh-CN') : '未知' }}</span>
+                  <span>{{ $t('type_label') || '类型' }}: {{ getHistoryTypeText(item.type) }}</span>
+                  <span>{{ $t('mode_display') || '模式' }}: {{ getModelLabel(item) }}</span>
+                  <span>{{ $t('duration_label') || '时长' }}: {{ getDurationText(item) }}</span>
+                  <span>{{ $t('created_time_display') || '创建时间' }}: {{ item.create_time ? new Date(item.create_time).toLocaleString('zh-CN') : ($t('unknown') || '未知') }}</span>
                 </div>
                 <div v-if="item.image_path" style="margin-top: 12px; padding: 12px; background: #0f1620; border-radius: 8px; border: 1px solid var(--border);">
-                  <div style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">输入图片:</div>
+                  <div style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">{{ $t('input_images_label') || '输入图片' }}:</div>
                   <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                     <template v-for="(img, idx) in item.image_path.split(',')" :key="idx">
                       <div v-if="img" style="display: flex; align-items: center; gap: 12px;">
                         <img :src="img" style="max-width: 120px; max-height: 80px; border-radius: 6px; object-fit: cover; border: 1px solid var(--border);" />
-                        <a :href="img" target="_blank" class="btn secondary" style="font-size: 12px; padding: 4px 12px; text-decoration: none;">查看原图</a>
+                        <a :href="img" target="_blank" class="btn secondary" style="font-size: 12px; padding: 4px 12px; text-decoration: none;">{{ $t('view_original') || '查看原图' }}</a>
                       </div>
                     </template>
                   </div>
                 </div>
                 <div v-if="item.reference_images" style="margin-top: 12px; padding: 12px; background: #0f1620; border-radius: 8px; border: 1px solid var(--border);">
-                  <div style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">参考图:</div>
+                  <div style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">{{ $t('reference_images_display') || '参考图' }}:</div>
                   <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                     <template v-for="(img, idx) in (typeof item.reference_images === 'string' ? JSON.parse(item.reference_images) : item.reference_images)" :key="idx">
                       <div v-if="img" style="display: flex; align-items: center; gap: 12px;">
                         <img :src="img" style="max-width: 120px; max-height: 80px; border-radius: 6px; object-fit: cover; border: 1px solid var(--border);" />
-                        <a :href="img" target="_blank" class="btn secondary" style="font-size: 12px; padding: 4px 12px; text-decoration: none;">查看原图</a>
+                        <a :href="img" target="_blank" class="btn secondary" style="font-size: 12px; padding: 4px 12px; text-decoration: none;">{{ $t('view_original') || '查看原图' }}</a>
                       </div>
                     </template>
                   </div>
                 </div>
                 <div v-if="item.result_url" style="margin-top: 8px;">
-                  <a :href="item.result_url" target="_blank" class="btn secondary" style="display: inline-block; text-decoration: none;">查看结果</a>
-                  <button v-if="item.status == 2 && item.type == 3" class="btn" @click="enhanceVideo(item, item.id)" :disabled="enhancingVideos[item.id]" style="margin-left: 8px;">{{ enhancingVideos[item.id] ? '已修复' : '生成高清视频' }}</button>
-                  <button v-if="item.status == 2 && item.project_id" class="btn" @click="goToCharacterCard(item.project_id)" style="margin-left: 8px;">创建角色卡</button>
+                  <a :href="item.result_url" target="_blank" class="btn secondary" style="display: inline-block; text-decoration: none;">{{ $t('view_result') }}</a>
+                  <button v-if="item.status == 2 && item.type == 3" class="btn" @click="enhanceVideo(item, item.id)" :disabled="enhancingVideos[item.id]" style="margin-left: 8px;">{{ enhancingVideos[item.id] ? ($t('enhanced_button') || '已修复') : ($t('generate_hd_video') || '生成高清视频') }}</button>
+                  <button v-if="item.status == 2 && item.project_id" class="btn" @click="goToCharacterCard(item.project_id)" style="margin-left: 8px;">{{ $t('create_character_card') || '创建角色卡' }}</button>
                 </div>
               </div>
-              
+
               <!-- Loading indicator -->
               <div v-if="historyLoading" style="text-align: center; padding: 20px; color: var(--muted);">
-                加载中...
+                {{ $t('loading') || '加载中...' }}
               </div>
-              
+
               <!-- End indicator -->
               <div v-else-if="historyList.length >= historyTotal" style="text-align: center; padding: 20px; color: var(--muted);">
-                已加载全部数据
+                {{ $t('all_data_loaded') || '已加载全部数据' }}
               </div>
             </div>
           </div>
@@ -5782,14 +5790,14 @@
       <div>
         <div class="form">
           <div class="field">
-            <label class="label">视频提示词</label>
-            <textarea class="textarea" v-model.trim="prompt" placeholder="请输入视频内容描述，例如：第一镜（0–3秒）静谧晨光，窗外的城市尚在沉睡..."></textarea>
+            <label class="label">{{ $t('video_prompt') }}</label>
+            <textarea class="textarea" v-model.trim="prompt" :placeholder="$t('describe_video_content')"></textarea>
           </div>
 
           <div class="field">
-            <label class="label">视频生成模型</label>
+            <label class="label">{{ $t('model_selection') }}</label>
             <select class="input" v-model="videoModel">
-              <option value="">-- 请选择模型 --</option>
+              <option value="">-- {{ $t('model_selection') }} --</option>
               <option v-for="opt in videoModelOptions" :key="opt.value" :value="opt.value">
                 {{ opt.label }}
               </option>
@@ -5797,7 +5805,7 @@
           </div>
 
           <div class="field">
-            <label class="label">视频比例</label>
+            <label class="label">{{ $t('aspect_ratio') }}</label>
             <select class="input" v-model="model">
               <option v-for="opt in modelOptions" :key="opt.value" :value="opt.value">
                 {{ opt.label }}
@@ -5806,7 +5814,7 @@
           </div>
 
           <div class="field">
-            <label class="label">视频时长</label>
+            <label class="label">{{ $t('duration_label') }}</label>
             <select class="input" v-model="durationSeconds">
               <option v-for="opt in durationOptions" :key="opt.value" :value="opt.value">
                 {{ opt.label }}
@@ -5815,7 +5823,7 @@
           </div>
 
           <div class="field">
-            <label class="label">生成数量</label>
+            <label class="label">{{ $t('number_of_images') }}</label>
             <select class="input" v-model.number="count">
               <option v-for="opt in countOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
@@ -5823,53 +5831,53 @@
 
           <div class="field" style="background: #1a1f2e; padding: 12px; border-radius: 8px; border: 1px solid var(--border);">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="color: var(--muted); font-size: 14px;">算力消耗：</span>
-              <span style="color: #60a5fa; font-weight: bold; font-size: 16px;">{{ totalComputingPower }} 算力</span>
+              <span style="color: var(--muted); font-size: 14px;">{{ $t('power_consumption') }}：</span>
+              <span style="color: #60a5fa; font-weight: bold; font-size: 16px;">{{ totalComputingPower }} {{ $t('power_unit') }}</span>
             </div>
             <div style="margin-top: 6px; font-size: 12px; color: var(--muted);">
-              单个 {{ computingPower }} 算力 × {{ count }} 个 = {{ totalComputingPower }} 算力
+              {{ $t('single') }} {{ computingPower }} {{ $t('power_unit') }} × {{ count }} {{ $t('items') }} = {{ totalComputingPower }} {{ $t('power_unit') }}
             </div>
           </div>
 
           <div class="field">
             <div class="row">
-              <button class="btn" :disabled="!canSubmit" @click="submit">{{ loading ? '生成中…' : '开始生成' }}</button>
-              <button class="btn secondary" @click="fetchHistory" :disabled="historyLoading">{{ historyLoading ? '加载中...' : '历史记录' }}</button>
+              <button class="btn" :disabled="!canSubmit" @click="submit">{{ loading ? $t('generating') : $t('start_generating') }}</button>
+              <button class="btn secondary" @click="fetchHistory" :disabled="historyLoading">{{ historyLoading ? $t('loading') : $t('history') }}</button>
             </div>
           </div>
         </div>
 
-        <div class="status" v-if="projectId">任务 ID：{{ projectId }}</div>
+        <div class="status" v-if="projectId">{{ $t('task_id') }}：{{ projectId }}</div>
         <div class="status" v-if="statusText">{{ statusText }}</div>
         <div class="status danger" v-if="error">{{ error }}</div>
 
         <div class="preview" v-if="results.length">
           <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px;">
             <div v-for="(result, i) in results" :key="i" style="border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: #0b1220;">
-              <div style="margin-bottom: 12px; font-size: 14px; font-weight: bold; color: var(--muted);">视频 #{{ i + 1 }}</div>
-              
+              <div style="margin-bottom: 12px; font-size: 14px; font-weight: bold; color: var(--muted);">{{ $t('video') }} #{{ i + 1 }}</div>
+
               <!-- 原视频 -->
               <div style="margin-bottom: 16px;">
-                <div style="margin-bottom: 8px; font-weight: bold; color: var(--primary); text-align: center;">原视频</div>
+                <div style="margin-bottom: 8px; font-weight: bold; color: var(--primary); text-align: center;">{{ $t('original_image') }}</div>
                 <video :src="result.file_url" controls style="width: 100%; border-radius: 8px;"></video>
                 <div style="padding: 8px; text-align: center;">
-                  <button class="btn secondary" @click="downloadVideo(result.file_url, i)" style="font-size: 12px; padding: 6px 12px;">下载视频</button>
+                  <button class="btn secondary" @click="downloadVideo(result.file_url, i)" style="font-size: 12px; padding: 6px 12px;">{{ $t('download_video') }}</button>
                   <button class="btn" @click="enhanceVideo(result, i)" :disabled="enhancingVideos[i]" style="font-size: 12px; padding: 6px 12px; margin-left: 8px;">
-                    {{ enhancingVideos[i] ? '处理中...' : '高清放大' }}
+                    {{ enhancingVideos[i] ? $t('processing') : $t('download_image_hd') }}
                   </button>
-                  <div class="muted" style="margin-top: 4px; font-size: 11px;">耗时: {{ result.task_cost_time || '未知' }}</div>
+                  <div class="muted" style="margin-top: 4px; font-size: 11px;">{{ $t('cost_time') }}: {{ result.task_cost_time || $t('unknown') }}</div>
                 </div>
               </div>
 
               <!-- 高清视频 -->
               <div v-if="result.enhancedVideo" style="border-top: 1px solid var(--border); padding-top: 16px;">
-                <div style="margin-bottom: 8px; font-weight: bold; color: #10b981; text-align: center;">高清视频</div>
+                <div style="margin-bottom: 8px; font-weight: bold; color: #10b981; text-align: center;">{{ $t('hd_video') }}</div>
                 <video :src="result.enhancedVideo.file_url || result.enhancedVideo" controls style="width: 100%; border-radius: 8px;"></video>
                 <div style="padding: 8px; text-align: center;">
                   <button class="btn secondary" @click="downloadVideo(result.enhancedVideo.file_url || result.enhancedVideo, i, true)" style="font-size: 12px; padding: 6px 12px;">
-                    下载高清视频
+                    {{ $t('download_hd_video') }}
                   </button>
-                  <div class="muted" style="margin-top: 4px; font-size: 11px;">耗时: {{ result.enhancedVideo.task_cost_time || '未知' }}</div>
+                  <div class="muted" style="margin-top: 4px; font-size: 11px;">{{ $t('cost_time') }}: {{ result.enhancedVideo.task_cost_time || $t('unknown') }}</div>
                 </div>
               </div>
             </div>
@@ -5882,49 +5890,49 @@
             <div style="position: relative;">
               <div style="display: flex; justify-content: space-between; align-items: flex-start; padding-right: 40px; margin-bottom: 12px;">
                 <div style="display: flex; align-items: flex-start; gap: 12px;">
-                  <div class="modal-title">历史记录 (共 {{ historyTotal }} 条)</div>
+                  <div class="modal-title">{{ $t('history') }} ({{ $t('total_records') }} {{ historyTotal }} {{ $t('items') }})</div>
                   <button class="btn secondary" @click="fetchHistory(false)" :disabled="historyLoading" style="display: inline-flex; align-items: center; justify-content: center; padding: 4px 12px; font-size: 12px;">
-                    {{ historyLoading ? '刷新中...' : '刷新' }}
+                    {{ historyLoading ? $t('refreshing') : $t('refresh') }}
                   </button>
                 </div>
                 <button class="modal-close" @click="closeHistory">×</button>
               </div>
             </div>
-            
+
             <div v-if="historyList.length === 0" style="padding: 40px; text-align: center; color: var(--muted);">
-              暂无历史记录
+              {{ $t('no_history') }}
             </div>
-            
+
             <div v-else style="padding: 16px;">
               <div v-for="item in historyList" :key="item.id" style="margin-bottom: 16px; padding: 12px; background: #0b1220; border: 1px solid var(--border); border-radius: 8px;">
                 <div style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
                   <div>
-                    <strong>提示词:</strong> {{ getHistoryPrompt(item) }}
+                    <strong>{{ $t('prompt_label') }}</strong> {{ getHistoryPrompt(item) }}
                   </div>
                   <span :style="{ padding: '4px 12px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', backgroundColor: getStatusColor(item.status) + '20', color: getStatusColor(item.status), border: '1px solid ' + getStatusColor(item.status), cursor: item.status == -1 && item.message ? 'help' : 'default' }" :title="item.status == -1 && item.message ? item.message : ''">
                     {{ getStatusText(item.status) }}
                   </span>
                 </div>
                 <div style="display: flex; gap: 16px; font-size: 13px; color: var(--muted); margin-bottom: 8px;">
-                  <span>类型: {{ getHistoryTypeText(item.type) }}</span>
-                  <span>模式: {{ getModelLabel(item.ratio) }}</span>
-                  <span>时长: {{ getDurationText(item) }}</span>
-                  <span>创建时间: {{ item.create_time ? new Date(item.create_time).toLocaleString('zh-CN') : '未知' }}</span>
+                  <span>{{ $t('type_label') }}: {{ getHistoryTypeText(item.type) }}</span>
+                  <span>{{ $t('mode_switch') }}: {{ getModelLabel(item.ratio) }}</span>
+                  <span>{{ $t('duration_label') }}: {{ getDurationText(item) }}</span>
+                  <span>{{ $t('create_time') }}: {{ item.create_time ? new Date(item.create_time).toLocaleString('zh-CN') : $t('unknown') }}</span>
                 </div>
                 <div v-if="item.result_url" style="margin-top: 8px;">
-                  <button class="btn secondary" @click="downloadHistoryResult(item)" style="display: inline-block; margin-right: 8px;">查看结果</button>
-                  <button v-if="item.status == 2 && item.type == 2" class="btn" @click="enhanceVideo(item, item.id)" :disabled="enhancingVideos[item.id]" style="display: inline-block;">{{ enhancingVideos[item.id] ? '已修复' : '生成高清视频' }}</button>
+                  <button class="btn secondary" @click="downloadHistoryResult(item)" style="display: inline-block; margin-right: 8px;">{{ $t('view_result') }}</button>
+                  <button v-if="item.status == 2 && item.type == 2" class="btn" @click="enhanceVideo(item, item.id)" :disabled="enhancingVideos[item.id]" style="display: inline-block;">{{ enhancingVideos[item.id] ? $t('fixed') : $t('generate_hd_video') }}</button>
                 </div>
               </div>
-              
+
               <!-- Loading indicator -->
               <div v-if="historyLoading" style="text-align: center; padding: 20px; color: var(--muted);">
-                加载中...
+                {{ $t('loading') }}
               </div>
-              
+
               <!-- End indicator -->
               <div v-else-if="historyList.length >= historyTotal" style="text-align: center; padding: 20px; color: var(--muted);">
-                已加载全部数据
+                {{ $t('all_data_loaded') }}
               </div>
             </div>
           </div>
@@ -6973,19 +6981,19 @@
     template: `
       <div class="skill-config-page">
         <div class="skill-config-header">
-          <button class="back-btn" @click="$router.push({name:'list'})">← 返回</button>
-          <h1>技能配置</h1>
+          <button class="back-btn" @click="$router.push({name:'list'})">← {{ $t('back') }}</button>
+          <h1>{{ $t('skill_config_tool') }}</h1>
         </div>
-        <p class="skill-config-desc">自定义 AI 专家的工作方式，修改将影响你后续的所有剧本创作。未配置的技能使用默认值。</p>
+        <p class="skill-config-desc">{{ $t('skill_config_desc') }}</p>
 
         <div v-if="loading" class="skill-loading">
           <div class="loading-spinner"></div>
-          <span>加载中...</span>
+          <span>{{ $t('loading') }}</span>
         </div>
 
         <div v-else-if="error" class="skill-error">
           {{ error }}
-          <button v-if="!userId" class="skill-btn primary" style="margin-left:12px;" @click="$root.showLoginModal=true">去登录</button>
+          <button v-if="!userId" class="skill-btn primary" style="margin-left:12px;" @click="$root.showLoginModal=true">{{ $t('login') }}</button>
         </div>
 
         <div v-else class="skill-list">
@@ -6997,12 +7005,12 @@
             </div>
             <div class="skill-card-meta">
               <span class="skill-size">{{ formatFileSize(skill.file_size) }}</span>
-              <span v-if="skill.has_custom" class="skill-badge custom">已自定义</span>
-              <span v-else class="skill-badge default">默认配置</span>
+              <span v-if="skill.has_custom" class="skill-badge custom">{{ $t('customized') }}</span>
+              <span v-else class="skill-badge default">{{ $t('default_config') }}</span>
             </div>
             <div class="skill-card-actions">
-              <button class="skill-btn primary" @click="openEditor(skill)">编辑</button>
-              <button v-if="skill.has_custom" class="skill-btn" @click="resetSkill(skill)">重置</button>
+              <button class="skill-btn primary" @click="openEditor(skill)">{{ $t('edit_skill') }}</button>
+              <button v-if="skill.has_custom" class="skill-btn" @click="resetSkill(skill)">{{ $t('reset_skill') }}</button>
             </div>
           </div>
         </div>
@@ -7011,20 +7019,20 @@
         <div v-if="showEditModal" class="skill-modal-overlay" @click.self="closeEditor">
           <div class="skill-modal">
             <div class="skill-modal-header">
-              <h2>编辑技能 - {{ editingSkill?.display_name || editingSkill?.skill_name }}</h2>
+              <h2>{{ $t('edit_skill') }} - {{ editingSkill?.display_name || editingSkill?.skill_name }}</h2>
               <button class="skill-modal-close" @click="closeEditor">&times;</button>
             </div>
 
             <div v-if="editLoading && !editPrompt" class="skill-modal-loading">
               <div class="loading-spinner"></div>
-              <span>加载中...</span>
+              <span>{{ $t('loading') }}</span>
             </div>
 
             <template v-else>
               <div class="skill-modal-info">
-                <span class="skill-modal-label">技能标识：</span>
+                <span class="skill-modal-label">{{ $t('skill_name') }}：</span>
                 <span>{{ editingSkill?.skill_name }}</span>
-                <span v-if="editingSkill?.has_custom" class="skill-badge custom" style="margin-left:8px;">已自定义</span>
+                <span v-if="editingSkill?.has_custom" class="skill-badge custom" style="margin-left:8px;">{{ $t('customized') }}</span>
               </div>
 
               <div v-if="editError" class="skill-error" style="margin:0 20px;">{{ editError }}</div>
@@ -7033,23 +7041,23 @@
                 <textarea
                   v-model="editPrompt"
                   class="skill-textarea"
-                  placeholder="输入技能的 prompt 内容（Markdown 格式）..."
+                  :placeholder="$t('prompt_placeholder')"
                   @keydown.tab="handleTabKey"
                 ></textarea>
                 <div class="skill-textarea-info">
-                  <span>{{ editPrompt.length }} 字符 | {{ formatFileSize(promptSize) }}</span>
-                  <span v-if="hasChanges" class="skill-changed">* 已修改</span>
+                  <span>{{ editPrompt.length }} {{ $t('characters') }} | {{ formatFileSize(promptSize) }}</span>
+                  <span v-if="hasChanges" class="skill-changed">* {{ $t('changed') }}</span>
                 </div>
               </div>
 
               <div class="skill-modal-footer">
-                <button class="skill-btn" @click="closeEditor">取消</button>
+                <button class="skill-btn" @click="closeEditor">{{ $t('cancel_edit') }}</button>
                 <button
                   class="skill-btn primary"
                   @click="saveSkill"
                   :disabled="editLoading || !hasChanges"
                 >
-                  {{ editLoading ? '保存中...' : '保存' }}
+                  {{ editLoading ? $t('save_loading') : $t('save') }}
                 </button>
               </div>
             </template>
@@ -7301,15 +7309,15 @@
     },
     computed: {
       route(){ return this.$route },
-      mainTitle(){ 
+      mainTitle(){
         if (this.route.name === 'list') return '智剧通';
-        if (this.route.name === 'image-edit') return '图片编辑';
-        if (this.route.name === 'ai-video-gen') return 'AI 视频生成';
-        if (this.route.name === 'image-to-video') return '图片生成视频';
-        if (this.route.name === 'ai-script-gen') return '图生视频智能体';
-        if (this.route.name === 'video-enhance') return '视频高清修复';
-        if (this.route.name === 'audio-generate') return 'AI 音频生成';
-        return 'AI 工具';
+        if (this.route.name === 'image-edit') return this.$t('page_title_image_edit');
+        if (this.route.name === 'ai-video-gen') return this.$t('page_title_ai_video_gen');
+        if (this.route.name === 'image-to-video') return this.$t('page_title_image_to_video');
+        if (this.route.name === 'ai-script-gen') return this.$t('page_title_ai_script_gen');
+        if (this.route.name === 'video-enhance') return this.$t('page_title_video_enhance');
+        if (this.route.name === 'audio-generate') return this.$t('page_title_audio_generate');
+        return this.$t('page_title_ai_tools');
       },
       isLoggedIn() {
         return !!(this.authToken && this.userPhone);
@@ -8266,7 +8274,11 @@
       
       async loadTermsContent() {
         try {
-          const response = await axios.get('/files/AI工具服务使用条款.txt');
+          const locale = localStorage.getItem('zjt_locale') || 'zh-CN';
+          const termsFile = locale === 'en'
+            ? '/files/AI Tool Service Terms.txt'
+            : '/files/AI工具服务使用条款.txt';
+          const response = await axios.get(termsFile);
           // Convert markdown-like text to HTML
           let html = response.data
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // Bold text
@@ -8274,11 +8286,14 @@
             .replace(/^## (.*?)$/gm, '<h2>$1</h2>')  // H2 headers
             .replace(/\n\n/g, '</p><p>')  // Paragraphs
             .replace(/\n/g, '<br>');  // Line breaks
-          
+
           this.termsContent = '<p>' + html + '</p>';
         } catch (error) {
           console.error('Failed to load terms:', error);
-          this.termsContent = '<p>加载使用条款失败，请稍后重试。</p>';
+          const locale = localStorage.getItem('zjt_locale') || 'zh-CN';
+          this.termsContent = locale === 'en'
+            ? '<p>Failed to load terms of service. Please try again later.</p>'
+            : '<p>加载使用条款失败，请稍后重试。</p>';
         }
       },
       
@@ -8436,7 +8451,7 @@
 
       handleRechargeClick() {
         if (this.isLocal) {
-          alert('只有云端环境才能开启二维码支付。本地模式下，管理员用户请进入后台增加算力，非管理员用户请通知管理员。');
+          alert(this.$t('local_recharge_tip'));
         } else {
           this.showRechargePowerModal = true;
           this.fetchRechargePackages();
@@ -8603,9 +8618,31 @@
     }
   };
 
-  const app = Vue.createApp(App);
-  app.use(router);
-  app.mount('#app');
+  // i18n 初始化 - 必须在 Vue 应用创建前执行
+  window.__STATIC_VERSION = window.__STATIC_VERSION || '';
+
+  // 先设置 HTML lang 属性为当前保存的语言
+  const savedLocale = localStorage.getItem('zjt_locale') || 'zh-CN';
+  document.documentElement.lang = savedLocale === 'en' ? 'en' : 'zh-CN';
+
+  ZJTi18n.init(['common', 'index', 'video_workflow', 'marketing_agent']).then(() => {
+    // 初始化完成后创建 Vue 应用
+    const app = Vue.createApp(App);
+    app.use(router);
+    // 注册 Vue i18n 插件
+    app.use(window.ZJTi18nVue);
+    app.mount('#app');
+
+    // 扫描 DOM 中的 data-i18n 属性并翻译
+    if (window.ZJTi18nDOM) {
+      ZJTi18nDOM.scanDOM();
+    }
+
+    // 初始化语言切换器到指定容器
+    if (window.ZJTi18nSwitcher) {
+      ZJTi18nSwitcher.render('.language-switcher-container');
+    }
+  });
   </script>
 </body>
 </html>

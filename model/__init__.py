@@ -7,7 +7,7 @@ from .tasks import TasksModel, Task
 from .ai_audio import AIAudioModel, AIAudio
 from .payment_orders import PaymentOrdersModel, PaymentOrder
 from .runninghub_slots import RunningHubSlotsModel, RunningHubSlot
-from .database import get_db_connection, execute_query, execute_update, execute_insert
+from .database import get_db_connection, execute_query, execute_update, execute_insert, transaction, execute_insert_in_transaction, execute_update_in_transaction
 from .users import UsersModel, User
 from .user_tokens import UserTokensModel, UserToken
 from .computing_power import ComputingPowerModel, ComputingPower
@@ -21,6 +21,7 @@ from .media_file_mapping import MediaFileMappingModel, MediaFileMapping
 from .skill_definitions import SkillDefinitionsModel, SkillDefinition
 from .notifications import NotificationsModel, NotificationEntity
 from .async_tasks import AsyncTasksModel, AsyncTask, AsyncTaskStatus
+from .ai_tool_pipeline_steps import PipelineStepModel, PipelineStep, PipelineStepStatus, PipelineStage, PipelineStepType
 
 __all__ = [
     'AIToolsModel',
@@ -39,6 +40,9 @@ __all__ = [
     'execute_query',
     'execute_update',
     'execute_insert',
+    'transaction',
+    'execute_insert_in_transaction',
+    'execute_update_in_transaction',
     'UsersModel',
     'User',
     'UserTokensModel',
@@ -68,4 +72,9 @@ __all__ = [
     'AsyncTasksModel',
     'AsyncTask',
     'AsyncTaskStatus',
+    'PipelineStepModel',
+    'PipelineStep',
+    'PipelineStepStatus',
+    'PipelineStage',
+    'PipelineStepType',
 ]

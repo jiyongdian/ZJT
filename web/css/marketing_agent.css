@@ -435,6 +435,11 @@ body {
   gap: 12px;
 }
 
+.language-switcher-container {
+  display: flex;
+  align-items: center;
+}
+
 .top-bar-search {
   position: relative;
 }
