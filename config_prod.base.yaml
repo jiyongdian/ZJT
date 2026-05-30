@@ -43,6 +43,11 @@ vidu:
 volcengine:
   api_key: ""
 
+volcengine_oversea:
+  api_key: ""
+  base_url: "https://ark.ap-southeast.bytepluses.com"
+  model_aliases: {}
+
 # 适配云雾 comfly这类聚合站
 api_aggregator:
   site_0:

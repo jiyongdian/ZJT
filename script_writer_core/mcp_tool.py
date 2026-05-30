@@ -3301,12 +3301,24 @@ def generate_character_reference_audio(user_id: str, world_id: str, auth_token: 
             }
 
         # 构建提示词（复用 task/audio_task.py 中的函数）
-        from task.audio_task import build_character_audio_text
-        final_text = build_character_audio_text(character_data, text)
-
-        # style_prompt 直接使用用户提供的，如果没提供则使用默认
-        final_style_prompt = style_prompt.strip() if style_prompt and style_prompt.strip() else \
-            "请生成平静、自然、清晰、有辨识度的参考音频，语气平和，不带明显情感"
+        from task.audio_task import build_character_audio_text, build_character_audio_style_prompt
+        import asyncio
+        
+        # 在同步函数中调用异步函数
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        # 使用 LLM 智能判断角色发声类型并生成文本和风格提示词
+        # 注意：这里暂时不传 model 参数，使用默认逻辑
+        final_text = loop.run_until_complete(
+            build_character_audio_text(character_data, text)
+        )
+        final_style_prompt = loop.run_until_complete(
+            build_character_audio_style_prompt(character_data, style_prompt)
+        )
 
         # 验证 user_id
         try:

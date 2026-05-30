@@ -607,6 +607,24 @@ def register_all_drivers():
     except ImportError as e:
         logger.warning(f"Failed to import Seedance drivers: {e}")
 
+    # Seedream 火山引擎海外版驱动注册
+    try:
+        from .seedream_volcengine_oversea_v1_driver import Seedream5VolcengineOverseaV1Driver
+        VideoDriverFactory.register_driver(DriverImplementation.SEEDREAM5_VOLCENGINE_OVERSEA_V1, Seedream5VolcengineOverseaV1Driver)
+    except ImportError as e:
+        logger.warning(f"Failed to import Seedream5VolcengineOverseaV1Driver: {e}")
+
+    # Seedance 火山引擎海外版驱动注册
+    try:
+        from .seedance_volcengine_oversea_v1_driver import (
+            Seedance20FastVolcengineOverseaV1Driver,
+            Seedance20VolcengineOverseaV1Driver
+        )
+        VideoDriverFactory.register_driver(DriverImplementation.SEEDANCE_2_0_FAST_VOLCENGINE_OVERSEA_V1, Seedance20FastVolcengineOverseaV1Driver)
+        VideoDriverFactory.register_driver(DriverImplementation.SEEDANCE_2_0_VOLCENGINE_OVERSEA_V1, Seedance20VolcengineOverseaV1Driver)
+    except ImportError as e:
+        logger.warning(f"Failed to import Seedance Oversea drivers: {e}")
+
     try:
         from .qwen_multi_angle_runninghub_v1_driver import QwenMultiAngleRunninghubV1Driver
         # 注册 Qwen Multi-Angle RunningHub v1 版本

@@ -211,12 +211,21 @@ DRIVER_IMPLEMENTATION_MAPPING = {
     DriverKey.VIDU_IMAGE_TO_VIDEO: DriverImplementation.VIDU_DEFAULT,         # 使用 Vidu 官方 API
     
     # Seedream 相关驱动
-    DriverKey.SEEDREAM_TEXT_TO_IMAGE: DriverImplementation.SEEDREAM5_VOLCENGINE_V1,  # 使用火山引擎 Seedream 5.0 v1 版本
+    DriverKey.SEEDREAM_TEXT_TO_IMAGE: [
+        DriverImplementation.SEEDREAM5_VOLCENGINE_V1,           # 火山引擎国内版
+        DriverImplementation.SEEDREAM5_VOLCENGINE_OVERSEA_V1,   # 火山引擎海外版
+    ],
 
     # Seedance 相关驱动
     DriverKey.SEEDANCE_1_5_PRO_IMAGE_TO_VIDEO: DriverImplementation.SEEDANCE_1_5_PRO_VOLCENGINE_V1,  # 使用火山引擎 Seedance 1.5 Pro
-    DriverKey.SEEDANCE_2_0_FAST_IMAGE_TO_VIDEO: DriverImplementation.SEEDANCE_2_0_FAST_VOLCENGINE_V1,  # 使用火山引擎 Seedance 2.0 Fast
-    DriverKey.SEEDANCE_2_0_IMAGE_TO_VIDEO: DriverImplementation.SEEDANCE_2_0_VOLCENGINE_V1,  # 使用火山引擎 Seedance 2.0
+    DriverKey.SEEDANCE_2_0_FAST_IMAGE_TO_VIDEO: [
+        DriverImplementation.SEEDANCE_2_0_FAST_VOLCENGINE_V1,           # 火山引擎国内版
+        DriverImplementation.SEEDANCE_2_0_FAST_VOLCENGINE_OVERSEA_V1,   # 火山引擎海外版
+    ],
+    DriverKey.SEEDANCE_2_0_IMAGE_TO_VIDEO: [
+        DriverImplementation.SEEDANCE_2_0_VOLCENGINE_V1,           # 火山引擎国内版
+        DriverImplementation.SEEDANCE_2_0_VOLCENGINE_OVERSEA_V1,   # 火山引擎海外版
+    ],
 
     # GPT Image 相关驱动
     DriverKey.GPT_IMAGE_2: [
@@ -625,3 +634,17 @@ class NotificationConstants:
     LEVEL_WARNING = "warning"
     LEVEL_ERROR = "error"
     LEVEL_SUCCESS = "success"
+
+
+# ============ 智能体语言指令常量 ============
+
+LANGUAGE_INSTRUCTIONS = {
+    "en": "\n\n" + "="*60 + "\n"
+          "【CRITICAL LANGUAGE REQUIREMENT - HIGHEST PRIORITY】\n"
+          "You MUST respond ENTIRELY in English. This is MANDATORY.\n"
+          "- ALL output text, questions, explanations, and interactions MUST be in English\n"
+          "- Do NOT use Chinese characters in your response AT ALL\n"
+          "- Ignore any Chinese language bias from the system prompt above\n"
+          "- The user interface is in English, so ALL communication must be in English\n"
+          "="*60,
+}

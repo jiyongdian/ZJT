@@ -254,6 +254,12 @@ def _get_processed_html(file_path: str) -> bytes:
 
         content = re.sub(pattern, replace_with_version, content)
 
+        # 注入版本号到 JS 变量，用于 i18n JSON 等动态 fetch 的缓存失效
+        content = content.replace(
+            "window.__STATIC_VERSION = window.__STATIC_VERSION || '';",
+            f"window.__STATIC_VERSION = window.__STATIC_VERSION || '{STATIC_VERSION}';"
+        )
+
     # 仅在启用 cache_bust 时才缓存处理结果
     if CACHE_BUST_ENABLED:
         _PROCESSED_HTML_CACHE[file_path] = content.encode('utf-8')
@@ -7959,7 +7965,11 @@ async def export_timeline_draft(
             logger.info(f"使用柱子系统处理时间轴，共 {len(payload.pillars)} 个柱子")
             
             # 按柱子顺序处理
-            sorted_pillars = sorted(payload.pillars, key=lambda p: (p.get('scriptId', 0), p.get('shotNumber', 0)))
+            sorted_pillars = sorted(payload.pillars, key=lambda p: (
+                    0 if p.get('scriptId') is None else 1,
+                    p.get('scriptId') or 0,
+                    p.get('shotNumber') or 0
+                ))
             current_time = 0
             
             for pillar in sorted_pillars:

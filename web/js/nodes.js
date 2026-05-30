@@ -3104,7 +3104,7 @@
       const node = {
         id,
         type: 'image_to_video',
-        title: window.t ? window.t('image_to_video') : '图生视频',
+        title: window.t ? window.t('image_to_video') : '生视频',
         x,
         y,
         data: {
@@ -3153,10 +3153,11 @@
             <!-- 左栏：输入源 -->
             <div class="video-section">
               <div class="field field-collapsible image-mode-field">
-                <div class="label" data-i18n="image_mode_label">${window.t ? window.t('image_mode_label') : '图片模式'}</div>
+                <div class="label">${window.t ? window.t('image_mode_label') : '图片模式'}</div>
                 <select class="image-mode-select">
-                  <option value="first_last_frame" data-i18n="image_mode_first_last">${window.t ? window.t('image_mode_first_last') : '首尾帧模式'}</option>
-                  <option value="multi_reference" data-i18n="image_mode_multi_ref">${window.t ? window.t('image_mode_multi_ref') : '多参考图模式'}</option>
+                  <option value="first_last_frame">${window.t ? window.t('image_mode_first_last') : '首尾帧模式'}</option>
+                  <option value="multi_reference">${window.t ? window.t('image_mode_multi_ref') : '多参考图模式'}</option>
+                  <option value="text_to_video">${window.t ? window.t('image_mode_text_to_video') : '文生视频'}</option>
                 </select>
                 <div class="image-mode-hint" style="font-size: 11px; color: #6b7280; margin-top: 4px;"></div>
               </div>
@@ -3320,27 +3321,33 @@
         const modelConfigs = getModelConfigs();
         const currentValue = node.data.videoModel || videoModelSelect.value;
         videoModelSelect.innerHTML = '';
-        
+
         if(window.TaskConfig && window.TaskConfig.isLoaded()) {
-          const options = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+          const category = currentMode === 'text_to_video' ? 'text_to_video' : 'image_to_video';
+          const options = window.TaskConfig.getModelOptionsForCategory(category);
           let firstAvailable = null;
-          
+
           options.forEach(opt => {
-            const config = modelConfigs[opt.value];
-            const supportedModes = config?.supported_image_modes || ['first_last_frame'];
-            const supportsCurrentMode = supportedModes.includes(currentMode);
-            
             const optEl = document.createElement('option');
             optEl.value = opt.value;
-            optEl.textContent = supportsCurrentMode ? opt.label : opt.label + ' (不支持当前模式)';
-            optEl.disabled = !supportsCurrentMode;
-            videoModelSelect.appendChild(optEl);
-            
-            if(supportsCurrentMode && !firstAvailable) {
-              firstAvailable = opt.value;
+
+            if(currentMode === 'text_to_video') {
+              // 文生视频模式：所有模型都可用
+              optEl.textContent = opt.label;
+              videoModelSelect.appendChild(optEl);
+              if(!firstAvailable) firstAvailable = opt.value;
+            } else {
+              // 图生视频模式：检查 supported_image_modes
+              const config = modelConfigs[opt.value];
+              const supportedModes = config?.supported_image_modes || ['first_last_frame'];
+              const supportsCurrentMode = supportedModes.includes(currentMode);
+              optEl.textContent = supportsCurrentMode ? opt.label : opt.label + ' (不支持当前模式)';
+              optEl.disabled = !supportsCurrentMode;
+              videoModelSelect.appendChild(optEl);
+              if(supportsCurrentMode && !firstAvailable) firstAvailable = opt.value;
             }
           });
-          
+
           firstVideoModelValue = firstAvailable || options[0]?.value || 'wan22';
         } else {
           // 回退：硬编码选项
@@ -3385,7 +3392,8 @@
       // 图片模式切换逻辑
       const imageModeHints = {
         'first_last_frame': '第一张为首帧，第二张（可选）为尾帧',
-        'multi_reference': '所有图片作为参考'
+        'multi_reference': '所有图片作为参考',
+        'text_to_video': '纯文本生成视频，无需上传图片'
       };
 
       // 获取当前模型的最大参考图数量
@@ -3569,6 +3577,9 @@
         updateImageModeUI();
         // 重新填充视频模型选项（根据新的图片模式筛选）
         populateVideoModelOptions();
+        // 更新时长和比例选项（新模型可能有不同的支持范围）
+        updateDurationOptions(node.data.videoModel);
+        updateRatioOptions(node.data.videoModel);
         // 更新算力显示
         updateComputingPowerDisplay();
         // 重新渲染连接线
@@ -3829,6 +3840,7 @@
           startPreviewImg.removeAttribute('src');
           startImagePort.classList.remove('disabled');
         }
+        adjustFramePreviewHeight();
       }
 
       // 尾帧预览更新函数
@@ -3842,6 +3854,15 @@
           endPreviewImg.removeAttribute('src');
           endImagePort.classList.remove('disabled');
         }
+        adjustFramePreviewHeight();
+      }
+
+      // 首帧和尾帧同时存在时，预览图高度减半
+      function adjustFramePreviewHeight(){
+        const bothVisible = startPreviewRow.style.display !== 'none' && endPreviewRow.style.display !== 'none';
+        const maxHeight = bothVisible ? '100px' : '200px';
+        if(startPreviewImg) startPreviewImg.style.maxHeight = maxHeight;
+        if(endPreviewImg) endPreviewImg.style.maxHeight = maxHeight;
       }
 
       // 保存预览更新函数的引用到元素上，便于外部调用
@@ -4113,8 +4134,10 @@
         let imageUrls = '';
         let referenceImages = '';
         const currentImageMode = node.data.imageMode || 'first_last_frame';
-        
-        if(currentImageMode === 'first_last_frame') {
+
+        if(currentImageMode === 'text_to_video') {
+          // 文生视频模式：不需要图片，直接跳过
+        } else if(currentImageMode === 'first_last_frame') {
           // 首尾帧模式
           let startImageUrl = '';
           if(node.data.startUrl){
@@ -4206,7 +4229,12 @@
           }));
 
           // 调用生成API
-          const result = await generateVideoFromImage(imageUrls, prompt, duration, desiredCount, ratio, videoModel, currentImageMode, referenceImages, allAudioUrls.join(','), allVideoUrls.join(','), JSON.stringify(mediaReferences));
+          let result;
+          if(currentImageMode === 'text_to_video') {
+            result = await generateVideoFromText(prompt, duration, desiredCount, ratio, videoModel);
+          } else {
+            result = await generateVideoFromImage(imageUrls, prompt, duration, desiredCount, ratio, videoModel, currentImageMode, referenceImages, allAudioUrls.join(','), allVideoUrls.join(','), JSON.stringify(mediaReferences));
+          }
           console.log('[DEBUG] API返回:', { projectIds: result.projectIds, count: result.projectIds?.length });
           
           genStatus.textContent = '任务已提交，正在生成视频...';
@@ -4726,6 +4754,7 @@
         startPreviewRow.style.display = 'none';
         startPreviewImg.removeAttribute('src');
         startImagePort.classList.remove('disabled');
+        adjustFramePreviewHeight();
         renderImageConnections();
         updateComputingPowerDisplay();  // 更新算力显示
         safeAutoSave()
@@ -4741,6 +4770,7 @@
         endPreviewRow.style.display = 'none';
         endPreviewImg.removeAttribute('src');
         endImagePort.classList.remove('disabled');
+        adjustFramePreviewHeight();
         renderImageConnections();
         updateComputingPowerDisplay();  // 更新算力显示
         safeAutoSave()
@@ -7278,18 +7308,21 @@
               .filter(n => n && n.type === 'shot_frame');
             
             if(sfNodes.length > 0) {
-              // 检查有预览图的分镜
-              const nodesWithImage = sfNodes.filter(n => n.data.previewImageUrl || n.data.imageUrl);
-              
-              if(nodesWithImage.length > 0) {
+              // 检查就绪的分镜（有预览图或启用参考图模式）
+              const readyNodes = sfNodes.filter(n => {
+                const nodeMode = n.data.videoMode || 'first_last_frame';
+                return nodeMode === 'multi_reference' || n.data.previewImageUrl || n.data.imageUrl;
+              });
+
+              if(readyNodes.length > 0) {
                 shotGroupsWithFrames.push({
                   shotGroupNode: sgNode,
-                  shotFrameNodes: nodesWithImage
+                  shotFrameNodes: readyNodes
                 });
-                
+
                 // 计算每个分镜的算力消耗
                 // 模型优先级：分镜节点 > 分镜组 > 剧本节点 > 默认wan22
-                nodesWithImage.forEach(sfNode => {
+                readyNodes.forEach(sfNode => {
                   const videoModel = sfNode.data.videoModel || sgNode.data.videoModel || node.data.videoModel || 'wan22';
                   const duration = sfNode.data.videoDuration || sfNode.data.duration || 5;
                   const drawCount = sfNode.data.videoDrawCount || 1;
@@ -7781,6 +7814,7 @@
           videoModel: resolvedVideoModel,
           videoDuration: pickFirstDefinedValue(shotGroupData.videoDuration, shotGroupData.video_duration) || 5,
           videoDrawCount: pickFirstDefinedValue(shotGroupData.videoDrawCount, shotGroupData.video_draw_count) || 1,
+          videoGenMode: shotGroupData.videoGenMode || 'first_last_frame',
           gridPreview: shotGroupData.gridPreview || {},
         }
       };
@@ -7869,6 +7903,13 @@
                 <div class="script-section-title" data-i18n="shot_group_video_section">${window.t ? window.t('shot_group_video_section') : '视频生成'}</div>
               </div>
               <div class="field field-always-visible">
+                <div class="label" data-i18n="video_gen_mode_label">${window.t ? window.t('video_gen_mode_label') : '视频生成模式'}</div>
+                <select class="shot-group-video-gen-mode">
+                  <option value="first_last_frame" data-i18n="video_mode_first_frame">${window.t ? window.t('video_mode_first_frame') : '首帧模式'}</option>
+                  <option value="multi_reference" data-i18n="video_mode_reference">${window.t ? window.t('video_mode_reference') : '参考模式'}</option>
+                </select>
+              </div>
+              <div class="field field-always-visible" style="margin-top:5px">
                 <div class="label" data-i18n="shot_group_video_model_label">${window.t ? window.t('shot_group_video_model_label') : '视频模型'}</div>
                 <select class="shot-group-video-model"></select>
               </div>
@@ -8039,6 +8080,7 @@
       }
 
       // 视频生成相关元素
+      const videoGenModeEl = el.querySelector('.shot-group-video-gen-mode');
       const videoModelEl = el.querySelector('.shot-group-video-model');
       const videoDurationEl = el.querySelector('.shot-group-video-duration');
       const generateVideoBtn = el.querySelector('.shot-group-generate-video-btn');
@@ -8078,6 +8120,7 @@
       if(!node.data.videoModel) node.data.videoModel = firstShotGroupVideoModelValue;
       if(videoModelEl) videoModelEl.value = node.data.videoModel;
       if(videoDurationEl) videoDurationEl.value = node.data.videoDuration;
+      if(videoGenModeEl) videoGenModeEl.value = node.data.videoGenMode || 'first_last_frame';
       
       // 应用驱动状态禁用未配置的选项
       if(videoModelEl) applyDriverStatusToSelect(videoModelEl);
@@ -8171,15 +8214,30 @@
         updateMergeButtonVisibility(videoModelEl.value);
       });
 
+      // 视频生成模式选择事件
+      if(videoGenModeEl) {
+        videoGenModeEl.addEventListener('change', () => {
+          node.data.videoGenMode = videoGenModeEl.value;
+          updateMergeButtonVisibility(videoModelEl.value);
+        });
+      }
+
       // 根据模型配置更新合并生成按钮的显示状态
       function updateMergeButtonVisibility(videoModel) {
         const mergeContainer = el.querySelector('.shot-group-merge-container');
-        
-        // 从后端配置获取模型是否支持宫格合并（指定分类为图生视频）
+        const currentMode = node.data.videoGenMode || 'first_last_frame';
+
+        // 参考生视频模式下，合并按钮始终显示（不需要宫格合并支持）
+        if(currentMode === 'multi_reference') {
+          if(mergeContainer) mergeContainer.style.display = 'inline-flex';
+          return;
+        }
+
+        // 首尾帧模式：从后端配置获取模型是否支持宫格合并
         const taskId = window.TaskConfig?.getTaskIdByKey(videoModel, 'image_to_video');
         const taskConfig = taskId ? window.TaskConfig?.getTaskById(taskId) : null;
         const isMergeSupported = taskConfig?.supports_grid_merge || false;
-        
+
         if(mergeContainer) {
           mergeContainer.style.display = isMergeSupported ? 'inline-flex' : 'none';
         }
@@ -8885,6 +8943,7 @@
           videoDrawCount: 1,
           videoDuration: 5,
           videoModel: inheritedVideoModel,
+          videoMode: 'first_last_frame',  // 'first_last_frame' | 'multi_reference'
         }
       };
       state.nodes.push(node);
@@ -8994,6 +9053,14 @@
                 </div>
                 <div class="gen-meta shot-frame-draw-count-label"></div>
               </div>
+              <div class="field field-always-visible shot-frame-video-mode-field" style="margin-top: 8px;">
+                <div class="label" data-i18n="video_gen_mode_label">${window.t ? window.t('video_gen_mode_label') : '视频生成模式'}</div>
+                <div class="shot-frame-video-mode-toggle" style="display:flex; border:1px solid #ddd; border-radius:6px; overflow:hidden;">
+                  <button type="button" class="video-mode-btn" data-mode="first_last_frame" data-i18n="video_mode_first_frame" style="flex:1; padding:6px 8px; font-size:12px; border:none; cursor:pointer; background:#3b82f6; color:white;">${window.t ? window.t('video_mode_first_frame') : '首帧模式'}</button>
+                  <button type="button" class="video-mode-btn" data-mode="multi_reference" data-i18n="video_mode_reference" style="flex:1; padding:6px 8px; font-size:12px; border:none; cursor:pointer; background:#f3f4f6; color:#666;">${window.t ? window.t('video_mode_reference') : '参考模式'}</button>
+                </div>
+                <div class="video-mode-hint" data-i18n="video_mode_hint_first_frame" style="font-size:11px; color:#6b7280; margin-top:4px;">${window.t ? window.t('video_mode_hint_first_frame') : '先生成分镜图作为视频首帧'}</div>
+              </div>
               <div class="field field-always-visible" style="margin-top: 8px;">
                 <div class="label" data-i18n="shot_group_video_model_label">${window.t ? window.t('shot_group_video_model_label') : '视频模型'}</div>
                 <select class="shot-frame-video-model"></select>
@@ -9102,54 +9169,142 @@
         applyDriverStatusToSelect(modelEl);
       }
 
-      // 动态填充视频模型选项
-      if(videoModelEl) {
+      // ============ 视频模型填充（根据 videoMode 动态过滤） ============
+
+      // 根据当前 videoMode 填充视频模型选项
+      function populateVideoModelOptions() {
+        if(!videoModelEl) return;
+        const mode = node.data.videoMode || 'first_last_frame';
         videoModelEl.innerHTML = '';
-        let firstVideoModelValue = 'wan22';
+        let allOptions = [];
+        let firstVideoModelValue = mode === 'multi_reference' ? 'veo3' : 'wan22';
+
         if(window.TaskConfig && window.TaskConfig.isLoaded()) {
-          const options = window.TaskConfig.getModelOptionsForCategory('image_to_video');
-          if(options.length > 0) firstVideoModelValue = options[0].value;
-          options.forEach(opt => {
+          allOptions = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+          if(mode === 'multi_reference') {
+            allOptions = allOptions.filter(opt => {
+              const modes = opt.supportedImageModes || ['first_last_frame'];
+              return modes.includes('multi_reference');
+            });
+          }
+          if(allOptions.length > 0) firstVideoModelValue = allOptions[0].value;
+          allOptions.forEach(opt => {
             const optEl = document.createElement('option');
             optEl.value = opt.value;
             optEl.textContent = opt.label;
-            if(opt.value === node.data.videoModel) optEl.selected = true;
             videoModelEl.appendChild(optEl);
           });
         } else {
-          videoModelEl.innerHTML = `
-            <option value="wan22" selected>Wan2.2</option>
-            <option value="sora2">Sora2</option>
-            <option value="ltx2">LTX2.0</option>
-            <option value="kling">可灵</option>
-            <option value="vidu">Vidu</option>
-            <option value="veo3">VEO3.1</option>
-          `;
-        }
-        videoModelEl.value = node.data.videoModel || firstVideoModelValue;
-        applyDriverStatusToSelect(videoModelEl);
-
-        // 初始化参考音视频字段可见性
-        function updateRefAudioVideoVisibility() {
-          const videoModel = videoModelEl.value;
-          const refAudioField = el.querySelector('.shot-ref-audio-field');
-          const refVideoField = el.querySelector('.shot-ref-video-field');
-
-          if(window.TaskConfig && window.TaskConfig.isLoaded()) {
-            const modelConfig = window.TaskConfig.getModelConfigs()[videoModel];
-            const supportsRefAudioVideo = modelConfig && modelConfig.supports_ref_audio_video === true;
-
-            if(refAudioField) refAudioField.style.display = supportsRefAudioVideo ? 'block' : 'none';
-            if(refVideoField) refVideoField.style.display = supportsRefAudioVideo ? 'block' : 'none';
+          // fallback
+          if(mode === 'multi_reference') {
+            videoModelEl.innerHTML = `
+              <option value="veo3">VEO3.1</option>
+              <option value="grok">Grok</option>
+              <option value="seedance_2_0">Seedance 2.0</option>
+            `;
+            firstVideoModelValue = 'veo3';
           } else {
-            // 如果配置未加载，默认隐藏
-            if(refAudioField) refAudioField.style.display = 'none';
-            if(refVideoField) refVideoField.style.display = 'none';
+            videoModelEl.innerHTML = `
+              <option value="wan22">Wan2.2</option>
+              <option value="sora2">Sora2</option>
+              <option value="ltx2">LTX2.0</option>
+              <option value="kling">可灵</option>
+              <option value="vidu">Vidu</option>
+              <option value="veo3">VEO3.1</option>
+            `;
+            firstVideoModelValue = 'wan22';
           }
         }
 
-        // 初始更新
+        // 如果当前选择的模型不在新列表中，切换到第一个
+        const validValues = allOptions.map(o => o.value);
+        if(validValues.length > 0 && !validValues.includes(node.data.videoModel)) {
+          node.data.videoModel = firstVideoModelValue;
+        }
+        videoModelEl.value = node.data.videoModel || firstVideoModelValue;
+        applyDriverStatusToSelect(videoModelEl);
+      }
+
+      // ============ 模式切换 UI 更新 ============
+
+      function updateModeUI() {
+        const mode = node.data.videoMode || 'first_last_frame';
+        const isRefMode = mode === 'multi_reference';
+
+        // 更新提示文本
+        const hintEl = el.querySelector('.video-mode-hint');
+        if(hintEl) {
+          const hintKey = isRefMode ? 'video_mode_hint_reference' : 'video_mode_hint_first_frame';
+          hintEl.setAttribute('data-i18n', hintKey);
+          hintEl.textContent = window.t ? window.t(hintKey) : (isRefMode ? '使用角色/场景/道具参考图直接生成视频（无参考图时将回退为文生视频，实际消耗以最终调用为准）' : '先生成分镜图作为视频首帧');
+        }
+
+        // 分镜模型/生成分镜图按钮降低透明度
+        const generateImageBtn = el.querySelector('.shot-frame-generate-btn');
+        const modelFieldEl = el.querySelector('.shot-frame-model')?.closest('.field');
+        if(generateImageBtn) generateImageBtn.style.opacity = isRefMode ? '0.4' : '1';
+        if(modelFieldEl) modelFieldEl.style.opacity = isRefMode ? '0.4' : '1';
+
+        // 参考音视频字段可见性（参考图模式下由模型配置决定，首帧模式同理）
         updateRefAudioVideoVisibility();
+      }
+
+      // 初始化参考音视频字段可见性
+      function updateRefAudioVideoVisibility() {
+        const videoModel = videoModelEl ? videoModelEl.value : 'wan22';
+        const mode = node.data.videoMode || 'first_last_frame';
+        const refAudioField = el.querySelector('.shot-ref-audio-field');
+        const refVideoField = el.querySelector('.shot-ref-video-field');
+
+        // 参考图模式下，参考音视频始终隐藏（multi_reference 模型大多不支持）
+        if(mode === 'multi_reference') {
+          if(refAudioField) refAudioField.style.display = 'none';
+          if(refVideoField) refVideoField.style.display = 'none';
+          return;
+        }
+
+        if(window.TaskConfig && window.TaskConfig.isLoaded()) {
+          const modelConfig = window.TaskConfig.getModelConfigs()[videoModel];
+          const supportsRefAudioVideo = modelConfig && modelConfig.supports_ref_audio_video === true;
+          if(refAudioField) refAudioField.style.display = supportsRefAudioVideo ? 'block' : 'none';
+          if(refVideoField) refVideoField.style.display = supportsRefAudioVideo ? 'block' : 'none';
+        } else {
+          if(refAudioField) refAudioField.style.display = 'none';
+          if(refVideoField) refVideoField.style.display = 'none';
+        }
+      }
+
+      if(videoModelEl) {
+        // 初始填充
+        populateVideoModelOptions();
+        updateRefAudioVideoVisibility();
+
+        // ============ 模式切换事件 ============
+        const modeBtns = el.querySelectorAll('.video-mode-btn');
+        modeBtns.forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const newMode = btn.dataset.mode;
+            if(newMode === node.data.videoMode) return;
+            node.data.videoMode = newMode;
+
+            // 更新切换按钮样式
+            modeBtns.forEach(b => {
+              const isActive = b === btn;
+              b.style.background = isActive ? '#3b82f6' : '#f3f4f6';
+              b.style.color = isActive ? 'white' : '#666';
+            });
+
+            // 重新填充视频模型列表
+            populateVideoModelOptions();
+            updateModeUI();
+            // 触发算力重新计算（通过元素引用，因为函数定义在后面）
+            if(el._updateVideoComputingPowerDisplay) {
+              try { el._updateVideoComputingPowerDisplay(); } catch(e) {}
+            }
+            try{ autoSaveWorkflow(); } catch(e){}
+          });
+        });
 
         // 监听视频模型变化
         videoModelEl.addEventListener('change', () => {
@@ -9754,8 +9909,9 @@
       }
       updateVideoDrawCountLabel();
       
-      // 初始化算力显示
+      // 初始化算力显示，并存储引用供模式切换调用
       updateVideoComputingPowerDisplay();
+      el._updateVideoComputingPowerDisplay = updateVideoComputingPowerDisplay;
 
       // 获取所有连接的图片节点（包括子图片和嵌套子图片，递归查找）
       function getConnectedImageNodes(){
@@ -10022,18 +10178,22 @@
       // 生成视频
       generateVideoBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if(!node.data.previewImageUrl){
+        const mode = node.data.videoMode || 'first_last_frame';
+        if(mode === 'first_last_frame' && !node.data.previewImageUrl){
           showToast('请先生成分镜图', 'warning');
           return;
         }
+        // multi_reference 模式不需要 previewImageUrl
         generateShotFrameVideo(id, node);
       });
 
       // 初始化时更新预览图
       updatePreviewImage();
 
-      // 暴露更新预览图的方法供外部调用
+      // 暴露方法供外部调用（工作流恢复时使用）
       node.updatePreview = updatePreviewImage;
+      node.updateModeUI = updateModeUI;
+      node.populateVideoModelOptions = populateVideoModelOptions;
 
       deleteBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -10594,12 +10754,16 @@
           showToast('请先生成分镜节点', 'warning');
           return;
         }
-        
-        // 检查所有分镜节点是否都有首帧图片
-        const nodesWithImage = shotFrameNodes.filter(n => n.data.previewImageUrl || n.data.imageUrl);
-        if(nodesWithImage.length === 0) {
-          showToast('分镜节点没有首帧图片，请先生成分镜图', 'warning');
-          return;
+
+        const videoGenMode = shotGroupNode.data.videoGenMode || 'first_last_frame';
+
+        // 首尾帧模式下检查是否有首帧图片（参考模式不需要首帧图）
+        if(videoGenMode === 'first_last_frame') {
+          const nodesWithImage = shotFrameNodes.filter(n => n.data.previewImageUrl || n.data.imageUrl);
+          if(nodesWithImage.length === 0) {
+            showToast('分镜节点没有首帧图片，请先生成分镜图', 'warning');
+            return;
+          }
         }
         
         const generateBtn = document.querySelector(`.node[data-node-id="${shotGroupNodeId}"] .shot-group-generate-video-btn`);
@@ -10614,79 +10778,112 @@
         const videoModel = shotGroupNode.data.videoModel || 'wan22';
         const userId = localStorage.getItem('user_id') || '1';
         const authToken = localStorage.getItem('auth_token') || '';
-        
-        // ===== 宫格合并模式：多分镜时先合并为宫格图 =====
-        let imageUrl;
-        
-        if(shotFrameNodes.length > 1) {
-          // 多分镜：合并为宫格图
+
+        // ===== 根据视频生成模式收集图片 =====
+        let imageUrl; // 首尾帧模式使用
+        let referenceImageUrls = []; // 参考模式使用
+        let refPromptSuffix = []; // 参考图描述文字
+        let useTextToVideo = false; // 降级标记
+
+        if(videoGenMode === 'multi_reference') {
+          // ===== 参考生视频模式：收集角色/场景/道具参考图 =====
           if(mergeStatusEl) {
             mergeStatusEl.style.color = '#3b82f6';
-            mergeStatusEl.textContent = '正在合并宫格图片...';
+            mergeStatusEl.textContent = '正在收集参考图片...';
           }
-          generateBtn.textContent = '合并宫格...';
-          
-          const gridSize = calculateGridSize(shotFrameNodes.length);
-          if(!gridSize) {
-            throw new Error('分镜数量超过25，不支持宫格合并');
+          generateBtn.textContent = '收集参考图...';
+
+          const { referenceImageUrls: refUrls, promptSuffix: _refPromptSuffix } = await collectReferenceImagesForGrid(shotFrameNodes);
+          referenceImageUrls = refUrls;
+          refPromptSuffix = _refPromptSuffix || [];
+
+          if(referenceImageUrls.length > 0) {
+            console.log(`[分镜组视频] 参考模式：收集到 ${referenceImageUrls.length} 张参考图`);
+            if(mergeStatusEl) {
+              mergeStatusEl.style.color = '#22c55e';
+              mergeStatusEl.textContent = `收集到 ${referenceImageUrls.length} 张参考图，正在生成视频...`;
+            }
+          } else {
+            // 无参考图，降级为文生视频
+            console.log('[分镜组视频] 参考模式：无参考图，降级为文生视频');
+            useTextToVideo = true;
+            if(mergeStatusEl) {
+              mergeStatusEl.style.color = '#f59e0b';
+              mergeStatusEl.textContent = '无参考图，回退为文生视频模式...';
+            }
           }
-          
-          // 收集图片URL和黑色位置
-          const imageUrls = [];
-          const blackIndices = [];
-          for(let i = 0; i < gridSize; i++) {
-            if(i < shotFrameNodes.length) {
-              const imgUrl = shotFrameNodes[i].data.previewImageUrl || shotFrameNodes[i].data.imageUrl || '';
-              if(imgUrl) {
-                imageUrls.push(imgUrl);
+        } else {
+          // ===== 首尾帧模式：宫格合并 =====
+          if(shotFrameNodes.length > 1) {
+            // 多分镜：合并为宫格图
+            if(mergeStatusEl) {
+              mergeStatusEl.style.color = '#3b82f6';
+              mergeStatusEl.textContent = '正在合并宫格图片...';
+            }
+            generateBtn.textContent = '合并宫格...';
+
+            const gridSize = calculateGridSize(shotFrameNodes.length);
+            if(!gridSize) {
+              throw new Error('分镜数量超过25，不支持宫格合并');
+            }
+
+            // 收集图片URL和黑色位置
+            const imageUrls = [];
+            const blackIndices = [];
+            for(let i = 0; i < gridSize; i++) {
+              if(i < shotFrameNodes.length) {
+                const imgUrl = shotFrameNodes[i].data.previewImageUrl || shotFrameNodes[i].data.imageUrl || '';
+                if(imgUrl) {
+                  imageUrls.push(imgUrl);
+                } else {
+                  imageUrls.push('');
+                  blackIndices.push(i);
+                }
               } else {
                 imageUrls.push('');
                 blackIndices.push(i);
               }
-            } else {
-              imageUrls.push('');
-              blackIndices.push(i);
             }
-          }
-          
-          console.log(`[分镜组视频] 合并宫格: ${shotFrameNodes.length}个分镜 → ${gridSize}宫格, 黑色位置:`, blackIndices);
-          
-          // 调用合并API
-          const mergeRes = await fetch('/api/images/merge-grid', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-User-Id': userId,
-              'Authorization': `Bearer ${authToken}`
-            },
-            body: JSON.stringify({
-              image_urls: imageUrls,
-              black_indices: blackIndices,
-              grid_size: gridSize
-            })
-          });
-          
-          const mergeData = await mergeRes.json();
-          if(mergeData.code !== 0 || !mergeData.data || !mergeData.data.image_url) {
-            throw new Error(mergeData.message || '宫格图片合并失败');
-          }
-          
-          imageUrl = mergeData.data.image_url;
-          console.log(`[分镜组视频] 宫格合并成功:`, imageUrl);
-          
-          // 保存合并结果到节点数据
-          shotGroupNode.data.gridPreview = shotGroupNode.data.gridPreview || {};
-          shotGroupNode.data.gridPreview.mergedImageUrl = imageUrl;
-          
-          if(mergeStatusEl) {
-            mergeStatusEl.style.color = '#22c55e';
-            mergeStatusEl.textContent = '宫格合并完成，正在生成视频...';
-          }
-        } else {
-          // 单分镜：直接使用首帧图
-          imageUrl = firstShotFrame.data.previewImageUrl || firstShotFrame.data.imageUrl;
-          if(!imageUrl) {
-            throw new Error('分镜节点没有首帧图片');
+
+            console.log(`[分镜组视频] 合并宫格: ${shotFrameNodes.length}个分镜 → ${gridSize}宫格, 黑色位置:`, blackIndices);
+
+            // 调用合并API
+            const mergeRes = await fetch('/api/images/merge-grid', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-User-Id': userId,
+                'Authorization': `Bearer ${authToken}`
+              },
+              body: JSON.stringify({
+                image_urls: imageUrls,
+                black_indices: blackIndices,
+                grid_size: gridSize
+              })
+            });
+
+            const mergeData = await mergeRes.json();
+            if(mergeData.code !== 0 || !mergeData.data || !mergeData.data.image_url) {
+              throw new Error(mergeData.message || '宫格图片合并失败');
+            }
+
+            imageUrl = mergeData.data.image_url;
+            console.log(`[分镜组视频] 宫格合并成功:`, imageUrl);
+
+            // 保存合并结果到节点数据
+            shotGroupNode.data.gridPreview = shotGroupNode.data.gridPreview || {};
+            shotGroupNode.data.gridPreview.mergedImageUrl = imageUrl;
+
+            if(mergeStatusEl) {
+              mergeStatusEl.style.color = '#22c55e';
+              mergeStatusEl.textContent = '宫格合并完成，正在生成视频...';
+            }
+          } else {
+            // 单分镜：直接使用首帧图
+            imageUrl = firstShotFrame.data.previewImageUrl || firstShotFrame.data.imageUrl;
+            if(!imageUrl) {
+              throw new Error('分镜节点没有首帧图片');
+            }
           }
         }
         
@@ -10723,32 +10920,70 @@
         if(typeof getVideoPromptWithSuffix === 'function'){
           finalVideoPrompt = getVideoPromptWithSuffix(combinedVideoPrompt);
         }
+
+        // 参考模式下追加参考图描述（如"图1是土豆仔，图2是绿色青椒帽。"）
+        if(videoGenMode === 'multi_reference' && refPromptSuffix && refPromptSuffix.length > 0 && !useTextToVideo) {
+          finalVideoPrompt = `${finalVideoPrompt}\n\n${refPromptSuffix.join('，')}。`;
+        }
         
         generateBtn.textContent = '提交视频...';
         showToast(`正在生成 ${count} 个视频...`, 'info');
-        
-        // 调用图生视频API
-        // 根据 videoModel 获取 task_id
-        const taskId9 = TaskConfig.getTaskIdByKey(videoModel || 'wan22', 'image_to_video');
-        if(!taskId9){
-          throw new Error(`未找到视频模型 ${videoModel} 对应的任务配置`);
+
+        // 根据模式调用不同的API
+        let res;
+
+        if(useTextToVideo) {
+          // ===== 降级：文生视频 =====
+          const t2vTaskId = TaskConfig.getTaskIdByKey(videoModel || 'wan22', 'text_to_video');
+          if(!t2vTaskId){
+            throw new Error(`模型 ${videoModel} 不支持文生视频，请添加参考图（角色/场景/道具）或切换支持文生视频的模型`);
+          }
+
+          const form = new FormData();
+          form.append('prompt', finalVideoPrompt);
+          form.append('duration_seconds', duration);
+          form.append('count', count);
+          form.append('ratio', state.ratio || '9:16');
+          form.append('task_id', t2vTaskId);
+          appendAuthToForm(form);
+
+          res = await fetch('/api/ai-app-run', { method: 'POST', body: form });
+        } else if(videoGenMode === 'multi_reference') {
+          // ===== 参考生视频模式 =====
+          const refTaskId = TaskConfig.getTaskIdByKey(videoModel || 'wan22', 'image_to_video');
+          if(!refTaskId){
+            throw new Error(`未找到视频模型 ${videoModel} 对应的任务配置`);
+          }
+
+          const form = new FormData();
+          form.append('image_urls', referenceImageUrls.join(','));
+          form.append('image_mode', 'multi_reference');
+          form.append('prompt', finalVideoPrompt);
+          form.append('duration_seconds', duration);
+          form.append('count', count);
+          form.append('ratio', state.ratio || '9:16');
+          form.append('task_id', refTaskId);
+          appendAuthToForm(form);
+
+          res = await fetch('/api/ai-app-run-image', { method: 'POST', body: form });
+        } else {
+          // ===== 首尾帧模式（原有逻辑） =====
+          const taskId9 = TaskConfig.getTaskIdByKey(videoModel || 'wan22', 'image_to_video');
+          if(!taskId9){
+            throw new Error(`未找到视频模型 ${videoModel} 对应的任务配置`);
+          }
+
+          const form = new FormData();
+          form.append('image_urls', imageUrl);
+          form.append('prompt', finalVideoPrompt);
+          form.append('duration_seconds', duration);
+          form.append('count', count);
+          form.append('ratio', state.ratio || '9:16');
+          form.append('task_id', taskId9);
+          appendAuthToForm(form);
+
+          res = await fetch('/api/ai-app-run-image', { method: 'POST', body: form });
         }
-        
-        const form = new FormData();
-        
-        form.append('image_urls', imageUrl);
-        form.append('prompt', finalVideoPrompt);
-        form.append('duration_seconds', duration);
-        form.append('count', count);
-        form.append('ratio', state.ratio || '9:16');
-        form.append('task_id', taskId9);
-        
-        appendAuthToForm(form);
-        
-        const res = await fetch('/api/ai-app-run-image', {
-          method: 'POST',
-          body: form
-        });
         
         const resText5 = await res.text();
         let data;
@@ -10919,9 +11154,13 @@
           return;
         }
 
-        // 检查所有分镜节点是否都有首帧图片
-        const nodesWithImage = shotFrameNodes.filter(n => n.data.previewImageUrl || n.data.imageUrl);
-        if(nodesWithImage.length === 0) {
+        const groupGenMode = shotGroupNode.data.videoGenMode || 'first_last_frame';
+
+        // 检查所有分镜节点是否就绪（首帧模式需要图片，参考模式不需要）
+        const nodesReady = shotFrameNodes.filter(n => {
+          return groupGenMode === 'multi_reference' || n.data.previewImageUrl || n.data.imageUrl;
+        });
+        if(nodesReady.length === 0) {
           showToast('分镜节点没有首帧图片，请先生成分镜图', 'warning');
           return;
         }
@@ -10944,17 +11183,27 @@
         for(let i = 0; i < shotFrameNodes.length; i++) {
           const shotFrameNode = shotFrameNodes[i];
 
-          // 检查是否有预览图
-          if(!shotFrameNode.data.previewImageUrl && !shotFrameNode.data.imageUrl) {
-            console.warn(`分镜节点 ${shotFrameNode.id} 没有预览图，跳过`);
+          // 使用分镜组的生成模式覆盖子节点的模式
+          const effectiveMode = groupGenMode;
+
+          // 首帧模式需要有预览图，参考模式不需要
+          if(effectiveMode === 'first_last_frame' && !shotFrameNode.data.previewImageUrl && !shotFrameNode.data.imageUrl) {
+            console.warn(`分镜节点 ${shotFrameNode.id} 没有预览图且为首帧模式，跳过`);
             failCount++;
             continue;
           }
 
           try {
             showToast(`正在生成 ${i + 1}/${shotFrameNodes.length} 分镜视频...`, 'info');
-            // 从分镜组节点继承视频模型配置（修复视频模型选择不生效的bug）
-            shotFrameNode.data.videoModel = shotGroupNode.data.videoModel || shotFrameNode.data.videoModel;
+
+            // 将分镜组的生成模式同步到子节点
+            shotFrameNode.data.videoMode = effectiveMode;
+
+            // 首帧模式从分镜组继承视频模型；参考模式保持子节点自己的模型
+            if(effectiveMode !== 'multi_reference') {
+              shotFrameNode.data.videoModel = shotGroupNode.data.videoModel || shotFrameNode.data.videoModel;
+            }
+
             await generateShotFrameVideo(shotFrameNode.id, shotFrameNode);
             successCount++;
           } catch(error) {

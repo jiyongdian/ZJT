@@ -803,6 +803,7 @@ class TaskCreateRequest(BaseModel):
     audio_urls: Optional[List[str]] = None
     image_preferences: Optional[Dict[str, Any]] = None
     video_preferences: Optional[Dict[str, Any]] = None
+    language: Optional[str] = None
 
 class ModelChangeRequest(BaseModel):
     model: str
@@ -2116,7 +2117,10 @@ async def generate_character_reference_audio(
             character_data, audio_request.style_prompt,
             model=audio_request.model, vendor_id=audio_request.vendor_id
         )
-        text = build_character_audio_text(character_data, audio_request.text)
+        text = await build_character_audio_text(
+            character_data, audio_request.text,
+            model=audio_request.model, vendor_id=audio_request.vendor_id
+        )
 
         # 写入异步任务表，由 scheduler 后台统一处理提交
         from model import AsyncTasksModel
@@ -2497,6 +2501,8 @@ async def create_agent_task(request: Request, session_id: str, task_request: Tas
                 user_message += f"\n\n[用户视频偏好] {', '.join(v_pref_parts)}"
 
         # 创建任务（返回 task_id 字符串）
+        task_language = task_request.language or 'zh-CN'
+        logger.info(f'创建任务: language={task_language} (from request: {task_request.language})')
         task_id = task_manager.create_task(
             session_id=session_id,
             user_message=user_message,
@@ -2509,7 +2515,8 @@ async def create_agent_task(request: Request, session_id: str, task_request: Tas
             thinking_effort=task_request.thinking_effort,
             image_urls=task_request.image_urls,
             video_urls=task_request.video_urls,
-            audio_urls=task_request.audio_urls
+            audio_urls=task_request.audio_urls,
+            language=task_language
         )
         
         # 获取任务对象

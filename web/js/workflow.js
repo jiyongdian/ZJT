@@ -1517,22 +1517,26 @@
             videoModelSelect.innerHTML = '';
             
             if(window.TaskConfig && window.TaskConfig.isLoaded()) {
-              const options = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+              const category = imageMode === 'text_to_video' ? 'text_to_video' : 'image_to_video';
+              const options = window.TaskConfig.getModelOptionsForCategory(category);
               let firstAvailable = null;
-              
+
               options.forEach(opt => {
-                const config = modelConfigs[opt.value];
-                const supportedModes = config?.supported_image_modes || ['first_last_frame'];
-                const supportsCurrentMode = supportedModes.includes(imageMode);
-                
                 const optEl = document.createElement('option');
                 optEl.value = opt.value;
-                optEl.textContent = supportsCurrentMode ? opt.label : opt.label + ' (不支持当前模式)';
-                optEl.disabled = !supportsCurrentMode;
-                videoModelSelect.appendChild(optEl);
-                
-                if(supportsCurrentMode && !firstAvailable) {
-                  firstAvailable = opt.value;
+
+                if(imageMode === 'text_to_video') {
+                  optEl.textContent = opt.label;
+                  videoModelSelect.appendChild(optEl);
+                  if(!firstAvailable) firstAvailable = opt.value;
+                } else {
+                  const config = modelConfigs[opt.value];
+                  const supportedModes = config?.supported_image_modes || ['first_last_frame'];
+                  const supportsCurrentMode = supportedModes.includes(imageMode);
+                  optEl.textContent = supportsCurrentMode ? opt.label : opt.label + ' (不支持当前模式)';
+                  optEl.disabled = !supportsCurrentMode;
+                  videoModelSelect.appendChild(optEl);
+                  if(supportsCurrentMode && !firstAvailable) firstAvailable = opt.value;
                 }
               });
               
@@ -1648,7 +1652,17 @@
             if(endPreviewRow) endPreviewRow.style.display = 'flex';
             if(endImagePort) endImagePort.classList.add('disabled');
           }
-          
+
+          // 首尾帧同时存在时，预览图高度减半
+          const _startRow = el.querySelector('.start-preview-row');
+          const _endRow = el.querySelector('.end-preview-row');
+          const _bothVisible = _startRow && _endRow && _startRow.style.display !== 'none' && _endRow.style.display !== 'none';
+          const _maxH = _bothVisible ? '100px' : '200px';
+          const _startImg = el.querySelector('.start-preview');
+          const _endImg = el.querySelector('.end-preview');
+          if(_startImg) _startImg.style.maxHeight = _maxH;
+          if(_endImg) _endImg.style.maxHeight = _maxH;
+
           // 更新图片模式UI
           const imageModeSelect = el.querySelector('.image-mode-select');
           const imageModeHint = el.querySelector('.image-mode-hint');
@@ -1661,7 +1675,8 @@
           const imageMode = node.data.imageMode || 'first_last_frame';
           const imageModeHints = {
             'first_last_frame': '第一张为首帧，第二张（可选）为尾帧',
-            'multi_reference': '所有图片作为风格参考'
+            'multi_reference': '所有图片作为风格参考',
+            'text_to_video': '纯文本生成视频，无需上传图片'
           };
           
           if(imageModeSelect) imageModeSelect.value = imageMode;
@@ -2535,10 +2550,30 @@
           const videoModelEl = nodeEl.querySelector('.shot-frame-video-model');
           const videoDurationEl = nodeEl.querySelector('.shot-frame-video-duration');
           
+          // 恢复视频生成模式（先恢复模式，再填充模型列表）
+          if(nodeData.data.videoMode) {
+            node.data.videoMode = nodeData.data.videoMode;
+            const modeBtns = nodeEl.querySelectorAll('.video-mode-btn');
+            modeBtns.forEach(btn => {
+              const isActive = btn.dataset.mode === nodeData.data.videoMode;
+              btn.style.background = isActive ? '#3b82f6' : '#f3f4f6';
+              btn.style.color = isActive ? 'white' : '#666';
+            });
+          }
+
+          // 根据模式重新填充视频模型列表，再恢复选中值
+          if(node.populateVideoModelOptions) {
+            node.populateVideoModelOptions();
+          }
           if(videoModelEl && nodeData.data.videoModel){
             videoModelEl.value = nodeData.data.videoModel;
           }
-          
+
+          // 恢复模式相关 UI 状态
+          if(node.updateModeUI) {
+            node.updateModeUI();
+          }
+
           // 先更新时长选项（基于视频模型），再设置时长值
           if(videoDurationEl){
             const videoModel = nodeData.data.videoModel || 'wan22';

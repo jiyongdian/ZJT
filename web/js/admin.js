@@ -179,6 +179,26 @@ const PROVIDER_DEFINITIONS = [
         _sharedWith: 'huoshan'
     },
     {
+        id: 'huoshan_oversea_image',
+        nameKey: 'provider_huoshan_oversea_name',
+        descKey: 'provider_huoshan_oversea_image_desc',
+        category: 'image',
+        icon: '🌍',
+        docUrl: 'https://console.volcengine.com/ark',
+        lazyRecommended: false,
+        displayOrder: 2,
+        baseName: 'huoshan_oversea',
+        isOfficialAPI: false,
+        impactsKey: 'provider_huoshan_oversea_image_impacts',
+        fields: [
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true },
+            { id: 'base_url', label: 'Base URL', type: 'url', placeholder: 'https://ark.ap-southeast.bytepluses.com', required: false }
+        ],
+        configKeyMap: { api_key: 'volcengine_oversea.api_key', base_url: 'volcengine_oversea.base_url' },
+        testEndpoint: null,
+        _sharedWith: 'huoshan_oversea'
+    },
+    {
         id: 'site_1_image',
         nameKey: 'provider_site_name',
         nameKeyParams: { n: 1 },
@@ -344,6 +364,26 @@ const PROVIDER_DEFINITIONS = [
         configKeyMap: { api_key: 'volcengine.api_key' },
         testEndpoint: null,
         _sharedWith: 'huoshan'
+    },
+    {
+        id: 'huoshan_oversea_video',
+        nameKey: 'provider_huoshan_oversea_name',
+        descKey: 'provider_huoshan_oversea_video_desc',
+        category: 'video',
+        icon: '🌍',
+        docUrl: 'https://console.volcengine.com/ark',
+        lazyRecommended: false,
+        displayOrder: 5,
+        baseName: 'huoshan_oversea',
+        isOfficialAPI: false,
+        impactsKey: 'provider_huoshan_oversea_video_impacts',
+        fields: [
+            { id: 'api_key', labelKey: 'field_api_key_label', type: 'text', placeholderKey: 'field_api_key_placeholder', required: true },
+            { id: 'base_url', label: 'Base URL', type: 'url', placeholder: 'https://ark.ap-southeast.bytepluses.com', required: false }
+        ],
+        configKeyMap: { api_key: 'volcengine_oversea.api_key', base_url: 'volcengine_oversea.base_url' },
+        testEndpoint: null,
+        _sharedWith: 'huoshan_oversea'
     },
     {
         id: 'site_1_video',

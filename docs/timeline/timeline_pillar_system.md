@@ -188,17 +188,21 @@ addClipToPillar(pillar, clipId, 'video');
 
 ### 移动约束
 
-**核心规则**：视频和音频片段只能在对应的柱子内移动，不允许跨柱子移动。
+**核心规则**：视频和音频片段可以在不同柱子之间移动（包括自由柱子）。
 
 **实现方式**：
-- 在拖拽事件中检查源片段和目标片段是否属于同一个柱子
-- 如果不属于同一个柱子，禁止拖放操作并显示提示
+- 在拖拽事件中检查源片段和目标片段是否都有柱子归属
+- 如果属于不同柱子，执行跨柱子移动（更新 pillarId）
+- 如果属于同一柱子，执行柱子内排序
+- 也可以拖拽到空柱子的背景区域，将片段移入该柱子
 
 ```javascript
-// 检查是否可以移动
-if (!canMoveClipTo(draggedClipId, targetClipId, 'video')) {
-  showToast('不能跨柱子移动视频片段', 'warning');
-  return;
+// 跨柱子移动
+if (draggedClip.pillarId !== targetClip.pillarId) {
+  moveClipToPillar(draggedClipId, targetClip.pillarId, 'video', insertOrder);
+} else {
+  // 同柱子内排序
+  moveTimelineClipToPosition(draggedClipId, finalPosition);
 }
 ```
 
@@ -316,12 +320,11 @@ renderTimeline();
 // 1. 用户点击"加时间轴"按钮
 // 2. 系统调用 addToTimeline(nodeId)
 // 3. 系统查找节点对应的柱子（柱子已预先创建）
-const pillar = getPillarForNode(nodeId);
+let pillar = getPillarForNode(nodeId);
 
-// 4. 如果找不到柱子，提示用户先解析剧本
+// 4. 如果找不到柱子，使用自由柱子（独立片段）
 if (!pillar) {
-  showToast('请先解析剧本以创建时间轴结构', 'warning');
-  return;
+  pillar = getOrCreateFreePillar();
 }
 
 // 5. 创建视频片段并关联到柱子
@@ -341,21 +344,42 @@ addClipToPillar(pillar, clip.id, 'video');
 renderTimeline();
 ```
 
-### 场景3：拖拽片段重新排序
+### 场景3：拖拽片段跨柱子移动
 
 ```javascript
-// 1. 用户拖拽片段A到片段B的位置
-// 2. 系统检查是否属于同一个柱子
+// 1. 用户拖拽片段A到片段B的位置（可能是不同柱子）
+// 2. 系统检查柱子约束
 if (!canMoveClipTo(clipA.id, clipB.id, 'video')) {
-  showToast('不能跨柱子移动视频片段', 'warning');
+  showToast('无法移动到该位置', 'warning');
   return;
 }
 
-// 3. 允许移动，更新order
-moveTimelineClipToPosition(clipA.id, newPosition);
+// 3. 根据是否跨柱子选择不同移动方式
+if (draggedClip.pillarId !== targetClip.pillarId) {
+  // 跨柱子移动：更新 pillarId
+  moveClipToPillar(draggedClipId, targetClip.pillarId, 'video', insertOrder);
+} else {
+  // 同柱子内排序：只更新 order
+  moveTimelineClipToPosition(draggedClipId, finalPosition);
+}
 
 // 4. 重新渲染
 renderTimeline();
+```
+
+### 场景4：拖拽片段到空柱子背景
+
+```javascript
+// 1. 用户将片段拖拽到某个空柱子的背景区域
+// 2. 柱子背景 dragover 事件触发，显示高亮
+// 3. 柱子背景 drop 事件触发
+const clipId = Number(e.dataTransfer.getData('text/plain'));
+const targetPillarId = pillarEl.dataset.pillarId;
+
+// 4. 如果片段不在目标柱子，执行跨柱子移动
+if (clip.pillarId !== targetPillarId) {
+  moveClipToPillar(clipId, targetPillarId, 'video');
+}
 ```
 
 ### 场景4：删除片段
@@ -461,9 +485,8 @@ function autoMigratePillars() {
 
 - 剧本节点已被删除
 - 剧本节点未执行过"拆分剧本"操作
-- 视频节点不是通过剧本分镜生成的（独立上传的视频）
 
-此时会提示："该视频节点未关联到剧本分镜，请先解析剧本"
+对于视频节点不是通过剧本分镜生成的（独立上传的视频），系统会将其放入自由柱子（`__free__`），不再拒绝添加。
 
 ## 时间轴点击跳转
 
@@ -496,10 +519,11 @@ function autoMigratePillars() {
 
 1. **柱子标识唯一性**：同一个剧本的同一个分镜只有一个柱子
 2. **时长动态性**：柱子时长会随内容变化而自动调整
-3. **移动约束**：严格限制片段只能在柱子内移动
+3. **跨柱子移动**：片段可以在不同柱子之间移动（包括从自由柱子到分镜柱子）
 4. **空柱子**：即使柱子内没有片段，也会占据默认时长的空间
 5. **前置空元素**：新片段会自动放入对应柱子，前面用空元素占位
 6. **历史兼容**：旧版工作流会自动迁移到新的柱子系统
+7. **自由柱子清理**：当自由柱子内所有片段都被移出/删除后，空自由柱子会自动清理
 
 ## 调试信息
 
@@ -510,6 +534,49 @@ function autoMigratePillars() {
 [时间轴] 视频片段 1 已关联到柱子 123_1
 [恢复工作流] 恢复了 5 个柱子
 ```
+
+## 自由柱子（独立片段）
+
+### 概念
+
+自由柱子（ID为 `__free__`）用于容纳未关联任何分镜节点的独立视频/音频片段。当用户将独立的视频节点或音频节点加入时间轴时，如果该节点没有通过连接链关联到任何分镜节点，片段会被放入自由柱子。
+
+### 数据结构
+
+```javascript
+{
+  id: "__free__",           // 固定标识
+  scriptId: null,           // 无剧本关联
+  shotNumber: null,          // 无分镜关联
+  defaultDuration: 15,       // 默认时长
+  videoClipIds: [],          // 独立视频片段ID列表
+  audioClipIds: []           // 独立音频片段ID列表
+}
+```
+
+### 视觉区分
+
+- 自由柱子使用琥珀色背景 `rgba(245, 158, 11, 0.08)` 和琥珀色边框 `rgba(245, 158, 11, 0.3)`
+- 标签显示"独立片段"而非"镜头X"
+- 在时间轴开头渲染（排在所有分镜柱子之前）
+
+### 自动清理
+
+当自由柱子内的所有片段都被移出（移到其他柱子）或删除后，空自由柱子会自动移除，避免在时间轴开头渲染空区域。
+
+### API 函数
+
+#### `getOrCreateFreePillar()`
+获取或创建自由柱子。当独立片段需要加入时间轴时调用。
+
+#### `cleanupFreePillarIfEmpty()`
+清理空的自由柱子。在片段移除或跨柱子移动后调用。
+
+#### `moveClipToPillar(clipId, targetPillarId, trackType, insertOrder)`
+跨柱子移动片段：从源柱子移除，加入目标柱子，更新片段的 pillarId 和 order。
+
+#### `bindPillarDropEvents()`
+绑定柱子背景区域的拖拽事件，允许将片段拖拽到空柱子的背景区域。
 
 ## 未来扩展
 
