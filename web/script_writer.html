@@ -1280,7 +1280,7 @@
         let driverStatus = {};  // 驱动可用状态
 
         function handleTokenExpired() {
-            alert('⚠️ 登录已过期\n\n您的登录信息已过期，请重新登录。');
+            alert('⚠️ ' + (window.t ? window.t('alert_login_expired') : '登录已过期\n\n您的登录信息已过期，请重新登录。'));
             window.location.href = LOGIN_URL;
         }
 
@@ -1438,7 +1438,7 @@
 
             // 检查是否缺少 user_id 参数
             if (!USER_ID || USER_ID === 'null' || USER_ID === '') {
-                alert('⚠️ 缺少关键参数\n\n请回到工作流列表后，再进入。');
+                alert('⚠️ ' + (window.t ? window.t('alert_missing_params') : '缺少关键参数\n\n请回到工作流列表后，再进入。'));
                 const baseUrl = window.location.origin;
                 const redirectUrl = baseUrl + '/video-workflow-list';
                 window.location.href = redirectUrl;
@@ -1543,7 +1543,7 @@
             // 更新欢迎提示文字
             const welcomeHint = document.querySelector('.welcome-hint');
             if (welcomeHint) {
-                welcomeHint.textContent = '选择下方需求或直接输入，开始您的创作之旅！';
+                welcomeHint.textContent = window.t ? window.t('welcome_hint_select') : '选择下方需求或直接输入，开始您的创作之旅！';
             }
             if (messageInput) messageInput.focus();
         });
@@ -2351,7 +2351,7 @@
                     }
                     // 检查是否是算力不足错误
                     if (taskData.error === '算力不足' || taskData.message?.includes('算力不足')) {
-                        alert('⚠️ 算力不足\n\n您的算力不足，请充值后继续使用。');
+                        alert('⚠️ ' + (window.t ? window.t('alert_insufficient_power') : '算力不足\n\n您的算力不足，请充值后继续使用。'));
                         hideTypingIndicator();
                         isProcessing = false;
                         return;
@@ -2990,7 +2990,7 @@
                 if (!data.success) {
                     const option = document.createElement('option');
                     option.value = '';
-                    option.textContent = '模型加载失败';
+                    option.textContent = window.t ? window.t('error_model_load_failed') : '模型加载失败';
                     selector.appendChild(option);
                     showError(data.error || '获取模型列表失败');
                     return;
@@ -3466,15 +3466,15 @@
             const isOllama = vendorName === LLMVendor.OLLAMA;
 
             if (isOllama) {
-                showWarning('⚠️ 本地模型提示：Ollama 模型为本地运行，存在不稳定情况。推荐使用 ' + LLMModel.QWEN_3_5_PLUS + ' 模型以获得更好的体验。');
+                showWarning('⚠️ ' + (window.t ? window.t('warn_ollama_local', {model: LLMModel.QWEN_3_5_PLUS}) : '本地模型提示：Ollama 模型为本地运行，存在不稳定情况。推荐使用 ' + LLMModel.QWEN_3_5_PLUS + ' 模型以获得更好的体验。'));
             }
 
             // 其他模型不推荐提示
             const modelValue = model || '';
             if (modelValue === LLMModel.GEMINI_3_1_PRO) {
-                showWarning('⚠️ 该模型价格较贵，推荐使用 ' + LLMModel.GEMINI_3_FLASH + ' 以获得更好的性价比。');
+                showWarning('⚠️ ' + (window.t ? window.t('warn_expensive_model', {model: LLMModel.GEMINI_3_FLASH}) : '该模型价格较贵，推荐使用 ' + LLMModel.GEMINI_3_FLASH + ' 以获得更好的性价比。'));
             } else if (modelValue.includes('flash-lite')) {
-                showWarning('⚠️ 该模型实际表现不够智能，可能无法胜任复杂任务，谨慎选择。推荐使用 ' + LLMModel.GEMINI_3_FLASH + ' 以获得更好的效果。');
+                showWarning('⚠️ ' + (window.t ? window.t('warn_weak_model', {model: LLMModel.GEMINI_3_FLASH}) : '该模型实际表现不够智能，可能无法胜任复杂任务，谨慎选择。推荐使用 ' + LLMModel.GEMINI_3_FLASH + ' 以获得更好的效果。'));
             }
 
             if (!AUTH_TOKEN) {
@@ -3543,7 +3543,7 @@
                 if (!data.success) {
                     const option = document.createElement('option');
                     option.value = '';
-                    option.textContent = '模型加载失败';
+                    option.textContent = window.t ? window.t('error_model_load_failed') : '模型加载失败';
                     selector.appendChild(option);
                     showError(data.error || '获取生图模型列表失败');
                     return;
@@ -3626,7 +3626,7 @@
                 console.error('加载生图模型列表失败:', error);
                 const selector = document.getElementById('text-to-image-model-selector');
                 if (selector) {
-                    selector.innerHTML = '<option value="">模型加载失败</option>';
+                    selector.innerHTML = `<option value="">${window.t ? window.t('error_model_load_failed') : '模型加载失败'}</option>`;
                 }
                 showError(window.t ? window.t('error_load_image_models_failed') : '加载生图模型列表失败，请稍后重试');
             }
@@ -4869,7 +4869,7 @@
                             showSuccess(window.t ? window.t('success_multi_angle_done', {name: locationName, count: generatedImages.length}) : `[${locationName}] 多角度生图完成！共 ${generatedImages.length} 张图片已保存到暂存区`);
                         } else {
                             statusSpan.textContent = `[${locationName}] 任务完成但无图片`;
-                            showWarning('任务完成，但未生成任何图片');
+                            showWarning(window.t ? window.t('warn_no_images_generated') : '任务完成，但未生成任何图片');
                         }
 
                         btn.disabled = false;
@@ -5062,7 +5062,7 @@
                             showSuccess(window.t ? window.t('success_multi_angle_done_short', {count: generatedImages.length}) : `多角度生图完成！共 ${generatedImages.length} 张图片已保存到暂存区`);
                         } else {
                             statusSpan.textContent = '任务完成但无图片';
-                            showWarning('任务完成，但未生成任何图片');
+                            showWarning(window.t ? window.t('warn_no_images_generated') : '任务完成，但未生成任何图片');
                         }
 
                         btn.disabled = false;
@@ -6348,7 +6348,7 @@
                 const response = await fetch('/api/system/server-config');
                 const data = await response.json();
                 if (data.data && data.data.is_local) {
-                    alert('只有云端环境才能开启二维码支付。本地模式下，管理员用户请进入后台增加算力，非管理员用户请通知管理员。');
+                    alert(window.t ? window.t('alert_cloud_only_payment') : '只有云端环境才能开启二维码支付。本地模式下，管理员用户请进入后台增加算力，非管理员用户请通知管理员。');
                     return;
                 }
             } catch (e) {
@@ -6766,7 +6766,7 @@
                 window.location.href = url;
             } else {
                 // 没有WORKFLOW_ID，跳转到工作流列表
-                alert('未找到关联的工作流，请先创建工作流');
+                alert(window.t ? window.t('alert_no_workflow') : '未找到关联的工作流，请先创建工作流');
                 window.location.href = '/video-workflow-list';
             }
         }
@@ -6884,7 +6884,7 @@
                 }
 
                 console.log('✅ 任务已创建:', taskResp);
-                alert(`✅ 测试任务已创建！\n\n📋 任务ID: ${taskResp.task_id}\n\n现在 LLM 将向你提问，请在前端回答，然后观察 LLM 的回复。\n\n💡 提示：打开浏览器控制台（F12）可以看到更详细的 SSE 消息日志。`);
+                alert('✅ ' + (window.t ? window.t('alert_test_created', {taskId: taskResp.task_id}) : `测试任务已创建！\n\n📋 任务ID: ${taskResp.task_id}\n\n现在 LLM 将向你提问，请在前端回答，然后观察 LLM 的回复。\n\n💡 提示：打开浏览器控制台（F12）可以看到更详细的 SSE 消息日志。`));
 
                 // 2. 监听 SSE
                 const es = new EventSource(`/api/task/${taskResp.task_id}/stream`);
