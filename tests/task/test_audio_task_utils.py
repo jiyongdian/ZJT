@@ -3,6 +3,7 @@ audio_task 纯函数单元测试
 
 测试 build_character_audio_text 和 calculate_next_retry_delay。
 """
+import asyncio
 import os
 import sys
 import unittest
@@ -51,7 +52,7 @@ sys.modules['task.async_drivers.runninghub_audio_driver'] = rh_config
 sys.modules['utils.index_tts_util'] = MagicMock()
 sys.modules['config.config_util'] = MagicMock()
 
-from task.audio_task import build_character_audio_text, calculate_next_retry_delay, _extract_gender_from_text
+from task.audio_task import build_character_audio_text, calculate_next_retry_delay
 
 # 恢复被 mock 的 sys.modules，防止污染后续测试
 for _key, _saved in [
@@ -67,134 +68,99 @@ for _key, _saved in [
         sys.modules.pop(_key, None)
 
 
+def _run_async(coro):
+    """辅助函数：在测试中运行异步函数"""
+    return asyncio.run(coro)
+
+
 class TestBuildCharacterAudioText(unittest.TestCase):
     """测试 build_character_audio_text()"""
 
     def test_custom_text_takes_priority(self):
         """自定义文本优先返回"""
-        result = build_character_audio_text(
+        result = _run_async(build_character_audio_text(
             character_data={"name": "Alice"},
             custom_text="这是自定义的音频文本"
-        )
+        ))
         self.assertEqual(result, "这是自定义的音频文本")
 
     def test_custom_text_with_whitespace(self):
         """自定义文本会被 strip"""
-        result = build_character_audio_text(
+        result = _run_async(build_character_audio_text(
             character_data={"name": "Alice"},
             custom_text="  有内容的文本  "
-        )
+        ))
         self.assertEqual(result, "有内容的文本")
 
-    def test_empty_custom_text_uses_default_format(self):
-        """空 custom_text 时使用默认模板"""
-        result = build_character_audio_text(
+    @patch('task.audio_task._analyze_character_voice_capability')
+    def test_empty_custom_text_uses_llm(self, mock_analyze):
+        """空 custom_text 时使用 LLM 生成的文本"""
+        mock_analyze.return_value = {
+            'sample_text': '大家好，我是张三，是勇士。很高兴在这个故事里与你相遇。'
+        }
+        result = _run_async(build_character_audio_text(
             character_data={"name": "张三", "identity": "勇士"},
             custom_text=""
-        )
+        ))
         self.assertEqual(result, "大家好，我是张三，是勇士。很高兴在这个故事里与你相遇。")
 
-    def test_with_age_and_male_gender(self):
-        """包含年龄和男性性别信息"""
-        result = build_character_audio_text(
+    @patch('task.audio_task._analyze_character_voice_capability')
+    def test_with_age_and_male_gender(self, mock_analyze):
+        """包含年龄和男性性别信息（LLM 生成）"""
+        mock_analyze.return_value = {
+            'sample_text': '大家好，我是张伟，今年30岁，是一位男性，是程序员。很高兴在这个故事里与你相遇。'
+        }
+        result = _run_async(build_character_audio_text(
             character_data={"name": "张伟", "age": "30", "identity": "程序员", "appearance": "一位高大的男性"},
             custom_text=None
-        )
+        ))
         self.assertEqual(result, "大家好，我是张伟，今年30岁，是一位男性，是程序员。很高兴在这个故事里与你相遇。")
 
-    def test_with_age_and_female_gender(self):
-        """包含年龄和女性性别信息"""
-        result = build_character_audio_text(
+    @patch('task.audio_task._analyze_character_voice_capability')
+    def test_with_age_and_female_gender(self, mock_analyze):
+        """包含年龄和女性性别信息（LLM 生成）"""
+        mock_analyze.return_value = {
+            'sample_text': '大家好，我是小美，今年25岁，是一位女性，是公主。很高兴在这个故事里与你相遇。'
+        }
+        result = _run_async(build_character_audio_text(
             character_data={"name": "小美", "age": "25", "identity": "公主", "appearance": "美丽的女子"},
             custom_text=None
-        )
+        ))
         self.assertEqual(result, "大家好，我是小美，今年25岁，是一位女性，是公主。很高兴在这个故事里与你相遇。")
 
-    def test_with_age_no_gender(self):
-        """包含年龄但无性别信息"""
-        result = build_character_audio_text(
-            character_data={"name": "冒险者", "age": "20", "identity": "冒险者"},
-            custom_text=None
-        )
-        self.assertEqual(result, "大家好，我是冒险者，今年20岁，是冒险者。很高兴在这个故事里与你相遇。")
-
-    def test_with_gender_no_age(self):
-        """包含性别但无年龄信息"""
-        result = build_character_audio_text(
-            character_data={"name": "少年", "identity": "少年", "appearance": "英俊的男孩"},
-            custom_text=None
-        )
-        self.assertEqual(result, "大家好，我是少年，是一位男性，是少年。很高兴在这个故事里与你相遇。")
-
-    def test_no_age_no_gender(self):
-        """无年龄无性别信息"""
-        result = build_character_audio_text(
-            character_data={"name": "神秘人", "identity": "神秘人"},
-            custom_text=None
-        )
-        self.assertEqual(result, "大家好，我是神秘人，是神秘人。很高兴在这个故事里与你相遇。")
-
-    def test_none_custom_text(self):
-        """None custom_text 时使用默认模板"""
-        result = build_character_audio_text(
-            character_data={"name": "李四", "identity": "法师"},
-            custom_text=None
-        )
-        self.assertEqual(result, "大家好，我是李四，是法师。很高兴在这个故事里与你相遇。")
-
-    def test_no_name_falls_back_to_default(self):
-        """无角色名时 fallback 为 '我'"""
-        result = build_character_audio_text(
-            character_data={"identity": "战士"},
-            custom_text=None
-        )
-        self.assertIn("我是我", result)
-        self.assertIn("是战士", result)
-
-    def test_no_identity_falls_back_to_default(self):
-        """无身份时 fallback 为 '故事中的角色'"""
-        result = build_character_audio_text(
-            character_data={"name": "王五"},
-            custom_text=None
-        )
-        self.assertIn("故事中的角色", result)
-        self.assertIn("我是王五", result)
-
-    def test_no_character_data_at_all(self):
-        """完全无角色数据时使用所有默认值"""
-        result = build_character_audio_text(
+    @patch('task.audio_task._analyze_character_voice_capability')
+    def test_no_character_data_at_all(self, mock_analyze):
+        """完全无角色数据时使用默认值"""
+        mock_analyze.return_value = {
+            'sample_text': '大家好，我是我，是故事中的角色。很高兴在这个故事里与你相遇。'
+        }
+        result = _run_async(build_character_audio_text(
             character_data={},
             custom_text=None
-        )
+        ))
         self.assertEqual(result, "大家好，我是我，是故事中的角色。很高兴在这个故事里与你相遇。")
 
-    def test_extract_gender_from_text_male(self):
-        """从文本中提取男性性别信息"""
-        self.assertEqual(_extract_gender_from_text("程序员 一位高大的男性"), "男性")
-        self.assertEqual(_extract_gender_from_text("少年"), "男性")
-        self.assertEqual(_extract_gender_from_text("先生"), "男性")
-        self.assertEqual(_extract_gender_from_text("父亲"), "男性")
-
-    def test_extract_gender_from_text_female(self):
-        """从文本中提取女性性别信息"""
-        self.assertEqual(_extract_gender_from_text("公主 美丽的女子"), "女性")
-        self.assertEqual(_extract_gender_from_text("小姐"), "女性")
-        self.assertEqual(_extract_gender_from_text("母亲"), "女性")
-        self.assertEqual(_extract_gender_from_text("皇后"), "女性")
-
-    def test_extract_gender_from_text_no_gender(self):
-        """无性别信息时返回空字符串"""
-        self.assertEqual(_extract_gender_from_text("冒险者"), "")
-        self.assertEqual(_extract_gender_from_text("神秘人"), "")
-        self.assertEqual(_extract_gender_from_text(""), "")
+    @patch('task.audio_task._analyze_character_voice_capability')
+    def test_llm_returns_fallback_sample_text(self, mock_analyze):
+        """LLM 未返回 sample_text 时使用默认模板"""
+        mock_analyze.return_value = {}
+        result = _run_async(build_character_audio_text(
+            character_data={"name": "测试角色"},
+            custom_text=None
+        ))
+        self.assertEqual(result, "大家好，我是测试角色。")
 
     def test_whitespace_only_custom_text_ignored(self):
-        """仅含空格的 custom_text 被视为空"""
-        result = build_character_audio_text(
-            character_data={"name": "测试", "identity": "角色"},
-            custom_text="   "
-        )
-        self.assertIn("我是测试", result)
+        """仅含空格的 custom_text 被视为空，走 LLM 路径"""
+        with patch('task.audio_task._analyze_character_voice_capability') as mock_analyze:
+            mock_analyze.return_value = {
+                'sample_text': '大家好，我是测试，是角色。很高兴在这个故事里与你相遇。'
+            }
+            result = _run_async(build_character_audio_text(
+                character_data={"name": "测试", "identity": "角色"},
+                custom_text="   "
+            ))
+            self.assertIn("我是测试", result)
 
 
 class TestCalculateNextRetryDelay(unittest.TestCase):
