@@ -10471,23 +10471,42 @@
       });
 
       try {
-        const response = await fetch(`/api/scripts?world_id=${defaultWorldId}&page=1&page_size=50`, {
-          headers: {
-            ...getAuthHeaders()
-          }
-        });
+        const pageSize = 50;
+        const headers = {
+          'Authorization': localStorage.getItem('auth_token') || '',
+          'X-User-Id': localStorage.getItem('user_id') || ''
+        };
 
-        if (!response.ok) {
+        // 第一页请求
+        const firstResponse = await fetch(`/api/scripts?world_id=${defaultWorldId}&page=1&page_size=${pageSize}`, { headers });
+        if (!firstResponse.ok) {
           throw new Error('获取剧本列表失败');
         }
-
-        const result = await response.json();
-        
-        if (result.code !== 0) {
-          throw new Error(result.message || '获取剧本列表失败');
+        const firstResult = await firstResponse.json();
+        if (firstResult.code !== 0) {
+          throw new Error(firstResult.message || '获取剧本列表失败');
         }
 
-        const scripts = result.data.data || [];
+        let scripts = firstResult.data.data || [];
+        const total = firstResult.data.total || 0;
+
+        // 如果还有更多页，并发请求剩余页
+        if (total > pageSize) {
+          const totalPages = Math.ceil(total / pageSize);
+          const remainingRequests = [];
+          for (let p = 2; p <= totalPages; p++) {
+            remainingRequests.push(
+              fetch(`/api/scripts?world_id=${defaultWorldId}&page=${p}&page_size=${pageSize}`, { headers })
+                .then(r => r.json())
+            );
+          }
+          const remainingResults = await Promise.all(remainingRequests);
+          for (const res of remainingResults) {
+            if (res.code === 0 && res.data && res.data.data) {
+              scripts = scripts.concat(res.data.data);
+            }
+          }
+        }
 
         // 按集数排序（升序）
         scripts.sort((a, b) => {
