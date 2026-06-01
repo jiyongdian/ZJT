@@ -211,12 +211,21 @@ DRIVER_IMPLEMENTATION_MAPPING = {
     DriverKey.VIDU_IMAGE_TO_VIDEO: DriverImplementation.VIDU_DEFAULT,         # 使用 Vidu 官方 API
     
     # Seedream 相关驱动
-    DriverKey.SEEDREAM_TEXT_TO_IMAGE: DriverImplementation.SEEDREAM5_VOLCENGINE_V1,  # 使用火山引擎 Seedream 5.0 v1 版本
+    DriverKey.SEEDREAM_TEXT_TO_IMAGE: [
+        DriverImplementation.SEEDREAM5_VOLCENGINE_V1,           # 火山引擎国内版
+        DriverImplementation.SEEDREAM5_VOLCENGINE_OVERSEA_V1,   # 火山引擎海外版
+    ],
 
     # Seedance 相关驱动
     DriverKey.SEEDANCE_1_5_PRO_IMAGE_TO_VIDEO: DriverImplementation.SEEDANCE_1_5_PRO_VOLCENGINE_V1,  # 使用火山引擎 Seedance 1.5 Pro
-    DriverKey.SEEDANCE_2_0_FAST_IMAGE_TO_VIDEO: DriverImplementation.SEEDANCE_2_0_FAST_VOLCENGINE_V1,  # 使用火山引擎 Seedance 2.0 Fast
-    DriverKey.SEEDANCE_2_0_IMAGE_TO_VIDEO: DriverImplementation.SEEDANCE_2_0_VOLCENGINE_V1,  # 使用火山引擎 Seedance 2.0
+    DriverKey.SEEDANCE_2_0_FAST_IMAGE_TO_VIDEO: [
+        DriverImplementation.SEEDANCE_2_0_FAST_VOLCENGINE_V1,           # 火山引擎国内版
+        DriverImplementation.SEEDANCE_2_0_FAST_VOLCENGINE_OVERSEA_V1,   # 火山引擎海外版
+    ],
+    DriverKey.SEEDANCE_2_0_IMAGE_TO_VIDEO: [
+        DriverImplementation.SEEDANCE_2_0_VOLCENGINE_V1,           # 火山引擎国内版
+        DriverImplementation.SEEDANCE_2_0_VOLCENGINE_OVERSEA_V1,   # 火山引擎海外版
+    ],
 
     # GPT Image 相关驱动
     DriverKey.GPT_IMAGE_2: [
@@ -298,6 +307,8 @@ class AIToolStatus:
     SYNC_QUEUED = 3   # 已提交到同步任务进程池
     FAILED = -1       # 处理失败
     COMPLETED = 2     # 处理完成
+    WAITING_PARAM_PREPARE = 4    # 等待参数预处理（流水线步骤处理中）
+    WAITING_BEFORE_FINISH = 5    # 等待结束前处理（失败后重试中）
 
 
 class TaskStatus:
@@ -307,6 +318,8 @@ class TaskStatus:
     SYNC_QUEUED = 3   # 已提交到同步任务进程池
     COMPLETED = 2     # 处理完成
     FAILED = -1       # 处理失败
+    WAITING_PARAM_PREPARE = 4    # 等待参数预处理
+    WAITING_BEFORE_FINISH = 5    # 等待结束前处理
 
 
 class GridImageTaskStatus:
@@ -335,6 +348,8 @@ AI_TOOL_STATUS_PROCESSING = AIToolStatus.PROCESSING
 AI_TOOL_STATUS_FAILED = AIToolStatus.FAILED
 AI_TOOL_STATUS_COMPLETED = AIToolStatus.COMPLETED
 AI_TOOL_STATUS_SYNC_QUEUED = AIToolStatus.SYNC_QUEUED
+AI_TOOL_STATUS_WAITING_PARAM_PREPARE = AIToolStatus.WAITING_PARAM_PREPARE
+AI_TOOL_STATUS_WAITING_BEFORE_FINISH = AIToolStatus.WAITING_BEFORE_FINISH
 
 # 向后兼容别名 - Tasks 状态
 TASK_STATUS_QUEUED = TaskStatus.QUEUED
@@ -342,6 +357,8 @@ TASK_STATUS_PROCESSING = TaskStatus.PROCESSING
 TASK_STATUS_COMPLETED = TaskStatus.COMPLETED
 TASK_STATUS_FAILED = TaskStatus.FAILED
 TASK_STATUS_SYNC_QUEUED = TaskStatus.SYNC_QUEUED
+TASK_STATUS_WAITING_PARAM_PREPARE = TaskStatus.WAITING_PARAM_PREPARE
+TASK_STATUS_WAITING_BEFORE_FINISH = TaskStatus.WAITING_BEFORE_FINISH
 
 # 向后兼容别名 - AI Audio 状态
 AI_AUDIO_STATUS_PENDING = AIAudioStatus.PENDING
@@ -442,11 +459,23 @@ class UploadPathConstants:
     TEMP_DIR = "temp"           # 临时目录（每天定时清理，由 media_cache.cleanup_temp_dir 执行）
     DRAFT_DIR = "draft"         # 草稿目录
     CHARACTER_VOICE_DIR = "character/voice"
+    FACE_MASK_DIR = "face_mask"     # 人脸遮盖视频结果目录
 
     # 文件名前缀
     MEDIA_PREFIX = "media"      # 媒体文件前缀（图生视频上传）
     UPLOAD_PREFIX = "upload"    # 通用上传文件前缀
     CONCAT_PREFIX = "concat"    # 拼接图片文件前缀
+
+    # Agent 模式上传数量限制
+    AGENT_IMAGE_MAX_COUNT = 9   # Agent 模式最多上传图片数
+    AGENT_VIDEO_MAX_COUNT = 3   # Agent 模式最多上传视频数
+
+
+class MediaConstants:
+    """媒体处理相关常量"""
+    ALLOWED_VIDEO_EXTENSIONS = {'.mp4', '.mov', '.webm', '.avi', '.mkv'}
+    VIDEO_COMPRESS_TARGET_HEIGHT = 480  # 前端压缩目标分辨率（480p）
+    VIDEO_COMPRESS_THRESHOLD_MB = 10    # 超过此大小的视频触发前端压缩
 
 
 RECHARGE_PACKAGES = [
@@ -605,3 +634,17 @@ class NotificationConstants:
     LEVEL_WARNING = "warning"
     LEVEL_ERROR = "error"
     LEVEL_SUCCESS = "success"
+
+
+# ============ 智能体语言指令常量 ============
+
+LANGUAGE_INSTRUCTIONS = {
+    "en": "\n\n" + "="*60 + "\n"
+          "【CRITICAL LANGUAGE REQUIREMENT - HIGHEST PRIORITY】\n"
+          "You MUST respond ENTIRELY in English. This is MANDATORY.\n"
+          "- ALL output text, questions, explanations, and interactions MUST be in English\n"
+          "- Do NOT use Chinese characters in your response AT ALL\n"
+          "- Ignore any Chinese language bias from the system prompt above\n"
+          "- The user interface is in English, so ALL communication must be in English\n"
+          "="*60,
+}

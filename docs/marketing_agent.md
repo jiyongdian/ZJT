@@ -1,136 +1,525 @@
-# 营销模式（Marketing Mode）
+# 营销智能体（Marketing Agent）
 
-## 概述
+## 功能概述
 
-营销模式是面向营销内容创作场景的全新交互模式，与短剧模式并列为系统的两大创作模式。该模式提供营销智能体（Marketing Agent）对话式创作能力，可帮助用户生成带货脚本、广告创意、产品文案等营销内容。
+营销智能体是系统两大创作模式之一（另一为短剧模式），面向营销内容创作场景。它提供对话式交互能力，集成 LLM 对话、图片生成、视频生成三大核心功能，帮助用户创作带货脚本、广告创意、产品文案等营销内容。
 
-## 模式入口
+### 双模式系统
 
-### 模式切换
+用户首次进入系统时通过模式选择弹窗选择创作模式，选择结果保存在 `localStorage` 的 `creation_mode` 字段中（`short_drama` 或 `marketing`）。两种模式共享后端基础设施，但前端入口和交互风格不同：
 
-用户首次进入系统时，会弹出"选择创作模式"弹窗，可在以下两种模式中选择：
+| 模式 | 入口 | 主题 | 适用场景 |
+|------|------|------|----------|
+| 短剧模式 | `/video-workflow-list` | 深色主题 | AI 短剧创作全流程 |
+| 营销模式 | `/marketing-agent` | 浅色主题（白底蓝调） | 营销内容对话式创作 |
 
-- 🎬 **短剧模式**：适用于 AI 短剧创作，包含剧本、角色、场景、视频生成全流程
-- 🎯 **营销模式**：适用于营销内容创作，包含带货脚本、广告创意、产品文案等全流程
+模式切换入口位于 `web/index.html` 的模式选择弹窗（约第 630-660 行），`selectCreationMode(mode)` 方法仅保存模式状态，不自动跳转。
 
-模式选择后保存在 `localStorage` 的 `creation_mode` 字段中（值为 `short_drama` 或 `marketing`）。用户可在首页顶部"切换模式"按钮重新选择。
+## 页面架构
 
-### 首页模式感知
+### 技术栈
 
-`web/index.html`（短剧首页）会根据当前模式动态调整内容，切换模式仅改变首页状态，不立即跳转：
+- **框架**：Vue 3（CDN 引入 `vue.global.prod.js`，使用 Composition API）
+- **HTTP 客户端**：axios（`axios.min.js`）
+- **Markdown 渲染**：marked.js（`marked.min.js`）
+- **代码高亮**：highlight.js（`github.min.css` 主题）
+- **任务配置**：`task_config.js`（统一任务类型/模型/算力配置模块）
+- **视频压缩**：`video_compressor.js`（Canvas + MediaRecorder 方案，480p 压缩）
+- **国际化**：`i18n-core.js` + `i18n-vue-plugin.js` + `i18n-dom.js`
 
-| 模式 | 当前模式标签 | "开始创作"横幅 | 功能卡片区域 | 点击跳转目标 |
-|------|-------------|---------------|-------------|-------------|
-| 短剧模式 | 🎬 短剧模式 | ✨ 开始创作（短剧话术） | 显示视频工作流 + 剧本智能创作系统 | `/video-workflow-list?action=create` |
-| 营销模式 | 🎯 营销模式 | 🎯 开始营销创作（营销话术） | 隐藏（与营销场景无关） | `/marketing-agent` |
+### 三栏布局
 
-### 实现位置
+页面为 Vue 3 单页应用（SPA），采用三栏布局，整体高度 100vh：
 
-- 模式选择弹窗：`web/index.html`，约第 630-660 行
-- 模式切换方法：`web/index.html` 中 `selectCreationMode(mode)` 方法（仅保存模式，不自动跳转）
-- 动态内容渲染：`web/index.html` 中 `handleStartCreation()` 及模板条件渲染
-
-## 页面结构
-
-### 营销智能体对话页面（`/marketing-agent`）
-
-营销智能体对话界面位于 `web/marketing_agent.html`，使用 Vue 3 单文件应用实现。页面布局参考"营销智能体参考图/智能体对话.png"。
-
-#### 页面布局
-
-| 区块 | 说明 |
-|------|------|
-| 左侧窄导航 | 灵感（置灰禁用）、生成（高亮）、资产、工作流 |
-| 左侧边栏 | 新对话按钮、搜索框、默认创作、最近对话列表、用户信息 |
-| 顶部栏 | 当前日期、搜索框、时间/生成类型筛选器 |
-| 消息流 | 欢迎卡片 + 用户/AI 消息气泡，支持 Markdown 渲染 |
-| 底部输入区 | 文本输入框 + 上传按钮 + 类型选择 + 模型选择 + 比例/分辨率选择 + 技能/主体（置灰）+ 发送按钮 |
-
-#### 后端路由
-
-由 `server.py` 中的 `serve_marketing_agent` 函数（约第 8077-8083 行）服务静态 HTML：
-
-```python
-@app.get("/marketing-agent")
-async def serve_marketing_agent():
-    file_path = os.path.join(static_dir, "marketing_agent.html")
-    if os.path.isfile(file_path):
-        content = _get_processed_html(file_path)
-        return Response(content=content, media_type="text/html")
-    raise HTTPException(status_code=404, detail="Marketing agent page not found")
+```
++--------+------------------+--------------------------------+
+| 左侧   | 左侧边栏          | 主内容区                        |
+| 窄导航  |                  |                                |
+| (64px) | (260px)          | (flex: 1)                      |
++--------+------------------+--------------------------------+
 ```
 
-#### 接口复用
+| 区块 | 类名 | 宽度 | 说明 |
+|------|------|------|------|
+| 左侧窄导航 | `.marketing-nav` | 64px | Logo、灵感（禁用）、生成（高亮）、资产（禁用） |
+| 左侧边栏 | `.sidebar` | 260px | 新对话按钮、搜索框、最近对话列表、用户信息 |
+| 主内容区 | `.main-content` | flex: 1 | 顶部栏 + 消息流 + 底部输入区 |
 
-营销智能体的对话能力**复用 `script_writer` 的现有接口**：
+**响应式**：768px 以下侧边栏变为固定定位的抽屉，通过 `.sidebar.open` 类控制显示。
 
-| 用途 | 接口 | 方法 |
+### 组件结构
+
+页面内所有 UI 均在单个 Vue 3 `createApp()` 实例中实现，无外部组件拆分。主要 UI 区块：
+
+1. **顶部栏** (`.top-bar`)：当前日期、搜索框、算力余额显示
+2. **消息流** (`.chat-messages`)：欢迎卡片、用户/AI 消息气泡、打字指示器、继续按钮
+3. **底部输入区** (`.input-area`)：文件上传按钮、文本输入框、媒体缩略图条、类型选择、模型选择、比例/分辨率选择、发送按钮
+4. **弹窗层**：联系反馈弹窗、算力日志弹窗（iframe）、算力充值弹窗、图片放大模态框
+
+## 核心功能详解
+
+### 三种创作类型
+
+底部输入栏的类型选择器提供三种创作模式：
+
+| 类型 | key | 图标 | 说明 |
+|------|-----|------|------|
+| Agent 模式 | `agent` | ✨ | LLM 对话驱动，可调用图片/视频生成工具，支持多模态输入 |
+| 图片生成 | `image` | 🖼️ | 直接调用文生图/图生图 API，轮询获取结果 |
+| 视频生成 | `video` | 📹 | 直接调用文生视频/图生视频 API，轮询获取结果 |
+
+Agent 模式为默认推荐模式，走 LLM 对话流程，后端 PM Agent 可自主调用图片/视频生成工具。图片/视频模式为直接生成模式，前端直接调用生成 API 并轮询状态。
+
+### 会话管理
+
+#### 创建会话
+
+- 调用 `POST /api/session/create`，传入 `user_id`、`world_id`、`auth_token`、`session_type: 2`（营销模式标识）
+- 营销智能体使用固定 `world_id = '1'`，无需多世界概念
+- 创建成功后将新会话加入本地 `sessions` 列表头部并持久化到 `localStorage`（`marketing_sessions` 键）
+
+#### 搜索
+
+侧边栏搜索框通过 `v-model` 绑定 `searchQuery`，`filteredSessions` 计算属性对会话标题进行大小写不敏感的模糊过滤。
+
+#### 重命名
+
+- 悬浮会话项显示 `···` 按钮，点击弹出上下文菜单
+- 选择"重命名"后，会话标题变为内联输入框（`.history-rename-input`）
+- 支持 Enter 确认、Escape 取消、失焦自动确认
+- 调用 `PUT /api/session/{session_id}/title` 保存到后端
+
+#### 删除
+
+- 调用 `DELETE /api/session/{session_id}` 进行软删除
+- 至少保留一个会话，删除最后一个时提示 `keep_one_session`
+- 删除当前活跃会话后自动切换到列表中的第一个会话
+
+#### 加载会话列表
+
+页面初始化时调用 `GET /api/sessions?user_id=xxx&world_id=1&session_type=2&limit=50` 从后端加载，失败时回退到 `localStorage` 缓存。
+
+### 消息交互
+
+#### 消息类型
+
+| 角色 | 头像 | 气泡样式 | 说明 |
+|------|------|----------|------|
+| `user` | 👤 | 蓝色背景，右对齐 | 用户输入 |
+| `ai` | 🤖 | 白色背景，左对齐 | AI 回复 |
+| `system` | - | 居中标签 | 任务状态标签（已完成等） |
+
+#### 多模态消息
+
+- 用户上传的图片在消息气泡中以 `<img>` 标签渲染，最大高度 160px，点击可放大
+- 视频以 `<video>` 标签渲染，支持 controls
+- 音频以 `<audio>` 标签渲染
+- 历史消息中的多模态内容（JSON 数组格式的 `image_url` + `text`）在 `parseHistoryMessage` 中解析为文本+图片分别渲染
+
+#### Markdown 渲染
+
+`renderMarkdown(text)` 函数的处理流程：
+
+1. 保护已有的 Markdown 图片语法 `![alt](url)` 和链接语法 `[text](url)`（占位符替换）
+2. 将裸图片 URL（以 `.png/.jpg/.gif/.webp` 等结尾）自动转换为 Markdown 图片格式
+3. 处理 URL 后紧跟中文等非空白字符的边界问题
+4. 恢复占位符
+5. 调用 `marked.parse()` 解析为 HTML
+6. 为所有 `<img>` 标签添加点击放大事件和样式
+
+#### Verification 交互（ask_user）
+
+当后端 Agent 通过 `ask_user` 工具向用户提问时，SSE 流会推送 `human_verification_required` 事件：
+
+1. 前端解析 `verification` 对象，提取 `title`、`description`、`options`
+2. 渲染为特殊消息气泡，包含预设选项按钮和"其他"自由输入按钮
+3. 用户选择后调用 `POST /api/verification/{verification_id}` 提交回答
+4. 验证期间（`pendingVerificationId` 不为 null）禁止正常发送消息
+
+### SSE 流式响应
+
+#### 连接建立
+
+Agent 模式下发送消息的完整流程：
+
+1. `POST /api/session/{session_id}/task` 创建任务，获取 `task_id`
+2. `EventSource` 连接到 `/api/task/{task_id}/stream`
+3. 超时设置为 900 秒（15 分钟）
+
+#### 事件类型
+
+| 事件类型 | 处理逻辑 |
+|----------|----------|
+| `message` | 追加文本到当前 AI 消息气泡 |
+| `status` | 忽略 |
+| `progress` | 忽略 |
+| `human_verification_required` | 触发 Verification 交互流程 |
+| `verification_timeout` | 清除验证状态，提示超时 |
+| `context_compression` | 忽略 |
+| `image_task_submitted` | 前端开始轮询图片生成状态 |
+| `video_task_submitted` | 前端开始轮询视频生成状态 |
+| `error` | 关闭 SSE，显示错误消息 |
+| `done` | 关闭 SSE，显示"继续"按钮，刷新算力余额 |
+
+#### 任务状态轮询
+
+Agent 提交图片/视频生成任务后，前端通过 `setInterval` 轮询 `GET /api/get-status/{project_ids}`：
+
+- 图片轮询间隔：5 秒
+- 视频轮询间隔：10 秒
+- 任务完成后将结果（图片/视频 URL）渲染到消息气泡中
+- 使用 `sessionTaskRegistry` 注册表跟踪所有活跃任务，支持会话切换后恢复
+
+#### 任务恢复机制
+
+页面刷新或切换会话时，系统通过以下机制恢复未完成的任务：
+
+1. **`__PENDING_TASK__` 标记**：后端在对话历史中保存 `__PENDING_TASK__:{type}:{project_ids}` 标记
+2. **`recoverPendingTasks()`**：加载历史消息后检测标记，轮询任务状态，完成则替换为结果
+3. **`sessionActiveTaskId` 注册表**：记录每个 session 的活跃 Agent task_id，切换回来时检查任务状态并重连 SSE
+4. **`sessionTaskRegistry` 注册表**：内存中跟踪图片/视频生成任务的 project_ids，支持会话内切换恢复
+
+### 模型选择
+
+#### 图片模型
+
+通过 `TaskConfig.getModelOptionsForCategory('text_to_image')` 动态加载，默认优先选择 Seedream 5.0。用户选择保存到 `localStorage`（`marketing_selected_image_model` 键），并通过 `POST /api/text-to-image-model` 同步到后端 `user_preferences` 表。
+
+#### 视频模型
+
+- **文生视频**：`TaskConfig.getModelOptionsForCategory('text_to_video')`
+- **图生视频**：`TaskConfig.getModelOptionsForCategory('image_to_video')`，根据 `videoImageMode` 过滤支持的模型
+- 模型偏好从后端 `GET /api/video-model` 获取，回退到 `localStorage`
+
+#### LLM 模型（Agent 模式）
+
+调用 `GET /api/models` 加载所有可用 LLM 模型，支持 VL（视觉理解）和 Thinking（深度思考）标签。默认选择 `doubao-seed-2-0-lite`。用户选择保存到 `localStorage`（`marketing_selected_llm_model_id` 键），发送消息时通过 `model`、`model_id`、`vendor_id` 字段传给后端。
+
+### 图像比例选择
+
+比例选项通过 `TaskConfig.getRatioOptions(modelKey)` 动态获取，支持的比例如下（定义在 `aspectRatioMap` 中）：
+
+| 比例 | 可视化尺寸 |
+|------|-----------|
+| auto（智能） | 20x20 |
+| 21:9 | 28x12 |
+| 16:9 | 24x14 |
+| 3:2 | 22x15 |
+| 4:3 | 20x15 |
+| 1:1 | 18x18 |
+| 3:4 | 15x20 |
+| 2:3 | 14x22 |
+| 9:16 | 12x24 |
+
+用户选择保存到 `localStorage`（`marketing_selected_ratio` 键），并通过 `POST /api/text-to-image-model` 同步到后端。
+
+### 分辨率选择
+
+图片模式下显示分辨率选项，通过 `TaskConfig.getSizeOptions(modelKey)` 动态获取。选项前自动添加 `auto`（自动根据模型选择最佳分辨率）。分辨率映射：`1K` -> `1K`，`2K` -> 高清 2K，`4K` -> 超清 4K。
+
+### 视频时长和生成方式
+
+#### 视频时长
+
+通过 `TaskConfig` 的 `supported_durations` 动态获取，默认选项 `[3, 5, 8, 10, 15]`。
+
+#### 生成方式（videoImageMode）
+
+视频模式下有图片时可选择：
+
+| 模式 | key | 说明 |
+|------|-----|------|
+| 首尾帧 | `first_last_frame` | 第一张为首帧，第二张为尾帧（可选） |
+| 全能参考 | `multi_reference` | 所有图片作为风格参考，最多 5 张 |
+
+### 文件上传
+
+#### Agent 对话模式
+
+支持同时上传多种媒体文件：
+
+| 类型 | 最大数量 | 大小限制 | 时长限制 | 说明 |
+|------|----------|----------|----------|------|
+| 图片 | 9 张 | 10MB（可配置） | - | 上传到 `/api/upload-agent-image` 获取 HTTP URL |
+| 视频 | 3 个 | 100MB（可配置） | 15 秒（可配置） | 前端压缩到 480p 后上传到 `/api/upload-agent-video` |
+| 音频 | 5 个 | 20MB | 15 秒（可配置） | 上传到 `/api/upload-agent-audio` |
+
+#### Agent 视频模式
+
+支持上传参考图（首尾帧/全能参考）、参考视频和参考音频。图片上传到 `/api/upload-agent-image`，通过 `image_urls` 字段传给后端。
+
+#### 图片/视频模式
+
+图片直接通过 `FormData` 上传到 `/api/text-to-image` 或 `/api/image-edit`。视频上传到 `/api/ai-app-run-image`（图生视频）或 `/api/ai-app-run`（文生视频）。
+
+#### 视频压缩
+
+使用 `VIDEO_COMPRESSOR` 模块（Canvas + MediaRecorder 方案）：
+
+- 目标短边：480px
+- 帧率：24fps
+- 视频码率：1.5Mbps
+- 压缩阈值：文件 > 10MB 或短边 > 480px
+- 支持 WebM (VP9/VP8) 和 MP4 格式
+- 超过最大时长的视频自动截断
+
+#### @ 引用系统
+
+输入框支持 `@` 触发媒体引用下拉框，列出已上传的媒体文件。选中后插入引用标签到文本中，支持模糊搜索过滤。`mentionDropdown` 状态管理下拉框的显示、查询和选中索引。
+
+### 算力显示
+
+#### 余额显示
+
+顶部栏右侧显示算力余额，每 30-45 秒随机间隔自动刷新（`startComputingPowerRefresh`）。余额根据数值自动变色：
+
+| 余额范围 | CSS 类 | 颜色 |
+|----------|--------|------|
+| < 100 | `.low-power` | 红色 |
+| 100-999 | `.medium-power` | 黄色 |
+| >= 1000 | `.high-power` | 绿色 |
+
+点击余额打开算力日志弹窗（iframe 加载 `/computing_power_logs.html`）。
+
+#### 消耗预估
+
+输入区右侧根据当前选中模型和参数实时计算本次操作的算力消耗，使用 `TaskConfig.getComputingPower()` 方法。
+
+#### 算力充值
+
+算力日志弹窗中点击"算力充值"按钮打开充值弹窗：
+
+1. 调用 `GET /api/recharge/packages` 加载套餐列表
+2. 用户选择套餐后调用 `POST /api/recharge/wechat-pay` 创建支付订单
+3. 通过第三方 QR 码服务生成微信支付二维码
+4. 支持自动检测到账
+
+### i18n 国际化
+
+使用自研 i18n 框架（`i18n-core.js`），支持：
+
+- Vue 模板中的 `$t('key')` 翻译
+- JS 代码中的 `window.t('key')` 翻译
+- 带参数的翻译：`$t('duration_seconds', { dur: 5 })` -> `5秒`
+- DOM 属性的 `data-i18n` 自动翻译
+- 语言切换器组件（`i18n-switcher.js`）
+
+翻译文件位于 `web/i18n/locales/zh-CN/marketing_agent.json`，共约 215 个翻译键，覆盖页面标题、导航、侧边栏、输入区、模型选择、错误提示等所有用户可见文本。
+
+## API 接口列表
+
+### 会话管理
+
+| 端点 | 方法 | 说明 | 请求参数 |
+|------|------|------|----------|
+| `/api/session/create` | POST | 创建新会话 | `{ user_id, world_id, auth_token, session_type: 2 }` |
+| `/api/sessions` | GET | 获取会话列表 | `?user_id=&world_id=&session_type=2&limit=50` |
+| `/api/session/{session_id}/history` | GET | 获取会话历史 | Headers: `Authorization`, `X-User-Id` |
+| `/api/session/{session_id}/message` | POST | 追加消息到会话 | `{ role, content }` |
+| `/api/session/{session_id}/title` | PUT | 更新会话标题 | `{ title }` |
+| `/api/session/{session_id}` | DELETE | 删除会话（软删除） | - |
+| `/api/session/{session_id}/latest-task` | GET | 获取最新活跃任务 | - |
+| `/api/session/{session_id}/clean-pending-tasks` | POST | 清理 pending task 标记 | - |
+
+### 智能体任务
+
+| 端点 | 方法 | 说明 |
 |------|------|------|
-| 创建会话 | `/api/session/create` | POST |
-| 发送消息 | `/api/session/{session_id}/task` | POST |
-| 接收流式响应 | `/api/task/{task_id}/stream` | GET (SSE) |
-| 加载历史 | `/api/session/{session_id}/history` | GET |
-| 获取/创建世界 | `/api/worlds` | GET / POST |
+| `/api/session/{session_id}/task` | POST | 创建 Agent 任务 |
+| `/api/task/{task_id}/stream` | GET (SSE) | 流式获取任务消息 |
+| `/api/task/{task_id}/status` | GET | 查询任务状态 |
+| `/api/verification/{verification_id}` | POST | 提交人工验证回答 |
 
-**图片 VL 流程**：用户上传图片后，前端在客户端压缩到 ~2MB 并转为 base64。发送消息时通过 `image_urls` 字段将 base64 传给后端，后端直接透传给 LLM，使大模型能够"看到"图片。
+#### 任务创建请求体
 
-**Agent 图片上传流程**：Agent 对话模式下，用户上传图片后会先调用 `POST /api/upload-agent-image` 保存到服务端并获取稳定 HTTP URL。图片上传中或上传失败时禁止发送消息，避免对话消息引用本地 `blob:` 预览地址；发送成功后的对话框图片统一使用服务端 URL 渲染，确保本地预览地址释放后历史消息仍可显示。
+```json
+{
+  "message": "用户输入文本",
+  "auth_token": "认证令牌",
+  "image_urls": ["http://..."],
+  "video_urls": ["http://..."],
+  "audio_urls": ["http://..."],
+  "model": "LLM模型名称",
+  "model_id": 1,
+  "vendor_id": 1,
+  "image_preferences": {
+    "ratio": "1:1",
+    "model_name": "Seedream 5.0",
+    "resolution": "2K"
+  },
+  "video_preferences": {
+    "ratio": "16:9",
+    "duration": 5,
+    "image_mode": "first_last_frame",
+    "model_name": "可灵 2.0",
+    "task_id": 1
+  }
+}
+```
 
-**专家图片注入流程**：PM Agent 委托 `marketing-image` 专家生图后，系统自动检测返回结果中的图片 URL（优先从专家对话历史的 tool result 中提取），下载压缩为 base64 并注入 PM 的对话历史（多模态消息），使 PM 的 LLM 能"看到"生成的图片并向用户描述。实现位于 `pm_agent.py` 的 `_extract_image_url_from_result` 和 `_inject_image_to_history` 方法。
+### 媒体上传
 
-**图片模型与偏好同步**：用户在前端选择图片模型/比例/分辨率后：
-- 模型通过 `POST /api/text-to-image-model` 同步到后端，持久化存储到 `user_preferences` 数据库表
-- 比例和分辨率通过同一个 API 同步，持久化存储到 `user_preferences` 数据库表（pref_type=image_preferences）
-- 比例/分辨率非 `auto` 时，系统会在 `generate_text_to_image` / `edit_image` 中强制校验，LLM 传入的参数若与用户设置冲突会直接返回错误
-- 发送消息时通过 `image_preferences` 字段同时注入用户消息，供 PM LLM 参考
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/upload-agent-image` | POST | 上传 Agent 图片，返回 HTTP URL |
+| `/api/upload-agent-video` | POST | 上传 Agent 视频 |
+| `/api/upload-agent-audio` | POST | 上传 Agent 音频 |
 
-**历史消息图片渲染**：刷新页面加载历史时，多模态消息（包含 `image_url` 的 JSON 数组）会被解析为文本+图片分别渲染，不会显示原始 base64 文本。
+### 生成任务
 
-页面初始化流程：
-1. 从 URL 参数获取 `user_id`，从 `localStorage` 获取 `auth_token`
-2. 调用 `GET /api/worlds` 获取用户的世界列表
-3. 若用户没有世界，自动调用 `POST /api/worlds` 创建"营销世界"
-4. 调用 `POST /api/session/create` 创建新会话
-5. 若 URL 中有 `initial_message` 参数，自动发送首条消息
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/text-to-image` | POST | 文生图 |
+| `/api/image-edit` | POST | 图生图/图片编辑 |
+| `/api/ai-app-run` | POST | 文生视频 |
+| `/api/ai-app-run-image` | POST | 图生视频 |
+| `/api/get-status/{project_ids}` | GET | 查询生成任务状态 |
+
+### 模型和配置
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/system/task-configs` | GET | 获取任务配置（模型/算力/比例等） |
+| `/api/system/server-config` | GET | 获取服务器配置（文件大小限制等） |
+| `/api/models` | GET | 获取可用 LLM 模型列表 |
+| `/api/video-model` | GET | 获取用户视频模型偏好 |
+| `/api/text-to-image-model` | POST | 同步图片模型偏好到后端 |
+
+### 用户和算力
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/user/computing_power` | GET | 查询算力余额 |
+| `/api/user/computing_power_logs` | GET | 查询算力日志 |
+| `/api/recharge/packages` | GET | 获取充值套餐列表 |
+| `/api/recharge/wechat-pay` | POST | 创建微信支付订单 |
+
+### 世界观
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/worlds` | GET | 获取世界列表 |
+| `/api/worlds` | POST | 创建世界 |
+
+## 前端依赖库
+
+| 文件 | 用途 |
+|------|------|
+| `web/js/vue.global.prod.js` | Vue 3 生产版 |
+| `web/js/axios.min.js` | HTTP 客户端 |
+| `web/js/marked.min.js` | Markdown 解析器 |
+| `web/js/task_config.js` | 任务配置统一管理模块 |
+| `web/js/video_compressor.js` | 前端视频压缩模块 |
+| `web/css/github.min.css` | 代码高亮主题 |
+| `web/i18n/i18n-core.js` | i18n 核心模块 |
+| `web/i18n/i18n-vue-plugin.js` | i18n Vue 插件 |
+| `web/i18n/i18n-dom.js` | i18n DOM 翻译 |
+| `web/i18n/i18n-switcher.js` | 语言切换器组件 |
+
+## 配置项
+
+### localStorage 键
+
+| 键名 | 用途 | 示例值 |
+|------|------|--------|
+| `creation_mode` | 当前创作模式 | `marketing` |
+| `marketing_sessions` | 本地会话历史缓存 | JSON 数组 |
+| `marketing_selected_image_model` | 用户选择的图片模型名称 | `Seedream 5.0` |
+| `marketing_selected_image_model_key` | 用户选择的图片模型 key | `seedream_5` |
+| `marketing_selected_t2v_model` | 文生视频模型名称 | `可灵 2.0` |
+| `marketing_selected_i2v_model` | 图生视频模型名称 | `可灵 2.0` |
+| `marketing_selected_ratio` | 用户选择的比例 | `1:1` |
+| `marketing_selected_llm_model_id` | LLM 模型 ID | `1` |
+| `marketing_media_type` | Agent 模式的生成偏好 | `image` / `video` |
+| `auth_token` | 认证令牌 | JWT token |
+| `user_id` | 用户 ID | 数字字符串 |
+| `phone` | 用户手机号 | 手机号 |
+
+### 服务端配置（`/api/system/server-config`）
+
+| 字段 | 默认值 | 说明 |
+|------|--------|------|
+| `max_image_size_mb` | 10 | 图片上传大小限制（MB） |
+| `max_video_size_mb` | 100 | 视频上传大小限制（MB） |
+| `max_video_duration_seconds` | 15 | 视频/音频最大时长（秒） |
+| `is_enterprise` | false | 是否为商业版 |
+
+### 前端常量
+
+| 常量 | 值 | 说明 |
+|------|-----|------|
+| `AGENT_IMAGE_MAX_COUNT` | 9 | Agent 模式最大图片数 |
+| `AGENT_VIDEO_MAX_COUNT` | 3 | Agent 模式最大视频数 |
+| `AGENT_AUDIO_MAX_COUNT` | 5 | Agent 模式最大音频数 |
+| `VIDEO_COMPRESSOR.TARGET_SHORT_EDGE` | 480 | 视频压缩目标短边（px） |
+| `VIDEO_COMPRESSOR.FPS` | 24 | 视频压缩帧率 |
+| `VIDEO_COMPRESSOR.VIDEO_BITRATE` | 1500000 | 视频压缩码率（bps） |
 
 ## 样式与主题
 
-营销模式采用**浅色主题**（白底蓝调），与短剧模式的深色主题形成视觉区分。
+### 主题色变量（CSS 自定义属性）
 
-### 主题色变量
-
-定义于 `web/css/marketing_agent.css` 顶部 `:root` 中：
+定义于 `web/css/marketing_agent.css` 的 `:root` 中：
 
 ```css
---bg-primary: #f5f5f5;       /* 主背景 */
---bg-secondary: #ffffff;     /* 卡片/输入框背景 */
---accent-color: #00a8e6;     /* 主题色（亮蓝） */
---text-primary: #1a1a1a;     /* 主文本 */
---text-secondary: #666666;   /* 次要文本 */
---text-muted: #999999;       /* 弱化文本 */
---border-color: #e8e8e8;     /* 边框 */
+--bg-primary: #f5f5f5;         /* 主背景 */
+--bg-secondary: #ffffff;       /* 卡片/输入框背景 */
+--bg-sidebar: #fafafa;         /* 侧边栏背景 */
+--accent-color: #00a8e6;       /* 主题色（亮蓝） */
+--accent-hover: #0095cc;       /* 主题色悬停 */
+--accent-light: #e6f7ff;       /* 主题色浅底 */
+--user-bubble: #e6f7ff;        /* 用户气泡背景 */
+--ai-bubble: #ffffff;          /* AI 气泡背景 */
+--text-primary: #1a1a1a;       /* 主文本 */
+--text-secondary: #666666;     /* 次要文本 */
+--text-muted: #999999;         /* 弱化文本 */
+--border-color: #e8e8e8;       /* 边框 */
+--shadow: 0 2px 8px rgba(0,0,0,0.06);
+--radius-sm: 8px;
+--radius-md: 12px;
+--radius-lg: 16px;
+--header-height: 56px;
+--sidebar-width: 260px;
 ```
+
+### 下拉菜单和弹窗
+
+所有下拉菜单（类型选择、模型选择、比例选择等）采用统一的向上弹出定位（`position: absolute; bottom: 100%`），带 `fadeInUp` 动画。大面板弹窗使用 `box-shadow: 0 -8px 32px` 阴影。
+
+## 与其他模块的关系
+
+### 世界观系统
+
+营销智能体使用固定 `world_id = '1'`，复用 `script_writer` 的世界观基础设施。会话通过 `session_type: 2` 区分营销模式和短剧模式（`session_type: 1`）。
+
+### 算力系统
+
+- 模型选择时通过 `TaskConfig.getComputingPower()` 实时预估消耗
+- 发送消息时后端扣减算力，SSE 流结束后前端刷新余额
+- 算力不足时后端返回错误，前端提示充值
+
+### PM Agent 后端
+
+Agent 模式的消息通过 PM Agent（`pm_agent.py`）处理：
+
+- PM Agent 根据用户意图委托专家（如 `marketing-image` 专家生图）
+- 专家返回结果后，PM Agent 自动提取图片 URL 并注入对话历史（多模态消息）
+- 通过 `ask_user` 工具实现向用户提问的交互
+
+### 用户偏好同步
+
+用户在前端选择的图片模型、比例、分辨率等偏好通过 API 同步到后端 `user_preferences` 数据库表，确保跨设备/会话的一致性。
 
 ## 文件清单
 
 | 文件路径 | 类型 | 说明 |
 |----------|------|------|
-| `web/index.html` | 修改 | 模式选择器（电商模式→营销模式）、选择后跳转 `/marketing-agent` |
-| `web/css/index.css` | 修改 | 末尾追加"营销模式首页样式"区块 |
-| `web/marketing_agent.html` | 新建 | 营销智能体对话页面（Vue 3） |
-| `web/css/marketing_agent.css` | 新建 | 对话页面样式（浅色主题） |
-| `server.py` | 修改 | 新增 `/marketing-agent` 路由 |
-
-## 本地存储键
-
-| 键名 | 用途 |
-|------|------|
-| `creation_mode` | 当前选择的创作模式（`short_drama` / `marketing`） |
-| `marketing_sessions` | 营销模式本地会话历史缓存 |
-
-## 后续可扩展点
-
-1. **左侧导航功能**：当前左侧"灵感、生成、资产、画布"和"无限画布、Agent 模式、图片生成、视频生成"功能卡片为纯 UI 展示，可逐步实现实际页面跳转。
-2. **筛选器联动**：顶部"时间、生成类型"筛选器目前仅有 UI，可结合后端实现历史记录筛选。
-3. **营销技能库**：可在 `script_writer_core/skills/` 下新增营销专用 skill（如 `marketing-script-writer`、`product-copy-writer`），并通过 `system_prompt` 切换使营销 Agent 拥有专属能力。
-4. **营销专用世界**：当前自动创建"营销世界"，未来可根据营销主题（如"美妆"、"3C数码"）创建多个细分世界。
+| `web/marketing_agent.html` | 页面 | 营销智能体对话页面（Vue 3 SPA） |
+| `web/css/marketing_agent.css` | 样式 | 对话页面样式（浅色主题，约 1460 行） |
+| `web/js/task_config.js` | 脚本 | 任务配置统一管理模块 |
+| `web/js/video_compressor.js` | 脚本 | 前端视频压缩模块（Canvas + MediaRecorder） |
+| `web/i18n/locales/zh-CN/marketing_agent.json` | 翻译 | 中文翻译文件（约 215 个键） |
+| `web/i18n/locales/en/marketing_agent.json` | 翻译 | 英文翻译文件 |
+| `server.py` | 路由 | `/marketing-agent` 静态页面路由（约第 8281 行） |
+| `api/script_writer.py` | API | 会话管理、任务创建、流式响应、文件上传等 API |
+| `web/index.html` | 页面 | 模式选择弹窗入口 |

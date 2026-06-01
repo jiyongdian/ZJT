@@ -202,6 +202,8 @@ class TestBuildCreateRequest(unittest.TestCase):
         self.assertEqual(result['json']['prompt'], '测试提示词')
         self.assertEqual(result['json']['enhance_prompt'], True)
         self.assertEqual(result['json']['images'], ['http://example.com/test.jpg'])
+        # 首帧模式不应设置 veo_fl_close
+        self.assertNotIn('veo_fl_close', result['json'])
 
     def test_request_without_image(self):
         """无图片时的请求"""
@@ -240,6 +242,8 @@ class TestBuildCreateRequest(unittest.TestCase):
             'http://example.com/ref2.jpg',
             'http://example.com/ref3.jpg'
         ])
+        # 参考图模式应设置 veo_fl_close=True
+        self.assertTrue(result['json']['veo_fl_close'])
 
     def test_request_with_extra_reference_images_truncated(self):
         """超过3张参考图时截取前3张"""
@@ -259,6 +263,8 @@ class TestBuildCreateRequest(unittest.TestCase):
         self.assertEqual(len(result['json']['images']), 3)
         self.assertEqual(result['json']['images'][0], 'http://example.com/ref1.jpg')
         self.assertEqual(result['json']['images'][2], 'http://example.com/ref3.jpg')
+        # 参考图模式应设置 veo_fl_close=True
+        self.assertTrue(result['json']['veo_fl_close'])
 
 
 class TestBuildCheckQuery(unittest.TestCase):

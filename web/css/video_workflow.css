@@ -2055,6 +2055,13 @@ textarea:focus{ border-color: var(--primary); }
 .timeline-drop-indicator.show {
   opacity: 1;
 }
+.timeline-pillar-bg.pillar-drop-target {
+  background: rgba(59, 130, 246, 0.15) !important;
+  border: 2px dashed #3b82f6 !important;
+}
+.timeline-audio-clip.dragging {
+  opacity: 0.4;
+}
 .timeline-clip-thumb {
   width: 100%;
   height: 100%;

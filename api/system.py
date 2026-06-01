@@ -93,6 +93,8 @@ async def get_server_config():
         footer = get_config_value('server', 'footer', default={})
         version = get_app_version()
         max_image_size_mb = get_dynamic_config_value('upload', 'max_image_size_mb', default=10)
+        max_video_size_mb = get_dynamic_config_value('upload', 'max_video_size_mb', default=50)
+        max_video_duration_seconds = get_dynamic_config_value('upload', 'max_video_duration_seconds', default=15)
         enable_vue_error_output = get_config_value('frontend', 'enable_vue_error_output', default=False)
 
         return {
@@ -101,6 +103,8 @@ async def get_server_config():
                 "is_local": is_local,
                 "version": version,
                 "max_image_size_mb": max_image_size_mb,
+                "max_video_size_mb": max_video_size_mb,
+                "max_video_duration_seconds": max_video_duration_seconds,
                 "is_enterprise": not IS_COMMUNITY_EDITION,
                 "shared_space": not Edition.is_space_isolated(),
                 "enable_vue_error_output": enable_vue_error_output,

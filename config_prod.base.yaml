@@ -43,6 +43,11 @@ vidu:
 volcengine:
   api_key: ""
 
+volcengine_oversea:
+  api_key: ""
+  base_url: "https://ark.ap-southeast.bytepluses.com"
+  model_aliases: {}
+
 # 适配云雾 comfly这类聚合站
 api_aggregator:
   site_0:
@@ -128,6 +133,8 @@ task_queue:
 
 upload:
   max_image_size_mb: 10
+  max_video_size_mb: 50
+  max_video_duration_seconds: 15
 
 frontend:
   debug_password: "123"

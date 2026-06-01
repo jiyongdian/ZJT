@@ -6,8 +6,13 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>视频工作流列表</title>
+  <title data-i18n="page_title">视频工作流列表</title>
   <link rel="icon" href="/files/logo.ico" type="image/vnd.microsoft.icon"/>
+  <!-- i18n 支持 -->
+  <script src="/i18n/i18n-core.js?v=__VERSION__"></script>
+  <script src="/i18n/i18n-dom.js?v=__VERSION__"></script>
+  <link rel="stylesheet" href="/i18n/i18n-switcher.css?v=__VERSION__" />
+  <script src="/i18n/i18n-switcher.js?v=__VERSION__"></script>
   <style>
     :root{
       --bg:#ffffff;
@@ -570,24 +575,33 @@
       margin-top: 16px;
       line-height: 1.6;
     }
+    .i18n-switcher-container {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 100;
+    }
   </style>
 </head>
 <body>
+  <!-- 语言切换器 -->
+  <div class="i18n-switcher-container" id="i18nSwitcher"></div>
+
   <div class="container">
     <div class="header">
       <div class="header-left">
         <a href="/" class="brand">
           <img src="/files/logo.svg" alt="Logo">
-          <span class="brand-title">智剧通 AI短剧制作平台</span>
+          <span class="brand-title" data-i18n="brand_title">智剧通 AI短剧制作平台</span>
         </a>
-        <h1 class="page-title">视频工作流</h1>
+        <h1 class="page-title" data-i18n="page_title">视频工作流</h1>
         <nav class="breadcrumb">
-          <a href="/">首页</a>
+          <a href="/" data-i18n="breadcrumb_home">首页</a>
           <span class="breadcrumb-separator">/</span>
-          <span class="breadcrumb-current">视频工作流</span>
+          <span class="breadcrumb-current" data-i18n="breadcrumb_current">视频工作流</span>
         </nav>
       </div>
-      <button class="btn" onclick="openCreateModal()">
+      <button class="btn" onclick="openCreateModal()" data-i18n="create_workflow">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="12" y1="5" x2="12" y2="19"></line>
           <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -603,19 +617,19 @@
           <path d="M2 17L12 22L22 17"></path>
           <path d="M2 12L12 17L22 12"></path>
         </svg>
-        短剧智能体
+        <span data-i18n="agent_title">短剧智能体</span>
       </div>
-      <div class="agent-btn-desc">AI智能体生成剧本，人物，场景，道具</div>
+      <div class="agent-btn-desc" data-i18n="agent_desc">AI智能体生成剧本，人物，场景，道具</div>
     </button>
 
     <div class="toolbar">
       <div class="search-box">
-        <input type="text" class="search-input" id="searchInput" placeholder="搜索工作流名称..." onkeyup="handleSearch(event)">
+        <input type="text" class="search-input" id="searchInput" data-i18n="search_placeholder:placeholder" placeholder="搜索工作流名称..." onkeyup="handleSearch(event)">
         <select class="filter-select" id="statusFilter" onchange="loadWorkflows()">
-          <option value="">全部状态</option>
-          <option value="1">已启用</option>
-          <option value="0">已禁用</option>
-          <option value="2">草稿</option>
+          <option value="" data-i18n="status_all">全部状态</option>
+          <option value="1" data-i18n="status_enabled">已启用</option>
+          <option value="0" data-i18n="status_disabled">已禁用</option>
+          <option value="2" data-i18n="status_draft">草稿</option>
         </select>
       </div>
     </div>
@@ -623,53 +637,53 @@
     <div id="workflowContainer">
       <div class="loading">
         <div class="loading-spinner"></div>
-        <div>加载中...</div>
+        <div data-i18n="loading">加载中...</div>
       </div>
     </div>
 
     <div class="pagination" id="pagination" style="display:none;">
-      <button class="pagination-btn" id="prevBtn" onclick="prevPage()">上一页</button>
-      <span class="pagination-info" id="pageInfo">第 1 页 / 共 1 页</span>
-      <button class="pagination-btn" id="nextBtn" onclick="nextPage()">下一页</button>
+      <button class="pagination-btn" id="prevBtn" onclick="prevPage()" data-i18n="previous_page">上一页</button>
+      <span class="pagination-info" id="pageInfo"></span>
+      <button class="pagination-btn" id="nextBtn" onclick="nextPage()" data-i18n="next_page">下一页</button>
     </div>
   </div>
 
   <!-- Create/Edit Modal -->
   <div class="modal-overlay" id="createModal">
     <div class="modal">
-      <h2 class="modal-title" id="modalTitle">新建工作流</h2>
+      <h2 class="modal-title" id="modalTitle" data-i18n="create_modal_title">新建工作流</h2>
       <form id="workflowForm" onsubmit="handleSubmit(event)">
         <input type="hidden" id="workflowId">
         <div class="modal-two-column">
           <div class="modal-left-column">
             <div class="form-group">
-              <label class="form-label">工作流名称 *</label>
+              <label class="form-label" data-i18n="workflow_name_label">工作流名称 *</label>
               <input type="text" class="form-input" id="workflowName" required>
             </div>
             <div class="form-group">
-              <button type="button" class="btn btn-secondary btn-sm" id="toggleDescBtn" onclick="toggleDescSection()" style="width: 100%; justify-content: center;">展开填写描述</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="toggleDescBtn" onclick="toggleDescSection()" style="width: 100%; justify-content: center;" data-i18n="expand_desc">展开填写描述</button>
               <div id="descSection" style="display: none; margin-top: 12px;">
-                <label class="form-label">描述</label>
+                <label class="form-label" data-i18n="workflow_desc_label">描述</label>
                 <textarea class="form-input form-textarea" id="workflowDesc"></textarea>
               </div>
             </div>
             <div class="form-group">
-              <label class="form-label">世界</label>
-              <div style="font-size: 12px; color: var(--muted); margin-bottom: 6px;">世界是一个包裹角色、场景、道具还有剧本的盒子</div>
+              <label class="form-label" data-i18n="world_label">世界</label>
+              <div style="font-size: 12px; color: var(--muted); margin-bottom: 6px;" data-i18n="world_desc_hint">世界是一个包裹角色、场景、道具还有剧本的盒子</div>
               <div style="display: flex; gap: 8px;">
                 <select class="form-input" id="workflowWorld" style="flex: 1;">
-                  <option value="">选择世界（可选）</option>
+                  <option value="" data-i18n="select_world_placeholder">选择世界（可选）</option>
                 </select>
-                <button type="button" class="btn btn-secondary" onclick="openWorldModal()" style="white-space: nowrap;">新建世界</button>
+                <button type="button" class="btn btn-secondary" onclick="openWorldModal()" style="white-space: nowrap;" data-i18n="create_world_btn">新建世界</button>
               </div>
             </div>
             <div class="form-group" id="styleFieldGroup">
               <label class="form-label">
-                画风
-                <a href="/image-style-guide" target="_blank" style="margin-left: 8px; font-size: 12px; color: #3b82f6; text-decoration: none; font-weight: normal; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'" title="查看画风说明">查看画风说明</a>
-                <span style="margin-left: 8px; font-size: 12px; color: #6b7280; font-weight: normal;">不知道如何描述画风？可以在即梦寻找画风。查看：<a href="https://bq3mlz1jiae.feishu.cn/wiki/LBw5w7zZaiuQhuk4sT7c42zcn0e#share-NKbIdQfDdouM8xx3LxIcZrPHn7c" target="_blank" style="color: #3b82f6; text-decoration: none; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'">文档</a>。</span>
+                <span data-i18n="style_label">画风</span>
+                <a href="/image-style-guide" target="_blank" style="margin-left: 8px; font-size: 12px; color: #3b82f6; text-decoration: none; font-weight: normal; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'" data-i18n="style_guide_link style_guide_link:title">查看画风说明</a>
+                <span style="margin-left: 8px; font-size: 12px; color: #6b7280; font-weight: normal;" data-i18n="style_guide_desc">不知道如何描述画风？可以在即梦寻找画风。查看：<a href="https://bq3mlz1jiae.feishu.cn/wiki/LBw5w7zZaiuQhuk4sT7c42zcn0e#share-NKbIdQfDdouM8xx3LxIcZrPHn7c" target="_blank" style="color: #3b82f6; text-decoration: none; border-bottom: 1px solid transparent; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='transparent'">文档</a>。</span>
               </label>
-              <input type="text" class="form-input" id="workflowStyle" list="styleOptions" placeholder="选择或输入画风">
+              <input type="text" class="form-input" id="workflowStyle" list="styleOptions" data-i18n="style_placeholder:placeholder" placeholder="选择或输入画风">
               <datalist id="styleOptions">
                 <option value="漫画风格">
                 <option value="写实风格">
@@ -687,17 +701,17 @@
               </datalist>
             </div>
             <div class="form-group">
-              <label class="form-label">状态</label>
+              <label class="form-label" data-i18n="status_label">状态</label>
               <select class="form-input" id="workflowStatus">
-                <option value="1">启用</option>
-                <option value="2">草稿</option>
-                <option value="0">禁用</option>
+                <option value="1" data-i18n="status_enabled_option">启用</option>
+                <option value="2" data-i18n="status_draft_option">草稿</option>
+                <option value="0" data-i18n="status_disabled_option">禁用</option>
               </select>
             </div>
           </div>
           <div class="modal-right-column">
             <div class="form-group">
-              <label class="form-label">工作流比例 *</label>
+              <label class="form-label" data-i18n="workflow_ratio_label">工作流比例 *</label>
               <div style="display: flex; flex-direction: column; gap: 12px;">
                 <!-- 16:9 横屏 -->
                 <label class="ratio-option">
@@ -705,7 +719,7 @@
                   <div class="ratio-icon ratio-icon-landscape"></div>
                   <div class="ratio-text">
                     <span class="ratio-value">16:9</span>
-                    <span class="ratio-label">横屏</span>
+                    <span class="ratio-label" data-i18n="ratio_landscape">横屏</span>
                   </div>
                 </label>
                 <!-- 9:16 竖屏 -->
@@ -714,7 +728,7 @@
                   <div class="ratio-icon ratio-icon-portrait"></div>
                   <div class="ratio-text">
                     <span class="ratio-value">9:16</span>
-                    <span class="ratio-label">竖屏</span>
+                    <span class="ratio-label" data-i18n="ratio_portrait">竖屏</span>
                   </div>
                 </label>
               </div>
@@ -722,9 +736,9 @@
           </div>
         </div>
         <div class="modal-actions">
-          <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
-          <button type="button" class="btn btn-secondary btn-sm" onclick="handleSubmit(event)">仅创建工作流</button>
-          <button type="button" class="btn" onclick="handleSubmitAndGoScript(event)">创建并生成剧本</button>
+          <button type="button" class="btn btn-secondary" onclick="closeModal()" data-i18n="cancel_btn">取消</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="handleSubmit(event)" data-i18n="create_only_btn">仅创建工作流</button>
+          <button type="button" class="btn" onclick="handleSubmitAndGoScript(event)" data-i18n="create_and_script_btn">创建并生成剧本</button>
         </div>
       </form>
     </div>
@@ -733,22 +747,22 @@
   <!-- World Creation Modal -->
   <div class="modal-overlay" id="worldModal">
     <div class="modal">
-      <h2 class="modal-title">新建世界</h2>
+      <h2 class="modal-title" data-i18n="create_world_modal_title">新建世界</h2>
       <form id="worldForm" onsubmit="handleWorldSubmit(event)">
         <div class="form-group">
-          <label class="form-label">世界名称 *</label>
+          <label class="form-label" data-i18n="world_name_label">世界名称 *</label>
           <input type="text" class="form-input" id="worldName" required>
         </div>
         <div class="form-group">
-          <button type="button" class="btn btn-secondary btn-sm" id="toggleWorldDescBtn" onclick="toggleWorldDescSection()" style="width: 100%; justify-content: center;">展开填写描述</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="toggleWorldDescBtn" onclick="toggleWorldDescSection()" style="width: 100%; justify-content: center;" data-i18n="expand_desc">展开填写描述</button>
           <div id="worldDescSection" style="display: none; margin-top: 12px;">
-            <label class="form-label">描述</label>
+            <label class="form-label" data-i18n="world_desc_label">描述</label>
             <textarea class="form-input form-textarea" id="worldDesc"></textarea>
           </div>
         </div>
         <div class="modal-actions">
-          <button type="button" class="btn btn-secondary" onclick="closeWorldModal()">取消</button>
-          <button type="submit" class="btn">创建</button>
+          <button type="button" class="btn btn-secondary" onclick="closeWorldModal()" data-i18n="cancel_btn">取消</button>
+          <button type="submit" class="btn" data-i18n="create_btn">创建</button>
         </div>
       </form>
     </div>
@@ -757,12 +771,12 @@
   <!-- Delete Confirm Modal -->
   <div class="modal-overlay" id="deleteModal">
     <div class="modal">
-      <h2 class="modal-title">确认删除</h2>
-      <p style="color: var(--muted); margin-bottom: 24px;">确定要删除这个工作流吗？此操作不可撤销。</p>
+      <h2 class="modal-title" data-i18n="delete_confirm_title">确认删除</h2>
+      <p style="color: var(--muted); margin-bottom: 24px;" data-i18n="delete_confirm_desc">确定要删除这个工作流吗？此操作不可撤销。</p>
       <input type="hidden" id="deleteWorkflowId">
       <div class="modal-actions">
-        <button type="button" class="btn btn-secondary" onclick="closeDeleteModal()">取消</button>
-        <button type="button" class="btn btn-danger" onclick="confirmDelete()">删除</button>
+        <button type="button" class="btn btn-secondary" onclick="closeDeleteModal()" data-i18n="cancel_btn">取消</button>
+        <button type="button" class="btn btn-danger" onclick="confirmDelete()" data-i18n="delete_btn">删除</button>
       </div>
     </div>
   </div>
@@ -770,26 +784,34 @@
   <div class="toast" id="toast"></div>
 
   <!-- 意见反馈按钮 -->
-  <button class="feedback-btn" onclick="document.getElementById('feedbackModal').classList.add('active')">
+  <button class="feedback-btn" onclick="document.getElementById('feedbackModal').classList.add('active')" data-i18n="feedback_btn">
     💬 意见反馈
   </button>
 
   <!-- 意见反馈弹窗 -->
   <div class="modal-overlay" id="feedbackModal">
     <div class="modal">
-      <h2 class="modal-title">意见反馈</h2>
+      <h2 class="modal-title" data-i18n="feedback_modal_title">意见反馈</h2>
       <div class="feedback-modal-content">
-        <p style="color: var(--muted); margin-bottom: 16px;">扫描二维码添加微信，提交您的宝贵意见</p>
-        <img src="/files/二维码.jpg" alt="微信二维码" class="feedback-qr-code">
-        <p class="feedback-tip">我们会认真听取每一条反馈，持续改进产品体验</p>
+        <p style="color: var(--muted); margin-bottom: 16px;" data-i18n="feedback_scan_tip">扫描二维码添加微信，提交您的宝贵意见</p>
+        <img src="/files/二维码.jpg" class="feedback-qr-code" data-i18n="feedback_qr_code_alt:alt">
+        <p class="feedback-tip" data-i18n="feedback_message">我们会认真听取每一条反馈，持续改进产品体验</p>
       </div>
       <div class="modal-actions">
-        <button type="button" class="btn" onclick="document.getElementById('feedbackModal').classList.remove('active')">关闭</button>
+        <button type="button" class="btn" onclick="document.getElementById('feedbackModal').classList.remove('active')" data-i18n="feedback_close_btn">关闭</button>
       </div>
     </div>
   </div>
 
   <script>
+    // i18n 翻译函数
+    function t(key, params = {}) {
+      if (window.ZJTi18n) {
+        return window.ZJTi18n.t(key, params) || key;
+      }
+      return key;
+    }
+
     let currentPage = 1;
     let pageSize = 10;
     let totalPages = 1;
@@ -808,7 +830,7 @@
     function ensureLoggedIn() {
       const uid = getUserId();
       if (!uid) {
-        showToast('请先登录', 'error');
+        showToast(t('toast_login_required'), 'error');
         return false;
       }
       return true;
@@ -816,10 +838,10 @@
 
     async function loadWorkflows() {
       const container = document.getElementById('workflowContainer');
-      container.innerHTML = '<div class="loading"><div class="loading-spinner"></div><div>加载中...</div></div>';
+      container.innerHTML = '<div class="loading"><div class="loading-spinner"></div><div>' + t('loading') + '</div></div>';
 
       if (!ensureLoggedIn()) {
-        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔒</div><div class="empty-state-title">请先登录</div><div class="empty-state-desc">登录后才能查看工作流列表</div><a class="btn" href="/">去登录</a></div>';
+        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔒</div><div class="empty-state-title">' + t('login_required') + '</div><div class="empty-state-desc">' + t('login_required_desc') + '</div><a class="btn" href="/">' + t('go_to_login') + '</a></div>';
         document.getElementById('pagination').style.display = 'none';
         return;
       }
@@ -841,12 +863,12 @@
         if (result.code === 0) {
           renderWorkflows(result.data);
         } else {
-          showToast(result.message || '加载失败', 'error');
-          container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">😕</div><div class="empty-state-title">加载失败</div><div class="empty-state-desc">请刷新页面重试</div></div>';
+          showToast(result.message || t('load_failed'), 'error');
+          container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">😕</div><div class="empty-state-title">' + t('load_failed') + '</div><div class="empty-state-desc">' + t('load_failed_desc') + '</div></div>';
         }
       } catch (error) {
-        showToast('网络错误', 'error');
-        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">😕</div><div class="empty-state-title">网络错误</div><div class="empty-state-desc">请检查网络连接</div></div>';
+        showToast(t('network_error'), 'error');
+        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">😕</div><div class="empty-state-title">' + t('network_error') + '</div><div class="empty-state-desc">' + t('network_error_desc') + '</div></div>';
       }
     }
 
@@ -858,9 +880,9 @@
         container.innerHTML = `
           <div class="empty-state">
             <div class="empty-state-icon">📋</div>
-            <div class="empty-state-title">暂无工作流</div>
-            <div class="empty-state-desc">点击"新建工作流"按钮创建您的第一个工作流</div>
-            <button class="btn" onclick="openCreateModal()">新建工作流</button>
+            <div class="empty-state-title">${t('no_workflows')}</div>
+            <div class="empty-state-desc">${t('no_workflows_desc')}</div>
+            <button class="btn" onclick="openCreateModal()">${t('create_workflow')}</button>
           </div>
         `;
         pagination.style.display = 'none';
@@ -871,31 +893,31 @@
 
       let html = '<div class="workflow-grid">';
       data.data.forEach(workflow => {
-        const statusClass = workflow.status === 1 ? 'status-enabled' : 
+        const statusClass = workflow.status === 1 ? 'status-enabled' :
                            workflow.status === 0 ? 'status-disabled' : 'status-draft';
-        const statusText = workflow.status === 1 ? '已启用' : 
-                          workflow.status === 0 ? '已禁用' : '草稿';
-        
-        const coverHtml = workflow.cover_image 
+        const statusText = workflow.status === 1 ? t('status_enabled') :
+                          workflow.status === 0 ? t('status_disabled') : t('status_draft');
+
+        const coverHtml = workflow.cover_image
           ? `<img src="${workflow.cover_image}" alt="${workflow.name}">`
           : '🎬';
 
-        const createTime = workflow.create_time ? new Date(workflow.create_time).toLocaleDateString('zh-CN') : '';
+        const createTime = workflow.create_time ? new Date(workflow.create_time).toLocaleDateString() : '';
 
         html += `
           <div class="workflow-card" onclick="enterWorkflow(${workflow.id})">
             <div class="workflow-cover">${coverHtml}</div>
             <div class="workflow-content">
               <div class="workflow-name">${escapeHtml(workflow.name)}</div>
-              <div class="workflow-desc">${escapeHtml(workflow.description || '暂无描述')}</div>
+              <div class="workflow-desc">${escapeHtml(workflow.description || t('no_description'))}</div>
               <div class="workflow-meta">
                 <span>${createTime}</span>
                 <span class="workflow-status ${statusClass}">${statusText}</span>
               </div>
             </div>
             <div class="workflow-actions" onclick="event.stopPropagation()">
-              <button class="btn btn-secondary btn-sm" onclick="editWorkflow(${workflow.id}, '${escapeHtml(workflow.name)}', '${escapeHtml(workflow.description || '')}', ${workflow.status})">编辑</button>
-              <button class="btn btn-danger btn-sm" onclick="deleteWorkflow(${workflow.id})">删除</button>
+              <button class="btn btn-secondary btn-sm" onclick="editWorkflow(${workflow.id}, '${escapeHtml(workflow.name)}', '${escapeHtml(workflow.description || '')}', ${workflow.status})">${t('edit_btn')}</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteWorkflow(${workflow.id})">${t('delete_btn')}</button>
             </div>
           </div>
         `;
@@ -905,7 +927,7 @@
       container.innerHTML = html;
 
       // Update pagination
-      document.getElementById('pageInfo').textContent = `第 ${currentPage} 页 / 共 ${totalPages} 页 (共 ${data.total} 条)`;
+      document.getElementById('pageInfo').textContent = t('page_info', { current: currentPage, total: totalPages, count: data.total });
       document.getElementById('prevBtn').disabled = currentPage <= 1;
       document.getElementById('nextBtn').disabled = currentPage >= totalPages;
       pagination.style.display = 'flex';
@@ -946,7 +968,7 @@
     }
 
     async function openCreateModal(options = {}) {
-      document.getElementById('modalTitle').textContent = '新建工作流';
+      document.getElementById('modalTitle').textContent = t('create_modal_title');
       document.getElementById('workflowId').value = '';
       document.getElementById('workflowName').value = '';
       document.getElementById('workflowDesc').value = '';
@@ -961,20 +983,20 @@
         updateRatioOptionStyles();
       }
       document.getElementById('descSection').style.display = 'none';
-      document.getElementById('toggleDescBtn').textContent = '展开填写描述';
+      document.getElementById('toggleDescBtn').textContent = t('expand_desc');
       document.getElementById('styleFieldGroup').style.display = options.hideStyle ? 'none' : '';
       await loadWorlds();
       document.getElementById('createModal').classList.add('active');
     }
 
     async function editWorkflow(id, name, desc, status) {
-      document.getElementById('modalTitle').textContent = '编辑工作流';
+      document.getElementById('modalTitle').textContent = t('edit_modal_title');
       document.getElementById('workflowId').value = id;
       document.getElementById('workflowName').value = name;
       document.getElementById('workflowDesc').value = desc;
       document.getElementById('workflowStatus').value = status;
       document.getElementById('descSection').style.display = 'none';
-      document.getElementById('toggleDescBtn').textContent = '展开填写描述';
+      document.getElementById('toggleDescBtn').textContent = t('expand_desc');
       
       await loadWorlds();
       
@@ -1041,10 +1063,10 @@
       const btn = document.getElementById('toggleDescBtn');
       if (section.style.display === 'none') {
         section.style.display = 'block';
-        btn.textContent = '收起描述';
+        btn.textContent = t('collapse_desc');
       } else {
         section.style.display = 'none';
-        btn.textContent = '展开填写描述';
+        btn.textContent = t('expand_desc');
       }
     }
 
@@ -1061,13 +1083,13 @@
       const workflowRatio = document.querySelector('input[name="workflowRatio"]:checked')?.value || null;
 
       if (!name) {
-        showToast('请输入工作流名称', 'error');
+        showToast(t('toast_workflow_name_required'), 'error');
         return null;
       }
 
       const isEdit = !!id;
       if (!isEdit && !workflowRatio) {
-        showToast('请选择工作流比例', 'error');
+        showToast(t('toast_ratio_required'), 'error');
         return null;
       }
 
@@ -1105,11 +1127,11 @@
         if (result.code === 0) {
           return { isEdit, workflowId: result.data?.id || id };
         } else {
-          showToast(result.message || '操作失败', 'error');
+          showToast(result.message || t('toast_operation_failed'), 'error');
           return null;
         }
       } catch (error) {
-        showToast('网络错误', 'error');
+        showToast(t('network_error'), 'error');
         return null;
       }
     }
@@ -1128,7 +1150,7 @@
       try {
         const result = await createWorkflowData();
         if (result) {
-          showToast(result.isEdit ? '更新成功' : '创建成功', 'success');
+          showToast(result.isEdit ? t('toast_update_success') : t('toast_create_success'), 'success');
           closeModal();
           loadWorkflows();
         }
@@ -1157,7 +1179,7 @@
 
         const result = await createWorkflowData();
         if (result && result.workflowId) {
-          showToast('创建成功，正在跳转...', 'success');
+          showToast(t('toast_creating'), 'success');
           closeModal();
           // 跳转到剧本创作系统
           const userId = getUserId();
@@ -1188,7 +1210,7 @@
       const id = document.getElementById('deleteWorkflowId').value;
 
       if (!ensureLoggedIn()) return;
-      
+
       try {
         const response = await fetch(`/api/video-workflow/${id}`, {
           method: 'DELETE',
@@ -1200,14 +1222,14 @@
         const result = await response.json();
 
         if (result.code === 0) {
-          showToast('删除成功', 'success');
+          showToast(t('toast_delete_success'), 'success');
           closeDeleteModal();
           loadWorkflows();
         } else {
-          showToast(result.message || '删除失败', 'error');
+          showToast(result.message || t('toast_delete_failed'), 'error');
         }
       } catch (error) {
-        showToast('网络错误', 'error');
+        showToast(t('network_error'), 'error');
       }
     }
 
@@ -1224,7 +1246,7 @@
     // Style image preview
     async function loadWorlds() {
       if (!ensureLoggedIn()) return;
-      
+
       try {
         const response = await fetch('/api/worlds?page=1&page_size=100', {
           headers: {
@@ -1233,13 +1255,13 @@
           }
         });
         const result = await response.json();
-        
+
         if (result.code === 0 && result.data && result.data.data) {
           worldsCache = result.data.data;
           const select = document.getElementById('workflowWorld');
           const currentValue = select.value;
-          
-          select.innerHTML = '<option value="">选择世界（可选）</option>';
+
+          select.innerHTML = '<option value="">' + t('select_world_placeholder') + '</option>';
           worldsCache.forEach(world => {
             const option = document.createElement('option');
             option.value = world.id;
@@ -1260,7 +1282,7 @@
       document.getElementById('worldName').value = '';
       document.getElementById('worldDesc').value = '';
       document.getElementById('worldDescSection').style.display = 'none';
-      document.getElementById('toggleWorldDescBtn').textContent = '展开填写描述';
+      document.getElementById('toggleWorldDescBtn').textContent = t('expand_desc');
       document.getElementById('worldModal').classList.add('active');
     }
 
@@ -1273,26 +1295,26 @@
       const btn = document.getElementById('toggleWorldDescBtn');
       if (section.style.display === 'none') {
         section.style.display = 'block';
-        btn.textContent = '收起描述';
+        btn.textContent = t('collapse_desc');
       } else {
         section.style.display = 'none';
-        btn.textContent = '展开填写描述';
+        btn.textContent = t('expand_desc');
       }
     }
 
     async function handleWorldSubmit(event) {
       event.preventDefault();
-      
+
       if (!ensureLoggedIn()) return;
-      
+
       const name = document.getElementById('worldName').value.trim();
       const description = document.getElementById('worldDesc').value.trim();
-      
+
       if (!name) {
-        showToast('请输入世界名称', 'error');
+        showToast(t('toast_world_name_required'), 'error');
         return;
       }
-      
+
       try {
         const response = await fetch('/api/worlds', {
           method: 'POST',
@@ -1304,40 +1326,40 @@
           body: JSON.stringify({ name, description })
         });
         const result = await response.json();
-        
+
         if (result.code === 0) {
-          showToast('世界创建成功', 'success');
+          showToast(t('toast_world_create_success'), 'success');
           closeWorldModal();
           await loadWorlds();
           if (result.data && result.data.id) {
             document.getElementById('workflowWorld').value = result.data.id;
           }
         } else {
-          showToast(result.message || '创建失败', 'error');
+          showToast(result.message || t('toast_world_create_failed'), 'error');
         }
       } catch (error) {
-        showToast('网络错误', 'error');
+        showToast(t('network_error'), 'error');
       }
     }
 
     async function handleAgentClick() {
       if (!ensureLoggedIn()) return;
-      
+
       try {
         const authToken = getAuthToken();
         const userId = getUserId();
-        
+
         // 将 auth_token 存储到 localStorage，避免在 URL 中暴露
         localStorage.setItem('auth_token', authToken);
-        
+
         // 直接跳转到内部路由（不传递 auth_token）
         const url = `/script-writer?user_id=${encodeURIComponent(userId)}`;
-        
+
         // 打开新窗口
         window.open(url, '_blank');
       } catch (error) {
         console.error('Failed to open script writer:', error);
-        showToast('网络错误', 'error');
+        showToast(t('network_error'), 'error');
       }
     }
 
@@ -1352,8 +1374,26 @@
       if (e.target === this) closeWorldModal();
     });
 
+    // 初始化 i18n
+    async function initI18n() {
+      if (window.ZJTi18n) {
+        const locale = localStorage.getItem('zjt_locale') || 'zh-CN';
+        await window.ZJTi18n.setLocale(locale, ['workflow_list']);
+        // 扫描 DOM 翻译静态元素
+        if (window.ZJTi18nDOM) {
+          window.ZJTi18nDOM.scanDOM(document.body);
+        }
+        // 渲染语言切换器
+        if (window.ZJTi18nSwitcher) {
+          window.ZJTi18nSwitcher.render('i18nSwitcher');
+        }
+      }
+    }
+
     // Initial load
-    loadWorkflows();
+    initI18n().then(() => {
+      loadWorkflows();
+    });
     
     // 检测URL参数，如果有action=create则自动打开新建表单
     const urlParams = new URLSearchParams(window.location.search);

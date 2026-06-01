@@ -13,3 +13,4 @@
 | [runninghub_concurrency_control.md](./runninghub_concurrency_control.md) | RunningHub 并发控制机制 |
 | [task_queue_management.md](./task_queue_management.md) | 任务队列管理机制（重试、过期处理） |
 | [reasoning_content_passthrough.md](./reasoning_content_passthrough.md) | 推理模型 reasoning_content 回传机制 |
+| [pipeline_steps.md](./pipeline_steps.md) | AI Tools 流水线步骤机制（预处理、失败重试） |

@@ -59,6 +59,27 @@ DEFAULT_CONFIGS: List[Dict[str, Any]] = [
         'editable': True,
         'is_sensitive': False
     },
+    {
+        'key': 'upload.max_video_size_mb',
+        'value_type': 'int',
+        'description': 'Agent 对话模式上传视频最大大小限制（MB）',
+        'editable': True,
+        'is_sensitive': False
+    },
+    {
+        'key': 'upload.max_video_duration_seconds',
+        'value_type': 'int',
+        'description': 'Agent 对话模式上传视频最大时长限制（秒），超时长的视频将被截断',
+        'editable': True,
+        'is_sensitive': False
+    },
+    {
+        'key': 'upload.max_audio_size_mb',
+        'value_type': 'int',
+        'description': 'Agent 对话模式上传音频最大大小限制（MB）',
+        'editable': True,
+        'is_sensitive': False
+    },
 
     # ==================== 前端配置 ====================
     {
@@ -215,6 +236,24 @@ DEFAULT_CONFIGS: List[Dict[str, Any]] = [
         'description': '火山引擎 API Key（Seedream 5.0 文生图）',
         'editable': True,
         'is_sensitive': True,
+        'quick_config': True
+    },
+
+    # ==================== 火山引擎海外版配置 ====================
+    {
+        'key': 'volcengine_oversea.api_key',
+        'value_type': 'string',
+        'description': '火山引擎海外版 API Key（Seedream/Seedance 海外版）',
+        'editable': True,
+        'is_sensitive': True,
+        'quick_config': True
+    },
+    {
+        'key': 'volcengine_oversea.base_url',
+        'value_type': 'string',
+        'description': '火山引擎海外版 API 基础 URL（代码自动拼接 /api/v3）',
+        'editable': True,
+        'is_sensitive': False,
         'quick_config': True
     },
 

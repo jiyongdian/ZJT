@@ -201,7 +201,7 @@
           console.log('Position:', { x: node.x, y: node.y });
           console.log('Data:', node.data);
           console.log('完整节点对象:', node);
-          showToast(`节点 ${node.title} 信息已输出到控制台`, 'info');
+          showToast(window.t ? window.t('node_info_output').replace('${node.title}', node.title) : `节点 ${node.title} 信息已输出到控制台`, 'info');
         });
         
         // 查找按钮容器（场景节点等有按钮容器的情况）
@@ -241,9 +241,6 @@
       }
 
       const worldId = state.defaultWorldId;
-      const userId = localStorage.getItem('user_id') || '1';
-      const authToken = localStorage.getItem('auth_token') || '';
-
       for (const shotNode of allShotFrameNodes) {
         const imagePrompt = shotNode.data.imagePrompt || '';
         const shotData = shotNode.data.shotJson || {};
@@ -257,10 +254,7 @@
             collectedCharacters.add(characterName);
             try {
               const response = await fetch(`/api/characters?world_id=${worldId}&page=1&page_size=100&keyword=${encodeURIComponent(characterName)}`, {
-                headers: {
-                  'Authorization': authToken,
-                  'X-User-Id': userId
-                }
+                headers: getAuthHeaders()
               });
               if (response.ok) {
                 const result = await response.json();
@@ -291,10 +285,7 @@
           collectedLocations.add(shotData.db_location_id);
           try {
             const response = await fetch(`/api/location/${shotData.db_location_id}`, {
-              headers: {
-                'Authorization': authToken,
-                'X-User-Id': userId
-              }
+              headers: getAuthHeaders()
             });
             if (response.ok) {
               const result = await response.json();
@@ -330,10 +321,7 @@
             if (prop && prop.props_db_id) {
               try {
                 const response = await fetch(`/api/props/${prop.props_db_id}`, {
-                  headers: {
-                    'Authorization': authToken,
-                    'X-User-Id': userId
-                  }
+                  headers: getAuthHeaders()
                 });
                 if (response.ok) {
                   const result = await response.json();
@@ -390,24 +378,24 @@
       el.style.top = node.y + 'px';
 
       el.innerHTML = `
-        <div class="port input" title="输入（连接图生视频节点或角色节点）"></div>
-        <div class="port output" title="输出（连接到对话组节点作为情感参考）"></div>
+        <div class="port input" data-i18n="node_input_port:title"></div>
+        <div class="port output" data-i18n="node_output_port_dialogue:title"></div>
         <div class="node-header">
           <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M10 9.5V14.5L14.5 12L10 9.5Z" fill="currentColor"/></svg>${node.title}</div>
-          <button class="icon-btn" title="删除">×</button>
+          <button class="icon-btn" title="${window.t ? window.t('node_delete_btn') : '删除'}">×</button>
         </div>
         <div class="node-body">
           <div class="field field-collapsible">
-            <div class="label">视频</div>
+            <div class="label" data-i18n="node_video_label">${window.t ? window.t('node_video_label') : '视频'}</div>
             <input class="video-file" type="file" accept="video/*" />
           </div>
           <div class="field field-always-visible video-preview-field" style="display:none;">
-            <div class="label">预览</div>
+            <div class="label" data-i18n="node_preview_label">${window.t ? window.t('node_preview_label') : '预览'}</div>
             <div class="video-preview">
               <video class="video-thumb" playsinline></video>
               <div class="video-preview-actions">
-                <button class="vp-btn vp-play" type="button" aria-label="播放">▶</button>
-                <button class="vp-btn vp-zoom" type="button" aria-label="放大">⤢</button>
+                <button class="vp-btn vp-play" type="button" aria-label="${window.t ? window.t('node_play_btn') : '播放'}">▶</button>
+                <button class="vp-btn vp-zoom" type="button" aria-label="${window.t ? window.t('node_zoom_btn') : '放大'}">⤢</button>
               </div>
             </div>
             <div class="gen-meta video-name"></div>
@@ -415,9 +403,9 @@
           <div class="field field-collapsible video-preview-actions-field" style="display:none;">
             <div class="preview-row" style="margin-top: 8px; justify-content: space-between;">
               <div style="display: flex; gap: 8px;">
-                <button class="mini-btn video-add-timeline" type="button">加时间轴</button>
-                <button class="mini-btn video-download" type="button">下载</button>
-                <button class="mini-btn video-clear" type="button">清除</button>
+                <button class="mini-btn video-add-timeline" type="button" data-i18n="node_add_timeline_btn">${window.t ? window.t('node_add_timeline_btn') : '加时间轴'}</button>
+                <button class="mini-btn video-download" type="button" data-i18n="node_download_btn">${window.t ? window.t('node_download_btn') : '下载'}</button>
+                <button class="mini-btn video-clear" type="button" data-i18n="node_clear_btn">${window.t ? window.t('node_clear_btn') : '清除'}</button>
               </div>
             </div>
           </div>
@@ -477,11 +465,7 @@
                 from: state.connecting.fromId,
                 to: id
               });
-              renderConnections();
-              renderImageConnections();
-              renderFirstFrameConnections();
-              renderVideoConnections();
-              renderAudioConnections();
+              renderAllConnections();
             }
           }
         }
@@ -536,20 +520,20 @@
         
         // 立即上传到服务器获取永久URL
         try {
-          showToast('正在上传视频...', 'info');
+          showToast(window.t ? window.t('uploading_video') : '正在上传视频...', 'info');
           const permanentUrl = await uploadFile(file);
           if(permanentUrl){
             // 更新为服务器URL
             node.data.url = permanentUrl;
             thumbVideo.src = proxyDownloadUrl(permanentUrl);
-            showToast('视频上传成功', 'success');
-            
+            showToast(window.t ? window.t('video_upload_success') : '视频上传成功', 'success');
+
             // 自动保存工作流
-            try{ autoSaveWorkflow(); } catch(e){}
+            safeAutoSave()
           }
         } catch(error){
           console.error('视频上传失败:', error);
-          showToast('视频上传失败，刷新页面后将丢失', 'error');
+          showToast(window.t ? window.t('video_upload_failed') : '视频上传失败，刷新页面后将丢失', 'error');
         }
       });
 
@@ -587,23 +571,23 @@
       downloadBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         if(!node.data.url){
-          showToast('没有可下载的视频', 'error');
+          showToast(window.t ? window.t('no_downloadable_video') : '没有可下载的视频', 'error');
           return;
         }
-        
+
         // 生成文件名
         const now = new Date();
-        const dateStr = now.getFullYear().toString() + 
-                       (now.getMonth() + 1).toString().padStart(2, '0') + 
+        const dateStr = now.getFullYear().toString() +
+                       (now.getMonth() + 1).toString().padStart(2, '0') +
                        now.getDate().toString().padStart(2, '0');
-        const timeStr = now.getHours().toString().padStart(2, '0') + 
+        const timeStr = now.getHours().toString().padStart(2, '0') +
                        now.getMinutes().toString().padStart(2, '0');
         const filename = `workflow_video_${dateStr}_${timeStr}.mp4`;
-        
+
         // 使用后端代理下载，绕过CORS
         const downloadUrl = `/api/download?url=${encodeURIComponent(node.data.url)}&filename=${encodeURIComponent(filename)}`;
         window.open(downloadUrl, '_blank');
-        showToast('开始下载', 'success');
+        showToast(window.t ? window.t('start_download') : '开始下载', 'success');
       });
 
       // 添加调试按钮
@@ -648,14 +632,14 @@
       el.style.top = node.y + 'px';
 
       el.innerHTML = `
-        <div class="port output" title="输出（连接到图生视频节点）"></div>
+        <div class="port output" title="${window.t ? window.t('node_output_port_video') : '输出（连接到图生视频节点）'}"></div>
         <div class="node-header">
           <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${node.title}</div>
-          <button class="icon-btn" title="删除">×</button>
+          <button class="icon-btn" title="${window.t ? window.t('node_delete_btn') : '删除'}">×</button>
         </div>
         <div class="node-body">
           <div class="field field-collapsible">
-            <div class="label">音频文件</div>
+            <div class="label" data-i18n="node_audio_file_label">${window.t ? window.t('node_audio_file_label') : '音频文件'}</div>
             <input class="audio-file" type="file" accept="audio/*" />
           </div>
           <div class="field field-always-visible audio-preview-field" style="display:none;">
@@ -666,7 +650,7 @@
           </div>
           <div class="field field-collapsible audio-preview-actions-field" style="display:none;">
             <div class="preview-row" style="margin-top: 4px;">
-              <button class="mini-btn audio-clear" type="button">清除</button>
+              <button class="mini-btn audio-clear" type="button" data-i18n="node_clear_btn">${window.t ? window.t('node_clear_btn') : '清除'}</button>
             </div>
           </div>
         </div>
@@ -735,17 +719,17 @@
         setAudioFromFile(file);
         fileEl.value = '';
         try {
-          showToast('正在上传音频...', 'info');
+          showToast(window.t ? window.t('uploading_audio') : '正在上传音频...', 'info');
           const permanentUrl = await uploadFile(file);
           if(permanentUrl){
             node.data.url = permanentUrl;
             playerEl.src = permanentUrl;
-            showToast('音频上传成功', 'success');
-            try{ autoSaveWorkflow(); } catch(e){}
+            showToast(window.t ? window.t('audio_upload_success') : '音频上传成功', 'success');
+            safeAutoSave()
           }
         } catch(error){
           console.error('音频上传失败:', error);
-          showToast('音频上传失败', 'error');
+          showToast(window.t ? window.t('audio_upload_failed') : '音频上传失败', 'error');
         }
       });
 
@@ -1214,7 +1198,7 @@
       if(typeof window.openPropsModalForShot === 'function'){
         window.openPropsModalForShot();
       } else {
-        showToast('道具选择功能未初始化', 'error');
+        showToast(window.t ? window.t('props_selector_not_init') : '道具选择功能未初始化', 'error');
       }
     }
     
@@ -1232,7 +1216,7 @@
       shotGroupEditModalContent.innerHTML = renderShotGroupEditForm(node.data);
       bindShotEditEvents();
       
-      showToast('已移除道具', 'success');
+      showToast(window.t ? window.t('prop_removed') : '已移除道具', 'success');
     }
 
     function addNewShot(insertIndex){
@@ -1330,8 +1314,7 @@
       try{
         const response = await fetch('/api/worlds?page=1&page_size=100', {
           headers: {
-            'Authorization': localStorage.getItem('auth_token') || '',
-            'X-User-Id': localStorage.getItem('user_id') || '1'
+            ...getAuthHeaders()
           }
         });
 
@@ -1349,7 +1332,7 @@
         }
       } catch(e){
         console.error('加载世界列表失败:', e);
-        showToast('加载世界列表失败', 'error');
+        showToast(window.t ? window.t('load_world_list_failed') : '加载世界列表失败', 'error');
       }
     }
 
@@ -1372,8 +1355,7 @@
 
         const response = await fetch(url, {
           headers: {
-            'Authorization': localStorage.getItem('auth_token') || '',
-            'X-User-Id': localStorage.getItem('user_id') || '1'
+            ...getAuthHeaders()
           }
         });
 
@@ -1457,8 +1439,8 @@
         shotGroupModalContent.innerHTML = renderShotGroupTable(node.data, nodeId);
       }
 
-      showToast('场景设置成功', 'success');
-      try{ autoSaveWorkflow(); } catch(e){}
+      showToast(window.t ? window.t('location_set_success') : '场景设置成功', 'success');
+      safeAutoSave()
     }
     
     // 将 selectLocation 暴露到全局作用域
@@ -1508,7 +1490,7 @@
 
       updateShotGroupNodeDisplay(currentEditingNodeId);
       closeShotGroupEditModal();
-      try{ autoSaveWorkflow(); } catch(e){}
+      safeAutoSave()
     }
 
     function updateShotGroupNodeDisplay(nodeId){
@@ -1587,7 +1569,7 @@
             <div class="btn-row" style="display: flex; gap: 8px; justify-content: flex-start;">
               <div class="gen-container">
                 <button class="gen-btn gen-btn-main shot-group-generate-video-btn" type="button" style="background: #22c55e; color: white;">生成视频</button>
-                <button class="gen-btn gen-btn-caret shot-group-video-caret" type="button" aria-label="选择抽卡次数">▾</button>
+                <button class="gen-btn gen-btn-caret shot-group-video-caret" type="button" aria-label="${window.t ? window.t('draw_count_menu') : '选择抽卡次数'}">▾</button>
                 <div class="gen-menu shot-group-video-menu">
                   <div class="gen-item" data-count="1">X1</div>
                   <div class="gen-item" data-count="2">X2</div>
@@ -1764,10 +1746,16 @@
           const totalPower = singlePower * count;
 
           if(shotGroupComputingPowerValue) {
-            shotGroupComputingPowerValue.textContent = `${totalPower} 算力`;
+            const displayPower = typeof totalPower === 'number' ? totalPower : 0;
+            shotGroupComputingPowerValue.textContent = window.t ? window.t('shot_group_computing_power_value', { power: displayPower }) : `${displayPower} 算力`;
+            shotGroupComputingPowerValue.setAttribute('data-i18n-params', JSON.stringify({ power: displayPower }));
           }
           if(shotGroupComputingPowerDetail) {
-            shotGroupComputingPowerDetail.textContent = `单个 ${singlePower} 算力 × ${count} 个 = ${totalPower} 算力`;
+            const displaySingle = typeof singlePower === 'number' ? singlePower : 0;
+            const displayCount = typeof count === 'number' ? count : 1;
+            const displayTotal = typeof totalPower === 'number' ? totalPower : 0;
+            shotGroupComputingPowerDetail.textContent = window.t ? window.t('shot_group_computing_power_detail', { individual: displaySingle, count: displayCount, total: displayTotal }) : `单个 ${displaySingle} 算力 × ${displayCount} 个 = ${displayTotal} 算力`;
+            shotGroupComputingPowerDetail.setAttribute('data-i18n-params', JSON.stringify({ individual: displaySingle, count: displayCount, total: displayTotal }));
           }
         }
 
@@ -1783,7 +1771,7 @@
         // 抽卡次数菜单
         let videoDrawCount = node.data.videoDrawCount || 1;
         if(shotGroupGenerateVideoBtn) {
-          if(shotGroupDrawCountLabel) shotGroupDrawCountLabel.textContent = `抽卡次数: ${videoDrawCount}`;
+          if(shotGroupDrawCountLabel) shotGroupDrawCountLabel.textContent = window.t ? window.t('draw_count_simple', { count: videoDrawCount }) : `抽卡次数: ${videoDrawCount}`;
           updateVideoComputingPowerDisplay();
           shotGroupGenerateVideoBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -1802,7 +1790,7 @@
               e.stopPropagation();
               videoDrawCount = parseInt(item.dataset.count);
               node.data.videoDrawCount = videoDrawCount;
-              if(shotGroupDrawCountLabel) shotGroupDrawCountLabel.textContent = `抽卡次数: ${videoDrawCount}`;
+              if(shotGroupDrawCountLabel) shotGroupDrawCountLabel.textContent = window.t ? window.t('draw_count_simple', { count: videoDrawCount }) : `抽卡次数: ${videoDrawCount}`;
               updateVideoComputingPowerDisplay();
               shotGroupVideoMenu.style.display = 'none';
             });
@@ -1825,7 +1813,8 @@
 
       const titleEl = el.querySelector('.node-title');
       if(titleEl){
-        titleEl.textContent = node.title;
+        titleEl.setAttribute('data-i18n-params', JSON.stringify({ title: escapeHtml(node.title) }));
+        if(window.ZJTi18nDOM) window.ZJTi18nDOM.scanDOM(titleEl);
       }
     }
 
@@ -2058,7 +2047,7 @@
       if(typeof window.openPropsModalForShot === 'function'){
         await window.openPropsModalForShot();
       } else {
-        showToast('道具选择功能未初始化', 'error');
+        showToast(window.t ? window.t('props_selector_not_init') : '道具选择功能未初始化', 'error');
       }
     }
     
@@ -2077,8 +2066,8 @@
         shotGroupModalContent.innerHTML = renderShotGroupTable(node.data, nodeId);
       }
       
-      try{ autoSaveWorkflow(); } catch(e){}
-      showToast('已删除道具', 'success');
+      safeAutoSave()
+      showToast(window.t ? window.t('prop_removed') : '已删除道具', 'success');
     }
 
     async function selectLocationForShotDetail(nodeId, shotIndex){
@@ -2260,7 +2249,7 @@
       if(typeof window.openPropsModalForShot === 'function'){
         await window.openPropsModalForShot();
       } else {
-        showToast('道具选择功能未初始化', 'error');
+        showToast(window.t ? window.t('props_selector_not_init') : '道具选择功能未初始化', 'error');
       }
     }
     
@@ -2282,8 +2271,8 @@
         shotGroupModalContent.innerHTML = renderShotGroupTable(node.data, nodeId);
       }
       
-      try{ autoSaveWorkflow(); } catch(e){}
-      showToast('已移除道具', 'success');
+      safeAutoSave()
+      showToast(window.t ? window.t('prop_removed') : '已移除道具', 'success');
     }
     
     // 添加道具到分镜（供 events.js 调用）
@@ -2301,7 +2290,7 @@
       // 检查是否已存在该道具
       const exists = shot.props.some(p => p.id === props.id);
       if(exists){
-        showToast('该道具已添加', 'warning');
+        showToast(window.t ? window.t('prop_already_added') : '该道具已添加', 'warning');
         return;
       }
       
@@ -2333,8 +2322,8 @@
       document.getElementById('propsModal').classList.remove('show');
       window.currentPropsSelectionContext = null;
       
-      try{ autoSaveWorkflow(); } catch(e){}
-      showToast('已添加道具', 'success');
+      safeAutoSave()
+      showToast(window.t ? window.t('prop_added') : '已添加道具', 'success');
     };
 
     function escapeHtml(value){
@@ -2453,10 +2442,7 @@
       state.connections = state.connections.filter(c => c.id !== connId);
       if(state.selectedConnId === connId) state.selectedConnId = null;
       hideConnDeleteBtn();
-      renderConnections();
-      renderImageConnections();
-      renderFirstFrameConnections();
-      renderVideoConnections();
+      renderAllConnections();
       renderReferenceConnections();
       
       // 如果删除的连接涉及分镜节点，更新其预览图和选择菜单
@@ -2663,10 +2649,7 @@
           e.stopPropagation();
           state.selectedConnId = null;
           state.selectedImgConnId = connId;  // 使用保存的connId
-          renderConnections();
-          renderImageConnections();
-          renderFirstFrameConnections();
-          renderVideoConnections();
+          renderAllConnections();
         });
         
         // 显示删除按钮（计算贝塞尔曲线t=0.5处的实际位置）
@@ -2781,10 +2764,7 @@
           state.selectedImgConnId = null;
           state.selectedFirstFrameConnId = null;
           state.selectedVideoConnId = conn.id;
-          renderConnections();
-          renderImageConnections();
-          renderFirstFrameConnections();
-          renderVideoConnections();
+          renderAllConnections();
         });
         
         // 显示删除按钮（计算贝塞尔曲线t=0.5处的实际位置）
@@ -2891,12 +2871,7 @@
             state.selectedVideoConnId = null;
             state.selectedReferenceConnId = null;
             state.selectedAudioConnId = conn.id;
-            renderConnections();
-            renderImageConnections();
-            renderFirstFrameConnections();
-            renderVideoConnections();
-            renderReferenceConnections();
-            renderAudioConnections();
+            renderAllConnections();
           });
 
           if(state.selectedAudioConnId === conn.id){
@@ -2992,10 +2967,7 @@
           state.selectedFirstFrameConnId = null;
           state.selectedVideoConnId = null;
           state.selectedReferenceConnId = conn.id;
-          renderConnections();
-          renderImageConnections();
-          renderFirstFrameConnections();
-          renderVideoConnections();
+          renderAllConnections();
           renderReferenceConnections();
         });
         
@@ -3094,10 +3066,7 @@
           state.selectedConnId = null;
           state.selectedImgConnId = null;
           state.selectedFirstFrameConnId = conn.id;
-          renderConnections();
-          renderImageConnections();
-          renderFirstFrameConnections();
-          renderVideoConnections();
+          renderAllConnections();
         });
         
         // 显示删除按钮
@@ -3135,7 +3104,7 @@
       const node = {
         id,
         type: 'image_to_video',
-        title: '图生视频',
+        title: window.t ? window.t('image_to_video') : '生视频',
         x,
         y,
         data: {
@@ -3174,20 +3143,21 @@
       el.style.top = node.y + 'px';
 
       el.innerHTML = `
-        <div class="port output" title="输出（连接到视频节点）"></div>
+        <div class="port output" title="${window.t ? window.t('image_to_video_output_port') : '输出（连接到视频节点）'}"></div>
         <div class="node-header">
           <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="3" y="6" width="14" height="12" rx="2"/><path d="M17 10L21 8V16L17 14V10Z" fill="currentColor"/></svg>${node.title}</div>
-          <button class="icon-btn" title="删除">×</button>
+          <button class="icon-btn" title="${window.t ? window.t('node_delete_btn') : '删除'}">×</button>
         </div>
         <div class="node-body">
           <div class="video-node-body">
             <!-- 左栏：输入源 -->
             <div class="video-section">
               <div class="field field-collapsible image-mode-field">
-                <div class="label">图片模式</div>
+                <div class="label">${window.t ? window.t('image_mode_label') : '图片模式'}</div>
                 <select class="image-mode-select">
-                  <option value="first_last_frame">首尾帧模式</option>
-                  <option value="multi_reference">多参考图模式</option>
+                  <option value="first_last_frame">${window.t ? window.t('image_mode_first_last') : '首尾帧模式'}</option>
+                  <option value="multi_reference">${window.t ? window.t('image_mode_multi_ref') : '多参考图模式'}</option>
+                  <option value="text_to_video">${window.t ? window.t('image_mode_text_to_video') : '文生视频'}</option>
                 </select>
                 <div class="image-mode-hint" style="font-size: 11px; color: #6b7280; margin-top: 4px;"></div>
               </div>
@@ -3195,20 +3165,20 @@
               <div class="field field-collapsible first-last-frame-tabs-container" style="display: none;">
                 <!-- 首帧 -->
                 <div class="video-frame-content active" data-frame="start">
-                  <div class="label" style="margin-bottom: 4px;">首帧</div>
-                  <div class="port start-image-port port-anchor-start" data-port-type="start" title="连接图片节点（首帧）" style="position: relative; margin-bottom: 4px;"></div>
+                  <div class="label" style="margin-bottom: 4px;" data-i18n="first_frame_label">${window.t ? window.t('first_frame_label') : '首帧'}</div>
+                  <div class="port start-image-port port-anchor-start" data-port-type="start" title="${window.t ? window.t('first_frame_label') : '连接图片节点（首帧）'}" style="position: relative; margin-bottom: 4px;"></div>
                   <input class="start-file" type="file" accept="image/*" />
-                  <button class="mini-btn start-clear" type="button">清除</button>
+                  <button class="mini-btn start-clear" type="button" data-i18n="node_clear_btn">${window.t ? window.t('node_clear_btn') : '清除'}</button>
                   <div class="preview-row start-preview-row" style="display:none; margin-top: 8px;">
                     <img class="preview start-preview" />
                   </div>
                 </div>
                 <!-- 尾帧 -->
                 <div class="video-frame-content active" data-frame="end" style="margin-top: 8px;">
-                  <div class="label" style="margin-bottom: 4px;">尾帧</div>
-                  <div class="port end-image-port port-anchor-end" data-port-type="end" title="连接图片节点（尾帧）" style="position: relative; margin-bottom: 4px;"></div>
+                  <div class="label" style="margin-bottom: 4px;" data-i18n="last_frame_label">${window.t ? window.t('last_frame_label') : '尾帧'}</div>
+                  <div class="port end-image-port port-anchor-end" data-port-type="end" title="${window.t ? window.t('last_frame_label') : '连接图片节点（尾帧）'}" style="position: relative; margin-bottom: 4px;"></div>
                   <input class="end-file" type="file" accept="image/*" />
-                  <button class="mini-btn end-clear" type="button">清除</button>
+                  <button class="mini-btn end-clear" type="button" data-i18n="node_clear_btn">${window.t ? window.t('node_clear_btn') : '清除'}</button>
                   <div class="preview-row end-preview-row" style="display:none; margin-top: 8px;">
                     <img class="preview end-preview" />
                   </div>
@@ -3216,41 +3186,41 @@
               </div>
               <!-- 参考图片（多参考模式） -->
               <div class="field field-collapsible reference-fields" style="display:none; position: relative;">
-                <div class="port ref-image-input-port" data-port-type="ref-image" title="连接图片节点（参考图）"></div>
-                <div class="label ref-images-label">参考图片 (1-5张)<span class="req">*</span></div>
+                <div class="port ref-image-input-port" data-port-type="ref-image" title="${window.t ? window.t('reference_frame_port') : '连接图片节点（参考图）'}"></div>
+                <div class="label ref-images-label" data-i18n="reference_images_label">${window.t ? window.t('reference_images_label') : '参考图片 (1-5张)'}<span class="req">*</span></div>
                 <input class="reference-file" type="file" accept="image/*" multiple />
-                <button class="mini-btn reference-clear" type="button" style="margin-top: 4px;">清除全部</button>
+                <button class="mini-btn reference-clear" type="button" style="margin-top: 4px;" data-i18n="clear_all_btn">${window.t ? window.t('clear_all_btn') : '清除全部'}</button>
                 <div class="ref-images-counter" style="font-size: 11px; color: var(--muted); margin-top: 4px; display: none;"></div>
                 <div class="reference-preview-list" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;"></div>
               </div>
               <!-- 参考音频 -->
               <div class="field field-collapsible audio-field" style="position: relative;">
-                <div class="port audio-input-port" data-port-type="audio" title="连接音频节点"></div>
-                <div class="label">参考音频（可选，支持多个）</div>
+                <div class="port audio-input-port" data-port-type="audio" title="${window.t ? window.t('audio') : '连接音频节点'}"></div>
+                <div class="label" data-i18n="reference_audio_label">${window.t ? window.t('reference_audio_label') : '参考音频（可选，支持多个）'}</div>
                 <input class="audio-file" type="file" accept="audio/*" multiple />
-                <button class="mini-btn audio-clear-all" type="button" style="margin-top: 4px;">清除全部</button>
+                <button class="mini-btn audio-clear-all" type="button" style="margin-top: 4px;" data-i18n="clear_all_btn">${window.t ? window.t('clear_all_btn') : '清除全部'}</button>
                 <div class="audio-preview-list"></div>
               </div>
               <!-- 参考视频 -->
               <div class="field field-collapsible video-field" style="position: relative;">
-                <div class="port video-ref-input-port" data-port-type="video-ref" title="连接视频节点"></div>
-                <div class="label">参考视频（可选，支持多个）</div>
+                <div class="port video-ref-input-port" data-port-type="video-ref" title="${window.t ? window.t('video') : '连接视频节点'}"></div>
+                <div class="label" data-i18n="reference_video_label">${window.t ? window.t('reference_video_label') : '参考视频（可选，支持多个）'}</div>
                 <input class="video-file" type="file" accept="video/*" multiple />
-                <button class="mini-btn video-clear-all" type="button" style="margin-top: 4px;">清除全部</button>
+                <button class="mini-btn video-clear-all" type="button" style="margin-top: 4px;" data-i18n="clear_all_btn">${window.t ? window.t('clear_all_btn') : '清除全部'}</button>
                 <div class="video-preview-list"></div>
               </div>
             </div>
             <!-- 右栏：配置参数与执行 -->
             <div class="video-section">
               <div class="field field-collapsible">
-                <div class="label">视频长度</div>
+                <div class="label" data-i18n="video_length_label">${window.t ? window.t('video_length_label') : '视频长度'}</div>
                 <select class="duration-select">
-                  <option value="5" selected>5秒</option>
-                  <option value="10">10秒</option>
+                  <option value="5" selected data-i18n="duration_5s">${window.t ? window.t('duration_5s') : '5秒'}</option>
+                  <option value="10" data-i18n="duration_10s">${window.t ? window.t('duration_10s') : '10秒'}</option>
                 </select>
               </div>
               <div class="field field-collapsible">
-                <div class="label">视频比例</div>
+                <div class="label" data-i18n="video_ratio_label">${window.t ? window.t('video_ratio_label') : '视频比例'}</div>
                 <select class="ratio-select">
                   <option value="9:16">9:16</option>
                   <option value="3:4">3:4</option>
@@ -3260,31 +3230,31 @@
                 </select>
               </div>
               <div class="field field-collapsible">
-                <div class="label">视频模型</div>
+                <div class="label" data-i18n="video_model_label">${window.t ? window.t('video_model_label') : '视频模型'}</div>
                 <select class="video-model-select"></select>
               </div>
               <div class="field field-collapsible">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                  <div class="label" style="margin: 0;">提示词</div>
-                  <button class="mini-btn prompt-expand-btn" type="button" style="font-size: 11px; padding: 4px 8px;" title="放大编辑">⤢</button>
+                  <div class="label" style="margin: 0;" data-i18n="prompt_label">${window.t ? window.t('prompt_label') : '提示词'}</div>
+                  <button class="mini-btn prompt-expand-btn" type="button" style="font-size: 11px; padding: 4px 8px;" title="${window.t ? window.t('script_expand_btn') : '放大编辑'}" data-i18n="script_expand_btn:title">⤢</button>
                 </div>
-                <textarea class="prompt" placeholder="请输入提示词，输入 @ 引用媒体文件..." rows="6" style="resize: vertical; min-height: 120px; font-size: 11px;"></textarea>
-                <div style="font-size: 10px; color: var(--muted); margin-top: 4px;">💡 输入 @ 引用资源</div>
+                <textarea class="prompt" placeholder="${window.t ? window.t('prompt_placeholder') : '请输入提示词，输入 @ 引用媒体文件...'}" data-i18n="prompt_placeholder:placeholder" rows="6" style="resize: vertical; min-height: 120px; font-size: 11px;"></textarea>
+                <div style="font-size: 10px; color: var(--muted); margin-top: 4px;" data-i18n="prompt_tip">${window.t ? window.t('prompt_tip') : '💡 输入 @ 引用资源'}</div>
                 <div class="prompt-char-count" style="text-align: right; font-size: 11px; color: var(--muted); margin-top: 2px;">0 字符</div>
               </div>
               <div class="field field-collapsible computing-power-field" style="padding: 6px; border-radius: 6px;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <span style="color: #9ca3af; font-size: 12px;">算力消耗：</span>
-                  <span class="computing-power-value" style="color: #60a5fa; font-weight: bold; font-size: 14px;">0 算力</span>
+                  <span style="color: #9ca3af; font-size: 12px;" data-i18n="computing_power_label">${window.t ? window.t('computing_power_label') : '算力消耗：'}</span>
+                  <span class="computing-power-value" style="color: #60a5fa; font-weight: bold; font-size: 14px;" data-i18n="computing_power_value" data-i18n-params='{"power":0}'>${window.t ? window.t('computing_power_value', { power: 0 }) : '0 算力'}</span>
                 </div>
-                <div class="computing-power-detail" style="margin-top: 4px; font-size: 11px; color: #6b7280;">
-                  单个 0 算力 × 1 个 = 0 算力
+                <div class="computing-power-detail" style="margin-top: 4px; font-size: 11px; color: #6b7280;" data-i18n="computing_power_detail" data-i18n-params='{"individual":0,"count":1,"total":0}'>
+                  ${window.t ? window.t('computing_power_detail', { individual: 0, count: 1, total: 0 }) : '单个 0 算力 × 1 个 = 0 算力'}
                 </div>
               </div>
               <div class="field field-collapsible">
                 <div class="gen-container">
-                  <button class="gen-btn gen-btn-main" type="button">生成视频</button>
-                  <button class="gen-btn gen-btn-caret" type="button" aria-label="选择抽卡次数">▾</button>
+                  <button class="gen-btn gen-btn-main" type="button" data-i18n="generate_video_btn">${window.t ? window.t('generate_video_btn') : '生成视频'}</button>
+                  <button class="gen-btn gen-btn-caret" type="button" aria-label="${window.t ? window.t('draw_count_menu') : '选择抽卡次数'}" data-i18n="draw_count_menu:aria-label">▾</button>
                   <div class="gen-menu">
                     <div class="gen-item" data-count="1">X1</div>
                     <div class="gen-item" data-count="2">X2</div>
@@ -3351,27 +3321,33 @@
         const modelConfigs = getModelConfigs();
         const currentValue = node.data.videoModel || videoModelSelect.value;
         videoModelSelect.innerHTML = '';
-        
+
         if(window.TaskConfig && window.TaskConfig.isLoaded()) {
-          const options = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+          const category = currentMode === 'text_to_video' ? 'text_to_video' : 'image_to_video';
+          const options = window.TaskConfig.getModelOptionsForCategory(category);
           let firstAvailable = null;
-          
+
           options.forEach(opt => {
-            const config = modelConfigs[opt.value];
-            const supportedModes = config?.supported_image_modes || ['first_last_frame'];
-            const supportsCurrentMode = supportedModes.includes(currentMode);
-            
             const optEl = document.createElement('option');
             optEl.value = opt.value;
-            optEl.textContent = supportsCurrentMode ? opt.label : opt.label + ' (不支持当前模式)';
-            optEl.disabled = !supportsCurrentMode;
-            videoModelSelect.appendChild(optEl);
-            
-            if(supportsCurrentMode && !firstAvailable) {
-              firstAvailable = opt.value;
+
+            if(currentMode === 'text_to_video') {
+              // 文生视频模式：所有模型都可用
+              optEl.textContent = opt.label;
+              videoModelSelect.appendChild(optEl);
+              if(!firstAvailable) firstAvailable = opt.value;
+            } else {
+              // 图生视频模式：检查 supported_image_modes
+              const config = modelConfigs[opt.value];
+              const supportedModes = config?.supported_image_modes || ['first_last_frame'];
+              const supportsCurrentMode = supportedModes.includes(currentMode);
+              optEl.textContent = supportsCurrentMode ? opt.label : opt.label + ' (不支持当前模式)';
+              optEl.disabled = !supportsCurrentMode;
+              videoModelSelect.appendChild(optEl);
+              if(supportsCurrentMode && !firstAvailable) firstAvailable = opt.value;
             }
           });
-          
+
           firstVideoModelValue = firstAvailable || options[0]?.value || 'wan22';
         } else {
           // 回退：硬编码选项
@@ -3416,7 +3392,8 @@
       // 图片模式切换逻辑
       const imageModeHints = {
         'first_last_frame': '第一张为首帧，第二张（可选）为尾帧',
-        'multi_reference': '所有图片作为参考'
+        'multi_reference': '所有图片作为参考',
+        'text_to_video': '纯文本生成视频，无需上传图片'
       };
 
       // 获取当前模型的最大参考图数量
@@ -3600,12 +3577,13 @@
         updateImageModeUI();
         // 重新填充视频模型选项（根据新的图片模式筛选）
         populateVideoModelOptions();
+        // 更新时长和比例选项（新模型可能有不同的支持范围）
+        updateDurationOptions(node.data.videoModel);
+        updateRatioOptions(node.data.videoModel);
         // 更新算力显示
         updateComputingPowerDisplay();
         // 重新渲染连接线
-        renderImageConnections();
-        renderAudioConnections();
-        renderVideoConnections();
+        renderAllConnections();
       });
       
       // 多参考图上传处理
@@ -3618,7 +3596,7 @@
         const canAdd = maxCount - currentCount;
 
         if(canAdd <= 0) {
-          showToast(`已达到最大数量${maxCount}张参考图，请先删除一些图片`, 'error');
+          showToast(window.t ? window.t('max_reference_images').replace('${maxCount}', maxCount) : `已达到最大数量${maxCount}张参考图，请先删除一些图片`, 'error');
           referenceFileEl.value = '';
           return;
         }
@@ -3627,7 +3605,7 @@
 
         // 超出限制时提示还能添加几张
         if(selectedFiles.length > canAdd) {
-          showToast(`最多还能添加${canAdd}张参考图，已自动截取前${canAdd}张`, 'info');
+          showToast(window.t ? window.t('auto_truncate_images').replace('${canAdd}', canAdd) : `最多还能添加${canAdd}张参考图，已自动截取前${canAdd}张`, 'info');
         }
 
         const filesToUpload = selectedFiles.slice(0, canAdd);
@@ -3635,7 +3613,7 @@
 
         // 上传过程中禁用文件输入并显示进度
         referenceFileEl.disabled = true;
-        showToast(`正在上传参考图 (0/${totalToUpload})...`, 'info');
+        showToast(window.t ? window.t('uploading_reference_image').replace('${totalToUpload}', totalToUpload) : `正在上传参考图 (0/${totalToUpload})...`, 'info');
 
         let uploadedCount = 0;
         for(const file of filesToUpload) {
@@ -3646,7 +3624,7 @@
           }
           uploadedCount++;
           if(totalToUpload > 1 && uploadedCount < totalToUpload) {
-            showToast(`正在上传参考图 (${uploadedCount}/${totalToUpload})...`, 'info');
+            showToast(window.t ? window.t('uploading_reference_image_progress').replace('${uploadedCount}', uploadedCount).replace('${totalToUpload}', totalToUpload) : `正在上传参考图 (${uploadedCount}/${totalToUpload})...`, 'info');
           }
         }
 
@@ -3655,7 +3633,7 @@
         referenceFileEl.value = '';
 
         const totalCount = (node.data.referenceUrls || []).length;
-        showToast(`已上传 ${uploadedCount} 张参考图，当前共 ${totalCount}/${maxCount} 张`, 'success');
+        showToast(window.t ? window.t('reference_images_uploaded').replace('${uploadedCount}', uploadedCount).replace('${totalCount}', totalCount).replace('${maxCount}', maxCount) : `已上传 ${uploadedCount} 张参考图，当前共 ${totalCount}/${maxCount} 张`, 'success');
       });
       
       referenceClearBtn.addEventListener('click', (e) => {
@@ -3705,7 +3683,7 @@
             }
           }
           renderAudioPreview();
-          showToast('音频上传成功', 'success');
+          showToast(window.t ? window.t('audio_file_upload_success') : '音频上传成功', 'success');
         }
         audioFileEl.value = '';
       });
@@ -3725,7 +3703,7 @@
         node.data.videoUrls.forEach((item, idx) => {
           const el = document.createElement('div');
           el.className = 'media-item';
-          el.innerHTML = `<span class="media-name" title="${item.name}">🎬 视频${idx + 1}</span><span class="remove-btn">×</span>`;
+          el.innerHTML = `<span class="media-name" title="${item.name}">🎬 ${window.t ? window.t('video') : '视频'}${idx + 1}</span><span class="remove-btn">×</span>`;
           el.querySelector('.remove-btn').addEventListener('click', (e) => {
             e.stopPropagation();
             const removedUrl = item.url;
@@ -3755,7 +3733,7 @@
             }
           }
           renderVideoPreview();
-          showToast('视频上传成功', 'success');
+          showToast(window.t ? window.t('video_file_upload_success') : '视频上传成功', 'success');
         }
         videoFileEl.value = '';
       });
@@ -3837,10 +3815,12 @@
         const totalPower = singlePower * count;
 
         if(computingPowerValue) {
-          computingPowerValue.textContent = `${totalPower} 算力`;
+          computingPowerValue.textContent = window.t ? window.t('computing_power_value', { power: totalPower }) : `${totalPower} 算力`;
+          computingPowerValue.setAttribute('data-i18n-params', JSON.stringify({ power: totalPower }));
         }
         if(computingPowerDetail) {
-          computingPowerDetail.textContent = `单个 ${singlePower} 算力 × ${count} 个 = ${totalPower} 算力`;
+          computingPowerDetail.textContent = window.t ? window.t('computing_power_detail', { individual: singlePower, count: count, total: totalPower }) : `单个 ${singlePower} 算力 × ${count} 个 = ${totalPower} 算力`;
+          computingPowerDetail.setAttribute('data-i18n-params', JSON.stringify({ individual: singlePower, count: count, total: totalPower }));
         }
       }
 
@@ -3860,6 +3840,7 @@
           startPreviewImg.removeAttribute('src');
           startImagePort.classList.remove('disabled');
         }
+        adjustFramePreviewHeight();
       }
 
       // 尾帧预览更新函数
@@ -3873,6 +3854,15 @@
           endPreviewImg.removeAttribute('src');
           endImagePort.classList.remove('disabled');
         }
+        adjustFramePreviewHeight();
+      }
+
+      // 首帧和尾帧同时存在时，预览图高度减半
+      function adjustFramePreviewHeight(){
+        const bothVisible = startPreviewRow.style.display !== 'none' && endPreviewRow.style.display !== 'none';
+        const maxHeight = bothVisible ? '100px' : '200px';
+        if(startPreviewImg) startPreviewImg.style.maxHeight = maxHeight;
+        if(endPreviewImg) endPreviewImg.style.maxHeight = maxHeight;
       }
 
       // 保存预览更新函数的引用到元素上，便于外部调用
@@ -4097,7 +4087,7 @@
       */
 
       function updateGenMeta(){
-        genCountLabel.textContent = `抽卡次数：X${node.data.drawCount}`;
+        { const _t = window.t ? window.t('draw_count_x', { count: node.data.drawCount }) : null; genCountLabel.textContent = (_t && _t !== 'draw_count_x') ? _t : `抽卡次数：X${node.data.drawCount}`; }
         // 同时更新算力显示
         updateComputingPowerDisplay();
       }
@@ -4135,8 +4125,8 @@
         if(!prompt){
           genStatus.style.display = 'block';
           genStatus.style.color = '#dc2626';
-          genStatus.textContent = '请先输入提示词';
-          showToast('请先输入提示词', 'error');
+          genStatus.textContent = window.t ? window.t('input_prompt_first') : '请先输入提示词';
+          showToast(window.t ? window.t('input_prompt_first') : '请先输入提示词', 'error');
           return;
         }
 
@@ -4144,8 +4134,10 @@
         let imageUrls = '';
         let referenceImages = '';
         const currentImageMode = node.data.imageMode || 'first_last_frame';
-        
-        if(currentImageMode === 'first_last_frame') {
+
+        if(currentImageMode === 'text_to_video') {
+          // 文生视频模式：不需要图片，直接跳过
+        } else if(currentImageMode === 'first_last_frame') {
           // 首尾帧模式
           let startImageUrl = '';
           if(node.data.startUrl){
@@ -4197,8 +4189,7 @@
         }
 
         // 禁用按钮
-        genBtnMain.disabled = true;
-        genBtnMain.textContent = '生成中...';
+        setBtnLoading(genBtnMain, '生成中...');
         genStatus.style.color = '';
         genStatus.style.display = 'block';
         genStatus.textContent = '正在提交任务...';
@@ -4238,7 +4229,12 @@
           }));
 
           // 调用生成API
-          const result = await generateVideoFromImage(imageUrls, prompt, duration, desiredCount, ratio, videoModel, currentImageMode, referenceImages, allAudioUrls.join(','), allVideoUrls.join(','), JSON.stringify(mediaReferences));
+          let result;
+          if(currentImageMode === 'text_to_video') {
+            result = await generateVideoFromText(prompt, duration, desiredCount, ratio, videoModel);
+          } else {
+            result = await generateVideoFromImage(imageUrls, prompt, duration, desiredCount, ratio, videoModel, currentImageMode, referenceImages, allAudioUrls.join(','), allVideoUrls.join(','), JSON.stringify(mediaReferences));
+          }
           console.log('[DEBUG] API返回:', { projectIds: result.projectIds, count: result.projectIds?.length });
           
           genStatus.textContent = '任务已提交，正在生成视频...';
@@ -4279,12 +4275,9 @@
           // 所有视频节点ID（只包含新创建的节点）
           const allVideoNodeIds = [...newVideoNodeIds];
 
-          renderConnections();
-          renderImageConnections();
-          renderFirstFrameConnections();
-          renderVideoConnections();
+          renderAllConnections();
           renderMinimap();
-          try{ autoSaveWorkflow(); } catch(e){}
+          safeAutoSave()
 
           // 为每个视频节点初始化状态显示
           allVideoNodeIds.forEach((videoNodeId, idx) => {
@@ -4294,8 +4287,7 @@
               const statusEl = videoEl.querySelector('.video-status');
               if(statusField && statusEl){
                 statusField.style.display = 'block';
-                statusEl.style.color = '';
-                statusEl.textContent = '生成中...';
+                setStatusEl(statusEl, '生成中...');
               }
             }
           });
@@ -4312,8 +4304,7 @@
                 console.log('[TEST MODE] onComplete raw result:', statusResult);
               }
 
-              genBtnMain.disabled = false;
-              genBtnMain.textContent = '生成视频';
+              setBtnReady(genBtnMain, '生成视频');
               
               const tasks = statusResult.tasks || [];
               let successCount = 0;
@@ -4347,12 +4338,7 @@
                     console.log(`[图生视频] 视频节点 ${videoNodeId} 绑定 project_id:`, videoNode.data.project_id, '来源:', node.data.projectIds, 'index:', idx);
                     
                     if(previewField && thumbVideo && nameEl){
-                      thumbVideo.src = proxyDownloadUrl(videoUrl);
-                      thumbVideo.muted = true;
-                      thumbVideo.loop = true;
-                      thumbVideo.controls = false;
-                      thumbVideo.preload = 'metadata';
-                      thumbVideo.playsInline = true;
+                      setupVideoThumbnail(thumbVideo, videoUrl);
                       thumbVideo.onloadedmetadata = () => {
                         try{
                           if(isFinite(thumbVideo.duration) && thumbVideo.duration > 0){
@@ -4374,13 +4360,11 @@
                     }
                     
                     if(statusField && statusEl){
-                      statusEl.style.color = '#16a34a';
-                      statusEl.textContent = '✓ 生成成功';
+                      setStatusEl(statusEl, '✓ 生成成功', '#16a34a');
                     }
                   } else {
                     if(statusField && statusEl){
-                      statusEl.style.color = '#dc2626';
-                      statusEl.textContent = '✗ 生成成功但未返回视频地址';
+                      setStatusEl(statusEl, '✗ 生成成功但未返回视频地址', '#dc2626');
                     }
                   }
                 } else if(task.status === 'FAILED'){
@@ -4396,12 +4380,12 @@
                 // 全部成功
                 genStatus.style.color = '#16a34a';
                 genStatus.textContent = `全部成功！共${successCount}个视频`;
-                showToast('视频生成成功！', 'success');
+                showToast(window.t ? window.t('video_generation_success') : '视频生成成功！', 'success');
               } else if(failedCount === totalCount && failedCount > 0){
                 // 全部失败
                 genStatus.style.color = '#dc2626';
                 genStatus.textContent = `全部失败：${failedCount}个任务失败`;
-                showToast('视频生成失败', 'error');
+                showToast(window.t ? window.t('video_generation_failed') : '视频生成失败', 'error');
               } else if(successCount > 0 && failedCount > 0){
                 // 部分成功部分失败
                 genStatus.style.color = '#f59e0b';
@@ -4414,10 +4398,7 @@
               }
 
               // 视频节点内容已更新，重新渲染连接线
-              renderConnections();
-              renderImageConnections();
-              renderFirstFrameConnections();
-              renderVideoConnections();
+              renderAllConnections();
               renderMinimap();
 
               // 刷新用户算力显示
@@ -4431,8 +4412,7 @@
               const truncatedError = truncateErrorMessage(errorMsg);
               genStatus.style.color = '#dc2626';
               genStatus.textContent = truncatedError;
-              genBtnMain.disabled = false;
-              genBtnMain.textContent = '生成视频';
+              setBtnReady(genBtnMain, '生成视频');
               
               // 更新所有视频节点状态为失败
               allVideoNodeIds.forEach((videoNodeId) => {
@@ -4442,8 +4422,7 @@
                   const statusEl = videoEl.querySelector('.video-status');
                   if(statusField && statusEl){
                     statusField.style.display = 'block';
-                    statusEl.style.color = '#dc2626';
-                    statusEl.textContent = `✗ ${truncatedError}`;
+                    setStatusEl(statusEl, `✗ ${truncatedError}`, '#dc2626');
                   }
                 }
               });
@@ -4472,18 +4451,15 @@
                 // 只更新已经完成（成功或失败）的任务状态
                 if(task.status === 'FAILED'){
                   statusField.style.display = 'block';
-                  statusEl.style.color = '#dc2626';
-                  statusEl.textContent = `✗ 生成失败: ${truncateErrorMessage(task.error) || '未知错误'}`;
+                  setStatusEl(statusEl, `✗ 生成失败: ${truncateErrorMessage(task.error) || '未知错误'}`, '#dc2626');
                 } else if(task.status === 'SUCCESS' && task.result){
                   // 成功的任务在这里只更新状态文本，视频加载留给onComplete处理
                   statusField.style.display = 'block';
-                  statusEl.style.color = '#16a34a';
-                  statusEl.textContent = '✓ 生成成功，加载中...';
+                  setStatusEl(statusEl, '✓ 生成成功，加载中...', '#16a34a');
                 } else if(task.status === 'RUNNING'){
                   // 运行中的任务保持"生成中..."状态
                   statusField.style.display = 'block';
-                  statusEl.style.color = '';
-                  statusEl.textContent = '生成中...';
+                  setStatusEl(statusEl, '生成中...');
                 }
               });
             }
@@ -4494,8 +4470,7 @@
           const truncatedErr = truncateErrorMessage(err.message);
           genStatus.style.color = '#dc2626';
           genStatus.textContent = truncatedErr || '生成失败';
-          genBtnMain.disabled = false;
-          genBtnMain.textContent = '生成视频';
+          setBtnReady(genBtnMain, '生成视频');
           showToast('视频生成失败: ' + truncatedErr, 'error');
         }
       });
@@ -4731,10 +4706,9 @@
           // 删除该端口的连接
           state.imageConnections = state.imageConnections.filter(c => !(c.to === id && c.portType === 'start'));
           startImagePort.classList.add('disabled');
-          renderImageConnections();
-          renderVideoConnections();
+          renderAllConnections();
           updateComputingPowerDisplay();  // 更新算力显示
-          showToast('首帧图片上传成功', 'success');
+          showToast(window.t ? window.t('first_frame_upload_success') : '首帧图片上传成功', 'success');
         } else {
           startPreviewRow.style.display = 'none';
           startPreviewImg.removeAttribute('src');
@@ -4760,10 +4734,9 @@
           // 删除该端口的连接
           state.imageConnections = state.imageConnections.filter(c => !(c.to === id && c.portType === 'end'));
           endImagePort.classList.add('disabled');
-          renderImageConnections();
-          renderVideoConnections();
+          renderAllConnections();
           updateComputingPowerDisplay();  // 更新算力显示
-          showToast('尾帧图片上传成功', 'success');
+          showToast(window.t ? window.t('last_frame_upload_success') : '尾帧图片上传成功', 'success');
         } else {
           endPreviewRow.style.display = 'none';
           endPreviewImg.removeAttribute('src');
@@ -4781,9 +4754,10 @@
         startPreviewRow.style.display = 'none';
         startPreviewImg.removeAttribute('src');
         startImagePort.classList.remove('disabled');
+        adjustFramePreviewHeight();
         renderImageConnections();
         updateComputingPowerDisplay();  // 更新算力显示
-        try{ autoSaveWorkflow(); } catch(e){}
+        safeAutoSave()
       });
 
       endClearBtn.addEventListener('click', (e) => {
@@ -4796,9 +4770,10 @@
         endPreviewRow.style.display = 'none';
         endPreviewImg.removeAttribute('src');
         endImagePort.classList.remove('disabled');
+        adjustFramePreviewHeight();
         renderImageConnections();
         updateComputingPowerDisplay();  // 更新算力显示
-        try{ autoSaveWorkflow(); } catch(e){}
+        safeAutoSave()
       });
 
       // 初始化：恢复已保存的图片预览
@@ -4815,8 +4790,14 @@
 
       // 添加调试按钮
       addDebugButtonToNode(el, node);
-      
+
       canvasEl.appendChild(el);
+
+      // i18n: 翻译节点内 DOM
+      if (typeof window.ZJTi18nDOM !== 'undefined') {
+        setTimeout(() => window.ZJTi18nDOM.scanDOM(el), 0);
+      }
+
       setSelected(id);
       return id;
     }
@@ -4845,7 +4826,7 @@
       const node = {
         id,
         type: 'image',
-        title: '图片',
+        title: window.t ? window.t('image') : '图片',
         x,
         y,
         data: {
@@ -4869,12 +4850,12 @@
       el.style.top = node.y + 'px';
 
       el.innerHTML = `
-        <div class="port reference" title="参考端口（接收其他图片作为参考）"></div>
-        <div class="port input" title="输入（连接分镜节点）"></div>
-        <div class="port output" title="输出（连接到图生视频节点）"></div>
+        <div class="port reference" title="${window.t ? window.t('image_node_reference_port') : '参考端口（接收其他图片作为参考）'}"></div>
+        <div class="port input" title="${window.t ? window.t('image_node_input_port') : '输入（连接分镜节点）'}"></div>
+        <div class="port output" title="${window.t ? window.t('image_node_output_port') : '输出（连接到图生视频节点）'}"></div>
         <div class="node-header">
-          <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M7 15L10 12L13 15L16 11L20 17H4L7 15Z" fill="currentColor" opacity="0.35"/></svg>${node.title}</div>
-          <button class="icon-btn" title="删除">×</button>
+          <div class="node-title" data-i18n="image"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M7 15L10 12L13 15L16 11L20 17H4L7 15Z" fill="currentColor" opacity="0.35"/></svg>${window.t ? window.t('image') : '图片'}</div>
+          <button class="icon-btn" title="${window.t ? window.t('node_delete_btn') : '删除'}">×</button>
         </div>
         <div class="node-body">
           <div class="field field-always-visible">
@@ -4884,47 +4865,47 @@
           </div>
           <div class="reference-images-section" style="display:none;">
             <div class="reference-images-header">
-              <span>参考图片 (<span class="reference-images-count">0</span>)</span>
+              <span data-i18n="image_node_reference_images">${window.t ? window.t('image_node_reference_images') : '参考图片'} (<span class="reference-images-count">0</span>)</span>
             </div>
             <div class="reference-images-grid"></div>
           </div>
           <div class="field field-collapsible">
-            <div class="label">上传图片</div>
+            <div class="label" data-i18n="image_node_upload_label">${window.t ? window.t('image_node_upload_label') : '上传图片'}</div>
             <input class="image-file" type="file" accept="image/*" />
             <div style="display: flex; gap: 8px; margin-top: 8px;">
-              <button class="mini-btn image-clear" type="button">清除</button>
-              <button class="mini-btn image-download-icon-btn" type="button">下载</button>
+              <button class="mini-btn image-clear" type="button" data-i18n="image_node_clear_btn">${window.t ? window.t('image_node_clear_btn') : '清除'}</button>
+              <button class="mini-btn image-download-icon-btn" type="button" data-i18n="image_node_download_btn">${window.t ? window.t('image_node_download_btn') : '下载'}</button>
             </div>
           </div>
           <div class="field field-collapsible">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-              <div class="label" style="margin: 0;">编辑提示词（可选）</div>
-              <button class="mini-btn image-prompt-expand-btn" type="button" style="font-size: 11px; padding: 4px 8px;" title="放大编辑">⤢</button>
+              <div class="label" style="margin: 0;" data-i18n="image_node_prompt_label">${window.t ? window.t('image_node_prompt_label') : '编辑提示词（可选）'}</div>
+              <button class="mini-btn image-prompt-expand-btn" type="button" style="font-size: 11px; padding: 4px 8px;" title="${window.t ? window.t('script_expand_btn') : '放大编辑'}" data-i18n="script_expand_btn:title">⤢</button>
             </div>
-            <textarea class="image-prompt" rows="2" placeholder="输入提示词进行图片编辑"></textarea>
+            <textarea class="image-prompt" rows="2" placeholder="${window.t ? window.t('image_node_prompt_placeholder') : '输入提示词进行图片编辑'}" data-i18n="image_node_prompt_placeholder:placeholder"></textarea>
           </div>
           <div class="field field-collapsible">
-            <div class="label">模型</div>
+            <div class="label" data-i18n="image_node_model_label">${window.t ? window.t('image_node_model_label') : '模型'}</div>
             <select class="image-model"></select>
           </div>
           <div class="field field-collapsible">
-            <div class="label">图片比例</div>
+            <div class="label" data-i18n="image_node_ratio_label">${window.t ? window.t('image_node_ratio_label') : '图片比例'}</div>
             <select class="image-ratio">
-              <option value="9:16">竖屏 (9:16)</option>
-              <option value="16:9">横屏 (16:9)</option>
-              <option value="1:1">正方形 (1:1)</option>
-              <option value="3:4">竖屏 (3:4)</option>
-              <option value="4:3">横屏 (4:3)</option>
+              <option value="9:16" data-i18n="image_ratio_portrait_9_16">${window.t ? window.t('image_ratio_portrait_9_16') : '竖屏 (9:16)'}</option>
+              <option value="16:9" data-i18n="image_ratio_landscape_16_9">${window.t ? window.t('image_ratio_landscape_16_9') : '横屏 (16:9)'}</option>
+              <option value="1:1" data-i18n="image_ratio_square_1_1">${window.t ? window.t('image_ratio_square_1_1') : '正方形 (1:1)'}</option>
+              <option value="3:4" data-i18n="image_ratio_portrait_3_4">${window.t ? window.t('image_ratio_portrait_3_4') : '竖屏 (3:4)'}</option>
+              <option value="4:3" data-i18n="image_ratio_landscape_4_3">${window.t ? window.t('image_ratio_landscape_4_3') : '横屏 (4:3)'}</option>
             </select>
           </div>
           <div class="field field-collapsible">
-            <button class="mini-btn image-camera-control-btn" type="button" style="width:100%;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;">相机控制</button>
+            <button class="mini-btn image-camera-control-btn" type="button" style="width:100%;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;" data-i18n="image_node_camera_control_btn">${window.t ? window.t('image_node_camera_control_btn') : '相机控制'}</button>
           </div>
           <div class="field field-collapsible">
             <div class="btn-row" style="display: flex; gap: 8px;">
               <div class="gen-container">
-                <button class="gen-btn gen-btn-main image-edit-btn" type="button">编辑图片</button>
-                <button class="gen-btn gen-btn-caret" type="button" aria-label="选择抽卡次数">▾</button>
+                <button class="gen-btn gen-btn-main image-edit-btn" type="button" data-i18n="image_node_edit_btn">${window.t ? window.t('image_node_edit_btn') : '编辑图片'}</button>
+                <button class="gen-btn gen-btn-caret" type="button" aria-label="${window.t ? window.t('draw_count_menu') : '选择抽卡次数'}" data-i18n="draw_count_menu:aria-label">▾</button>
                 <div class="gen-menu">
                   <div class="gen-item" data-count="1">X1</div>
                   <div class="gen-item" data-count="2">X2</div>
@@ -4932,13 +4913,13 @@
                   <div class="gen-item" data-count="4">X4</div>
                 </div>
               </div>
-              <button class="mini-btn secondary image-coloring-btn" type="button" style="border-radius: 10px;">涂色编辑</button>
+              <button class="mini-btn secondary image-coloring-btn" type="button" style="border-radius: 10px;" data-i18n="image_node_coloring_btn">${window.t ? window.t('image_node_coloring_btn') : '涂色编辑'}</button>
             </div>
             <div class="gen-meta image-draw-count-label"></div>
             <div class="muted image-edit-status" style="display:none;"></div>
           </div>
           <div class="field field-collapsible image-confirm-field" style="display:none;">
-            <button class="mini-btn image-confirm-shot-btn" type="button" style="background: #10b981; color: white; width: 100%;">确认分镜图</button>
+            <button class="mini-btn image-confirm-shot-btn" type="button" style="background: #10b981; color: white; width: 100%;" data-i18n="image_node_confirm_shot_btn">${window.t ? window.t('image_node_confirm_shot_btn') : '确认分镜图'}</button>
           </div>
         </div>
       `;
@@ -5002,7 +4983,7 @@
                 state.referenceConnections.splice(idx, 1);
                 renderReferenceConnections();
                 updateReferenceImages();
-                try{ autoSaveWorkflow(); } catch(err){}
+                safeAutoSave()
               }
             });
             
@@ -5060,13 +5041,13 @@
               }
               
               if(isCircular){
-                showToast('不能创建循环参考', 'error');
+                showToast(window.t ? window.t('circular_reference_error') : '不能创建循环参考', 'error');
               } else {
                 // 检查参考图数量限制
                 const currentRefCount = state.referenceConnections.filter(c => c.to === id).length;
                 const maxRefs = node.data.model === 'gemini-2.5-flash-image-preview' ? 5 : 13;
                 if(currentRefCount >= maxRefs){
-                  showToast(`最多支持${maxRefs}张参考图`, 'error');
+                  showToast(window.t ? window.t('max_reference_images_msg').replace('${maxRefs}', maxRefs) : `最多支持${maxRefs}张参考图`, 'error');
                 } else {
                   state.referenceConnections.push({
                     id: state.nextReferenceConnId++,
@@ -5075,7 +5056,7 @@
                   });
                   renderReferenceConnections();
                   updateReferenceImages();
-                  try{ autoSaveWorkflow(); } catch(e){}
+                  safeAutoSave()
                 }
               }
             }
@@ -5115,18 +5096,14 @@
                 from: state.connecting.fromId,
                 to: id
               });
-              renderConnections();
-              renderImageConnections();
-              renderFirstFrameConnections();
-              renderVideoConnections();
-              renderAudioConnections();
+              renderAllConnections();
               
               // 更新分镜节点的预览图和选择菜单
               if(fromNode.updatePreview){
                 fromNode.updatePreview();
               }
               
-              try{ autoSaveWorkflow(); } catch(e){}
+              safeAutoSave()
             }
           }
         }
@@ -5261,11 +5238,11 @@
         coloringBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
           if(!node.data.url && !node.data.preview){
-            showToast('请先上传或生成图片', 'error');
+            showToast(window.t ? window.t('upload_or_generate_image_first') : '请先上传或生成图片', 'error');
             return;
           }
           const imageUrl = node.data.url || node.data.preview;
-          
+
           if(window.imageColoringEditor && window.imageColoringEditor.open){
             // Use proxied URL to avoid cross-origin canvas taint
             const safeImageUrl = (typeof proxyImageUrl === 'function') ? proxyImageUrl(imageUrl) : imageUrl;
@@ -5273,8 +5250,7 @@
               try {
                 coloringBtn.disabled = true;
                 statusEl.style.display = 'block';
-                statusEl.style.color = '#666';
-                statusEl.textContent = '正在上传涂色图片...';
+                setStatusEl(statusEl, window.t ? window.t('uploading_image') : '正在上传涂色图片...', '#666');
                 
                 const coloredImageBlob = await fetch(result.coloredImage).then(r => r.blob());
                 const uploadFormData = new FormData();
@@ -5282,10 +5258,7 @@
                 
                 const uploadRes = await fetch('/api/video-workflow/upload', {
                   method: 'POST',
-                  headers: {
-                    'Authorization': getAuthToken ? getAuthToken() : '',
-                    'X-User-Id': getUserId ? getUserId() : localStorage.getItem('user_id') || ''
-                  },
+                  headers: getAuthHeaders(),
                   body: uploadFormData
                 });
                 
@@ -5301,23 +5274,21 @@
                 imagePreviewImg.src = coloredImageUrl;
                 imagePreviewRow.style.display = 'block';
                 
-                statusEl.style.color = '#22c55e';
-                statusEl.textContent = '涂色完成！';
-                showToast('涂色完成！', 'success');
-                
-                try{ autoSaveWorkflow(); } catch(e){}
+                setStatusEl(statusEl, window.t ? window.t('fill_complete_msg') : '涂色完成！', '#22c55e');
+                showToast(window.t ? window.t('fill_complete_msg') : '涂色完成！', 'success');
+
+                safeAutoSave()
                 renderMinimap();
               } catch(err){
                 console.error('涂色编辑失败:', err);
-                statusEl.style.color = '#dc2626';
-                statusEl.textContent = '涂色失败';
-                showToast('涂色失败: ' + err.message, 'error');
+                setStatusEl(statusEl, window.t ? window.t('fill_error_msg') : '涂色失败', '#dc2626');
+                showToast((window.t ? window.t('fill_error_msg') : '涂色失败: ') + err.message, 'error');
               } finally {
                 coloringBtn.disabled = false;
               }
             });
           } else {
-            showToast('涂色编辑器未加载', 'error');
+            showToast(window.t ? window.t('fill_editor_not_loaded') : '涂色编辑器未加载', 'error');
           }
         });
       }
@@ -5335,8 +5306,8 @@
           if(connectedShotFrameNode.updatePreview){
             connectedShotFrameNode.updatePreview();
           }
-          showToast('已设置为视频首帧', 'success');
-          try{ autoSaveWorkflow(); } catch(e){}
+          showToast(window.t ? window.t('set_as_first_frame_msg') : '已设置为视频首帧', 'success');
+          safeAutoSave()
         }
       });
 
@@ -5344,7 +5315,7 @@
       updateConfirmButtonVisibility();
 
       function updateDrawCountLabel(){
-        drawCountLabel.textContent = `抽卡次数：X${node.data.drawCount}`;
+        { const _t = window.t ? window.t('draw_count_x', { count: node.data.drawCount }) : null; drawCountLabel.textContent = (_t && _t !== 'draw_count_x') ? _t : `抽卡次数：X${node.data.drawCount}`; }
       }
       updateDrawCountLabel();
 
@@ -5440,7 +5411,7 @@
           }
 
           showToast('图片上传成功', 'success');
-          try{ autoSaveWorkflow(); } catch(e){}
+          safeAutoSave()
         } else {
           imagePreviewRow.style.display = 'none';
           imagePreviewImg.removeAttribute('src');
@@ -5462,22 +5433,19 @@
         e.stopPropagation();
         if(!node.data.url && !node.data.file){
           statusEl.style.display = 'block';
-          statusEl.style.color = '#dc2626';
-          statusEl.textContent = '请先上传图片';
+          setStatusEl(statusEl, '请先上传图片', '#dc2626');
           return;
         }
         
         if(!node.data.prompt){
           statusEl.style.display = 'block';
-          statusEl.style.color = '#dc2626';
-          statusEl.textContent = '请先输入编辑提示词或调整相机参数';
+          setStatusEl(statusEl, '请先输入编辑提示词或调整相机参数', '#dc2626');
           return;
         }
 
         editBtn.disabled = true;
         statusEl.style.display = 'block';
-        statusEl.style.color = '';
-        statusEl.textContent = '正在提交任务...';
+        setStatusEl(statusEl, '正在提交任务...');
 
         try{
           let submitData = node.data.file;
@@ -5557,14 +5525,11 @@
           }
 
 
-          renderConnections();
-          renderImageConnections();
-          renderFirstFrameConnections();
-          renderVideoConnections();
+          renderAllConnections();
           renderReferenceConnections();
           renderMinimap();
 
-          try{ autoSaveWorkflow(); } catch(e){}
+          safeAutoSave()
 
           pollVideoStatus(
             submitRes.projectIds,
@@ -5585,15 +5550,13 @@
               }
 
               if(imageUrls.length === 0){
-                statusEl.style.color = '#dc2626';
-                statusEl.textContent = '生成成功，但未获取到图片地址';
+                setStatusEl(statusEl, '生成成功，但未获取到图片地址', '#dc2626');
                 editBtn.disabled = false;
                 showToast('生成成功但未返回图片地址', 'error');
                 return;
               }
 
-              statusEl.style.color = '#16a34a';
-              statusEl.textContent = `生成完成！共${imageUrls.length}张图片`;
+              setStatusEl(statusEl, `生成完成！共${imageUrls.length}张图片`, '#16a34a');
               editBtn.disabled = false;
 
               // 更新已创建的图片节点
@@ -5617,7 +5580,7 @@
                 }
               });
 
-              try{ autoSaveWorkflow(); } catch(e){}
+              safeAutoSave()
               renderMinimap();
               showToast('图片编辑成功！', 'success');
               
@@ -5627,15 +5590,13 @@
               }
             },
             (errMsg) => {
-              statusEl.style.color = '#dc2626';
-              statusEl.textContent = errMsg;
+              setStatusEl(statusEl, errMsg, '#dc2626');
               editBtn.disabled = false;
               showToast(errMsg || '图片编辑失败', 'error');
             }
           );
         } catch(err){
-          statusEl.style.color = '#dc2626';
-          statusEl.textContent = err.message || '提交失败';
+          setStatusEl(statusEl, err.message || '提交失败', '#dc2626');
           editBtn.disabled = false;
           showToast('提交失败: ' + (err.message || ''), 'error');
         }
@@ -5676,10 +5637,10 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(blobUrl);
           }
-          showToast('开始下载图片', 'success');
+          showToast(window.t ? window.t('start_download_image') : '开始下载图片', 'success');
         } catch(error) {
           console.error('下载图片失败:', error);
-          showToast('下载图片失败', 'error');
+          showToast(window.t ? window.t('download_image_failed') : '下载图片失败', 'error');
         }
       });
 
@@ -5703,11 +5664,10 @@
             to: cameraNodeId
           });
           renderConnections();
-          renderImageConnections();
-          renderFirstFrameConnections();
+          renderAllConnections();
           renderMinimap();
           showToast('已创建相机控制节点', 'success');
-          try{ autoSaveWorkflow(); } catch(err){}
+          safeAutoSave()
         });
       }
 
@@ -5759,17 +5719,17 @@
       el.style.top = node.y + 'px';
 
       el.innerHTML = `
-        <div class="port output" title="输出（拆分为分镜组）"></div>
+        <div class="port output" title="${window.t ? window.t('script_output_port') : '输出（拆分为分镜组）'}"></div>
         <div class="node-header">
           <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><path d="M9 5H7C5.89543 5 5 5.89543 5 7V19C5 20.1046 5.89543 21 7 21H17C18.1046 21 19 20.1046 19 19V7C19 5.89543 18.1046 5 17 5H15"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>剧本 ${scriptId}</div>
-          <button class="icon-btn" title="删除">×</button>
+          <button class="icon-btn" title="${window.t ? window.t('node_delete_btn') : '删除'}">×</button>
         </div>
         <div class="node-body script-node-body">
           <!-- 第1部分：剧本内容 -->
           <div class="script-section">
             <div class="script-section-header">
               <span class="script-section-number">1</span>
-              <span class="script-section-title">剧本内容</span>
+              <span class="script-section-title" data-i18n="script_section_1">${window.t ? window.t('script_section_1') : '剧本内容'}</span>
             </div>
             <div class="field field-always-visible script-info-field" style="display:none;">
               <div class="gen-meta script-name"></div>
@@ -5778,19 +5738,19 @@
             <div class="field field-always-visible">
               <div style="display: flex; justify-content: flex-end; align-items: center; gap: 6px; margin-bottom: 4px;">
                 <span class="script-char-count" style="color: #666; font-size: 12px;">0/30000</span>
-                <button class="mini-btn script-expand-btn" type="button" style="font-size: 11px; padding: 4px 8px;" title="放大编辑">⤢</button>
+                <button class="mini-btn script-expand-btn" type="button" style="font-size: 11px; padding: 4px 8px;" title="${window.t ? window.t('script_expand_btn') : '放大编辑'}" data-i18n="script_expand_btn:title">⤢</button>
               </div>
-              <textarea class="script-textarea" rows="16" maxlength="30000" placeholder="在此输入剧本内容，或上传文件（最多30000字符）"></textarea>
+              <textarea class="script-textarea" rows="16" maxlength="30000" placeholder="${window.t ? window.t('script_placeholder') : '在此输入剧本内容，或上传文件（最多30000字符）'}" data-i18n="script_placeholder:placeholder"></textarea>
             </div>
             <div class="field field-always-visible" style="margin-top: auto; padding-top: 8px;">
               <div style="display: flex; gap: 6px;">
-                <button class="gen-btn gen-btn-white script-upload-btn" type="button" style="border-radius: 8px; flex: 1; padding: 7px 0; font-size: 12px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>上传</button>
-                <button class="gen-btn gen-btn-green script-load-btn" type="button" style="border-radius: 8px; flex: 1; padding: 7px 0; font-size: 12px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>加载</button>
+                <button class="gen-btn gen-btn-white script-upload-btn" type="button" style="border-radius: 8px; flex: 1; padding: 7px 0; font-size: 12px;" data-i18n="script_upload_btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>${window.t ? window.t('script_upload_btn') : '上传'}</button>
+                <button class="gen-btn gen-btn-green script-load-btn" type="button" style="border-radius: 8px; flex: 1; padding: 7px 0; font-size: 12px;" data-i18n="script_load_btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>${window.t ? window.t('script_load_btn') : '加载'}</button>
               </div>
               <input class="script-file" type="file" accept=".txt,.md" style="display:none;" />
             </div>
             <div class="field field-always-visible script-warning-field" style="display:none;">
-              <div class="gen-meta" style="color: #f59e0b;">文件内容超过30000字符，已自动截取前30000字符。建议将剧本分段处理。</div>
+              <div class="gen-meta" style="color: #f59e0b;" data-i18n="script_file_truncated">${window.t ? window.t('script_file_truncated') : '文件内容超过30000字符，已自动截取前30000字符。建议将剧本分段处理。'}</div>
             </div>
           </div>
 
@@ -5798,67 +5758,67 @@
           <div class="script-section">
             <div class="script-section-header">
               <span class="script-section-number">2</span>
-              <span class="script-section-title">参数配置</span>
+              <span class="script-section-title" data-i18n="script_section_2">${window.t ? window.t('script_section_2') : '参数配置'}</span>
             </div>
             <div class="field field-always-visible">
-              <div class="label">镜头组时长</div>
+              <div class="label" data-i18n="script_duration_label">${window.t ? window.t('script_duration_label') : '镜头组时长'}</div>
               <select class="script-duration-select" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;">
-                <option value="5">5秒</option>
-                <option value="8">8秒</option>
-                <option value="10">10秒</option>
-                <option value="15" selected>15秒</option>
+                <option value="5" data-i18n="duration_5s">${window.t ? window.t('duration_5s') : '5秒'}</option>
+                <option value="8" data-i18n="duration_8s">${window.t ? window.t('duration_8s') : '8秒'}</option>
+                <option value="10" data-i18n="duration_10s">${window.t ? window.t('duration_10s') : '10秒'}</option>
+                <option value="15" selected data-i18n="duration_15s">${window.t ? window.t('duration_15s') : '15秒'}</option>
               </select>
             </div>
             <div class="field field-always-visible">
-              <div class="label">宫格生图模型</div>
+              <div class="label" data-i18n="script_grid_model_label">${window.t ? window.t('script_grid_model_label') : '宫格生图模型'}</div>
               <select class="script-grid-model" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;"></select>
             </div>
             <div class="field field-always-visible">
-              <div class="label">宫格类型</div>
+              <div class="label" data-i18n="script_grid_layout_label">${window.t ? window.t('script_grid_layout_label') : '宫格类型'}</div>
               <select class="script-grid-layout" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;">
-                <option value="auto">自动选择</option>
-                <option value="4">4宫格 (2x2)</option>
-                <option value="9">9宫格 (3x3)</option>
+                <option value="auto" data-i18n="script_grid_layout_auto">${window.t ? window.t('script_grid_layout_auto') : '自动选择'}</option>
+                <option value="4" data-i18n="script_grid_layout_4">${window.t ? window.t('script_grid_layout_4') : '4宫格 (2x2)'}</option>
+                <option value="9" data-i18n="script_grid_layout_9">${window.t ? window.t('script_grid_layout_9') : '9宫格 (3x3)'}</option>
               </select>
             </div>
             <div class="field field-always-visible">
-              <div class="label">拆分模型</div>
+              <div class="label" data-i18n="script_split_model_label">${window.t ? window.t('script_split_model_label') : '拆分模型'}</div>
               <select class="script-split-model" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;">
-                <option value="">加载中...</option>
+                <option value="" data-i18n="script_loading">${window.t ? window.t('script_loading') : '加载中...'}</option>
               </select>
             </div>
             <div class="field field-always-visible">
-              <div class="label">视频生成模型</div>
+              <div class="label" data-i18n="script_video_model_label">${window.t ? window.t('script_video_model_label') : '视频生成模型'}</div>
               <select class="script-video-model" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;"></select>
             </div>
             <div class="field field-always-visible">
-              <div class="label">输出语言</div>
+              <div class="label" data-i18n="script_output_language_label">${window.t ? window.t('script_output_language_label') : '输出语言'}</div>
               <select class="script-language" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;">
-                <option value="">中文（默认）</option>
+                <option value="" data-i18n="script_language_default">${window.t ? window.t('script_language_default') : '中文（默认）'}</option>
                 <option value="English">English</option>
                 <option value="Deutsch">Deutsch</option>
                 <option value="Français">Français</option>
                 <option value="Русский">Русский</option>
-                <option value="__custom__">自定义语言...</option>
+                <option value="__custom__" data-i18n="script_language_custom">${window.t ? window.t('script_language_custom') : '自定义语言...'}</option>
               </select>
-              <input type="text" class="script-language-custom" placeholder="或输入自定义语言..." style="display: none; width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white; margin-top: 4px;" />
+              <input type="text" class="script-language-custom" placeholder="${window.t ? window.t('script_language_custom') : '或输入自定义语言...'}" style="display: none; width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white; margin-top: 4px;" />
             </div>
             <div class="script-checkbox-group">
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
                 <input type="checkbox" class="script-force-medium-shot" style="cursor: pointer;" checked />
-                <span>对话禁止全景</span>
+                <span data-i18n="script_force_medium_shot">${window.t ? window.t('script_force_medium_shot') : '对话禁止全景'}</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
                 <input type="checkbox" class="script-no-bg-music" style="cursor: pointer;" checked />
-                <span>不生成背景音乐</span>
+                <span data-i18n="script_no_bg_music">${window.t ? window.t('script_no_bg_music') : '不生成背景音乐'}</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
                 <input type="checkbox" class="script-split-multi-dialogue" style="cursor: pointer;" />
-                <span>拆分多人对话镜头</span>
+                <span data-i18n="script_split_multi_dialogue">${window.t ? window.t('script_split_multi_dialogue') : '拆分多人对话镜头'}</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
                 <input type="checkbox" class="script-narration-as-dialogue" style="cursor: pointer;" />
-                <span>解说剧（仅旁白说话）</span>
+                <span data-i18n="script_narration_as_dialogue">${window.t ? window.t('script_narration_as_dialogue') : '解说剧（仅旁白说话）'}</span>
               </label>
             </div>
           </div>
@@ -5867,23 +5827,23 @@
           <div class="script-section script-section-actions">
             <div class="script-section-header">
               <span class="script-section-number">3</span>
-              <span class="script-section-title">执行操作</span>
+              <span class="script-section-title" data-i18n="script_section_3">${window.t ? window.t('script_section_3') : '执行操作'}</span>
             </div>
             <div class="field field-always-visible">
               <div style="display: flex; gap: 6px;">
-                <button class="gen-btn gen-btn-white script-split-btn" type="button" style="border-radius: 8px; flex: 1; padding: 18px 0;" disabled>拆分镜组</button>
-                <button class="gen-btn gen-btn-white script-grid-only-btn" type="button" style="border-radius: 8px; flex: 1; padding: 18px 0;">宫格生图</button>
+                <button class="gen-btn gen-btn-white script-split-btn" type="button" style="border-radius: 8px; flex: 1; padding: 18px 0;" disabled data-i18n="script_split_btn">${window.t ? window.t('script_split_btn') : '拆分镜组'}</button>
+                <button class="gen-btn gen-btn-white script-grid-only-btn" type="button" style="border-radius: 8px; flex: 1; padding: 18px 0;" data-i18n="script_grid_only_btn">${window.t ? window.t('script_grid_only_btn') : '宫格生图'}</button>
               </div>
               <div class="gen-meta script-status" style="display:none; margin-top: 6px;"></div>
               <div class="gen-meta script-grid-only-status" style="display:none; margin-top: 6px;"></div>
             </div>
             <div class="field field-always-visible">
-              <button class="gen-btn gen-btn-green script-split-grid-btn" type="button" style="border-radius: 8px; width: 100%; padding: 18px 0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>拆分分镜组 + 宫格生图</button>
+              <button class="gen-btn gen-btn-green script-split-grid-btn" type="button" style="border-radius: 8px; width: 100%; padding: 18px 0;" data-i18n="script_split_grid_btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>${window.t ? window.t('script_split_grid_btn') : '拆分分镜组 + 宫格生图'}</button>
               <div class="gen-meta script-grid-status" style="display:none; margin-top: 6px;"></div>
             </div>
             <div class="field field-always-visible">
-              <button class="gen-btn gen-btn-blue script-batch-generate-btn" type="button" style="border-radius: 8px; width: 100%; background: #3b82f6; color: white; padding: 18px 0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><polygon points="5 3 19 12 5 21 5 3"/></svg>逐个生成视频</button>
-              <div class="gen-meta" style="margin-top: 4px; font-size: 11px; color: #666;">支持所有模型，逐个生成可能浪费时长</div>
+              <button class="gen-btn gen-btn-blue script-batch-generate-btn" type="button" style="border-radius: 8px; width: 100%; background: #3b82f6; color: white; padding: 18px 0;" data-i18n="script_batch_generate_btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><polygon points="5 3 19 12 5 21 5 3"/></svg>${window.t ? window.t('script_batch_generate_btn') : '逐个生成视频'}</button>
+              <div class="gen-meta" style="margin-top: 4px; font-size: 11px; color: #666;" data-i18n="script_batch_info">${window.t ? window.t('script_batch_info') : '支持所有模型，逐个生成可能浪费时长'}</div>
               <div class="gen-meta script-batch-status" style="display:none; margin-top: 6px;"></div>
             </div>
           </div>
@@ -6064,9 +6024,7 @@
           window._vendorIcons = vendorIcons;
 
           const response = await fetch('/api/models', {
-            headers: {
-              'Authorization': getAuthToken()
-            }
+            headers: getAuthHeaders()
           });
           const data = await response.json();
 
@@ -6400,28 +6358,28 @@
           if(isTruncated) {
             content = content.substring(0, 30000);
             warningField.style.display = 'block';
-            showToast(`文件内容已截取至30000字符（原${originalLength}字符）`, 'warning');
+            showToast(window.t ? window.t('file_content_truncated').replace('${originalLength}', originalLength) : `文件内容已截取至30000字符（原${originalLength}字符）`, 'warning');
           } else {
             warningField.style.display = 'none';
-            showToast('剧本文件加载成功', 'success');
+            showToast(window.t ? window.t('script_file_load_success') : '剧本文件加载成功', 'success');
           }
-          
+
           // 更新文本框内容
           textareaEl.value = content;
           updateScriptContent(content, `来源: ${file.name}${isTruncated ? ' (已截取)' : ''}`);
-          
+
           fileEl.value = '';
         } catch(error) {
           console.error('读取文件失败:', error);
-          showToast('读取文件失败', 'error');
+          showToast(window.t ? window.t('file_read_error') : '读取文件失败', 'error');
         }
       });
 
       splitBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        
+
         if(!node.data.scriptContent) {
-          showToast('请先上传剧本文件', 'error');
+          showToast(window.t ? window.t('upload_script_file_first') : '请先上传剧本文件', 'error');
           return;
         }
 
@@ -6432,9 +6390,9 @@
             const targetNode = state.nodes.find(n => n.id === conn.to);
             return targetNode && targetNode.type === 'shot_group';
           });
-          
+
           if(hasShotGroupNode) {
-            showToast('已有分镜组，请勿重复点击', 'warning');
+            showToast(window.t ? window.t('duplicate_shot_group_warning') : '已有分镜组，请勿重复点击', 'warning');
             return;
           }
         }
@@ -6449,16 +6407,14 @@
         splitBtn.disabled = true;
         splitGridBtn.disabled = true;
         statusEl.style.display = 'block';
-        statusEl.style.color = '#666';
-        statusEl.textContent = node.data.narrationAsDialogue ? '正在将剧本转换为解说剧格式，再解析分镜...' : '正在调用LLM解析剧本...';
+        setStatusEl(statusEl, node.data.narrationAsDialogue ? '正在将剧本转换为解说剧格式，再解析分镜...' : '正在调用LLM解析剧本...', '#666');
 
         try {
           const response = await fetch('/api/parse-script', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': getAuthToken(),
-              'X-User-Id': getUserId()
+              ...getAuthHeaders()
             },
             body: JSON.stringify({
               script_content: node.data.scriptContent,
@@ -6480,8 +6436,7 @@
           if(result.code === 0 && result.data) {
             node.data.parsedData = result.data;
             
-            statusEl.style.color = '#16a34a';
-            statusEl.textContent = `解析成功！共${result.data.shot_groups?.length || 0}个分镜组`;
+            setStatusEl(statusEl, `解析成功！共${result.data.shot_groups?.length || 0}个分镜组`, '#16a34a');
             if(window.TaskConfig && !window.TaskConfig.isLoaded()) {
               await window.TaskConfig.load();
             }
@@ -6534,13 +6489,9 @@
               renderTimeline();
               if (!state.timeline.visible) flashExpandButton();
               
-              renderConnections();
-              renderImageConnections();
-              renderFirstFrameConnections();
-              renderVideoConnections();
-              renderAudioConnections();
+              renderAllConnections();
               renderMinimap();
-              try{ autoSaveWorkflow(); } catch(e){}
+              safeAutoSave()
               
               // 自动为每个分镜组生成分镜
               statusEl.textContent = '正在自动生成分镜...';
@@ -6550,19 +6501,17 @@
                   await generateShotFramesIndependentAsync(shotGroupNodeId, shotGroupNode);
                 }
               }
-              statusEl.style.color = '#16a34a';
-              statusEl.textContent = `已完成：${createdShotGroupNodes.length}个分镜组，所有分镜已自动生成`;
+              setStatusEl(statusEl, `已完成：${createdShotGroupNodes.length}个分镜组，所有分镜已自动生成`, '#16a34a');
             }
             
-            showToast('剧本拆分成功！所有分镜已自动生成', 'success');
+            showToast(window.t ? window.t('script_split_complete') : '剧本拆分成功！所有分镜已自动生成', 'success');
           } else {
             throw new Error(result.message || '解析失败');
           }
         } catch(error) {
           console.error('剧本解析失败:', error);
-          statusEl.style.color = '#dc2626';
-          statusEl.textContent = '解析失败: ' + (error.message || '未知错误');
-          showToast('剧本解析失败', 'error');
+          setStatusEl(statusEl, '解析失败: ' + (error.message || '未知错误'), '#dc2626');
+          showToast(window.t ? window.t('script_parse_error') : '剧本解析失败', 'error');
         } finally {
           splitBtn.disabled = false;
           splitGridBtn.disabled = false;
@@ -6746,8 +6695,7 @@
                 
                 form.append('prompt', finalGridPrompt);
                 form.append('count', '1');
-                form.append('user_id', getUserId());
-                form.append('auth_token', getAuthToken());
+                appendAuthToForm(form);
                 
                 if(finalModel === 'gemini-3-pro-image-preview') {
                   form.append('image_size', '4K');
@@ -6847,14 +6795,10 @@
               });
 
 
-              renderConnections();
-              renderImageConnections();
-              renderFirstFrameConnections();
-              renderVideoConnections();
-              renderAudioConnections();
+              renderAllConnections();
               renderMinimap();
 
-              try{ autoSaveWorkflow(); } catch(e){}
+              safeAutoSave()
 
               gridStatusEl.style.color = '#16a34a';
               gridStatusEl.textContent = `已提交${imageCount}张宫格图片生成任务，正在轮询状态...`;
@@ -6901,11 +6845,7 @@
                     }
                   }
                   
-                  try {
-                    await autoSaveWorkflow();
-                  } catch(e) {
-                    console.error('[宫格生图] 自动保存失败:', e);
-                  }
+                  safeAutoSave();
                   
                   gridStatusEl.style.color = '#16a34a';
                   gridStatusEl.textContent = '宫格图片生成完成，正在拆分...';
@@ -6953,8 +6893,7 @@
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': getAuthToken(),
-              'X-User-Id': getUserId()
+              ...getAuthHeaders()
             },
             body: JSON.stringify({
               script_content: node.data.scriptContent,
@@ -7028,10 +6967,7 @@
           renderTimeline();
           if (!state.timeline.visible) flashExpandButton();
           
-          renderConnections();
-          renderImageConnections();
-          renderFirstFrameConnections();
-          renderVideoConnections();
+          renderAllConnections();
           renderMinimap();
 
           // 第三步：生成分镜节点并收集提示词
@@ -7155,8 +7091,7 @@
             
             form.append('prompt', finalGridPrompt);
             form.append('count', '1');
-            form.append('user_id', getUserId());
-            form.append('auth_token', getAuthToken());
+            appendAuthToForm(form);
             
             // 加强版模型需要传入4K图片大小
             if(finalModel === 'gemini-3-pro-image-preview') {
@@ -7258,12 +7193,9 @@
             });
           });
 
-          renderConnections();
-          renderImageConnections();
-          renderFirstFrameConnections();
-          renderVideoConnections();
+          renderAllConnections();
           renderMinimap();
-          try{ autoSaveWorkflow(); } catch(e){}
+          safeAutoSave()
 
           gridStatusEl.style.color = '#16a34a';
           gridStatusEl.textContent = `已提交${imageCount}张宫格图片生成任务，正在轮询状态...`;
@@ -7315,11 +7247,7 @@
               }
               
               // 保存工作流
-              try {
-                await autoSaveWorkflow();
-              } catch(e) {
-                console.error('[宫格生图] 自动保存失败:', e);
-              }
+              safeAutoSave();
               
               gridStatusEl.style.color = '#16a34a';
               gridStatusEl.textContent = '宫格图片生成完成，正在拆分...';
@@ -7380,18 +7308,21 @@
               .filter(n => n && n.type === 'shot_frame');
             
             if(sfNodes.length > 0) {
-              // 检查有预览图的分镜
-              const nodesWithImage = sfNodes.filter(n => n.data.previewImageUrl || n.data.imageUrl);
-              
-              if(nodesWithImage.length > 0) {
+              // 检查就绪的分镜（有预览图或启用参考图模式）
+              const readyNodes = sfNodes.filter(n => {
+                const nodeMode = n.data.videoMode || 'first_last_frame';
+                return nodeMode === 'multi_reference' || n.data.previewImageUrl || n.data.imageUrl;
+              });
+
+              if(readyNodes.length > 0) {
                 shotGroupsWithFrames.push({
                   shotGroupNode: sgNode,
-                  shotFrameNodes: nodesWithImage
+                  shotFrameNodes: readyNodes
                 });
-                
+
                 // 计算每个分镜的算力消耗
                 // 模型优先级：分镜节点 > 分镜组 > 剧本节点 > 默认wan22
-                nodesWithImage.forEach(sfNode => {
+                readyNodes.forEach(sfNode => {
                   const videoModel = sfNode.data.videoModel || sgNode.data.videoModel || node.data.videoModel || 'wan22';
                   const duration = sfNode.data.videoDuration || sfNode.data.duration || 5;
                   const drawCount = sfNode.data.videoDrawCount || 1;
@@ -7431,8 +7362,7 @@
             localStorage.setItem(batchTipKey, 'true');
           }
           
-          batchGenerateBtn.disabled = true;
-          batchGenerateBtn.textContent = '批量生成中...';
+          setBtnLoading(batchGenerateBtn, '批量生成中...');
           
           let successCount = 0;
           let failCount = 0;
@@ -7457,21 +7387,19 @@
             }
           }
           
-          batchGenerateBtn.disabled = false;
-          batchGenerateBtn.textContent = '逐个生成视频';
+          setBtnReady(batchGenerateBtn, '逐个生成视频');
           
           const resultMsg = `批量生成完成！成功 ${successCount} 个分镜组，失败 ${failCount} 个`;
           batchStatusEl.style.color = successCount > 0 ? '#22c55e' : '#dc2626';
           batchStatusEl.textContent = resultMsg;
           showToast(resultMsg, successCount > 0 ? 'success' : 'warning');
           
-          try{ autoSaveWorkflow(); } catch(e){}
+          safeAutoSave()
         } catch(error) {
           console.error('Generate script videos error:', error);
           showToast(`批量生成失败: ${error.message}`, 'error');
           
-          batchGenerateBtn.textContent = '逐个生成视频';
-          batchGenerateBtn.disabled = false;
+          setBtnReady(batchGenerateBtn, '逐个生成视频');
           batchStatusEl.style.color = '#dc2626';
           batchStatusEl.textContent = `失败: ${error.message}`;
         }
@@ -7604,8 +7532,7 @@
             
             form.append('prompt', finalGridPrompt);
             form.append('count', '1');
-            form.append('user_id', getUserId());
-            form.append('auth_token', getAuthToken());
+            appendAuthToForm(form);
             
             if(finalModel === 'gemini-3-pro-image-preview') {
               form.append('image_size', '4K');
@@ -7701,12 +7628,9 @@
             });
           });
           
-          renderConnections();
-          renderImageConnections();
-          renderFirstFrameConnections();
-          renderVideoConnections();
+          renderAllConnections();
           renderMinimap();
-          try{ autoSaveWorkflow(); } catch(e){}
+          safeAutoSave()
 
           gridOnlyStatusEl.style.color = '#16a34a';
           gridOnlyStatusEl.textContent = `已提交${imageCount}张宫格图片生成任务，正在轮询状态...`;
@@ -7749,12 +7673,8 @@
                 }
               }
               
-              try {
-                await autoSaveWorkflow();
-              } catch(e) {
-                console.error('[宫格生图-仅生图] 自动保存失败:', e);
-              }
-              
+              safeAutoSave();
+
               gridOnlyStatusEl.style.color = '#16a34a';
               gridOnlyStatusEl.textContent = '宫格图片生成完成，正在拆分...';
               showToast('宫格图片生成完成，正在拆分', 'success');
@@ -7810,21 +7730,28 @@
       const shotCount = shotFrameNodes.length;
 
       if(shotCount === 0) {
-        container.innerHTML = '<div style="padding: 16px; text-align: center; color: #666; font-size: 11px; grid-column: 1/-1;">暂无分镜节点</div>';
-        if(labelEl) labelEl.textContent = '分镜预览（0个分镜）';
+        container.innerHTML = `<div style="padding: 16px; text-align: center; color: #666; font-size: 11px; grid-column: 1/-1;">${window.t ? window.t('shot_group_no_shot_node') : '暂无分镜节点'}</div>`;
+        if(labelEl) {
+          labelEl.textContent = window.t ? window.t('shot_group_preview_label', { count: 0 }) : '分镜预览（0个分镜）';
+          labelEl.setAttribute('data-i18n-params', JSON.stringify({ count: 0 }));
+        }
         return;
       }
 
       const gridSize = calculateGridSize(shotCount);
       if(!gridSize) {
-        container.innerHTML = '<div style="padding: 16px; text-align: center; color: #f59e0b; font-size: 11px; grid-column: 1/-1;">分镜数量超过25，不支持宫格预览</div>';
+        container.innerHTML = `<div style="padding: 16px; text-align: center; color: #f59e0b; font-size: 11px; grid-column: 1/-1;">${window.t ? window.t('shot_group_grid_overflow') : '分镜数量超过25，不支持宫格预览'}</div>`;
         return;
       }
 
       const n = Math.sqrt(gridSize);
       container.className = `shot-grid-preview-container grid-${n}x${n}`;
 
-      if(labelEl) labelEl.textContent = `分镜预览（${shotCount}个分镜 → ${gridSize}宫格）`;
+      if(labelEl) {
+        const previewText = window.t ? window.t('shot_group_preview_label', { count: shotCount }) : `分镜预览（${shotCount}个分镜）`;
+        labelEl.textContent = `${previewText} → ${gridSize}${window.t ? window.t('shot_group_grid_suffix') : '宫格'}`;
+        labelEl.setAttribute('data-i18n-params', JSON.stringify({ count: shotCount }));
+      }
 
       // 更新节点数据
       shotGroupNode.data.gridPreview = shotGroupNode.data.gridPreview || {};
@@ -7887,6 +7814,7 @@
           videoModel: resolvedVideoModel,
           videoDuration: pickFirstDefinedValue(shotGroupData.videoDuration, shotGroupData.video_duration) || 5,
           videoDrawCount: pickFirstDefinedValue(shotGroupData.videoDrawCount, shotGroupData.video_draw_count) || 1,
+          videoGenMode: shotGroupData.videoGenMode || 'first_last_frame',
           gridPreview: shotGroupData.gridPreview || {},
         }
       };
@@ -7912,11 +7840,11 @@
       }).join('');
 
       el.innerHTML = `
-        <div class="port input" title="输入（连接剧本节点）"></div>
-        <div class="port output" title="输出"></div>
+        <div class="port input" data-i18n="shot_group_input_port:title"></div>
+        <div class="port output" data-i18n="shot_group_output_port:title"></div>
         <div class="node-header">
-          <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M6 9H18M6 12H14M6 15H12" stroke="currentColor" stroke-linecap="round"/></svg>分镜组: ${escapeHtml(node.title)}</div>
-          <button class="icon-btn" title="删除">×</button>
+          <div class="node-title" data-i18n="shot_group_title" data-i18n-params='${JSON.stringify({ title: escapeHtml(node.title) })}'><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M6 9H18M6 12H14M6 15H12" stroke="currentColor" stroke-linecap="round"/></svg>${window.t ? window.t('shot_group_title', { title: escapeHtml(node.title) }) : `分镜组: ${escapeHtml(node.title)}`}</div>
+          <button class="icon-btn" data-i18n="node_delete_btn:title" title="${window.t ? window.t('node_delete_btn') : '删除'}">×</button>
         </div>
         <div class="node-body">
           <div class="script-node-body">
@@ -7924,47 +7852,47 @@
             <div class="script-section">
               <div class="script-section-header">
                 <div class="script-section-number">1</div>
-                <div class="script-section-title">分镜详情</div>
+                <div class="script-section-title" data-i18n="shot_group_details_section">${window.t ? window.t('shot_group_details_section') : '分镜详情'}</div>
               </div>
               <div class="field field-always-visible">
-                <div class="label">分镜组: ${escapeHtml(node.data.groupId || node.data.group_id)}</div>
-                <div class="gen-meta">共 ${node.data.shots.length} 个分镜</div>
+                <div class="label" data-i18n="shot_group_label">${window.t ? window.t('shot_group_label') : '分镜组:'} ${escapeHtml(node.data.groupId || node.data.group_id)}</div>
+                <div class="gen-meta" data-i18n="shot_group_shot_count" data-i18n-params='${JSON.stringify({ count: node.data.shots.length })}'>${window.t ? window.t('shot_group_shot_count', { count: node.data.shots.length }) : `共 ${node.data.shots.length} 个分镜`}</div>
               </div>
               <div class="field field-always-visible" style="flex: 1; max-height: 300px; overflow-y: auto;">
                 ${shotsHtml}
               </div>
               <div class="field field-always-visible btn-row" style="margin-top: 12px;">
-                <button class="mini-btn secondary shot-group-detail-btn" type="button" style="flex: 1; padding: 9px 12px;">查看/编辑</button>
-                <button class="mini-btn gen-btn-white shot-group-generate-btn" type="button" style="padding: 9px 12px;">生成分镜</button>
+                <button class="mini-btn secondary shot-group-detail-btn" type="button" style="flex: 1; padding: 9px 12px;" data-i18n="shot_group_detail_btn">${window.t ? window.t('shot_group_detail_btn') : '查看/编辑'}</button>
+                <button class="mini-btn gen-btn-white shot-group-generate-btn" type="button" style="padding: 9px 12px;" data-i18n="shot_group_generate_shot_btn">${window.t ? window.t('shot_group_generate_shot_btn') : '生成分镜'}</button>
               </div>
             </div>
             <!-- 第2列: 分镜预览与生成 -->
             <div class="script-section">
               <div class="script-section-header">
                 <div class="script-section-number">2</div>
-                <div class="script-section-title">分镜预览与生成</div>
+                <div class="script-section-title" data-i18n="shot_group_preview_section">${window.t ? window.t('shot_group_preview_section') : '分镜预览与生成'}</div>
               </div>
               <div class="field field-always-visible">
-                <div class="shot-grid-preview-label" style="font-size: 11px; color: #666; margin-bottom: 4px;">分镜预览（0个分镜）</div>
+                <div class="shot-grid-preview-label" style="font-size: 11px; color: #666; margin-bottom: 4px;" data-i18n="shot_group_preview_label" data-i18n-params='{"count":0}'>${window.t ? window.t('shot_group_preview_label', { count: 0 }) : '分镜预览（0个分镜）'}</div>
                 <div class="shot-grid-preview-container grid-2x2">
-                  <div style="padding: 16px; text-align: center; color: #666; font-size: 11px; grid-column: 1/-1;">暂无分镜节点</div>
+                  <div style="padding: 16px; text-align: center; color: #666; font-size: 11px; grid-column: 1/-1;" data-i18n="shot_group_no_shot_node">${window.t ? window.t('shot_group_no_shot_node') : '暂无分镜节点'}</div>
                 </div>
                 <div class="grid-merge-status"></div>
               </div>
               <div class="field field-always-visible">
-                <div class="label">宫格生图模型</div>
+                <div class="label" data-i18n="shot_group_grid_model_label">${window.t ? window.t('shot_group_grid_model_label') : '宫格生图模型'}</div>
                 <select class="shot-group-grid-model" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;"></select>
               </div>
               <div class="field field-always-visible">
-                <div class="label" style="margin-top:5px">宫格类型</div>
+                <div class="label" style="margin-top:5px" data-i18n="shot_group_grid_type_label">${window.t ? window.t('shot_group_grid_type_label') : '宫格类型'}</div>
                 <select class="shot-group-grid-layout" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;">
-                  <option value="auto">自动选择</option>
-                  <option value="4">4宫格 (2x2)</option>
-                  <option value="9">9宫格 (3x3)</option>
+                  <option value="auto" data-i18n="shot_group_grid_auto">${window.t ? window.t('shot_group_grid_auto') : '自动选择'}</option>
+                  <option value="4" data-i18n="shot_group_grid_4">${window.t ? window.t('shot_group_grid_4') : '4宫格 (2x2)'}</option>
+                  <option value="9" data-i18n="shot_group_grid_9">${window.t ? window.t('shot_group_grid_9') : '9宫格 (3x3)'}</option>
                 </select>
               </div>
               <div class="field field-always-visible btn-row" style="margin-top: 12px;">
-                <button class="mini-btn gen-btn-green shot-group-grid-btn" type="button" style="width: 100%; padding: 9px 12px;">宫格生图</button>
+                <button class="mini-btn gen-btn-green shot-group-grid-btn" type="button" style="width: 100%; padding: 9px 12px;" data-i18n="shot_group_grid_btn">${window.t ? window.t('shot_group_grid_btn') : '宫格生图'}</button>
               </div>
               <div class="gen-meta shot-group-grid-status" style="display:none; margin-top: 8px;"></div>
             </div>
@@ -7972,24 +7900,31 @@
             <div class="script-section" style="background: #f9fafb;">
               <div class="script-section-header">
                 <div class="script-section-number">3</div>
-                <div class="script-section-title">视频生成</div>
+                <div class="script-section-title" data-i18n="shot_group_video_section">${window.t ? window.t('shot_group_video_section') : '视频生成'}</div>
               </div>
               <div class="field field-always-visible">
-                <div class="label">视频模型</div>
+                <div class="label" data-i18n="video_gen_mode_label">${window.t ? window.t('video_gen_mode_label') : '视频生成模式'}</div>
+                <select class="shot-group-video-gen-mode">
+                  <option value="first_last_frame" data-i18n="video_mode_first_frame">${window.t ? window.t('video_mode_first_frame') : '首帧模式'}</option>
+                  <option value="multi_reference" data-i18n="video_mode_reference">${window.t ? window.t('video_mode_reference') : '参考模式'}</option>
+                </select>
+              </div>
+              <div class="field field-always-visible" style="margin-top:5px">
+                <div class="label" data-i18n="shot_group_video_model_label">${window.t ? window.t('shot_group_video_model_label') : '视频模型'}</div>
                 <select class="shot-group-video-model"></select>
               </div>
               <div class="field field-always-visible" style="margin-top:5px">
-                <div class="label">视频时长</div>
+                <div class="label" data-i18n="shot_group_video_duration_label">${window.t ? window.t('shot_group_video_duration_label') : '视频时长'}</div>
                 <select class="shot-group-video-duration">
-                  <option value="5" selected>5秒</option>
-                  <option value="10">10秒</option>
+                  <option value="5" selected data-i18n="shot_group_video_duration_5s">${window.t ? window.t('shot_group_video_duration_5s') : '5秒'}</option>
+                  <option value="10" data-i18n="shot_group_video_duration_10s">${window.t ? window.t('shot_group_video_duration_10s') : '10秒'}</option>
                 </select>
               </div>
               <div class="field field-always-visible" style="margin-top: 10px;">
                 <div style="display: flex; flex-direction: column; gap: 8px;">
                   <div class="gen-container shot-group-merge-container" style="width: 100%;">
-                    <button class="gen-btn gen-btn-main shot-group-generate-video-btn" type="button" style="background: #22c55e; color: white; padding: 10px; flex: 1;" title="将多个分镜合并为一个视频生成，节省算力（仅 kling/veo3/sora2 支持）">合并生成视频</button>
-                    <button class="gen-btn gen-btn-caret shot-group-video-caret" type="button" aria-label="选择抽卡次数">▾</button>
+                    <button class="gen-btn gen-btn-main shot-group-generate-video-btn" type="button" style="background: #22c55e; color: white; padding: 10px; flex: 1;" data-i18n="shot_group_merge_generate_video_btn">${window.t ? window.t('shot_group_merge_generate_video_btn') : '合并生成视频'}</button>
+                    <button class="gen-btn gen-btn-caret shot-group-video-caret" type="button" aria-label="${window.t ? window.t('draw_count_menu') : '选择抽卡次数'}">▾</button>
                     <div class="gen-menu shot-group-video-menu">
                       <div class="gen-item" data-count="1">X1</div>
                       <div class="gen-item" data-count="2">X2</div>
@@ -7997,23 +7932,21 @@
                       <div class="gen-item" data-count="4">X4</div>
                     </div>
                   </div>
-                  <button class="gen-btn gen-btn-main shot-group-batch-generate-btn" type="button" style="background: #3b82f6; color: white; padding: 10px;" title="每个分镜独立生成视频，支持所有模型但可能浪费时长">逐个生成视频</button>
+                  <button class="gen-btn gen-btn-main shot-group-batch-generate-btn" type="button" style="background: #3b82f6; color: white; padding: 10px;" data-i18n="shot_group_batch_generate_video_btn">${window.t ? window.t('shot_group_batch_generate_video_btn') : '逐个生成视频'}</button>
                 </div>
               </div>
               <div style="font-size: 10px; color: #9ca3af; line-height: 1.4; margin-top: 4px;">
-                <span style="color: #10b981;">● 合并生成</span>：多个分镜合并为一个视频，节省算力<br>
-                <span style="color: #3b82f6;">● 逐个生成</span>：每个分镜独立生成，支持所有模型
+                <span style="color: #10b981;" data-i18n="shot_group_merge_info_title">${window.t ? window.t('shot_group_merge_info_title') : '● 合并生成'}</span><span data-i18n="shot_group_merge_info_desc">：${window.t ? window.t('shot_group_merge_info_desc') : '多个分镜合并为一个视频，节省算力'}</span><br>
+                <span style="color: #3b82f6;" data-i18n="shot_group_batch_info_title">${window.t ? window.t('shot_group_batch_info_title') : '● 逐个生成'}</span><span data-i18n="shot_group_batch_info_desc">：${window.t ? window.t('shot_group_batch_info_desc') : '每个分镜独立生成，支持所有模型'}</span>
               </div>
               <div style="margin-top: auto; padding-top: 12px; border-top: 1px dashed #e5e7eb;">
-                <div class="gen-meta shot-group-video-draw-count-label"></div>
+                <div class="gen-meta shot-group-video-draw-count-label" data-i18n="shot_group_merge_draw_count"></div>
                 <div class="shot-group-computing-power" style="padding: 6px; border-radius: 6px;">
                   <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="color: #9ca3af; font-size: 11px;">算力消耗：</span>
-                    <span class="shot-group-computing-power-value" style="color: #3b82f6; font-weight: bold; font-size: 12px;">0 算力</span>
+                    <span style="color: #9ca3af; font-size: 11px;" data-i18n="shot_group_computing_power">${window.t ? window.t('shot_group_computing_power') : '算力消耗：'}</span>
+                    <span class="shot-group-computing-power-value" style="color: #3b82f6; font-weight: bold; font-size: 12px;" data-i18n="shot_group_computing_power_value" data-i18n-params='{"power":0}'>${window.t ? window.t('shot_group_computing_power_value', { power: 0 }) : '0 算力'}</span>
                   </div>
-                  <div class="shot-group-computing-power-detail" style="margin-top: 2px; font-size: 10px; color: #6b7280; text-align: right;">
-                    单个 0 算力 × 1 个 = 0 算力
-                  </div>
+                  <div class="shot-group-computing-power-detail" style="margin-top: 2px; font-size: 10px; color: #6b7280; text-align: right;" data-i18n="shot_group_computing_power_detail" data-i18n-params='{"individual":0,"count":1,"total":0}'>${window.t ? window.t('shot_group_computing_power_detail', { individual: 0, count: 1, total: 0 }) : '单个 0 算力 × 1 个 = 0 算力'}</div>
                 </div>
               </div>
             </div>
@@ -8061,14 +7994,10 @@
                 from: state.connecting.fromId,
                 to: id
               });
-              renderConnections();
-              renderImageConnections();
-              renderFirstFrameConnections();
-              renderVideoConnections();
-              renderAudioConnections();
+              renderAllConnections();
               renderReferenceConnections();
               renderMinimap();
-              try{ autoSaveWorkflow(); } catch(e){}
+              safeAutoSave()
             }
           }
         }
@@ -8151,6 +8080,7 @@
       }
 
       // 视频生成相关元素
+      const videoGenModeEl = el.querySelector('.shot-group-video-gen-mode');
       const videoModelEl = el.querySelector('.shot-group-video-model');
       const videoDurationEl = el.querySelector('.shot-group-video-duration');
       const generateVideoBtn = el.querySelector('.shot-group-generate-video-btn');
@@ -8190,6 +8120,7 @@
       if(!node.data.videoModel) node.data.videoModel = firstShotGroupVideoModelValue;
       if(videoModelEl) videoModelEl.value = node.data.videoModel;
       if(videoDurationEl) videoDurationEl.value = node.data.videoDuration;
+      if(videoGenModeEl) videoGenModeEl.value = node.data.videoGenMode || 'first_last_frame';
       
       // 应用驱动状态禁用未配置的选项
       if(videoModelEl) applyDriverStatusToSelect(videoModelEl);
@@ -8246,24 +8177,30 @@
         // 使用 TaskConfig API 动态获取算力（自动支持所有模型）
         return TaskConfig.getComputingPower(videoModel, duration);
       }
-      
+
       // 更新视频算力显示
       function updateVideoComputingPowerDisplay() {
         const singlePower = calculateVideoComputingPower();
         const count = node.data.videoDrawCount || 1;
         const totalPower = singlePower * count;
-        
+
         if(computingPowerValue) {
-          computingPowerValue.textContent = `${totalPower} 算力`;
+          const displayPower = typeof totalPower === 'number' ? totalPower : 0;
+          computingPowerValue.textContent = window.t ? window.t('shot_group_computing_power_value', { power: displayPower }) : `${displayPower} 算力`;
+          computingPowerValue.setAttribute('data-i18n-params', JSON.stringify({ power: displayPower }));
         }
         if(computingPowerDetail) {
-          computingPowerDetail.textContent = `单个 ${singlePower} 算力 × ${count} 个 = ${totalPower} 算力`;
+          const displaySingle = typeof singlePower === 'number' ? singlePower : 0;
+          const displayCount = typeof count === 'number' ? count : 1;
+          const displayTotal = typeof totalPower === 'number' ? totalPower : 0;
+          computingPowerDetail.textContent = window.t ? window.t('shot_group_computing_power_detail', { individual: displaySingle, count: displayCount, total: displayTotal }) : `单个 ${displaySingle} 算力 × ${displayCount} 个 = ${displayTotal} 算力`;
+          computingPowerDetail.setAttribute('data-i18n-params', JSON.stringify({ individual: displaySingle, count: displayCount, total: displayTotal }));
         }
       }
 
       // 初始化抽卡次数显示
       function updateVideoDrawCountLabel(){
-        videoDrawCountLabel.textContent = `抽卡次数：X${node.data.videoDrawCount}`;
+        { const _t = window.t ? window.t('draw_count_x', { count: node.data.videoDrawCount }) : null; videoDrawCountLabel.textContent = (_t && _t !== 'draw_count_x') ? _t : `抽卡次数：X${node.data.videoDrawCount}`; }
         updateVideoComputingPowerDisplay();
       }
       updateVideoDrawCountLabel();
@@ -8277,15 +8214,30 @@
         updateMergeButtonVisibility(videoModelEl.value);
       });
 
+      // 视频生成模式选择事件
+      if(videoGenModeEl) {
+        videoGenModeEl.addEventListener('change', () => {
+          node.data.videoGenMode = videoGenModeEl.value;
+          updateMergeButtonVisibility(videoModelEl.value);
+        });
+      }
+
       // 根据模型配置更新合并生成按钮的显示状态
       function updateMergeButtonVisibility(videoModel) {
         const mergeContainer = el.querySelector('.shot-group-merge-container');
-        
-        // 从后端配置获取模型是否支持宫格合并（指定分类为图生视频）
+        const currentMode = node.data.videoGenMode || 'first_last_frame';
+
+        // 参考生视频模式下，合并按钮始终显示（不需要宫格合并支持）
+        if(currentMode === 'multi_reference') {
+          if(mergeContainer) mergeContainer.style.display = 'inline-flex';
+          return;
+        }
+
+        // 首尾帧模式：从后端配置获取模型是否支持宫格合并
         const taskId = window.TaskConfig?.getTaskIdByKey(videoModel, 'image_to_video');
         const taskConfig = taskId ? window.TaskConfig?.getTaskById(taskId) : null;
         const isMergeSupported = taskConfig?.supports_grid_merge || false;
-        
+
         if(mergeContainer) {
           mergeContainer.style.display = isMergeSupported ? 'inline-flex' : 'none';
         }
@@ -8348,6 +8300,11 @@
       addDebugButtonToNode(el, node);
       
       canvasEl.appendChild(el);
+
+      // i18n: 翻译节点内 DOM
+      if (typeof window.ZJTi18nDOM !== 'undefined') {
+        setTimeout(() => window.ZJTi18nDOM.scanDOM(el), 0);
+      }
 
       // 初始化宫格预览（延迟执行，确保连接已建立）
       setTimeout(() => { updateGridPreviewUI(el, node); }, 100);
@@ -8486,8 +8443,7 @@
           
           form.append('prompt', finalGridPrompt);
           form.append('count', '1');
-          form.append('user_id', getUserId());
-          form.append('auth_token', getAuthToken());
+          appendAuthToForm(form);
           
           if(finalModel === 'gemini-3-pro-image-preview') {
             form.append('image_size', '4K');
@@ -8590,9 +8546,7 @@
         
 
         renderConnections();
-        renderImageConnections();
-        renderFirstFrameConnections();
-        renderVideoConnections();
+        renderAllConnections();
         renderMinimap();
 
 
@@ -8605,7 +8559,7 @@
         gridStatusEl.textContent = `已提交${imageCount}张宫格图片生成任务，等待AI生成...`;
         showToast(`已提交${imageCount}张宫格图片生成任务`, 'success');
         
-        try{ autoSaveWorkflow(); } catch(e){}
+        safeAutoSave()
         
       } catch(error) {
         console.error('[宫格生图] 错误:', error);
@@ -8726,11 +8680,8 @@
         }
       });
 
-      renderConnections();
-      renderImageConnections();
-      renderFirstFrameConnections();
-      renderVideoConnections();
-      try{ autoSaveWorkflow(); } catch(e){}
+      renderAllConnections();
+      safeAutoSave()
       
       // 显示合理的提示信息
       if(createdNodeIds.length === 0 && skippedCount > 0){
@@ -8865,11 +8816,8 @@
       
       console.log(`[宫格生图] 生成完成 - 新建: ${createdNodeIds.length}, 跳过: ${skippedCount}`);
 
-      renderConnections();
-      renderImageConnections();
-      renderFirstFrameConnections();
-      renderVideoConnections();
-      try{ autoSaveWorkflow(); } catch(e){}
+      renderAllConnections();
+      safeAutoSave()
       
       // 返回创建的节点ID数组（供宫格生图等功能使用）
       return createdNodeIds;
@@ -8995,6 +8943,7 @@
           videoDrawCount: 1,
           videoDuration: 5,
           videoModel: inheritedVideoModel,
+          videoMode: 'first_last_frame',  // 'first_last_frame' | 'multi_reference'
         }
       };
       state.nodes.push(node);
@@ -9007,11 +8956,11 @@
       // 不设固定宽度，由CSS .node:has(.script-node-body) 控制
 
       el.innerHTML = `
-        <div class="port input" title="输入（连接分镜组节点）"></div>
-        <div class="port output" title="输出"></div>
+        <div class="port input" data-i18n="shot_frame_input_port:title"></div>
+        <div class="port output" data-i18n="shot_frame_output_port:title"></div>
         <div class="node-header">
-          <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>分镜: ${node.title}</div>
-          <button class="icon-btn" title="删除">×</button>
+          <div class="node-title" data-i18n="shot_frame_title" data-i18n-params='${JSON.stringify({ title: escapeHtml(node.title) })}'><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>${window.t ? window.t('shot_frame_title', { title: escapeHtml(node.title) }) : `分镜: ${escapeHtml(node.title)}`}</div>
+          <button class="icon-btn" data-i18n="node_delete_btn:title" title="${window.t ? window.t('node_delete_btn') : '删除'}">×</button>
         </div>
         <div class="node-body">
           <div class="script-node-body">
@@ -9019,38 +8968,38 @@
             <div class="script-section">
               <div class="script-section-header">
                 <div class="script-section-number">1</div>
-                <div class="script-section-title">基础信息</div>
+                <div class="script-section-title" data-i18n="shot_frame_basic_info_section">${window.t ? window.t('shot_frame_basic_info_section') : '基础信息'}</div>
               </div>
               <div class="field field-always-visible">
                 <div style="font-size: 13px; font-weight: 600; color: var(--text);">${escapeHtml(node.data.description)}</div>
-                <div class="gen-meta" style="margin-top: 4px;">时长: ${node.data.duration}秒 | ${escapeHtml(node.data.shotType)} | ${escapeHtml(node.data.cameraMovement)}</div>
+                <div class="gen-meta" style="margin-top: 4px;" data-i18n="shot_frame_duration_label">${window.t ? window.t('shot_frame_duration_label') : '时长:'} ${node.data.duration}${window.t ? window.t('shot_frame_seconds') : '秒'} | ${escapeHtml(node.data.shotType)} | ${escapeHtml(node.data.cameraMovement)}</div>
               </div>
               <div class="field field-always-visible">
                 <div class="shot-ref-section" style="position: relative;">
                   <div class="shot-ref-row">
-                    <span class="shot-ref-label">场景</span>
+                    <span class="shot-ref-label" data-i18n="shot_frame_scene_label">${window.t ? window.t('shot_frame_scene_label') : '场景'}</span>
                     <div class="shot-ref-tags shot-ref-scene-tags"></div>
                   </div>
                   <div class="shot-ref-row">
-                    <span class="shot-ref-label">道具</span>
+                    <span class="shot-ref-label" data-i18n="shot_frame_prop_label">${window.t ? window.t('shot_frame_prop_label') : '道具'}</span>
                     <div class="shot-ref-tags shot-ref-prop-tags"></div>
                   </div>
                   <div class="shot-ref-row">
-                    <span class="shot-ref-label">角色</span>
+                    <span class="shot-ref-label" data-i18n="shot_frame_character_label">${window.t ? window.t('shot_frame_character_label') : '角色'}</span>
                     <div class="shot-ref-tags shot-ref-char-tags"></div>
                   </div>
                 </div>
               </div>
               <div class="field field-always-visible">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                  <div class="label" style="margin: 0;">视频首帧</div>
+                  <div class="label" style="margin: 0;" data-i18n="shot_frame_video_first_frame_label">${window.t ? window.t('shot_frame_video_first_frame_label') : '视频首帧'}</div>
                   <div class="gen-container shot-frame-image-selector-container" style="display: none;">
-                    <button class="mini-btn shot-frame-image-selector-btn" type="button" style="font-size: 11px; padding: 4px 8px; background: white; color: #333; border: 1px solid #ddd;">选择图片</button>
-                    <button class="gen-btn-caret" type="button" aria-label="选择图片" style="font-size: 11px; padding: 4px 6px;">▾</button>
+                    <button class="mini-btn shot-frame-image-selector-btn" type="button" style="font-size: 11px; padding: 4px 8px; background: white; color: #333; border: 1px solid #ddd;" data-i18n="shot_frame_select_image_btn">${window.t ? window.t('shot_frame_select_image_btn') : '选择图片'}</button>
+                    <button class="gen-btn-caret" type="button" aria-label="${window.t ? window.t('shot_frame_select_image_btn') : '选择图片'}" style="font-size: 11px; padding: 4px 6px;">▾</button>
                     <div class="gen-menu shot-frame-image-menu"></div>
                   </div>
                 </div>
-                <div class="port first-frame-port" title="连接图片节点（视频首帧）"></div>
+                <div class="port first-frame-port" data-i18n="shot_frame_first_frame_port:title"></div>
                 <div class="shot-frame-preview-field" style="position: relative;">
                   <img class="shot-frame-preview-image" src="${node.data.previewImageUrl || ''}" style="max-width: 100%; max-height: 160px; object-fit: contain; border-radius: 6px; cursor: pointer; display: ${node.data.previewImageUrl ? 'block' : 'none'};" />
                 </div>
@@ -9058,25 +9007,25 @@
               <div class="field field-always-visible shot-frame-image-field" style="display:${node.data.imageUrl ? 'flex' : 'none'};">
                 <img class="shot-frame-image" src="${node.data.imageUrl}" style="max-width: 100%; max-height: 160px; object-fit: contain; border-radius: 6px; cursor: pointer;" />
               </div>
-              <button class="gen-btn shot-frame-generate-dialogue-btn" type="button" style="background: #3b82f6; color: white; width: 100%; padding: 8px; border-radius: 6px; margin-top: auto;" disabled>生成对话音频</button>
+              <button class="gen-btn shot-frame-generate-dialogue-btn" type="button" style="background: #3b82f6; color: white; width: 100%; padding: 8px; border-radius: 6px; margin-top: auto;" disabled data-i18n="shot_frame_generate_dialogue_audio_btn">${window.t ? window.t('shot_frame_generate_dialogue_audio_btn') : '生成对话音频'}</button>
             </div>
             <!-- 第2列: 提示词编辑 -->
             <div class="script-section" style="background: #fcfcfc;">
               <div class="script-section-header">
                 <div class="script-section-number">2</div>
-                <div class="script-section-title">提示词编辑</div>
+                <div class="script-section-title" data-i18n="shot_frame_prompt_edit_section">${window.t ? window.t('shot_frame_prompt_edit_section') : '提示词编辑'}</div>
               </div>
               <div class="field field-always-visible" style="flex: 1; display: flex; flex-direction: column;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                  <div class="label" style="margin: 0;">图片提示词</div>
-                  <span style="font-size: 10px; color: #9ca3af;">点击编辑 | 按 / 选择角色</span>
+                  <div class="label" style="margin: 0;" data-i18n="shot_frame_image_prompt_label">${window.t ? window.t('shot_frame_image_prompt_label') : '图片提示词'}</div>
+                  <span style="font-size: 10px; color: #9ca3af;" data-i18n="shot_frame_image_prompt_hint">${window.t ? window.t('shot_frame_image_prompt_hint') : '点击编辑 | 按 / 选择角色'}</span>
                 </div>
                 <textarea class="shot-frame-image-prompt" rows="3" readonly style="width: 100%; flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; resize: none; cursor: pointer; background: #fafafa; line-height: 1.4;">${escapeHtml(node.data.imagePrompt)}</textarea>
               </div>
               <div class="field field-always-visible" style="flex: 1; display: flex; flex-direction: column;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                  <div class="label" style="margin: 0;">视频提示词</div>
-                  <button class="mini-btn secondary reduce-violation-btn" type="button" style="font-size: 11px; padding: 4px 8px;">视频生成失败，请点此次按钮</button>
+                  <div class="label" style="margin: 0;" data-i18n="shot_frame_video_prompt_label">${window.t ? window.t('shot_frame_video_prompt_label') : '视频提示词'}</div>
+                  <button class="mini-btn secondary reduce-violation-btn" type="button" style="font-size: 11px; padding: 4px 8px;" data-i18n="shot_frame_video_generation_failed_btn">${window.t ? window.t('shot_frame_video_generation_failed_btn') : '视频生成失败，请点此按钮'}</button>
                 </div>
                 <textarea class="shot-frame-video-prompt" rows="3" readonly style="width: 100%; flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; resize: none; cursor: pointer; background: #fafafa; line-height: 1.4;">${escapeHtml(node.data.videoPromptText || node.data.videoPrompt)}</textarea>
               </div>
@@ -9085,16 +9034,16 @@
             <div class="script-section" style="background: #f9fafb;">
               <div class="script-section-header">
                 <div class="script-section-number">3</div>
-                <div class="script-section-title">模型与生成</div>
+                <div class="script-section-title" data-i18n="shot_frame_model_generation_section">${window.t ? window.t('shot_frame_model_generation_section') : '模型与生成'}</div>
               </div>
               <div class="field field-always-visible">
-                <div class="label">分镜模型</div>
+                <div class="label" data-i18n="shot_frame_model_label">${window.t ? window.t('shot_frame_model_label') : '分镜模型'}</div>
                 <select class="shot-frame-model"></select>
               </div>
               <div class="field field-always-visible" style="margin-bottom: 4px; margin-top: 12px;">
                 <div class="gen-container" style="width: 100%;">
-                  <button class="gen-btn gen-btn-main shot-frame-generate-btn" type="button" style="flex: 1; padding: 10px;">生成分镜图</button>
-                  <button class="gen-btn gen-btn-caret shot-frame-caret" type="button" aria-label="选择抽卡次数">▾</button>
+                  <button class="gen-btn gen-btn-main shot-frame-generate-btn" type="button" style="flex: 1; padding: 10px;" data-i18n="shot_frame_generate_btn">${window.t ? window.t('shot_frame_generate_btn') : '生成分镜图'}</button>
+                  <button class="gen-btn gen-btn-caret shot-frame-caret" type="button" aria-label="${window.t ? window.t('shot_frame_select_draw_count') : '选择抽卡次数'}">▾</button>
                   <div class="gen-menu shot-frame-menu">
                     <div class="gen-item" data-count="1">X1</div>
                     <div class="gen-item" data-count="2">X2</div>
@@ -9104,31 +9053,39 @@
                 </div>
                 <div class="gen-meta shot-frame-draw-count-label"></div>
               </div>
+              <div class="field field-always-visible shot-frame-video-mode-field" style="margin-top: 8px;">
+                <div class="label" data-i18n="video_gen_mode_label">${window.t ? window.t('video_gen_mode_label') : '视频生成模式'}</div>
+                <div class="shot-frame-video-mode-toggle" style="display:flex; border:1px solid #ddd; border-radius:6px; overflow:hidden;">
+                  <button type="button" class="video-mode-btn" data-mode="first_last_frame" data-i18n="video_mode_first_frame" style="flex:1; padding:6px 8px; font-size:12px; border:none; cursor:pointer; background:#3b82f6; color:white;">${window.t ? window.t('video_mode_first_frame') : '首帧模式'}</button>
+                  <button type="button" class="video-mode-btn" data-mode="multi_reference" data-i18n="video_mode_reference" style="flex:1; padding:6px 8px; font-size:12px; border:none; cursor:pointer; background:#f3f4f6; color:#666;">${window.t ? window.t('video_mode_reference') : '参考模式'}</button>
+                </div>
+                <div class="video-mode-hint" data-i18n="video_mode_hint_first_frame" style="font-size:11px; color:#6b7280; margin-top:4px;">${window.t ? window.t('video_mode_hint_first_frame') : '先生成分镜图作为视频首帧'}</div>
+              </div>
               <div class="field field-always-visible" style="margin-top: 8px;">
-                <div class="label">视频模型</div>
+                <div class="label" data-i18n="shot_group_video_model_label">${window.t ? window.t('shot_group_video_model_label') : '视频模型'}</div>
                 <select class="shot-frame-video-model"></select>
               </div>
               <div class="field field-always-visible">
-                <div class="label">视频时长</div>
+                <div class="label" data-i18n="shot_frame_video_duration_label">${window.t ? window.t('shot_frame_video_duration_label') : '视频时长'}</div>
                 <select class="shot-frame-video-duration">
-                  <option value="5" selected>5秒</option>
-                  <option value="10">10秒</option>
+                  <option value="5" selected data-i18n="shot_frame_video_duration_5s">${window.t ? window.t('shot_frame_video_duration_5s') : '5秒'}</option>
+                  <option value="10" data-i18n="shot_frame_video_duration_10s">${window.t ? window.t('shot_frame_video_duration_10s') : '10秒'}</option>
                 </select>
               </div>
               <div class="shot-ref-audio-field field field-always-visible" style="margin-top: 8px; display: none;">
-                <div class="label">参考音频（可选）</div>
+                <div class="label" data-i18n="shot_frame_reference_audio_label">${window.t ? window.t('shot_frame_reference_audio_label') : '参考音频（可选）'}</div>
                 <input type="file" class="shot-ref-audio-input" accept="audio/*" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" />
                 <div class="shot-ref-audio-name" style="margin-top: 4px; font-size: 11px; color: #666;"></div>
               </div>
               <div class="shot-ref-video-field field field-always-visible" style="margin-top: 8px; display: none;">
-                <div class="label">参考视频（可选）</div>
+                <div class="label" data-i18n="shot_frame_reference_video_label">${window.t ? window.t('shot_frame_reference_video_label') : '参考视频（可选）'}</div>
                 <input type="file" class="shot-ref-video-input" accept="video/*" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" />
                 <div class="shot-ref-video-name" style="margin-top: 4px; font-size: 11px; color: #666;"></div>
               </div>
               <div class="field field-always-visible" style="margin-top: 12px;">
                 <div class="gen-container" style="width: 100%;">
-                  <button class="gen-btn gen-btn-main shot-frame-generate-video-btn" type="button" style="background: #22c55e; color: white; flex: 1; padding: 10px;">生成视频</button>
-                  <button class="gen-btn gen-btn-caret shot-frame-video-caret" type="button" aria-label="选择抽卡次数">▾</button>
+                  <button class="gen-btn gen-btn-main shot-frame-generate-video-btn" type="button" style="background: #22c55e; color: white; flex: 1; padding: 10px;" data-i18n="shot_frame_generate_video_btn">${window.t ? window.t('shot_frame_generate_video_btn') : '生成视频'}</button>
+                  <button class="gen-btn gen-btn-caret shot-frame-video-caret" type="button" aria-label="${window.t ? window.t('shot_frame_select_draw_count') : '选择抽卡次数'}">▾</button>
                   <div class="gen-menu shot-frame-video-menu">
                     <div class="gen-item" data-count="1">X1</div>
                     <div class="gen-item" data-count="2">X2</div>
@@ -9142,12 +9099,10 @@
               <div style="margin-top: auto; padding-top: 12px; border-top: 1px dashed #e5e7eb;">
                 <div class="shot-frame-computing-power" style="padding: 6px; border-radius: 6px;">
                   <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="color: #9ca3af; font-size: 11px;">算力消耗：</span>
-                    <span class="shot-frame-computing-power-value" style="color: #3b82f6; font-weight: bold; font-size: 12px;">0 算力</span>
+                    <span style="color: #9ca3af; font-size: 11px;" data-i18n="shot_frame_computing_power">${window.t ? window.t('shot_frame_computing_power') : '算力消耗：'}</span>
+                    <span class="shot-frame-computing-power-value" style="color: #3b82f6; font-weight: bold; font-size: 12px;" data-i18n="shot_frame_computing_power_value" data-i18n-params='{"power":0}'>${window.t ? window.t('shot_frame_computing_power_value', { power: 0 }) : '0 算力'}</span>
                   </div>
-                  <div class="shot-frame-computing-power-detail" style="margin-top: 2px; font-size: 10px; color: #6b7280; text-align: right;">
-                    单个 0 算力 × 1 个 = 0 算力
-                  </div>
+                  <div class="shot-frame-computing-power-detail" style="margin-top: 2px; font-size: 10px; color: #6b7280; text-align: right;" data-i18n="shot_frame_computing_power_detail" data-i18n-params='{"individual":0,"count":1,"total":0}'>${window.t ? window.t('shot_frame_computing_power_detail', { individual: 0, count: 1, total: 0 }) : '单个 0 算力 × 1 个 = 0 算力'}</div>
                 </div>
               </div>
             </div>
@@ -9214,60 +9169,148 @@
         applyDriverStatusToSelect(modelEl);
       }
 
-      // 动态填充视频模型选项
-      if(videoModelEl) {
+      // ============ 视频模型填充（根据 videoMode 动态过滤） ============
+
+      // 根据当前 videoMode 填充视频模型选项
+      function populateVideoModelOptions() {
+        if(!videoModelEl) return;
+        const mode = node.data.videoMode || 'first_last_frame';
         videoModelEl.innerHTML = '';
-        let firstVideoModelValue = 'wan22';
+        let allOptions = [];
+        let firstVideoModelValue = mode === 'multi_reference' ? 'veo3' : 'wan22';
+
         if(window.TaskConfig && window.TaskConfig.isLoaded()) {
-          const options = window.TaskConfig.getModelOptionsForCategory('image_to_video');
-          if(options.length > 0) firstVideoModelValue = options[0].value;
-          options.forEach(opt => {
+          allOptions = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+          if(mode === 'multi_reference') {
+            allOptions = allOptions.filter(opt => {
+              const modes = opt.supportedImageModes || ['first_last_frame'];
+              return modes.includes('multi_reference');
+            });
+          }
+          if(allOptions.length > 0) firstVideoModelValue = allOptions[0].value;
+          allOptions.forEach(opt => {
             const optEl = document.createElement('option');
             optEl.value = opt.value;
             optEl.textContent = opt.label;
-            if(opt.value === node.data.videoModel) optEl.selected = true;
             videoModelEl.appendChild(optEl);
           });
         } else {
-          videoModelEl.innerHTML = `
-            <option value="wan22" selected>Wan2.2</option>
-            <option value="sora2">Sora2</option>
-            <option value="ltx2">LTX2.0</option>
-            <option value="kling">可灵</option>
-            <option value="vidu">Vidu</option>
-            <option value="veo3">VEO3.1</option>
-          `;
-        }
-        videoModelEl.value = node.data.videoModel || firstVideoModelValue;
-        applyDriverStatusToSelect(videoModelEl);
-
-        // 初始化参考音视频字段可见性
-        function updateRefAudioVideoVisibility() {
-          const videoModel = videoModelEl.value;
-          const refAudioField = el.querySelector('.shot-ref-audio-field');
-          const refVideoField = el.querySelector('.shot-ref-video-field');
-
-          if(window.TaskConfig && window.TaskConfig.isLoaded()) {
-            const modelConfig = window.TaskConfig.getModelConfigs()[videoModel];
-            const supportsRefAudioVideo = modelConfig && modelConfig.supports_ref_audio_video === true;
-
-            if(refAudioField) refAudioField.style.display = supportsRefAudioVideo ? 'block' : 'none';
-            if(refVideoField) refVideoField.style.display = supportsRefAudioVideo ? 'block' : 'none';
+          // fallback
+          if(mode === 'multi_reference') {
+            videoModelEl.innerHTML = `
+              <option value="veo3">VEO3.1</option>
+              <option value="grok">Grok</option>
+              <option value="seedance_2_0">Seedance 2.0</option>
+            `;
+            firstVideoModelValue = 'veo3';
           } else {
-            // 如果配置未加载，默认隐藏
-            if(refAudioField) refAudioField.style.display = 'none';
-            if(refVideoField) refVideoField.style.display = 'none';
+            videoModelEl.innerHTML = `
+              <option value="wan22">Wan2.2</option>
+              <option value="sora2">Sora2</option>
+              <option value="ltx2">LTX2.0</option>
+              <option value="kling">可灵</option>
+              <option value="vidu">Vidu</option>
+              <option value="veo3">VEO3.1</option>
+            `;
+            firstVideoModelValue = 'wan22';
           }
         }
 
-        // 初始更新
+        // 如果当前选择的模型不在新列表中，切换到第一个
+        const validValues = allOptions.map(o => o.value);
+        if(validValues.length > 0 && !validValues.includes(node.data.videoModel)) {
+          node.data.videoModel = firstVideoModelValue;
+        }
+        videoModelEl.value = node.data.videoModel || firstVideoModelValue;
+        applyDriverStatusToSelect(videoModelEl);
+      }
+
+      // ============ 模式切换 UI 更新 ============
+
+      function updateModeUI() {
+        const mode = node.data.videoMode || 'first_last_frame';
+        const isRefMode = mode === 'multi_reference';
+
+        // 更新提示文本
+        const hintEl = el.querySelector('.video-mode-hint');
+        if(hintEl) {
+          const hintKey = isRefMode ? 'video_mode_hint_reference' : 'video_mode_hint_first_frame';
+          hintEl.setAttribute('data-i18n', hintKey);
+          hintEl.textContent = window.t ? window.t(hintKey) : (isRefMode ? '使用角色/场景/道具参考图直接生成视频（无参考图时将回退为文生视频，实际消耗以最终调用为准）' : '先生成分镜图作为视频首帧');
+        }
+
+        // 分镜模型/生成分镜图按钮降低透明度
+        const generateImageBtn = el.querySelector('.shot-frame-generate-btn');
+        const modelFieldEl = el.querySelector('.shot-frame-model')?.closest('.field');
+        if(generateImageBtn) generateImageBtn.style.opacity = isRefMode ? '0.4' : '1';
+        if(modelFieldEl) modelFieldEl.style.opacity = isRefMode ? '0.4' : '1';
+
+        // 参考音视频字段可见性（参考图模式下由模型配置决定，首帧模式同理）
         updateRefAudioVideoVisibility();
+      }
+
+      // 初始化参考音视频字段可见性
+      function updateRefAudioVideoVisibility() {
+        const videoModel = videoModelEl ? videoModelEl.value : 'wan22';
+        const mode = node.data.videoMode || 'first_last_frame';
+        const refAudioField = el.querySelector('.shot-ref-audio-field');
+        const refVideoField = el.querySelector('.shot-ref-video-field');
+
+        // 参考图模式下，参考音视频始终隐藏（multi_reference 模型大多不支持）
+        if(mode === 'multi_reference') {
+          if(refAudioField) refAudioField.style.display = 'none';
+          if(refVideoField) refVideoField.style.display = 'none';
+          return;
+        }
+
+        if(window.TaskConfig && window.TaskConfig.isLoaded()) {
+          const modelConfig = window.TaskConfig.getModelConfigs()[videoModel];
+          const supportsRefAudioVideo = modelConfig && modelConfig.supports_ref_audio_video === true;
+          if(refAudioField) refAudioField.style.display = supportsRefAudioVideo ? 'block' : 'none';
+          if(refVideoField) refVideoField.style.display = supportsRefAudioVideo ? 'block' : 'none';
+        } else {
+          if(refAudioField) refAudioField.style.display = 'none';
+          if(refVideoField) refVideoField.style.display = 'none';
+        }
+      }
+
+      if(videoModelEl) {
+        // 初始填充
+        populateVideoModelOptions();
+        updateRefAudioVideoVisibility();
+
+        // ============ 模式切换事件 ============
+        const modeBtns = el.querySelectorAll('.video-mode-btn');
+        modeBtns.forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const newMode = btn.dataset.mode;
+            if(newMode === node.data.videoMode) return;
+            node.data.videoMode = newMode;
+
+            // 更新切换按钮样式
+            modeBtns.forEach(b => {
+              const isActive = b === btn;
+              b.style.background = isActive ? '#3b82f6' : '#f3f4f6';
+              b.style.color = isActive ? 'white' : '#666';
+            });
+
+            // 重新填充视频模型列表
+            populateVideoModelOptions();
+            updateModeUI();
+            // 触发算力重新计算（通过元素引用，因为函数定义在后面）
+            if(el._updateVideoComputingPowerDisplay) {
+              try { el._updateVideoComputingPowerDisplay(); } catch(e) {}
+            }
+            try{ autoSaveWorkflow(); } catch(e){}
+          });
+        });
 
         // 监听视频模型变化
         videoModelEl.addEventListener('change', () => {
           node.data.videoModel = videoModelEl.value;
           updateRefAudioVideoVisibility();
-          try{ autoSaveWorkflow(); } catch(e){}
+          safeAutoSave()
         });
 
         // 参考音频输入事件
@@ -9280,7 +9323,7 @@
               const nameEl = el.querySelector('.shot-ref-audio-name');
               if(nameEl) nameEl.textContent = '✓ ' + file.name;
             }
-            try{ autoSaveWorkflow(); } catch(e){}
+            safeAutoSave()
           });
         }
 
@@ -9294,7 +9337,7 @@
               const nameEl = el.querySelector('.shot-ref-video-name');
               if(nameEl) nameEl.textContent = '✓ ' + file.name;
             }
-            try{ autoSaveWorkflow(); } catch(e){}
+            safeAutoSave()
           });
         }
       }
@@ -9387,7 +9430,7 @@
             node.data.selectedSceneRefUrl = null;
             node.data.selectedSceneRefLabel = null;
             renderSceneTags();
-            try{ autoSaveWorkflow(); } catch(e){}
+            safeAutoSave()
           });
           tag.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -9457,7 +9500,7 @@
             node.data.selectedSceneRefLabel = null;
             renderSceneTags();
             closeRefDropdowns();
-            try{ autoSaveWorkflow(); } catch(e){}
+            safeAutoSave()
           });
           dropdown.appendChild(mainItem);
 
@@ -9472,7 +9515,7 @@
               node.data.selectedSceneRefLabel = opt.label;
               renderSceneTags();
               closeRefDropdowns();
-              try{ autoSaveWorkflow(); } catch(e){}
+              safeAutoSave()
             });
             dropdown.appendChild(item);
           });
@@ -9510,7 +9553,7 @@
             node.data.refScene = { id: loc.id, name: loc.name, pic: loc.reference_image || '' };
             renderSceneTags();
             closeRefDropdowns();
-            try{ autoSaveWorkflow(); } catch(e){}
+            safeAutoSave()
           });
           dropdown.appendChild(item);
         });
@@ -9546,7 +9589,7 @@
             e.stopPropagation();
             node.data.refProps.splice(idx, 1);
             renderPropTags();
-            try{ autoSaveWorkflow(); } catch(e){}
+            safeAutoSave()
           });
           propTagsEl.appendChild(tag);
         });
@@ -9589,7 +9632,7 @@
             }
             renderPropTags();
             closeRefDropdowns();
-            try{ autoSaveWorkflow(); } catch(e){}
+            safeAutoSave()
           });
           dropdown.appendChild(item);
         });
@@ -9695,7 +9738,7 @@
               if(node.data.selectedCharRefImageLabels) delete node.data.selectedCharRefImageLabels[charName];
               renderCharTags();
               closeRefDropdowns();
-              try{ autoSaveWorkflow(); } catch(e){}
+              safeAutoSave()
             });
             dropdown.appendChild(mainItem);
           }
@@ -9715,7 +9758,7 @@
               node.data.selectedCharRefImageLabels[charName] = opt.label;
               renderCharTags();
               closeRefDropdowns();
-              try{ autoSaveWorkflow(); } catch(e){}
+              safeAutoSave()
             });
             dropdown.appendChild(item);
           });
@@ -9821,18 +9864,24 @@
         // 使用 TaskConfig API 动态获取算力（自动支持所有模型）
         return TaskConfig.getComputingPower(videoModel, duration);
       }
-      
+
       // 更新视频算力显示
       function updateVideoComputingPowerDisplay() {
         const singlePower = calculateVideoComputingPower();
         const count = node.data.videoDrawCount || 1;
         const totalPower = singlePower * count;
-        
+
         if(computingPowerValue) {
-          computingPowerValue.textContent = `${totalPower} 算力`;
+          const displayPower = typeof totalPower === 'number' ? totalPower : 0;
+          computingPowerValue.textContent = window.t ? window.t('shot_frame_computing_power_value', { power: displayPower }) : `${displayPower} 算力`;
+          computingPowerValue.setAttribute('data-i18n-params', JSON.stringify({ power: displayPower }));
         }
         if(computingPowerDetail) {
-          computingPowerDetail.textContent = `单个 ${singlePower} 算力 × ${count} 个 = ${totalPower} 算力`;
+          const displaySingle = typeof singlePower === 'number' ? singlePower : 0;
+          const displayCount = typeof count === 'number' ? count : 1;
+          const displayTotal = typeof totalPower === 'number' ? totalPower : 0;
+          computingPowerDetail.textContent = window.t ? window.t('shot_frame_computing_power_detail', { individual: displaySingle, count: displayCount, total: displayTotal }) : `单个 ${displaySingle} 算力 × ${displayCount} 个 = ${displayTotal} 算力`;
+          computingPowerDetail.setAttribute('data-i18n-params', JSON.stringify({ individual: displaySingle, count: displayCount, total: displayTotal }));
         }
       }
 
@@ -9845,19 +9894,24 @@
       }
 
       function updateDrawCountLabel(){
-        drawCountLabel.textContent = `抽卡次数：X${node.data.drawCount}`;
+        const count = node.data.drawCount;
+        const translated = window.t ? window.t('draw_count_x', { count }) : null;
+        drawCountLabel.textContent = (translated && translated !== 'draw_count_x') ? translated : `抽卡次数：X${count}`;
       }
       updateDrawCountLabel();
 
       function updateVideoDrawCountLabel(){
-        videoDrawCountLabel.textContent = `抽卡次数：X${node.data.videoDrawCount}`;
+        const count = node.data.videoDrawCount;
+        const translated = window.t ? window.t('draw_count_x', { count }) : null;
+        videoDrawCountLabel.textContent = (translated && translated !== 'draw_count_x') ? translated : `抽卡次数：X${count}`;
         // 同时更新算力显示
         updateVideoComputingPowerDisplay();
       }
       updateVideoDrawCountLabel();
       
-      // 初始化算力显示
+      // 初始化算力显示，并存储引用供模式切换调用
       updateVideoComputingPowerDisplay();
+      el._updateVideoComputingPowerDisplay = updateVideoComputingPowerDisplay;
 
       // 获取所有连接的图片节点（包括子图片和嵌套子图片，递归查找）
       function getConnectedImageNodes(){
@@ -9966,7 +10020,7 @@
               });
               renderFirstFrameConnections();
               
-              try{ autoSaveWorkflow(); } catch(e){}
+              safeAutoSave()
             });
           });
         } else {
@@ -10048,7 +10102,7 @@
             refreshParentShotGroupPreview();
             
             renderFirstFrameConnections();
-            try{ autoSaveWorkflow(); } catch(e){}
+            safeAutoSave()
           }
         }
         state.connecting = null;
@@ -10124,18 +10178,22 @@
       // 生成视频
       generateVideoBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if(!node.data.previewImageUrl){
+        const mode = node.data.videoMode || 'first_last_frame';
+        if(mode === 'first_last_frame' && !node.data.previewImageUrl){
           showToast('请先生成分镜图', 'warning');
           return;
         }
+        // multi_reference 模式不需要 previewImageUrl
         generateShotFrameVideo(id, node);
       });
 
       // 初始化时更新预览图
       updatePreviewImage();
 
-      // 暴露更新预览图的方法供外部调用
+      // 暴露方法供外部调用（工作流恢复时使用）
       node.updatePreview = updatePreviewImage;
+      node.updateModeUI = updateModeUI;
+      node.populateVideoModelOptions = populateVideoModelOptions;
 
       deleteBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -10204,15 +10262,13 @@
           }
           
           try {
-            reduceViolationBtn.disabled = true;
-            reduceViolationBtn.textContent = '改写提示词，修改违规内容...';
+            setBtnLoading(reduceViolationBtn, '改写提示词，修改违规内容...');
             
             const response = await fetch('/api/reduce-violation', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': getAuthToken(),
-                'X-User-Id': getUserId()
+                ...getAuthHeaders()
               },
               body: JSON.stringify({ prompt: currentPrompt })
             });
@@ -10230,8 +10286,7 @@
             console.error('降低违规失败:', error);
             showToast('降低违规失败: ' + error.message, 'error');
           } finally {
-            reduceViolationBtn.disabled = false;
-            reduceViolationBtn.textContent = '提示词已优化，再次优化';
+            setBtnReady(reduceViolationBtn, '提示词已优化，再次优化');
           }
         });
       }
@@ -10317,7 +10372,7 @@
           }
           
           showToast('已创建对话组节点并开始生成音频', 'success');
-          try{ autoSaveWorkflow(); } catch(e){}
+          safeAutoSave()
         });
       }
 
@@ -10340,18 +10395,14 @@
                 from: state.connecting.fromId,
                 to: id
               });
-              renderConnections();
-              renderImageConnections();
-              renderFirstFrameConnections();
-              renderVideoConnections();
-              renderAudioConnections();
+              renderAllConnections();
               
               // 如果是图片节点连接，更新预览图和选择菜单
               if(fromNode.type === 'image'){
                 updatePreviewImage();
               }
               
-              try{ autoSaveWorkflow(); } catch(e){}
+              safeAutoSave()
             }
           }
         }
@@ -10368,6 +10419,12 @@
       addDebugButtonToNode(el, node);
       
       canvasEl.appendChild(el);
+
+      // i18n: 翻译节点内 DOM
+      if (typeof window.ZJTi18nDOM !== 'undefined') {
+        setTimeout(() => window.ZJTi18nDOM.scanDOM(el), 0);
+      }
+
       setSelected(id);
       return id;
     }
@@ -10414,24 +10471,42 @@
       });
 
       try {
-        const response = await fetch(`/api/scripts?world_id=${defaultWorldId}&page=1&page_size=50`, {
-          headers: {
-            'Authorization': localStorage.getItem('auth_token') || '',
-            'X-User-Id': localStorage.getItem('user_id') || ''
-          }
-        });
+        const pageSize = 50;
+        const headers = {
+          'Authorization': localStorage.getItem('auth_token') || '',
+          'X-User-Id': localStorage.getItem('user_id') || ''
+        };
 
-        if (!response.ok) {
+        // 第一页请求
+        const firstResponse = await fetch(`/api/scripts?world_id=${defaultWorldId}&page=1&page_size=${pageSize}`, { headers });
+        if (!firstResponse.ok) {
           throw new Error('获取剧本列表失败');
         }
-
-        const result = await response.json();
-        
-        if (result.code !== 0) {
-          throw new Error(result.message || '获取剧本列表失败');
+        const firstResult = await firstResponse.json();
+        if (firstResult.code !== 0) {
+          throw new Error(firstResult.message || '获取剧本列表失败');
         }
 
-        const scripts = result.data.data || [];
+        let scripts = firstResult.data.data || [];
+        const total = firstResult.data.total || 0;
+
+        // 如果还有更多页，并发请求剩余页
+        if (total > pageSize) {
+          const totalPages = Math.ceil(total / pageSize);
+          const remainingRequests = [];
+          for (let p = 2; p <= totalPages; p++) {
+            remainingRequests.push(
+              fetch(`/api/scripts?world_id=${defaultWorldId}&page=${p}&page_size=${pageSize}`, { headers })
+                .then(r => r.json())
+            );
+          }
+          const remainingResults = await Promise.all(remainingRequests);
+          for (const res of remainingResults) {
+            if (res.code === 0 && res.data && res.data.data) {
+              scripts = scripts.concat(res.data.data);
+            }
+          }
+        }
 
         // 按集数排序（升序）
         scripts.sort((a, b) => {
@@ -10698,20 +10773,23 @@
           showToast('请先生成分镜节点', 'warning');
           return;
         }
-        
-        // 检查所有分镜节点是否都有首帧图片
-        const nodesWithImage = shotFrameNodes.filter(n => n.data.previewImageUrl || n.data.imageUrl);
-        if(nodesWithImage.length === 0) {
-          showToast('分镜节点没有首帧图片，请先生成分镜图', 'warning');
-          return;
+
+        const videoGenMode = shotGroupNode.data.videoGenMode || 'first_last_frame';
+
+        // 首尾帧模式下检查是否有首帧图片（参考模式不需要首帧图）
+        if(videoGenMode === 'first_last_frame') {
+          const nodesWithImage = shotFrameNodes.filter(n => n.data.previewImageUrl || n.data.imageUrl);
+          if(nodesWithImage.length === 0) {
+            showToast('分镜节点没有首帧图片，请先生成分镜图', 'warning');
+            return;
+          }
         }
         
         const generateBtn = document.querySelector(`.node[data-node-id="${shotGroupNodeId}"] .shot-group-generate-video-btn`);
         const mergeStatusEl = document.querySelector(`.node[data-node-id="${shotGroupNodeId}"] .grid-merge-status`);
         if(!generateBtn) return;
         
-        generateBtn.disabled = true;
-        generateBtn.textContent = '生成中...';
+        setBtnLoading(generateBtn, '生成中...');
         
         const firstShotFrame = shotFrameNodes[0];
         const duration = shotGroupNode.data.videoDuration || 5;
@@ -10719,79 +10797,112 @@
         const videoModel = shotGroupNode.data.videoModel || 'wan22';
         const userId = localStorage.getItem('user_id') || '1';
         const authToken = localStorage.getItem('auth_token') || '';
-        
-        // ===== 宫格合并模式：多分镜时先合并为宫格图 =====
-        let imageUrl;
-        
-        if(shotFrameNodes.length > 1) {
-          // 多分镜：合并为宫格图
+
+        // ===== 根据视频生成模式收集图片 =====
+        let imageUrl; // 首尾帧模式使用
+        let referenceImageUrls = []; // 参考模式使用
+        let refPromptSuffix = []; // 参考图描述文字
+        let useTextToVideo = false; // 降级标记
+
+        if(videoGenMode === 'multi_reference') {
+          // ===== 参考生视频模式：收集角色/场景/道具参考图 =====
           if(mergeStatusEl) {
             mergeStatusEl.style.color = '#3b82f6';
-            mergeStatusEl.textContent = '正在合并宫格图片...';
+            mergeStatusEl.textContent = '正在收集参考图片...';
           }
-          generateBtn.textContent = '合并宫格...';
-          
-          const gridSize = calculateGridSize(shotFrameNodes.length);
-          if(!gridSize) {
-            throw new Error('分镜数量超过25，不支持宫格合并');
+          generateBtn.textContent = '收集参考图...';
+
+          const { referenceImageUrls: refUrls, promptSuffix: _refPromptSuffix } = await collectReferenceImagesForGrid(shotFrameNodes);
+          referenceImageUrls = refUrls;
+          refPromptSuffix = _refPromptSuffix || [];
+
+          if(referenceImageUrls.length > 0) {
+            console.log(`[分镜组视频] 参考模式：收集到 ${referenceImageUrls.length} 张参考图`);
+            if(mergeStatusEl) {
+              mergeStatusEl.style.color = '#22c55e';
+              mergeStatusEl.textContent = `收集到 ${referenceImageUrls.length} 张参考图，正在生成视频...`;
+            }
+          } else {
+            // 无参考图，降级为文生视频
+            console.log('[分镜组视频] 参考模式：无参考图，降级为文生视频');
+            useTextToVideo = true;
+            if(mergeStatusEl) {
+              mergeStatusEl.style.color = '#f59e0b';
+              mergeStatusEl.textContent = '无参考图，回退为文生视频模式...';
+            }
           }
-          
-          // 收集图片URL和黑色位置
-          const imageUrls = [];
-          const blackIndices = [];
-          for(let i = 0; i < gridSize; i++) {
-            if(i < shotFrameNodes.length) {
-              const imgUrl = shotFrameNodes[i].data.previewImageUrl || shotFrameNodes[i].data.imageUrl || '';
-              if(imgUrl) {
-                imageUrls.push(imgUrl);
+        } else {
+          // ===== 首尾帧模式：宫格合并 =====
+          if(shotFrameNodes.length > 1) {
+            // 多分镜：合并为宫格图
+            if(mergeStatusEl) {
+              mergeStatusEl.style.color = '#3b82f6';
+              mergeStatusEl.textContent = '正在合并宫格图片...';
+            }
+            generateBtn.textContent = '合并宫格...';
+
+            const gridSize = calculateGridSize(shotFrameNodes.length);
+            if(!gridSize) {
+              throw new Error('分镜数量超过25，不支持宫格合并');
+            }
+
+            // 收集图片URL和黑色位置
+            const imageUrls = [];
+            const blackIndices = [];
+            for(let i = 0; i < gridSize; i++) {
+              if(i < shotFrameNodes.length) {
+                const imgUrl = shotFrameNodes[i].data.previewImageUrl || shotFrameNodes[i].data.imageUrl || '';
+                if(imgUrl) {
+                  imageUrls.push(imgUrl);
+                } else {
+                  imageUrls.push('');
+                  blackIndices.push(i);
+                }
               } else {
                 imageUrls.push('');
                 blackIndices.push(i);
               }
-            } else {
-              imageUrls.push('');
-              blackIndices.push(i);
             }
-          }
-          
-          console.log(`[分镜组视频] 合并宫格: ${shotFrameNodes.length}个分镜 → ${gridSize}宫格, 黑色位置:`, blackIndices);
-          
-          // 调用合并API
-          const mergeRes = await fetch('/api/images/merge-grid', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-User-Id': userId,
-              'Authorization': `Bearer ${authToken}`
-            },
-            body: JSON.stringify({
-              image_urls: imageUrls,
-              black_indices: blackIndices,
-              grid_size: gridSize
-            })
-          });
-          
-          const mergeData = await mergeRes.json();
-          if(mergeData.code !== 0 || !mergeData.data || !mergeData.data.image_url) {
-            throw new Error(mergeData.message || '宫格图片合并失败');
-          }
-          
-          imageUrl = mergeData.data.image_url;
-          console.log(`[分镜组视频] 宫格合并成功:`, imageUrl);
-          
-          // 保存合并结果到节点数据
-          shotGroupNode.data.gridPreview = shotGroupNode.data.gridPreview || {};
-          shotGroupNode.data.gridPreview.mergedImageUrl = imageUrl;
-          
-          if(mergeStatusEl) {
-            mergeStatusEl.style.color = '#22c55e';
-            mergeStatusEl.textContent = '宫格合并完成，正在生成视频...';
-          }
-        } else {
-          // 单分镜：直接使用首帧图
-          imageUrl = firstShotFrame.data.previewImageUrl || firstShotFrame.data.imageUrl;
-          if(!imageUrl) {
-            throw new Error('分镜节点没有首帧图片');
+
+            console.log(`[分镜组视频] 合并宫格: ${shotFrameNodes.length}个分镜 → ${gridSize}宫格, 黑色位置:`, blackIndices);
+
+            // 调用合并API
+            const mergeRes = await fetch('/api/images/merge-grid', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-User-Id': userId,
+                'Authorization': `Bearer ${authToken}`
+              },
+              body: JSON.stringify({
+                image_urls: imageUrls,
+                black_indices: blackIndices,
+                grid_size: gridSize
+              })
+            });
+
+            const mergeData = await mergeRes.json();
+            if(mergeData.code !== 0 || !mergeData.data || !mergeData.data.image_url) {
+              throw new Error(mergeData.message || '宫格图片合并失败');
+            }
+
+            imageUrl = mergeData.data.image_url;
+            console.log(`[分镜组视频] 宫格合并成功:`, imageUrl);
+
+            // 保存合并结果到节点数据
+            shotGroupNode.data.gridPreview = shotGroupNode.data.gridPreview || {};
+            shotGroupNode.data.gridPreview.mergedImageUrl = imageUrl;
+
+            if(mergeStatusEl) {
+              mergeStatusEl.style.color = '#22c55e';
+              mergeStatusEl.textContent = '宫格合并完成，正在生成视频...';
+            }
+          } else {
+            // 单分镜：直接使用首帧图
+            imageUrl = firstShotFrame.data.previewImageUrl || firstShotFrame.data.imageUrl;
+            if(!imageUrl) {
+              throw new Error('分镜节点没有首帧图片');
+            }
           }
         }
         
@@ -10828,37 +10939,70 @@
         if(typeof getVideoPromptWithSuffix === 'function'){
           finalVideoPrompt = getVideoPromptWithSuffix(combinedVideoPrompt);
         }
+
+        // 参考模式下追加参考图描述（如"图1是土豆仔，图2是绿色青椒帽。"）
+        if(videoGenMode === 'multi_reference' && refPromptSuffix && refPromptSuffix.length > 0 && !useTextToVideo) {
+          finalVideoPrompt = `${finalVideoPrompt}\n\n${refPromptSuffix.join('，')}。`;
+        }
         
         generateBtn.textContent = '提交视频...';
         showToast(`正在生成 ${count} 个视频...`, 'info');
-        
-        // 调用图生视频API
-        // 根据 videoModel 获取 task_id
-        const taskId9 = TaskConfig.getTaskIdByKey(videoModel || 'wan22', 'image_to_video');
-        if(!taskId9){
-          throw new Error(`未找到视频模型 ${videoModel} 对应的任务配置`);
+
+        // 根据模式调用不同的API
+        let res;
+
+        if(useTextToVideo) {
+          // ===== 降级：文生视频 =====
+          const t2vTaskId = TaskConfig.getTaskIdByKey(videoModel || 'wan22', 'text_to_video');
+          if(!t2vTaskId){
+            throw new Error(`模型 ${videoModel} 不支持文生视频，请添加参考图（角色/场景/道具）或切换支持文生视频的模型`);
+          }
+
+          const form = new FormData();
+          form.append('prompt', finalVideoPrompt);
+          form.append('duration_seconds', duration);
+          form.append('count', count);
+          form.append('ratio', state.ratio || '9:16');
+          form.append('task_id', t2vTaskId);
+          appendAuthToForm(form);
+
+          res = await fetch('/api/ai-app-run', { method: 'POST', body: form });
+        } else if(videoGenMode === 'multi_reference') {
+          // ===== 参考生视频模式 =====
+          const refTaskId = TaskConfig.getTaskIdByKey(videoModel || 'wan22', 'image_to_video');
+          if(!refTaskId){
+            throw new Error(`未找到视频模型 ${videoModel} 对应的任务配置`);
+          }
+
+          const form = new FormData();
+          form.append('image_urls', referenceImageUrls.join(','));
+          form.append('image_mode', 'multi_reference');
+          form.append('prompt', finalVideoPrompt);
+          form.append('duration_seconds', duration);
+          form.append('count', count);
+          form.append('ratio', state.ratio || '9:16');
+          form.append('task_id', refTaskId);
+          appendAuthToForm(form);
+
+          res = await fetch('/api/ai-app-run-image', { method: 'POST', body: form });
+        } else {
+          // ===== 首尾帧模式（原有逻辑） =====
+          const taskId9 = TaskConfig.getTaskIdByKey(videoModel || 'wan22', 'image_to_video');
+          if(!taskId9){
+            throw new Error(`未找到视频模型 ${videoModel} 对应的任务配置`);
+          }
+
+          const form = new FormData();
+          form.append('image_urls', imageUrl);
+          form.append('prompt', finalVideoPrompt);
+          form.append('duration_seconds', duration);
+          form.append('count', count);
+          form.append('ratio', state.ratio || '9:16');
+          form.append('task_id', taskId9);
+          appendAuthToForm(form);
+
+          res = await fetch('/api/ai-app-run-image', { method: 'POST', body: form });
         }
-        
-        const form = new FormData();
-        
-        form.append('image_urls', imageUrl);
-        form.append('prompt', finalVideoPrompt);
-        form.append('duration_seconds', duration);
-        form.append('count', count);
-        form.append('ratio', state.ratio || '9:16');
-        form.append('task_id', taskId9);
-        
-        if(userId){
-          form.append('user_id', userId);
-        }
-        if(authToken){
-          form.append('auth_token', authToken);
-        }
-        
-        const res = await fetch('/api/ai-app-run-image', {
-          method: 'POST',
-          body: form
-        });
         
         const resText5 = await res.text();
         let data;
@@ -10918,9 +11062,7 @@
         }
 
         renderConnections();
-        renderImageConnections();
-        renderFirstFrameConnections();
-        renderVideoConnections();
+        renderAllConnections();
         renderMinimap();
 
         // 轮询视频生成状态,更新视频URL
@@ -10990,7 +11132,7 @@
             generateBtn.textContent = '生成视频';
             generateBtn.disabled = false;
             
-            try{ autoSaveWorkflow(); } catch(e){}
+            safeAutoSave()
           },
           (error) => {
             console.error('Shot group video generation error:', error);
@@ -11031,9 +11173,13 @@
           return;
         }
 
-        // 检查所有分镜节点是否都有首帧图片
-        const nodesWithImage = shotFrameNodes.filter(n => n.data.previewImageUrl || n.data.imageUrl);
-        if(nodesWithImage.length === 0) {
+        const groupGenMode = shotGroupNode.data.videoGenMode || 'first_last_frame';
+
+        // 检查所有分镜节点是否就绪（首帧模式需要图片，参考模式不需要）
+        const nodesReady = shotFrameNodes.filter(n => {
+          return groupGenMode === 'multi_reference' || n.data.previewImageUrl || n.data.imageUrl;
+        });
+        if(nodesReady.length === 0) {
           showToast('分镜节点没有首帧图片，请先生成分镜图', 'warning');
           return;
         }
@@ -11048,8 +11194,7 @@
           localStorage.setItem(batchTipKey, 'true');
         }
 
-        batchGenerateBtn.disabled = true;
-        batchGenerateBtn.textContent = '批量生成中...';
+        setBtnLoading(batchGenerateBtn, '批量生成中...');
 
         let successCount = 0;
         let failCount = 0;
@@ -11057,17 +11202,27 @@
         for(let i = 0; i < shotFrameNodes.length; i++) {
           const shotFrameNode = shotFrameNodes[i];
 
-          // 检查是否有预览图
-          if(!shotFrameNode.data.previewImageUrl && !shotFrameNode.data.imageUrl) {
-            console.warn(`分镜节点 ${shotFrameNode.id} 没有预览图，跳过`);
+          // 使用分镜组的生成模式覆盖子节点的模式
+          const effectiveMode = groupGenMode;
+
+          // 首帧模式需要有预览图，参考模式不需要
+          if(effectiveMode === 'first_last_frame' && !shotFrameNode.data.previewImageUrl && !shotFrameNode.data.imageUrl) {
+            console.warn(`分镜节点 ${shotFrameNode.id} 没有预览图且为首帧模式，跳过`);
             failCount++;
             continue;
           }
 
           try {
             showToast(`正在生成 ${i + 1}/${shotFrameNodes.length} 分镜视频...`, 'info');
-            // 从分镜组节点继承视频模型配置（修复视频模型选择不生效的bug）
-            shotFrameNode.data.videoModel = shotGroupNode.data.videoModel || shotFrameNode.data.videoModel;
+
+            // 将分镜组的生成模式同步到子节点
+            shotFrameNode.data.videoMode = effectiveMode;
+
+            // 首帧模式从分镜组继承视频模型；参考模式保持子节点自己的模型
+            if(effectiveMode !== 'multi_reference') {
+              shotFrameNode.data.videoModel = shotGroupNode.data.videoModel || shotFrameNode.data.videoModel;
+            }
+
             await generateShotFrameVideo(shotFrameNode.id, shotFrameNode);
             successCount++;
           } catch(error) {
@@ -11076,8 +11231,7 @@
           }
         }
 
-        batchGenerateBtn.disabled = false;
-        batchGenerateBtn.textContent = '逐个生成视频';
+        setBtnReady(batchGenerateBtn, '逐个生成视频');
 
         if(successCount > 0) {
           showToast(`批量生成完成！成功 ${successCount} 个，失败 ${failCount} 个`, 'success');
@@ -11091,8 +11245,7 @@
 
         const batchGenerateBtn = document.querySelector(`.node[data-node-id="${shotGroupNodeId}"] .shot-group-batch-generate-btn`);
         if(batchGenerateBtn) {
-          batchGenerateBtn.disabled = false;
-          batchGenerateBtn.textContent = '逐个生成视频';
+          setBtnReady(batchGenerateBtn, '逐个生成视频');
         }
       }
     }

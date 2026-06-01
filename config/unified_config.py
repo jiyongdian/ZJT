@@ -61,10 +61,35 @@ class AsyncTaskImplementationId:
     """异步任务实现 ID 常量（用于 async_tasks 表的 implementation 字段）"""
     UNKNOWN = 0
     RUNNINGHUB_AUDIO = 1  # RunningHub 音频生成
-    # 后续可添加其他异步任务实现：
-    # RUNNINGHUB_VIDEO = 2
-    # CUSTOM_LLM_TASK = 3
-    # etc.
+    RUNNINGHUB_FACE_MASK = 2  # RunningHub 人脸遮盖视频生成
+
+
+@dataclass
+class AsyncTaskConfig:
+    """异步任务配置类"""
+    impl_id: int                      # 实现 ID
+    name: str                         # 名称
+    need_runninghub_slot: bool = False  # 是否需要 RunningHub 槽位
+    slot_task_type: int = 0           # 槽位 task_type（对应 runninghub_slots.task_type）
+
+
+# 异步任务配置表
+ASYNC_TASK_CONFIGS: Dict[int, AsyncTaskConfig] = {
+    AsyncTaskImplementationId.UNKNOWN: AsyncTaskConfig(
+        impl_id=0, name="未知", need_runninghub_slot=False
+    ),
+    AsyncTaskImplementationId.RUNNINGHUB_AUDIO: AsyncTaskConfig(
+        impl_id=1, name="RunningHub音频", need_runninghub_slot=True, slot_task_type=1
+    ),
+    AsyncTaskImplementationId.RUNNINGHUB_FACE_MASK: AsyncTaskConfig(
+        impl_id=2, name="RunningHub人脸遮盖", need_runninghub_slot=True, slot_task_type=2
+    ),
+}
+
+
+def get_async_task_config(impl_id: int) -> AsyncTaskConfig:
+    """获取异步任务配置"""
+    return ASYNC_TASK_CONFIGS.get(impl_id, ASYNC_TASK_CONFIGS[AsyncTaskImplementationId.UNKNOWN])
 
 @dataclass
 class PowerModifier:
@@ -821,6 +846,11 @@ class DriverImplementation:
     SEEDANCE_2_0_FAST_VOLCENGINE_V1 = 'seedance_2_0_fast_volcengine_v1'
     SEEDANCE_2_0_VOLCENGINE_V1 = 'seedance_2_0_volcengine_v1'
 
+    # Volcengine Oversea (火山引擎海外版)
+    SEEDREAM5_VOLCENGINE_OVERSEA_V1 = 'seedream5_volcengine_oversea_v1'
+    SEEDANCE_2_0_FAST_VOLCENGINE_OVERSEA_V1 = 'seedance_2_0_fast_volcengine_oversea_v1'
+    SEEDANCE_2_0_VOLCENGINE_OVERSEA_V1 = 'seedance_2_0_volcengine_oversea_v1'
+
     # GPT Image
     DUOMI_GPT_IMAGE_V1 = 'duomi_gpt_image_v1'
     GPT_IMAGE_COMMON_SITE0_V1 = 'gpt_image_common_site0_v1'
@@ -907,6 +937,11 @@ class DriverImplementationId:
     HAPPY_HORSE_DASHSCOPE_R2V_V1 = 50
     HAPPY_HORSE_DASHSCOPE_T2V_V1 = 51
 
+    # Volcengine Oversea
+    SEEDREAM5_VOLCENGINE_OVERSEA_V1 = 52
+    SEEDANCE_2_0_FAST_VOLCENGINE_OVERSEA_V1 = 53
+    SEEDANCE_2_0_VOLCENGINE_OVERSEA_V1 = 54
+
 
 # implementation 字符串到 ID 的映射
 IMPLEMENTATION_TO_ID = {
@@ -961,6 +996,9 @@ IMPLEMENTATION_TO_ID = {
     'happy_horse_dashscope_v1': DriverImplementationId.HAPPY_HORSE_DASHSCOPE_V1,
     'happy_horse_dashscope_r2v_v1': DriverImplementationId.HAPPY_HORSE_DASHSCOPE_R2V_V1,
     'happy_horse_dashscope_t2v_v1': DriverImplementationId.HAPPY_HORSE_DASHSCOPE_T2V_V1,
+    'seedream5_volcengine_oversea_v1': DriverImplementationId.SEEDREAM5_VOLCENGINE_OVERSEA_V1,
+    'seedance_2_0_fast_volcengine_oversea_v1': DriverImplementationId.SEEDANCE_2_0_FAST_VOLCENGINE_OVERSEA_V1,
+    'seedance_2_0_volcengine_oversea_v1': DriverImplementationId.SEEDANCE_2_0_VOLCENGINE_OVERSEA_V1,
 }
 
 # implementation ID 到字符串的映射
@@ -1180,6 +1218,10 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         provider=TaskProvider.VOLCENGINE,
         driver_name=DriverKey.SEEDREAM_TEXT_TO_IMAGE,
         implementation=DriverImplementation.SEEDREAM5_VOLCENGINE_V1,
+        implementations=[
+            DriverImplementation.SEEDREAM5_VOLCENGINE_V1,
+            DriverImplementation.SEEDREAM5_VOLCENGINE_OVERSEA_V1,
+        ],
         computing_power=6,
         supported_ratios=['1:1', '4:3', '3:4', '16:9', '9:16', '3:2', '2:3', '21:9'],
         supported_sizes=['2K', '3K'],
@@ -1198,6 +1240,10 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         provider=TaskProvider.VOLCENGINE,
         driver_name=DriverKey.SEEDREAM_TEXT_TO_IMAGE,
         implementation=DriverImplementation.SEEDREAM5_VOLCENGINE_V1,
+        implementations=[
+            DriverImplementation.SEEDREAM5_VOLCENGINE_V1,
+            DriverImplementation.SEEDREAM5_VOLCENGINE_OVERSEA_V1,
+        ],
         computing_power=8,
         supported_ratios=['1:1', '4:3', '3:4', '16:9', '9:16', '3:2', '2:3', '21:9'],
         supported_sizes=['2K', '4K'],
@@ -1503,6 +1549,10 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         provider=TaskProvider.VOLCENGINE,
         driver_name=DriverKey.SEEDANCE_2_0_FAST_IMAGE_TO_VIDEO,
         implementation=DriverImplementation.SEEDANCE_2_0_FAST_VOLCENGINE_V1,
+        implementations=[
+            DriverImplementation.SEEDANCE_2_0_FAST_VOLCENGINE_V1,
+            DriverImplementation.SEEDANCE_2_0_FAST_VOLCENGINE_OVERSEA_V1,
+        ],
         supported_ratios=['9:16', '16:9'],
         supported_durations=[5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
         default_ratio='9:16',
@@ -1512,6 +1562,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         supports_last_frame=True,  # 支持首尾帧
         supports_ref_audio_video=True,  # 支持参考音频和视频
         max_multi_ref_images=9,
+        supports_grid_merge=True,
     ),
     UnifiedTaskConfig(
         id=TaskTypeId.SEEDANCE_2_0_IMAGE_TO_VIDEO,
@@ -1523,6 +1574,10 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         provider=TaskProvider.VOLCENGINE,
         driver_name=DriverKey.SEEDANCE_2_0_IMAGE_TO_VIDEO,
         implementation=DriverImplementation.SEEDANCE_2_0_VOLCENGINE_V1,
+        implementations=[
+            DriverImplementation.SEEDANCE_2_0_VOLCENGINE_V1,
+            DriverImplementation.SEEDANCE_2_0_VOLCENGINE_OVERSEA_V1,
+        ],
         supported_ratios=['9:16', '16:9'],
         supported_durations=[5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
         default_ratio='9:16',
@@ -1532,6 +1587,7 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         supports_last_frame=True,  # 支持首尾帧
         supports_ref_audio_video=True,  # 支持参考音频和视频
         max_multi_ref_images=9,
+        supports_grid_merge=True,
     ),
     UnifiedTaskConfig(
         id=TaskTypeId.HAPPY_HORSE_IMAGE_TO_VIDEO,
@@ -2168,6 +2224,39 @@ ALL_IMPLEMENTATIONS: List[ImplementationConfig] = [
         description='火山引擎 Seedance 2.0 图生视频接口',
         sort_order=10700.0,
         required_config_keys=['volcengine.api_key']
+    ),
+
+    # ==================== 火山引擎海外版供应商 ====================
+    ImplementationConfig(
+        name='seedream5_volcengine_oversea_v1',
+        display_name='火山引擎海外版',
+        driver_class='Seedream5VolcengineOverseaV1Driver',
+        default_computing_power=6,
+        enabled=True,
+        description='火山引擎海外版 Seedream 5.0/4.5 文生图接口',
+        sort_order=10100.0,
+        sync_mode=True,  # 同步模式
+        required_config_keys=['volcengine_oversea.api_key']
+    ),
+    ImplementationConfig(
+        name='seedance_2_0_fast_volcengine_oversea_v1',
+        display_name='火山引擎海外版',
+        driver_class='Seedance20FastVolcengineOverseaV1Driver',
+        default_computing_power={5: 105, 6: 126, 7: 147, 8: 168, 9: 189, 10: 210, 11: 231, 12: 252, 13: 273, 14: 294, 15: 315},
+        enabled=True,
+        description='火山引擎海外版 Seedance 2.0 Fast 图生视频接口',
+        sort_order=10650.0,
+        required_config_keys=['volcengine_oversea.api_key']
+    ),
+    ImplementationConfig(
+        name='seedance_2_0_volcengine_oversea_v1',
+        display_name='火山引擎海外版',
+        driver_class='Seedance20VolcengineOverseaV1Driver',
+        default_computing_power={5: 250, 6: 300, 7: 350, 8: 400, 9: 450, 10: 500, 11: 550, 12: 600, 13: 650, 14: 700, 15: 750},
+        enabled=True,
+        description='火山引擎海外版 Seedance 2.0 图生视频接口',
+        sort_order=10750.0,
+        required_config_keys=['volcengine_oversea.api_key']
     ),
     ImplementationConfig(
         name='happy_horse_dashscope_v1',

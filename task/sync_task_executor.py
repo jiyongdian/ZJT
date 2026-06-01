@@ -313,7 +313,18 @@ class SyncTaskExecutor:
                     self._handle_task_result(result)
                 except Exception as e:
                     logger.error(f"[SyncTaskExecutor] Task {task_id} raised exception: {e}")
-                    self._handle_task_failure(task_id, str(e))
+                    try:
+                        self._handle_task_failure(task_id, str(e))
+                    except Exception as e2:
+                        logger.error(f"[SyncTaskExecutor] Failed to handle failure for task {task_id}: {e2}")
+                        # 最后兜底：确保 status 被更新，防止任务永久卡在 PROCESSING
+                        try:
+                            from model import AIToolsModel, TasksModel
+                            from config.constant import AI_TOOL_STATUS_FAILED, TASK_STATUS_FAILED
+                            AIToolsModel.update(task_id, status=AI_TOOL_STATUS_FAILED, message=f"系统异常: {str(e)}")
+                            TasksModel.update_by_task_id(task_id, status=TASK_STATUS_FAILED)
+                        except Exception as e3:
+                            logger.critical(f"[SyncTaskExecutor] CRITICAL: Cannot update status for task {task_id}: {e3}")
 
         # 清理已完成的future
         for task_id in completed_task_ids:

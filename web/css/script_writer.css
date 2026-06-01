@@ -2626,6 +2626,32 @@ body {
     opacity: 1;
 }
 
+/* 音色播放按钮 */
+.voice-play-btn {
+    color: #666;
+    transition: all 0.2s ease;
+}
+
+.voice-play-btn.has-voice {
+    color: #10b981;
+}
+
+.voice-play-btn.has-voice:hover {
+    color: #059669;
+    transform: scale(1.1);
+}
+
+.voice-play-btn.no-voice {
+    color: #9ca3af;
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.voice-play-btn[disabled] {
+    cursor: not-allowed;
+    opacity: 0.4;
+}
+
 /* 图片预览弹窗 */
 .image-preview-dialog {
     max-width: 90vw;

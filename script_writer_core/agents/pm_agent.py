@@ -172,17 +172,28 @@ class PMAgent(BaseAgent, AskUserMixin):
         # 设置 task_id，供 AskUserMixin 使用
         self.task_id = task.task_id
 
+        # 保存当前任务的语言设置
+        self.current_language = task.language
+        logger.info(f"{self.agent_id}: Language set to '{task.language}' (current_language={self.current_language})")
+
         # 重置失败计数器，确保每个新任务独立（避免算力不足停止后残留计数导致新任务立即失败）
         self.consecutive_failures = 0
         self.total_failures = 0
 
         try:
-            # 添加用户消息到历史（图片以文字标签形式注入，不需要 base64）
+            # 添加用户消息到历史（图片、视频、音频以文字标签形式注入，不需要 base64）
+            combined_parts = []
             if task.image_urls:
-                image_labels = []
                 for i, image_url in enumerate(task.image_urls):
-                    image_labels.append(f"[图片{i + 1}]（URL: {image_url}）")
-                combined = "\n".join(image_labels) + "\n\n" + task.user_message
+                    combined_parts.append(f"[图片{i + 1}]（URL: {image_url}）")
+            if task.video_urls:
+                for i, video_url in enumerate(task.video_urls):
+                    combined_parts.append(f"[视频{i + 1}]（URL: {video_url}）")
+            if task.audio_urls:
+                for i, audio_url in enumerate(task.audio_urls):
+                    combined_parts.append(f"[音频{i + 1}]（URL: {audio_url}）")
+            if combined_parts:
+                combined = "\n".join(combined_parts) + "\n\n" + task.user_message
                 self.add_to_history("user", combined)
             else:
                 self.add_to_history("user", task.user_message)
@@ -522,7 +533,8 @@ class PMAgent(BaseAgent, AskUserMixin):
             thinking_effort=task.thinking_effort,
             task_manager=self.task_manager,
             task_id=task.task_id,
-            max_iterations=expert_config.get("max_iterations", 10)
+            max_iterations=expert_config.get("max_iterations", 10),
+            language=task.language
         )
 
         # 合并 LLM 提供的 conversation_history 和 PM 已有的 ask_user 交互
@@ -928,9 +940,19 @@ class PMAgent(BaseAgent, AskUserMixin):
         messages = []
 
         # 1. 添加 system 消息（已在 __init__ 中包含环境上下文）
+        system_content = self.system_prompt
+        # 追加语言指令（非中文时）
+        if hasattr(self, 'current_language') and self.current_language != 'zh-CN':
+            from config.constant import LANGUAGE_INSTRUCTIONS
+            lang_instruction = LANGUAGE_INSTRUCTIONS.get(self.current_language, '')
+            if lang_instruction:
+                system_content += lang_instruction
+                logger.info(f"{self.agent_id}: Appended language instruction for '{self.current_language}' ({len(lang_instruction)} chars)")
+            else:
+                logger.warning(f"{self.agent_id}: No language instruction found for '{self.current_language}'")
         messages.append({
             "role": "system",
-            "content": self.system_prompt
+            "content": system_content
         })
 
         # 判断是否为 DeepSeek 模型，如果是则需要为历史 assistant 消息补充 reasoning_content
@@ -1004,7 +1026,15 @@ class PMAgent(BaseAgent, AskUserMixin):
                     "content": content if isinstance(content, str) else str(content)
                 })
 
-        # 3. 防御性清理：移除没有前置 assistant(tool_calls) 的孤立 tool 消息
+        # 3. 为非中文语言注入用户消息提示（双重保险）
+        if hasattr(self, 'current_language') and self.current_language != 'zh-CN':
+            # 找到最后一条 user 消息，追加语言提示
+            for i in range(len(messages) - 1, -1, -1):
+                if messages[i].get("role") == "user" and isinstance(messages[i].get("content"), str):
+                    messages[i]["content"] += f"\n\n[Please respond in English]"
+                    break
+
+        # 4. 防御性清理：移除没有前置 assistant(tool_calls) 的孤立 tool 消息
         sanitized = []
         for i, msg in enumerate(messages):
             if msg.get("role") == "tool":

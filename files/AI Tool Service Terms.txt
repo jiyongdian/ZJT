@@ -1,0 +1,103 @@
+# AI Tool Service Terms of Use
+
+**Important Notice**
+
+Welcome to our AI Tool Service! Please carefully read and fully understand all provisions of these Terms of Use (hereinafter referred to as "these Terms"), especially the provisions regarding exemption or limitation of liability, as well as any separate agreements or rules for activating or using certain services. Limitations and disclaimers may be highlighted in bold to draw your attention.
+
+**Unless you have read and accepted all relevant provisions of these Terms, you are not authorized to use this AI Tool Service. Your use of this AI Tool Service constitutes your acknowledgment that you have read and agree to be bound by these Terms.**
+
+## I. Service Description
+
+1.1 This service is provided by [Hangzhou Perseus Technology Co., Ltd.] (hereinafter referred to as "the Company" or "we") through mini-programs, web pages, and other forms, to you (hereinafter referred to as "the User"), supporting the generation of short videos through image and text input, or the modification of images according to requirements using artificial intelligence tools (hereinafter referred to as "the Service").
+
+1.2 All content generated or modified by this service (including but not limited to videos, images, text, etc., hereinafter referred to as "Generated Content") is automatically produced by artificial intelligence models based on your input instructions. The accuracy, completeness, availability, and timeliness of the Generated Content cannot be guaranteed. **You understand and agree that the Company makes no express or implied warranties regarding the Generated Content, and you should exercise your own judgment regarding the Generated Content and bear all risks independently.**
+
+## II. User Accounts
+
+2.1 You may need to register an account to use certain services. You agree to comply with the platform's account registration process and related management regulations, and ensure that the registration information you provide (such as identity information, contact information, etc.) is true, accurate, and complete.
+
+2.2 Your account is set up and maintained by you, and you are responsible for all activities under your account (including but not limited to generating content, publishing information, etc.). **If you discover any unauthorized use of your account, you should notify the Company immediately. The Company is not responsible for any losses caused by your failure to properly safeguard your account information.**
+
+**2.3 You understand and agree that lending, providing, transferring, or otherwise permitting others to use your personal account is a violation of the User Agreement. We reserve the right to take measures such as re-verifying identity, freezing accounts, banning or closing accounts, restricting account functions, IP restrictions or bans, suspending or terminating services, etc., depending on the circumstances. Please note that we may limit the number of devices that can log in to the website/application using the same member account, as well as the number of simultaneous online devices under the same account.**
+
+## **III. Paid Services**
+
+**3.1 Paid services include but are not limited to membership services, computing power, value-added packages, and other forms of premium services. The specific service content is subject to the display on the relevant product pages.**
+
+**3.2 The pricing standards for paid services are determined independently by us based on comprehensive considerations of business operating costs, operational strategies, etc., and may be adjusted from time to time, and will be displayed to you on the relevant product payment pages. The pricing standards for products you order are subject to the prices effective at that time. If there are adjustments to the price, content, etc. of subscription plans, you acknowledge and agree that your continued purchase action (including but not limited to clicking agree, continuing to purchase, or completing payment, etc.) constitutes your acknowledgment and agreement to the changed content, and you confirm that you will not claim compensation from us due to changes or adjustments in charging items or standards.**
+
+**3.3 Computing Power Service Rules:**
+**(1) Computing power is a virtual resource quota that you can use in this service to generate or process content. You can obtain computing power by purchasing specified paid packages or participating in activities approved by us.**
+**(2) Computing power typically has a fixed validity period (such as monthly, quarterly, annually, etc.), and the specific validity period will be clearly stated on the corresponding product page when you purchase. Please read the relevant rules carefully before purchasing.**
+**(3) You understand and agree that once computing power is purchased, it is non-refundable except as required by mandatory legal provisions. Within the specified validity period, your unused computing power can be accumulated; after the validity period expires, the system will automatically reset the remaining computing power for that period to zero, and no compensation or refund of any kind will be provided. Please use it within the validity period in a timely manner.**
+
+**3.4 If you terminate a paid service, the paid service will terminate at the beginning of the next billing cycle, and fees already paid are non-refundable.**
+
+## **IV. User Conduct Standards and Content Responsibility**
+
+4.1 **You promise and guarantee that any input content you provide to this service (including but not limited to images, text, instructions, etc., hereinafter referred to as "Input Content") and your use of this service comply with laws, regulations, public order and good morals, and do not infringe upon the lawful rights of any third party.** You must not create, upload, input, or transmit any information containing the following content:
+(1) Content that opposes the fundamental principles established by the Constitution;
+(2) Content that endangers national security, leaks state secrets, subverts state power, or undermines national unity;
+(3) Content that damages national honor and interests;
+(4) Content that incites ethnic hatred, ethnic discrimination, or undermines ethnic unity;
+(5) Content that undermines national religious policies, promotes cults and feudal superstitions;
+(6) Content that spreads rumors, disrupts social order, or undermines social stability;
+(7) Content that is obscene, pornographic, related to gambling, violent, murderous, terrorist, or incites crime;
+(8) Content that insults or defames others, infringes on others' reputation, privacy, intellectual property, trade secrets, and other lawful rights;
+(9) Any unauthorized or unlicensed third-party personal sensitive information;
+(10) Other content prohibited by laws and administrative regulations.
+
+**4.2 You should use AI products and services in a lawful and compliant manner. You understand, confirm, and promise that all Input Content you enter, submit, upload, or publish when using this product is original, fully owned by you, or has been fully and legally authorized. The intellectual property, ownership, personality rights (including but not limited to portrait rights, etc.), data rights, and/or other related rights of the Input Content are enjoyed by you and/or the third party that authorized you in accordance with the law, and do not infringe on anyone's intellectual property, personality rights, data rights, trade secrets, or other lawful rights. You should independently bear responsibility for the act of providing Input Content.**
+
+4.3 **You understand and confirm that you bear full responsibility for the legality and compliance of your Input Content and Generated Content.** If your Input Content or Generated Content violates laws and regulations or infringes on any third-party rights, resulting in any third-party claims, disputes, or losses, you shall independently bear responsibility and compensate the Company and its affiliates for all losses suffered as a result.
+
+**4.4 If we discover that your Input Content or Output Content (including but not limited to generated videos) during the use of this product contains content that violates laws, regulations, these Terms, or the User Agreement, we reserve the right to take measures such as deleting, blocking, or refusing to output relevant content as appropriate, and to take measures such as freezing, banning, or closing your account. If you discover that the Input Content or Output Content contains the aforementioned situations, you should immediately take appropriate measures such as deleting or replacing the content to avoid the generation or dissemination of relevant content, and promptly report the situation to us.**
+
+## V. Intellectual Property and Generated Content Attributes
+
+5.1 The intellectual property and related rights of the software, technology, interfaces, documentation, etc. provided by the Company in connection with this Service are owned by the Company or the relevant rights holders.
+
+5.2 **You understand and confirm that, given the nature of artificial intelligence technology, any content generated through this Service (including but not limited to videos, images, text, etc.) does not fall within the scope of "works" as defined by the Copyright Law of the People's Republic of China and does not enjoy intellectual property or other proprietary rights.** Generated Content is output automatically produced by artificial intelligence models based on algorithms and training data, and may be similar to or duplicate content generated by other users.
+
+5.3 Provided that you comply with these Terms, the Company permits you to use specific content generated through this Service for lawful purposes. You understand and agree that such use does not constitute a grant or transfer of any intellectual property rights.
+
+5.4 You should ensure that the Input Content you provide is original or has been fully authorized and does not infringe on the lawful rights of any third party. You hereby grant the Company a global, free, irrevocable license to use your Input Content for the purpose of operating, maintaining, and improving this Service and developing related artificial intelligence models. During such use, the Company will anonymize your personal data.
+
+## **VI. Rules for Using Generated Content**
+
+**6.1 For videos and other content generated using this Service (hereinafter referred to as "Generated Content"), users may download versions without explicit service identifiers/watermarks for use (including commercial purposes).**
+
+**6.2 You promise and guarantee:**
+**(1) You will use the Generated Content for lawful and compliant purposes, and will not use it for any illegal activities, nor use this Service or Generated Content to infringe on the lawful rights of others (including but not limited to intellectual property, portrait rights, privacy rights, etc.), nor use this Service or Generated Content to engage in business competing with ours.**
+**(2) When using, distributing, or publicly publishing Generated Content, you are obligated to clearly mark and indicate in a prominent manner that the content was generated by artificial intelligence technology, and fully explain this to third parties to avoid causing misleading, confusion, or misidentification.**
+
+**6.3 You acknowledge and agree that, in accordance with national laws and regulations, we will retain your account information, operation logs, and other necessary information for no less than six months to fulfill our management obligations.**
+
+**6.4 If you violate these Terms or relevant laws and regulations and engage in prohibited activities, you shall independently bear all consequences and responsibilities arising therefrom. If this causes losses to us or any third party (including but not limited to damages, administrative fines, attorney fees, rights protection expenses, etc.), you shall be responsible for full compensation.**
+
+## **VII. Disclaimer**
+
+7.1 **This Service is provided on an "as is" and "as available" basis. The Company hereby expressly disclaims all warranties regarding the Service, whether express or implied, including but not limited to warranties of merchantability, fitness for a particular purpose, non-infringement, and any warranties arising from course of dealing or usage of trade.**
+
+**7.2 Since all output content is generated by technical models, although we have made efforts to improve the model algorithms, due to the limitations of technological development, we still cannot guarantee the applicability, accuracy, reliability, or completeness of the Service or output content. You acknowledge, understand, and accept that we do not make any guarantees or bear any responsibility for the applicability, accuracy, reliability, or completeness of this AI Tool product and service, and you will not make any claims against us in this regard.**
+
+7.3 **In no event shall the Company be liable for any indirect, incidental, special, consequential, or punitive damages (including but not limited to loss of profits, data loss, loss of goodwill, or other intangible losses) arising from the use of or inability to use this Service,** even if the Company has been advised of the possibility of such damages.
+
+7.4 **Notwithstanding the preceding paragraph, in no event shall the Company's total liability under these Terms (whether based on contract, tort, or otherwise) exceed the total fees you have paid to the Company for the use of this Service (if any).**
+
+## **VIII. Service Changes and Termination**
+
+8.1 The Company reserves the right to modify, suspend, or terminate some or all of the services at any time based on business development, technology updates, or changes in laws and regulations, without prior notice to users.
+
+8.2 If any of the following circumstances occur, the Company has the right to immediately terminate or suspend the provision of services to you without notice and pursue your related legal responsibilities:
+(1) You violate any provision of these Terms;
+(2) As required by laws, regulations, or government or judicial authorities;
+(3) Other circumstances where the Company deems it necessary to terminate or suspend services.
+
+## **IX. Other Provisions**
+
+9.1 The validity, interpretation, modification, execution, and dispute resolution of these Terms shall be governed by the laws of the People's Republic of China.
+
+9.2 Any disputes arising from or related to these Terms shall first be resolved through friendly negotiation between the parties; if negotiation fails, either party has the right to submit the dispute to the **People's Court with jurisdiction in the location of the Company** for resolution through litigation.
+
+9.3 These Terms constitute the complete agreement between you and the Company regarding this Service. The Company's failure to exercise or delay in exercising any right under these Terms does not constitute a waiver of that right.
