@@ -3,12 +3,40 @@
 提供应用启动时自动执行 Alembic 迁移的功能
 """
 import logging
+import shutil
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 # 项目根目录
 APP_DIR = Path(__file__).parent.parent
+
+
+def _clean_pycache():
+    """
+    清理 alembic/versions 目录下的缓存和临时文件
+    - __pycache__: 避免跨平台字节码缓存损坏
+    - ._ 文件: macOS AppleDouble 资源分支文件，包含二进制数据会导致 Alembic 加载失败
+    """
+    versions_dir = APP_DIR / "alembic" / "versions"
+ 
+    # 清理 __pycache__ 目录
+    pycache_dir = versions_dir / "__pycache__"
+    if pycache_dir.exists():
+        try:
+            shutil.rmtree(pycache_dir)
+            logger.debug(f"Cleaned pycache: {pycache_dir}")
+        except Exception as e:
+            logger.warning(f"Failed to clean pycache: {e}")
+ 
+    # 清理 macOS AppleDouble 文件 (._*.py)
+    if versions_dir.exists():
+        for f in versions_dir.glob("._*.py"):
+            try:
+                f.unlink()
+                logger.debug(f"Removed AppleDouble file: {f.name}")
+            except Exception as e:
+                logger.warning(f"Failed to remove {f.name}: {e}")
 
 
 def get_alembic_config():
@@ -47,6 +75,9 @@ def run_migrations() -> bool:
     """
     try:
         from alembic import command
+
+        # 清理字节码缓存，避免跨平台使用时的编译错误
+        _clean_pycache()
 
         alembic_cfg = _create_alembic_cfg()
         if alembic_cfg is None:
@@ -112,6 +143,9 @@ def stamp_head() -> bool:
     """
     try:
         from alembic import command
+
+        # 清理字节码缓存，避免跨平台使用时的编译错误
+        _clean_pycache()
 
         alembic_cfg = _create_alembic_cfg()
         if alembic_cfg is None:
