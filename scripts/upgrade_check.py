@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 启动前检查更新脚本
@@ -32,9 +32,8 @@ def get_project_dir() -> Path:
 def find_git_binary():
     """查找 git 二进制
 
-    仅使用项目内置的 bin/git，不回退到系统 PATH。
-    Windows: bin/git/cmd/git.exe 或 bin/git/git.exe
-    macOS/Linux: bin/git/bin/git
+    Windows: 仅使用项目内置的 bin/git，不回退到系统 PATH
+    macOS/Linux: 优先使用内置 git，找不到则回退到系统 PATH
     """
     project_dir = get_project_dir()
 
@@ -53,6 +52,13 @@ def find_git_binary():
     for p in candidates:
         if p.exists():
             return str(p)
+
+    # macOS/Linux: 回退到系统 PATH 中的 git
+    if sys.platform != "win32":
+        import shutil
+        system_git = shutil.which("git")
+        if system_git:
+            return system_git
 
     return None
 
