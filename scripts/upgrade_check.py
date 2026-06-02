@@ -269,12 +269,39 @@ def get_local_version(project_dir, git_cmd=None):
     return "unknown"
 
 
+def get_git_env(git_cmd):
+    """获取运行 git 命令时的环境变量
+
+    如果使用内置 git，设置 GIT_SSL_CAINFO 指向内置的证书文件，
+    避免使用系统证书导致的 SSL 错误。
+    """
+    env = os.environ.copy()
+    git_path = Path(git_cmd)
+    project_dir = get_project_dir()
+
+    # 检查是否是内置 git（路径在项目 bin 目录下）
+    try:
+        git_path.resolve().relative_to(project_dir / "bin")
+        is_builtin = True
+    except ValueError:
+        is_builtin = False
+
+    if is_builtin and sys.platform == "win32":
+        # MinGit 的证书路径
+        ca_bundle = project_dir / "bin" / "git" / "mingw64" / "etc" / "ssl" / "certs" / "ca-bundle.crt"
+        if ca_bundle.exists():
+            env["GIT_SSL_CAINFO"] = str(ca_bundle)
+
+    return env
+
+
 def run_git(git_cmd, args, cwd, timeout=30, capture=True):
     """运行 git 命令
 
     返回 (returncode, stdout, stderr)
     """
     cmd = [git_cmd] + args
+    env = get_git_env(git_cmd)
     try:
         if capture:
             result = subprocess.run(
@@ -285,10 +312,11 @@ def run_git(git_cmd, args, cwd, timeout=30, capture=True):
                 encoding="utf-8",
                 errors="replace",
                 timeout=timeout,
+                env=env,
             )
             return result.returncode, result.stdout, result.stderr
         else:
-            result = subprocess.run(cmd, cwd=str(cwd), timeout=timeout)
+            result = subprocess.run(cmd, cwd=str(cwd), timeout=timeout, env=env)
             return result.returncode, "", ""
     except subprocess.TimeoutExpired:
         return -1, "", "timeout"
