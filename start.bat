@@ -141,15 +141,21 @@ REM ==========================================
 
 REM === 启动前检查更新 ===
 echo [1.5/4] Checking for updates...
-call "!UV_CMD!" run --python cpython-3.10-windows-x86_64-none --with-requirements requirements.txt scripts\upgrade_check.py
-set "UPGRADE_EXIT_CODE=!errorlevel!"
-if !UPGRADE_EXIT_CODE! GEQ 2 (
+"!UV_CMD!" run --python cpython-3.10-windows-x86_64-none --with-requirements requirements.txt scripts\upgrade_check.py
+set "UPGRADE_RC=%errorlevel%"
+if %UPGRADE_RC% equ 2 (
     echo [ERROR] 更新检查遇到严重错误
     pause
     exit /b 1
 )
-if !UPGRADE_EXIT_CODE! GEQ 1 (
+if %UPGRADE_RC% equ 1 (
     echo [WARN] 更新检查失败，继续使用本地版本
+)
+if %UPGRADE_RC% equ 10 (
+    echo [INFO] 代码已更新，正在重新启动...
+    endlocal
+    "%~f0" %*
+    exit /b
 )
 echo.
 REM =====================

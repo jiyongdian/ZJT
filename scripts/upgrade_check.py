@@ -367,7 +367,7 @@ def init_git_repo(project_dir, git_cmd, repo_urls, branch, timeout):
 
         # fetch
         rc, _, err = run_git(
-            git_cmd, ["fetch", "origin", branch, "--depth", "1", "--tags"],
+            git_cmd, ["fetch", "origin", branch, "--depth", "1", "--tags", "--force"],
             project_dir, timeout=timeout
         )
         if rc != 0:
@@ -580,7 +580,7 @@ def main():
 
     # 3. fetch 远程（包含 tag）
     rc, _, err = run_git(
-        git_cmd, ["fetch", "origin", branch, "--tags"],
+        git_cmd, ["fetch", "origin", branch, "--tags", "--force"],
         project_dir, timeout=timeout
     )
     if rc != 0:
