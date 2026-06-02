@@ -634,8 +634,8 @@ def main():
     # 9. 检查依赖变化
     check_requirements_changed(git_cmd, project_dir, timeout)
 
-    print("[upgrade] 更新完成，继续启动...")
-    return 0
+    print("[upgrade] 更新完成，需要重新启动...")
+    return 10  # 特殊码：代码已更新，需要重启 start.bat
 
 
 if __name__ == "__main__":
