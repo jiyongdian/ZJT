@@ -2299,8 +2299,8 @@ textarea:focus{ border-color: var(--primary); }
   overflow: hidden;
   background: #f9fafb;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-start;
+  justify-content: flex-start;
 }
 .coloring-canvas-container canvas{
   display: block;
