@@ -87,11 +87,34 @@ del "!SUCCESS_FLAG!" 2>nul
 echo   Trying !MIRROR_NAME! mirror (180s timeout)...
 
 if not "!MIRROR_URL!"=="" goto :mirror_has_url
-powershell -ExecutionPolicy ByPass -Command "$p = New-Object System.Diagnostics.Process; $p.StartInfo.FileName = '!UV_CMD!'; $p.StartInfo.Arguments = 'python install cpython-3.10-windows-x86_64-none'; $p.StartInfo.UseShellExecute = $false; $null = $p.Start(); if (-not $p.WaitForExit(180000)) { $p.Kill() } else { if ($p.ExitCode -eq 0) { '' | Set-Content -Path '!SUCCESS_FLAG!' } }"
-goto :mirror_check
+start /B "" "!UV_CMD!" python install cpython-3.10-windows-x86_64-none >nul 2>&1
+goto :wait_for_completion
 
 :mirror_has_url
-powershell -ExecutionPolicy ByPass -Command "$p = New-Object System.Diagnostics.Process; $p.StartInfo.FileName = '!UV_CMD!'; $p.StartInfo.Arguments = 'python install cpython-3.10-windows-x86_64-none --mirror !MIRROR_URL!'; $p.StartInfo.UseShellExecute = $false; $null = $p.Start(); if (-not $p.WaitForExit(180000)) { $p.Kill() } else { if ($p.ExitCode -eq 0) { '' | Set-Content -Path '!SUCCESS_FLAG!' } }"
+start /B "" "!UV_CMD!" python install cpython-3.10-windows-x86_64-none --mirror "!MIRROR_URL!" >nul 2>&1
+
+:wait_for_completion
+set "TIMEOUT_COUNT=0"
+:wait_loop
+tasklist /FI "IMAGENAME eq uv.exe" 2>nul | find /I "uv.exe" >nul
+if errorlevel 1 (
+    REM uv 进程已结束，检查是否成功
+    "!UV_CMD!" python find cpython-3.10-windows-x86_64-none >nul 2>&1
+    if not errorlevel 1 (
+        echo 1 > "!SUCCESS_FLAG!"
+    )
+    goto :mirror_check
+)
+
+REM 进程还在运行，继续等待
+set /a "TIMEOUT_COUNT+=1"
+if !TIMEOUT_COUNT! GEQ 180 (
+    REM 超时，杀掉进程
+    taskkill /F /IM uv.exe >nul 2>&1
+    goto :mirror_check
+)
+timeout /t 1 /nobreak >nul
+goto :wait_loop
 
 :mirror_check
 if exist "!SUCCESS_FLAG!" (
@@ -119,13 +142,20 @@ REM ==========================================
 REM === 启动前检查更新 ===
 echo [1.5/4] Checking for updates...
 "!UV_CMD!" run --python cpython-3.10-windows-x86_64-none --with-requirements requirements.txt scripts\upgrade_check.py
-if errorlevel 2 (
+set "UPGRADE_RC=%errorlevel%"
+if %UPGRADE_RC% equ 2 (
     echo [ERROR] 更新检查遇到严重错误
     pause
     exit /b 1
 )
-if errorlevel 1 (
+if %UPGRADE_RC% equ 1 (
     echo [WARN] 更新检查失败，继续使用本地版本
+)
+if %UPGRADE_RC% equ 10 (
+    echo [INFO] 代码已更新，正在重新启动...
+    endlocal
+    "%~f0" %*
+    exit /b
 )
 echo.
 REM =====================
@@ -153,7 +183,7 @@ echo [4/4] Starting services...
 echo ========================================
 echo.
 
-!UV_CMD! run --managed-python --python cpython-3.10-windows-x86_64-none --with-requirements requirements.txt scripts\launchers\start_windows.py
+!UV_CMD! run --python cpython-3.10-windows-x86_64-none --with-requirements requirements.txt scripts\launchers\start_windows.py
 
 if errorlevel 1 (
     echo.

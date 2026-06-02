@@ -50,13 +50,24 @@ echo "[OK] uv found"
 # [1.5/4] 检查更新（在 uv 就绪后执行）
 echo ""
 echo "[1.5/4] Checking for updates..."
+# 临时禁用 set -e，允许 upgrade_check.py 返回非零状态
+set +e
 "$UV_CMD" run --with-requirements requirements.txt scripts/upgrade_check.py
 UPGRADE_RC=$?
-if [ $UPGRADE_RC -eq 2 ]; then
+
+# 修复 Windows 编码问题（移除 null bytes 和 CRLF）
+echo "[1.6/4] Fixing file encodings..."
+find "$SCRIPT_DIR" -name "*.py" -type f -exec perl -pi -e 's/\x00//g; s/\r$//' {} \; 2>/dev/null
+find "$SCRIPT_DIR" -name "*.sh" -type f -exec perl -pi -e 's/\r$//' {} \; 2>/dev/null
+find "$SCRIPT_DIR" -name "*.command" -type f -exec perl -pi -e 's/\r$//' {} \; 2>/dev/null
+echo "[OK] File encodings fixed"
+
+set -e
+if [ $UPGRADE_RC -ge 2 ]; then
     echo "[ERROR] 更新检查遇到严重错误"
-    read -p "按回车键继续..."
+    read -p "按回车键继续..." _
     exit 1
-elif [ $UPGRADE_RC -eq 1 ]; then
+elif [ $UPGRADE_RC -ge 1 ]; then
     echo "[WARN] 更新检查失败，继续使用本地版本"
 fi
 echo ""
