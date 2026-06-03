@@ -50,6 +50,26 @@
       });
     }
 
+    /**
+     * 确保select元素包含已保存的值作为选项
+     * 当TaskConfig未加载时使用硬编码回退选项，但已保存的值可能不在回退列表中
+     * 此函数将已保存的值作为临时选项添加，确保视觉显示正确
+     * 后续 refreshShotGroupNodesModels/refreshShotFrameNodesModels 会用完整列表替换
+     */
+    function ensureSelectHasSavedOption(selectEl, savedValue) {
+      if (!selectEl || !savedValue) return;
+      // 检查已保存的值是否已在选项中
+      for (let i = 0; i < selectEl.options.length; i++) {
+        if (selectEl.options[i].value === savedValue) return;
+      }
+      // 值不在选项中，添加为临时选项并选中
+      const optEl = document.createElement('option');
+      optEl.value = savedValue;
+      optEl.textContent = savedValue;
+      optEl.selected = true;
+      selectEl.insertBefore(optEl, selectEl.firstChild);
+    }
+
     // 检查指定模型是否可用
     function isModelAvailable(modelValue) {
       const driverStatus = getDriverStatusConfig();
@@ -1617,6 +1637,8 @@
             node.data.model = firstModelValue;
             shotGroupModelEl.value = firstModelValue;
           }
+          // 确保已保存的模型值在下拉框中可见（防止TaskConfig未加载时硬编码选项不包含已保存值）
+          ensureSelectHasSavedOption(shotGroupModelEl, node.data.model);
         }
 
         const newDetailBtn = nodeBody.querySelector('.shot-group-detail-btn');
@@ -1668,6 +1690,8 @@
           if(!node.data.gridModel){
             node.data.gridModel = 'auto';
           }
+          // 确保已保存的宫格模型值在下拉框中可见
+          ensureSelectHasSavedOption(shotGroupGridModelEl, node.data.gridModel);
           shotGroupGridModelEl.value = node.data.gridModel;
           // 应用驱动状态禁用未配置的宫格生图模型选项
           applyDriverStatusToSelect(shotGroupGridModelEl);
@@ -1711,6 +1735,8 @@
             `;
           }
           if(!node.data.videoModel) node.data.videoModel = shotGroupVideoModelEl.value;
+          // 确保已保存的视频模型值在下拉框中可见
+          ensureSelectHasSavedOption(shotGroupVideoModelEl, node.data.videoModel);
           // 应用驱动状态禁用未配置的视频模型选项
           applyDriverStatusToSelect(shotGroupVideoModelEl);
         }
@@ -3367,6 +3393,9 @@
           });
         }
         
+        // 确保已保存的视频模型值在下拉框中可见（防止TaskConfig未加载时硬编码选项不包含已保存值）
+        ensureSelectHasSavedOption(videoModelSelect, currentValue);
+
         // 恢复之前的选择（如果仍然可用且支持当前模式）
         const selectedOption = videoModelSelect.querySelector(`option[value="${currentValue}"]:not([disabled])`);
         if(selectedOption) {
@@ -5166,7 +5195,11 @@
         if(!node.data.model) {
           node.data.model = firstImageModelValue;
         }
-        if(modelEl) modelEl.value = node.data.model;
+        // 确保已保存的模型值在下拉框中可见
+        if(modelEl) {
+          ensureSelectHasSavedOption(modelEl, node.data.model);
+          modelEl.value = node.data.model;
+        }
       }
       populateImageModelOptions();
 
@@ -5969,6 +6002,8 @@
 
           // 恢复之前的选择，默认使用后端配置的第一个模型（与分镜组节点和图生图片节点一致）
           const currentValue = node.data.videoModel || firstVideoModelValue;
+          // 确保已保存的视频模型值在下拉框中可见（防止TaskConfig未加载时硬编码选项不包含已保存值）
+          ensureSelectHasSavedOption(videoModelSelect, currentValue);
           const selectedOption = videoModelSelect.querySelector(`option[value="${currentValue}"]`);
           if(selectedOption) {
             videoModelSelect.value = currentValue;
@@ -6118,8 +6153,20 @@
           splitModelSelect.appendChild(optGroup);
         });
 
-        // 默认选中第一个
-        if(firstEnabled) {
+        // 恢复已保存的拆分模型选择，若无保存值则选中第一个
+        const savedSplitModel = node.data.splitModel;
+        let restored = false;
+        if(savedSplitModel) {
+          const savedOption = splitModelSelect.querySelector(`option[value="${savedSplitModel}"]`);
+          if(savedOption && !savedOption.disabled) {
+            savedOption.selected = true;
+            node.data.splitModelId = savedOption.dataset.modelId || '';
+            node.data.splitModelVendorId = savedOption.dataset.vendorId || '';
+            node.data.splitModelVendorName = savedOption.dataset.vendorName || '';
+            restored = true;
+          }
+        }
+        if(!restored && firstEnabled) {
           firstEnabled.selected = true;
           node.data.splitModel = firstEnabled.value;
           node.data.splitModelId = firstEnabled.dataset.modelId || '';
@@ -6183,17 +6230,23 @@
       // 初始化宫格生图模型
       populateScriptGridModelOptions();
       
-      // 初始化节点数据中的最大时长和选项
-      node.data.maxGroupDuration = 15;
-      node.data.forceMediumShot = true;
-      node.data.noBgMusic = true;
-      node.data.splitMultiDialogue = false;
-      node.data.narrationAsDialogue = false;
-      node.data.language = '';
-      node.data.gridModel = 'auto';
-      node.data.splitModelVendorId = '';
-      node.data.splitModelVendorName = '';
-      
+      // 初始化节点数据中的最大时长和选项（仅设置默认值，不覆盖已保存的值）
+      if(node.data.maxGroupDuration === undefined) node.data.maxGroupDuration = 15;
+      if(node.data.forceMediumShot === undefined) node.data.forceMediumShot = true;
+      if(node.data.noBgMusic === undefined) node.data.noBgMusic = true;
+      if(node.data.splitMultiDialogue === undefined) node.data.splitMultiDialogue = false;
+      if(node.data.narrationAsDialogue === undefined) node.data.narrationAsDialogue = false;
+      if(!node.data.language) node.data.language = '';
+      if(!node.data.gridModel) node.data.gridModel = 'auto';
+      if(!node.data.splitModelVendorId) node.data.splitModelVendorId = '';
+      if(!node.data.splitModelVendorName) node.data.splitModelVendorName = '';
+
+      // 确保已保存的宫格模型值在下拉框中可见，并恢复选中状态
+      if(gridModelSelect) {
+        ensureSelectHasSavedOption(gridModelSelect, node.data.gridModel);
+        gridModelSelect.value = node.data.gridModel;
+      }
+
       // 应用驱动状态禁用未配置的宫格生图模型选项
       if(gridModelSelect) applyDriverStatusToSelect(gridModelSelect);
 
@@ -8051,6 +8104,8 @@
         node.data.gridModel = 'auto';
       }
       if(gridModelSelect){
+        // 确保已保存的宫格模型值在下拉框中可见
+        ensureSelectHasSavedOption(gridModelSelect, node.data.gridModel);
         gridModelSelect.value = node.data.gridModel;
         // 应用驱动状态禁用未配置的宫格生图模型选项
         applyDriverStatusToSelect(gridModelSelect);
@@ -8118,10 +8173,14 @@
 
       // 初始化视频模型和时长（使用后端配置的第一个选项作为默认值）
       if(!node.data.videoModel) node.data.videoModel = firstShotGroupVideoModelValue;
-      if(videoModelEl) videoModelEl.value = node.data.videoModel;
+      // 确保已保存的视频模型值在下拉框中可见
+      if(videoModelEl) {
+        ensureSelectHasSavedOption(videoModelEl, node.data.videoModel);
+        videoModelEl.value = node.data.videoModel;
+      }
       if(videoDurationEl) videoDurationEl.value = node.data.videoDuration;
       if(videoGenModeEl) videoGenModeEl.value = node.data.videoGenMode || 'first_last_frame';
-      
+
       // 应用驱动状态禁用未配置的选项
       if(videoModelEl) applyDriverStatusToSelect(videoModelEl);
 
@@ -9165,6 +9224,8 @@
             <option value="seedream-5.0">Seedream 5.0 (6算力)</option>
           `;
         }
+        // 确保已保存的模型值在下拉框中可见
+        ensureSelectHasSavedOption(modelEl, node.data.model);
         modelEl.value = node.data.model || firstImageModelValue;
         applyDriverStatusToSelect(modelEl);
       }
@@ -9221,6 +9282,8 @@
         if(validValues.length > 0 && !validValues.includes(node.data.videoModel)) {
           node.data.videoModel = firstVideoModelValue;
         }
+        // 确保已保存的视频模型值在下拉框中可见
+        ensureSelectHasSavedOption(videoModelEl, node.data.videoModel);
         videoModelEl.value = node.data.videoModel || firstVideoModelValue;
         applyDriverStatusToSelect(videoModelEl);
       }
