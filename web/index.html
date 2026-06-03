@@ -348,8 +348,8 @@
         <!-- Login Form -->
         <div v-if="authMode === 'login'">
           <div class="field">
-            <label class="label">{{ $t('phone') }}</label>
-            <input class="input" type="tel" v-model="loginForm.phone" :placeholder="$t('enter_phone')" maxlength="11" />
+            <label class="label">{{ emailEnabled ? $t('login_phone_or_email') : $t('phone') }}</label>
+            <input class="input" type="text" v-model="loginForm.phone" :placeholder="emailEnabled ? $t('login_phone_or_email_placeholder') : $t('enter_phone')" />
           </div>
           <div class="field">
             <label class="label">{{ $t('password') }}</label>
@@ -371,9 +371,32 @@
 
         <!-- Register Form -->
         <div v-if="authMode === 'register'">
-          <div class="field">
-            <label class="label">{{ $t('phone') }}</label>
-            <input class="input" type="tel" v-model="registerForm.phone" :placeholder="$t('enter_phone')" maxlength="11" />
+          <!-- 注册方式切换（邮箱功能启用时显示） -->
+          <div v-if="emailEnabled" class="register-type-tabs" style="display: flex; margin-bottom: 12px; border-bottom: 1px solid #eee;">
+            <button type="button" style="flex:1; padding: 8px; border: none; background: none; cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent;"
+                    :style="{ borderBottomColor: registerType === 'phone' ? '#4CAF50' : 'transparent', color: registerType === 'phone' ? '#4CAF50' : '#666' }"
+                    @click="registerType = 'phone'">
+              {{ $t('register_by_phone') }}
+            </button>
+            <button type="button" style="flex:1; padding: 8px; border: none; background: none; cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent;"
+                    :style="{ borderBottomColor: registerType === 'email' ? '#4CAF50' : 'transparent', color: registerType === 'email' ? '#4CAF50' : '#666' }"
+                    @click="registerType = 'email'">
+              {{ $t('register_by_email') }}
+            </button>
+          </div>
+          <!-- 手机号注册 -->
+          <div v-if="registerType === 'phone'">
+            <div class="field">
+              <label class="label">{{ $t('phone') }}</label>
+              <input class="input" type="tel" v-model="registerForm.phone" :placeholder="$t('enter_phone')" maxlength="11" />
+            </div>
+          </div>
+          <!-- 邮箱注册 -->
+          <div v-if="registerType === 'email'">
+            <div class="field">
+              <label class="label">{{ $t('email') }}</label>
+              <input class="input" type="email" v-model="registerForm.email" :placeholder="$t('enter_email')" />
+            </div>
           </div>
           <div class="field">
             <label class="label">{{ $t('verification_code') }}</label>
@@ -421,9 +444,30 @@
 
         <!-- Reset Password Form -->
         <div v-if="authMode === 'reset'">
-          <div class="field">
-            <label class="label">{{ $t('phone') }}</label>
-            <input class="input" type="tel" v-model="resetForm.phone" :placeholder="$t('enter_phone')" maxlength="11" />
+          <!-- 重置方式切换 -->
+          <div v-if="emailEnabled" class="register-type-tabs" style="display: flex; margin-bottom: 12px; border-bottom: 1px solid #eee;">
+            <button type="button" style="flex:1; padding: 8px; border: none; background: none; cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent;"
+                    :style="{ borderBottomColor: resetType === 'phone' ? '#4CAF50' : 'transparent', color: resetType === 'phone' ? '#4CAF50' : '#666' }"
+                    @click="resetType = 'phone'">
+              {{ $t('reset_by_phone') }}
+            </button>
+            <button type="button" style="flex:1; padding: 8px; border: none; background: none; cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent;"
+                    :style="{ borderBottomColor: resetType === 'email' ? '#4CAF50' : 'transparent', color: resetType === 'email' ? '#4CAF50' : '#666' }"
+                    @click="resetType = 'email'">
+              {{ $t('reset_by_email') }}
+            </button>
+          </div>
+          <div v-if="resetType === 'phone'">
+            <div class="field">
+              <label class="label">{{ $t('phone') }}</label>
+              <input class="input" type="tel" v-model="resetForm.phone" :placeholder="$t('enter_phone')" maxlength="11" />
+            </div>
+          </div>
+          <div v-if="resetType === 'email'">
+            <div class="field">
+              <label class="label">{{ $t('email') }}</label>
+              <input class="input" type="email" v-model="resetForm.email" :placeholder="$t('enter_email')" />
+            </div>
           </div>
           <div class="field">
             <label class="label">{{ $t('verification_code') }}</label>
@@ -449,9 +493,13 @@
           </div>
           <div class="status danger" v-if="resetError" style="text-align: center; margin-top: 10px;">{{ resetError }}</div>
         </div>
+
       </div>
     </div>
     
+    <!-- CAPTCHA 人机验证隐藏按钮（必须在模态框外部，确保始终存在于 DOM 中） -->
+    <div v-if="captchaEnabled && captchaPrefix" id="captcha-verify-btn" style="position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden;"></div>
+
     <!-- Terms of Service Modal -->
     <div class="modal-overlay" v-if="showTermsModal" @click.self="showTermsModal = false">
       <div class="modal terms-modal" style="position: relative;">
@@ -7096,6 +7144,7 @@
       ],
       authToken: '',
       userPhone: '',
+      userEmail: '',
       inviteCode: '',
       computingPower: null,
       invitationStats: null,
@@ -7115,11 +7164,13 @@
       loginError: '',
       registerForm: {
         phone: '',
+        email: '',
         code: '',
         password: '',
         inviteCode: '',
         termsAgreed: false
       },
+      registerType: 'phone',
       registerLoading: false,
       registerError: '',
       codeSending: false,
@@ -7127,10 +7178,12 @@
       countdownTimer: null,
       resetForm: {
         phone: '',
+        email: '',
         code: '',
         newPassword: '',
         confirmPassword: ''
       },
+      resetType: 'phone',
       resetLoading: false,
       resetError: '',
       resetCodeSending: false,
@@ -7163,6 +7216,15 @@
       creationMode: '',
       // 本地模式配置
       isLocal: false,
+      // 邮箱功能开关
+      emailEnabled: false,
+      // CAPTCHA 人机验证
+      captchaEnabled: false,
+      captchaPrefix: '',
+      captchaSceneId: '',
+      captchaInstance: null,
+      captchaAction: null,  // 'register_code' | 'reset_code'
+      captchaVerifyParam: null,
       // 网站底部配置
       footerConfig: {
         copyright: '',
@@ -7222,6 +7284,7 @@
       
       this.authToken = urlParams.get('auth_token') || '';
       this.userPhone = urlParams.get('phone') || '';
+      this.userEmail = urlParams.get('email') || '';
       this.userId = urlParams.get('user_id') || '';
       this.inviteCode = urlParams.get('invite_code') || '';
       
@@ -7234,17 +7297,20 @@
       if (this.authToken) {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('phone');
+        localStorage.removeItem('email');
         localStorage.removeItem('user_id');
         localStorage.removeItem('invite_code');
         // Store in localStorage for persistence across sessions
         localStorage.setItem('auth_token', this.authToken);
         localStorage.setItem('phone', this.userPhone);
+        localStorage.setItem('email', this.userEmail);
         localStorage.setItem('user_id', this.userId);
         localStorage.setItem('invite_code', this.inviteCode);
       } else {
         // Try to restore from localStorage
         this.authToken = localStorage.getItem('auth_token') || '';
         this.userPhone = localStorage.getItem('phone') || '';
+        this.userEmail = localStorage.getItem('email') || '';
         this.userId = localStorage.getItem('user_id') || '';
         this.inviteCode = localStorage.getItem('invite_code') || '';
       }
@@ -7279,7 +7345,15 @@
       
       // Load terms of service
       this.loadTermsContent();
-      
+
+      // 监听语言切换事件，重新加载对应语言的服务条款
+      this._localeChangedHandler = (data) => {
+        this.loadTermsContent();
+      };
+      if (window.ZJTi18n) {
+        window.ZJTi18n.on('locale-changed', this._localeChangedHandler);
+      }
+
       // 设置 axios 响应拦截器，全局处理认证错误
       axios.interceptors.response.use(
         response => response,
@@ -7303,7 +7377,7 @@
       this.isAdminMode = localStorage.getItem('admin_mode') === 'true';
       
       // 已登录用户检查创作模式
-      if (this.authToken && this.userPhone) {
+      if (this.authToken && (this.userPhone || this.userEmail)) {
         this.checkCreationMode();
       }
     },
@@ -7320,11 +7394,16 @@
         return this.$t('page_title_ai_tools');
       },
       isLoggedIn() {
-        return !!(this.authToken && this.userPhone);
+        return !!(this.authToken && (this.userPhone || this.userEmail));
       },
       maskedPhone() {
+        // 邮箱用户显示掩码后的邮箱
+        if (!this.userPhone && this.userEmail) {
+          return this.maskEmail(this.userEmail);
+        }
         if (!this.userPhone || this.userPhone.length !== 11) {
-          return this.userPhone;
+          // 如果有邮箱则显示掩码邮箱，否则显示原始值
+          return this.userPhone || (this.userEmail ? this.maskEmail(this.userEmail) : '');
         }
         // 管理员模式下显示完整手机号
         if (this.isAdminMode) {
@@ -7344,6 +7423,15 @@
     methods: {
       goHome(){ this.$router.push({name:'list'}); },
       
+      maskEmail(email) {
+        if (!email || !email.includes('@')) return email || '';
+        const [local, domain] = email.split('@');
+        if (local.length <= 2) {
+          return local[0] + '***@' + domain;
+        }
+        return local.substring(0, 2) + '***@' + domain;
+      },
+      
       handleAuthError(error) {
         // 检查错误响应中是否包含认证过期信息
         const detail = error?.response?.data?.detail || '';
@@ -7351,12 +7439,14 @@
           // 清除本地存储的认证信息
           localStorage.removeItem('auth_token');
           localStorage.removeItem('phone');
+          localStorage.removeItem('email');
           localStorage.removeItem('user_id');
           localStorage.removeItem('invite_code');
           
           // 清除当前状态
           this.authToken = '';
           this.userPhone = '';
+          this.userEmail = '';
           this.userId = '';
           this.inviteCode = '';
           this.computingPower = null;
@@ -7389,14 +7479,21 @@
         this.loginForm.termsAgreed = false;
         this.loginShowTerms = false;
         this.registerForm.phone = '';
+        this.registerForm.email = '';
         this.registerForm.code = '';
         this.registerForm.password = '';
         this.registerForm.inviteCode = '';
         this.registerForm.termsAgreed = false;
+        this.registerType = 'phone';
         this.resetForm.phone = '';
+        this.resetForm.email = '';
         this.resetForm.code = '';
         this.resetForm.newPassword = '';
         this.resetForm.confirmPassword = '';
+        this.resetType = 'phone';
+        this.captchaAction = null;
+        this.captchaVerifyParam = null;
+        this._pendingSendPayload = null;
       },
       
       async handleLogin() {
@@ -7405,25 +7502,43 @@
         try {
           // 验证输入
           if (!this.loginForm.phone || !this.loginForm.password) {
-            this.loginError = '请输入手机号和密码';
+            this.loginError = this.emailEnabled ? '请输入手机号/邮箱和密码' : '请输入手机号和密码';
             this.loginLoading = false;
             return;
           }
           
-          // 验证手机号格式
-          if (!/^1[3-9]\d{9}$/.test(this.loginForm.phone)) {
-            this.loginError = '请输入正确的手机号';
+          // 判断是手机号还是邮箱
+          const identifier = this.loginForm.phone;
+          const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
+          const isPhone = /^1[3-9]\d{9}$/.test(identifier);
+          
+          // 邮箱功能关闭时，不允许邮箱登录
+          if (isEmail && !this.emailEnabled) {
+            this.loginError = '邮箱登录未启用，请使用手机号登录';
             this.loginLoading = false;
             return;
           }
           
-          // 调用登录 API
-          const response = await axios.post('/api/auth/login', {
-            phone: this.loginForm.phone,
+          if (!isEmail && !isPhone) {
+            this.loginError = this.emailEnabled ? '请输入正确的手机号或邮箱地址' : '请输入正确的手机号';
+            this.loginLoading = false;
+            return;
+          }
+          
+          // 构建登录参数
+          const loginPayload = {
             password: this.loginForm.password,
             agent: 'default',
             terms_agreed: this.loginForm.termsAgreed ? 1 : 0
-          });
+          };
+          if (isEmail) {
+            loginPayload.email = identifier;
+          } else {
+            loginPayload.phone = identifier;
+          }
+          
+          // 调用登录 API
+          const response = await axios.post('/api/auth/login', loginPayload);
           
           if (response.data.success) {
             // 登录成功，先清除旧数据，再保存新 token
@@ -7435,11 +7550,13 @@
               localStorage.removeItem('invite_code');
               
               this.authToken = response.data.data.token;
-              this.userPhone = response.data.data.phone || this.loginForm.phone;
+              this.userPhone = response.data.data.phone || '';
+              this.userEmail = response.data.data.email || '';
               this.userId = response.data.data.user_id;
               this.inviteCode = response.data.data.invite_code;
               localStorage.setItem('auth_token', this.authToken);
               localStorage.setItem('phone', this.userPhone);
+              localStorage.setItem('email', this.userEmail);
               localStorage.setItem('user_id', this.userId);
               localStorage.setItem('invite_code', this.inviteCode);
               
@@ -7478,14 +7595,38 @@
       async sendVerificationCode() {
         this.registerError = '';
         
-        // 验证手机号
-        if (!this.registerForm.phone) {
-          this.registerError = '请输入手机号';
-          return;
+        // 根据注册类型验证
+        if (this.registerType === 'email') {
+          if (!this.registerForm.email) {
+            this.registerError = '请输入邮箱';
+            return;
+          }
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.registerForm.email)) {
+            this.registerError = '请输入正确的邮箱地址';
+            return;
+          }
+        } else {
+          if (!this.registerForm.phone) {
+            this.registerError = '请输入手机号';
+            return;
+          }
+          if (!/^1[3-9]\d{9}$/.test(this.registerForm.phone)) {
+            this.registerError = '请输入正确的手机号';
+            return;
+          }
         }
         
-        if (!/^1[3-9]\d{9}$/.test(this.registerForm.phone)) {
-          this.registerError = '请输入正确的手机号';
+        // 构建请求参数
+        const sendPayload = { type: 'register', agent: 'default' };
+        if (this.registerType === 'email') {
+          sendPayload.email = this.registerForm.email;
+        } else {
+          sendPayload.phone = this.registerForm.phone;
+        }
+        
+        // 邮箱模式 + CAPTCHA 启用：触发人机验证
+        if (this.registerType === 'email' && this.captchaEnabled && this.captchaPrefix) {
+          this.triggerCaptchaForEmail('register_code', sendPayload);
           return;
         }
         
@@ -7493,11 +7634,7 @@
         
         try {
           // 调用发送验证码 API
-          const response = await axios.post('/api/auth/send_verify_code', {
-            phone: this.registerForm.phone,
-            type: 'register',
-            agent: 'default'
-          });
+          const response = await axios.post('/api/auth/send_verify_code', sendPayload);
           
           if (response.data.success) {
             // 开始倒计时
@@ -7526,23 +7663,33 @@
         this.registerLoading = true;
         
         try {
-          // 验证输入
-          if (!this.registerForm.phone || !this.registerForm.code || 
-              !this.registerForm.password) {
-            this.registerError = '请填写完整信息';
-            this.registerLoading = false;
-            return;
+          // 根据注册类型验证
+          if (this.registerType === 'email') {
+            if (!this.registerForm.email || !this.registerForm.code || !this.registerForm.password) {
+              this.registerError = '请填写完整信息';
+              this.registerLoading = false;
+              return;
+            }
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.registerForm.email)) {
+              this.registerError = '请输入正确的邮箱地址';
+              this.registerLoading = false;
+              return;
+            }
+          } else {
+            if (!this.registerForm.phone || !this.registerForm.code || !this.registerForm.password) {
+              this.registerError = '请填写完整信息';
+              this.registerLoading = false;
+              return;
+            }
+            if (!/^1[3-9]\d{9}$/.test(this.registerForm.phone)) {
+              this.registerError = '请输入正确的手机号';
+              this.registerLoading = false;
+              return;
+            }
           }
           
           if (!this.registerForm.termsAgreed) {
             this.registerError = '请勾选《AI工具服务使用条款》';
-            this.registerLoading = false;
-            return;
-          }
-          
-          // 验证手机号格式
-          if (!/^1[3-9]\d{9}$/.test(this.registerForm.phone)) {
-            this.registerError = '请输入正确的手机号';
             this.registerLoading = false;
             return;
           }
@@ -7554,14 +7701,21 @@
             return;
           }
           
-          // 调用注册 API
-          const response = await axios.post('/api/auth/register', {
-            phone: this.registerForm.phone,
+          // 构建注册参数
+          const registerPayload = {
             code: this.registerForm.code,
             password: this.registerForm.password,
             agent: 'default',
             invite_code: this.registerForm.inviteCode || undefined
-          });
+          };
+          if (this.registerType === 'email') {
+            registerPayload.email = this.registerForm.email;
+          } else {
+            registerPayload.phone = this.registerForm.phone;
+          }
+          
+          // 调用注册 API
+          const response = await axios.post('/api/auth/register', registerPayload);
           
           if (response.data.success) {
             // 检查是否需要管理员审核
@@ -7571,8 +7725,8 @@
               this.registerError = '';
               this.authMode = 'login';
               this.showLoginModal = true;
-              this.loginForm.phone = this.registerForm.phone;
-              this.registerForm = { phone: '', code: '', password: '', inviteCode: '', termsAgreed: false };
+              this.loginForm.phone = this.registerForm.phone || this.registerForm.email;
+              this.registerForm = { phone: '', email: '', code: '', password: '', inviteCode: '', termsAgreed: false };
               alert(response.data.message || '注册成功，请等待管理员审核通过后登录');
               return;
             }
@@ -7588,7 +7742,7 @@
             this.showLoginModal = true;
             this.authMode = 'login';
             this.loginShowTerms = true;
-            this.loginForm.phone = this.registerForm.phone;
+            this.loginForm.phone = this.registerForm.phone || this.registerForm.email;
             this.loginForm.password = this.registerForm.password;
             this.loginForm.termsAgreed = true;
             await this.handleLogin();
@@ -7615,9 +7769,11 @@
             // 登出成功，清除登录状态
             this.authToken = '';
             this.userPhone = '';
+            this.userEmail = '';
             this.computingPower = null;
             localStorage.removeItem('auth_token');
             localStorage.removeItem('phone');
+            localStorage.removeItem('email');
             localStorage.removeItem('user_id');
             localStorage.removeItem('invite_code');
             localStorage.removeItem('admin_mode');
@@ -7627,9 +7783,11 @@
             console.error('Logout error:', response.data.message);
             this.authToken = '';
             this.userPhone = '';
+            this.userEmail = '';
             this.computingPower = null;
             localStorage.removeItem('auth_token');
             localStorage.removeItem('phone');
+            localStorage.removeItem('email');
             localStorage.removeItem('user_id');
             localStorage.removeItem('invite_code');
             localStorage.removeItem('admin_mode');
@@ -7640,9 +7798,11 @@
           // 发生错误时也清除本地状态
           this.authToken = '';
           this.userPhone = '';
+          this.userEmail = '';
           this.computingPower = null;
           localStorage.removeItem('auth_token');
           localStorage.removeItem('phone');
+          localStorage.removeItem('email');
           localStorage.removeItem('user_id');
           localStorage.removeItem('invite_code');
           localStorage.removeItem('admin_mode');
@@ -8170,14 +8330,38 @@
       async sendResetCode() {
         this.resetError = '';
         
-        // 验证手机号
-        if (!this.resetForm.phone) {
-          this.resetError = '请输入手机号';
-          return;
+        // 根据重置类型验证
+        if (this.resetType === 'email') {
+          if (!this.resetForm.email) {
+            this.resetError = '请输入邮箱';
+            return;
+          }
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.resetForm.email)) {
+            this.resetError = '请输入正确的邮箱地址';
+            return;
+          }
+        } else {
+          if (!this.resetForm.phone) {
+            this.resetError = '请输入手机号';
+            return;
+          }
+          if (!/^1[3-9]\d{9}$/.test(this.resetForm.phone)) {
+            this.resetError = '请输入正确的手机号';
+            return;
+          }
         }
         
-        if (!/^1[3-9]\d{9}$/.test(this.resetForm.phone)) {
-          this.resetError = '请输入正确的手机号';
+        // 构建请求参数
+        const sendPayload = { type: 'reset_password', agent: 'default' };
+        if (this.resetType === 'email') {
+          sendPayload.email = this.resetForm.email;
+        } else {
+          sendPayload.phone = this.resetForm.phone;
+        }
+        
+        // 邮箱模式 + CAPTCHA 启用：触发人机验证
+        if (this.resetType === 'email' && this.captchaEnabled && this.captchaPrefix) {
+          this.triggerCaptchaForEmail('reset_code', sendPayload);
           return;
         }
         
@@ -8185,11 +8369,7 @@
         
         try {
           // 调用发送验证码 API
-          const response = await axios.post('/api/auth/send_verify_code', {
-            phone: this.resetForm.phone,
-            type: 'reset_password',
-            agent: 'default'
-          });
+          const response = await axios.post('/api/auth/send_verify_code', sendPayload);
           
           if (response.data.success) {
             // 开始倒计时
@@ -8218,19 +8398,27 @@
         this.resetLoading = true;
         
         try {
-          // 验证输入
-          if (!this.resetForm.phone || !this.resetForm.code || 
+          // 根据重置类型验证
+          const hasIdentifier = this.resetType === 'email' ? this.resetForm.email : this.resetForm.phone;
+          if (!hasIdentifier || !this.resetForm.code || 
               !this.resetForm.newPassword || !this.resetForm.confirmPassword) {
             this.resetError = '请填写完整信息';
             this.resetLoading = false;
             return;
           }
           
-          // 验证手机号格式
-          if (!/^1[3-9]\d{9}$/.test(this.resetForm.phone)) {
-            this.resetError = '请输入正确的手机号';
-            this.resetLoading = false;
-            return;
+          if (this.resetType === 'email') {
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.resetForm.email)) {
+              this.resetError = '请输入正确的邮箱地址';
+              this.resetLoading = false;
+              return;
+            }
+          } else {
+            if (!/^1[3-9]\d{9}$/.test(this.resetForm.phone)) {
+              this.resetError = '请输入正确的手机号';
+              this.resetLoading = false;
+              return;
+            }
           }
           
           // 验证密码长度
@@ -8247,12 +8435,19 @@
             return;
           }
           
-          // 调用重置密码 API
-          const response = await axios.post('/api/auth/reset_password', {
-            phone: this.resetForm.phone,
+          // 构建重置密码参数
+          const resetPayload = {
             code: this.resetForm.code,
             new_password: this.resetForm.newPassword
-          });
+          };
+          if (this.resetType === 'email') {
+            resetPayload.email = this.resetForm.email;
+          } else {
+            resetPayload.phone = this.resetForm.phone;
+          }
+          
+          // 调用重置密码 API
+          const response = await axios.post('/api/auth/reset_password', resetPayload);
           
           if (response.data.success) {
             // 重置密码成功
@@ -8437,16 +8632,159 @@
           const response = await axios.get('/api/system/server-config');
           if (response.data.code === 0) {
             this.isLocal = response.data.data.is_local || false;
+            this.emailEnabled = response.data.data.email_enabled || false;
+            this.captchaEnabled = response.data.data.captcha_enabled || false;
+            this.captchaPrefix = response.data.data.captcha_prefix || '';
+            this.captchaSceneId = response.data.data.captcha_scene_id || '';
             if (response.data.data.footer) {
               this.footerConfig = response.data.data.footer;
             }
             if (response.data.data.version) {
               this.footerConfig.version = response.data.data.version;
             }
+
+            // 如果 CAPTCHA 启用且有配置，动态加载 SDK
+            if (this.captchaEnabled && this.captchaPrefix) {
+              this.loadCaptchaSdk();
+            }
           }
         } catch (error) {
           console.error('Failed to fetch server config:', error);
         }
+      },
+
+      // ==================== CAPTCHA 人机验证 ====================
+
+      loadCaptchaSdk() {
+        // 防止重复加载
+        if (document.getElementById('aliyun-captcha-sdk')) return;
+        const script = document.createElement('script');
+        script.id = 'aliyun-captcha-sdk';
+        script.type = 'text/javascript';
+        script.src = 'https://o.alicdn.com/captcha-frontend/aliyunCaptcha/AliyunCaptcha.js';
+        script.onload = () => {
+          console.log('Aliyun CAPTCHA SDK loaded');
+          this.$nextTick(() => { this.initCaptcha(); });
+        };
+        script.onerror = () => {
+          console.error('Failed to load Aliyun CAPTCHA SDK');
+        };
+        document.head.appendChild(script);
+      },
+
+      initCaptcha() {
+        if (!this.captchaEnabled || !this.captchaPrefix || !window.initAliyunCaptcha) return;
+
+        // 确保 CAPTCHA 按钮存在
+        const captchaBtn = document.getElementById('captcha-verify-btn');
+        if (!captchaBtn) {
+          console.warn('CAPTCHA button element not found');
+          return;
+        }
+
+        try {
+          const self = this;
+          window.initAliyunCaptcha({
+            prefix: this.captchaPrefix,
+            SceneId: this.captchaSceneId,
+            mode: 'popup',
+            element: '#captcha-verify-btn',
+            button: '#captcha-verify-btn',
+            // 验证通过回调：captchaVerifyParam 已是字符串，直接传递
+            success: async function(captchaVerifyParam) {
+              await self._captchaSuccess(captchaVerifyParam);
+            },
+            // 验证失败回调
+            fail: function(result) {
+              console.error('CAPTCHA verify failed:', result);
+              self._handleCodeSendError('人机验证失败，请重试');
+            },
+            // 绑定验证码实例
+            getInstance: function(instance) {
+              self.captchaInstance = instance;
+            },
+            // 关闭弹窗回调
+            onClose: function() {
+              // 用户关闭验证弹窗时清理状态
+            },
+            language: 'cn',
+          }).then(function() {
+            console.log('Aliyun CAPTCHA initialized');
+          }).catch(function(err) {
+            console.error('CAPTCHA init error:', err);
+          });
+        } catch (e) {
+          console.error('Failed to init CAPTCHA:', e);
+        }
+      },
+
+      // CAPTCHA 验证成功回调
+      async _captchaSuccess(captchaVerifyParam) {
+        try {
+          const captchaResponse = await axios.post('/api/auth/send_verify_code', {
+            ...(this._pendingSendPayload || {}),
+            captcha_verify_param: captchaVerifyParam
+          });
+
+          if (captchaResponse.data.success) {
+            this._handleCodeSendSuccess();
+          } else {
+            this._handleCodeSendError(captchaResponse.data.message || '发送验证码失败');
+          }
+        } catch (error) {
+          console.error('CAPTCHA verify callback error:', error);
+          const msg = error?.response?.data?.message || '发送验证码失败，请重试';
+          this._handleCodeSendError(msg);
+        }
+      },
+
+      triggerCaptchaForEmail(action, payload) {
+        // 保存待发送的数据
+        this._pendingSendPayload = payload;
+        this.captchaAction = action;
+
+        // 触发 CAPTCHA 验证按钮
+        const captchaBtn = document.getElementById('captcha-verify-btn');
+        if (captchaBtn) {
+          captchaBtn.click();
+        } else {
+          console.error('CAPTCHA button not found');
+          this._handleCodeSendError('人机验证组件未加载');
+        }
+      },
+
+      _handleCodeSendSuccess() {
+        if (this.captchaAction === 'register_code') {
+          this.codeCountdown = 60;
+          this.countdownTimer = setInterval(() => {
+            this.codeCountdown--;
+            if (this.codeCountdown <= 0) {
+              clearInterval(this.countdownTimer);
+              this.countdownTimer = null;
+            }
+          }, 1000);
+        } else if (this.captchaAction === 'reset_code') {
+          this.resetCodeCountdown = 60;
+          this.resetCountdownTimer = setInterval(() => {
+            this.resetCodeCountdown--;
+            if (this.resetCodeCountdown <= 0) {
+              clearInterval(this.resetCountdownTimer);
+              this.resetCountdownTimer = null;
+            }
+          }, 1000);
+        }
+        this._pendingSendPayload = null;
+        this.captchaAction = null;
+      },
+
+      _handleCodeSendError(message) {
+        if (this.captchaAction === 'register_code') {
+          this.registerError = message;
+        } else if (this.captchaAction === 'reset_code') {
+          this.resetError = message;
+        }
+        this._pendingSendPayload = null;
+        this.captchaAction = null;
       },
 
       handleRechargeClick() {
@@ -8614,6 +8952,10 @@
       }
       if (this.resetCountdownTimer) {
         clearInterval(this.resetCountdownTimer);
+      }
+      // 移除语言切换事件监听
+      if (window.ZJTi18n && this._localeChangedHandler) {
+        window.ZJTi18n.off('locale-changed', this._localeChangedHandler);
       }
     }
   };

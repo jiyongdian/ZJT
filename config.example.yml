@@ -55,6 +55,39 @@ sms:
       driver: "perseids" 
       api_url: "https://ailive.perseids.cn:11443/api/v1/live/send_verify_code_simple"  # 短信API接口地址
       method: "POST"  # 请求方法，默认POST
+      verify_ssl: true  # 是否验证SSL证书（使用http协议时设为false）
+
+# Email configuration (邮箱验证码配置)
+email:
+  enabled: false                        # 是否启用邮箱注册/登录（开关）
+  active_driver: "api"  # 可选值: "smtp", "api"
+  agents:
+    # SMTP 代理：直接通过SMTP发送邮件
+    default:
+      driver: "smtp"
+      smtp_host: "smtp.gmail.com"      # SMTP 服务器地址
+      smtp_port: 587                    # SMTP 端口（TLS: 587, SSL: 465）
+      smtp_user: "your@email.com"       # SMTP 登录账号
+      smtp_password: "app_password"     # SMTP 密码 / 应用专用密码
+      smtp_from: "your@email.com"       # 发件人地址
+      smtp_from_name: "智剧通"          # 发件人显示名称
+      use_tls: true                     # 是否使用 TLS
+    # API 代理示例：通过HTTP API发送邮件（无需配置SMTP）
+    api_agent:
+      driver: "api"
+      api_url: "https://ailive.perseids.cn:11443/api/v1/live/send_email_verify_code"  # 邮件API接口地址
+      method: "POST"  # 请求方法，默认POST
+      verify_ssl: true  # 是否验证SSL证书（使用http协议时设为false）
+
+# Captcha configuration (人机验证配置 - 用于邮箱验证码发送)
+captcha:
+  enabled: false                          # 是否启用 CAPTCHA 验证
+  aliyun:
+    access_key_id: ""                     # 阿里云 AccessKey ID（建议 RAM 子账号）
+    access_key_secret: ""                 # 阿里云 AccessKey Secret
+    region_id: "cn-shanghai"              # CAPTCHA 服务区域（cn-shanghai 或 sg-1）
+    prefix: ""                            # 验证码2.0 身份标（控制台概览页获取）
+    scene_id: ""                          # 验证码2.0 场景ID
 
 # Database configuration
 database:

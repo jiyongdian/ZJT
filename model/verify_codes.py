@@ -16,6 +16,8 @@ class VerifyCode:
     def __init__(self, **kwargs):
         self.id = kwargs.get('id')
         self.phone = kwargs.get('phone')
+        self.email = kwargs.get('email')
+        self.identifier_type = kwargs.get('identifier_type', 'phone')
         self.code = kwargs.get('code')
         self.code_type = kwargs.get('type') or kwargs.get('code_type', 'register')
         self.expire_time = kwargs.get('expire_time')
@@ -33,6 +35,8 @@ class VerifyCode:
         return {
             'id': self.id,
             'phone': self.phone,
+            'email': self.email,
+            'identifier_type': self.identifier_type,
             'code': self.code,
             'expire_time': self.expire_time.isoformat() if self.expire_time else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
@@ -124,11 +128,88 @@ class VerifyCodesModel:
             logger.error(f"Failed to delete expired verify codes: {e}")
             raise
 
+    # ==================== 邮箱验证码方法 ====================
+
+    @staticmethod
+    def create_for_email(email: str, code: str, code_type: str = "register", expire_time: Optional[datetime] = None) -> int:
+        """创建邮箱验证码记录"""
+        if expire_time is None:
+            expire_time = datetime.now() + timedelta(minutes=5)
+        sql = """
+            INSERT INTO verify_codes (phone, email, identifier_type, code, type, expire_time)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """
+        try:
+            code_id = execute_insert(sql, ('', email, 'email', code, code_type, expire_time))
+            logger.info(f"Created verify code for email: {email}, type: {code_type}")
+            return code_id
+        except Exception as e:
+            logger.error(f"Failed to create verify code for email: {e}")
+            raise
+
+    @staticmethod
+    def get_latest_by_email(email: str) -> Optional[VerifyCode]:
+        """获取邮箱最新的验证码"""
+        sql = """
+            SELECT * FROM verify_codes 
+            WHERE email = %s AND identifier_type = 'email'
+            ORDER BY created_at DESC 
+            LIMIT 1
+        """
+        try:
+            result = execute_query(sql, (email,), fetch_one=True)
+            if result:
+                return VerifyCode(**result)
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get verify code for email {email}: {e}")
+            raise
+
+    @staticmethod
+    def verify_for_email(email: str, code: str, code_type: str = "register") -> bool:
+        """验证邮箱验证码是否正确、未过期且未使用"""
+        sql = """
+            SELECT * FROM verify_codes 
+            WHERE email = %s AND code = %s AND type = %s AND identifier_type = 'email'
+            AND expire_time > NOW() AND (used = 0 OR used IS NULL)
+            ORDER BY created_at DESC 
+            LIMIT 1
+        """
+        try:
+            result = execute_query(sql, (email, code, code_type), fetch_one=True)
+            return result is not None
+        except Exception as e:
+            logger.error(f"Failed to verify code for email {email}: {e}")
+            raise
+
+    @staticmethod
+    def mark_used_for_email(email: str, code: str, code_type: str = "register") -> int:
+        """标记邮箱验证码为已使用"""
+        sql = "UPDATE verify_codes SET used = 1 WHERE email = %s AND code = %s AND type = %s AND identifier_type = 'email'"
+        try:
+            return execute_update(sql, (email, code, code_type))
+        except Exception as e:
+            logger.error(f"Failed to mark verify code as used for email: {e}")
+            raise
+
+    @staticmethod
+    def delete_by_email(email: str) -> int:
+        """删除邮箱的所有验证码"""
+        sql = "DELETE FROM verify_codes WHERE email = %s"
+        try:
+            return execute_update(sql, (email,))
+            logger.info(f"Deleted verify codes for email: {email}")
+        except Exception as e:
+            logger.error(f"Failed to delete verify codes for email {email}: {e}")
+            raise
+
 
 CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS `verify_codes` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `phone` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  `phone` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '手机号',
+  `email` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '邮箱',
+  `identifier_type` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT 'phone' COMMENT '标识类型：phone或email',
   `code` varchar(6) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
   `type` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
@@ -136,6 +217,7 @@ CREATE TABLE IF NOT EXISTS `verify_codes` (
   `used` tinyint(1) DEFAULT '0',
   PRIMARY KEY (`id`) USING BTREE,
   KEY `idx_phone_type` (`phone`,`type`) USING BTREE,
+  KEY `idx_email_type` (`email`,`type`) USING BTREE,
   KEY `idx_expire_time` (`expire_time`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC;
 """

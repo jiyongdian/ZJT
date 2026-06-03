@@ -144,10 +144,45 @@ def is_process_running(pid, process_name=None, expected_cwd=None):
     return True
 
 
-def cleanup_dead_pids_on_startup():
+def _normalize_path(path):
+    """
+    标准化路径，用于跨平台比较
+
+    Args:
+        path: 原始路径字符串
+
+    Returns:
+        str: 标准化后的路径（小写、正斜杠、无末尾斜杠）
+    """
+    if not path:
+        return ''
+    return path.lower().replace('\\', '/').rstrip('/')
+
+
+def _is_same_project(path_a, path_b):
+    """
+    判断两个路径是否指向同一个项目目录
+
+    Args:
+        path_a: 路径 A
+        path_b: 路径 B
+
+    Returns:
+        bool: 是否为同一项目目录
+    """
+    if not path_a or not path_b:
+        return False
+    return _normalize_path(path_a) == _normalize_path(path_b)
+
+
+def cleanup_dead_pids_on_startup(project_dir=None):
     """
     启动时清理已死亡的进程 PID
     这个函数应该在进程启动时调用，清理上次异常退出残留的 PID
+
+    Args:
+        project_dir: 当前项目目录，传入后只清理属于当前项目的 PID，
+                     避免误操作其他项目的进程记录
 
     Returns:
         tuple: (清理的死亡 PID 数量, 保留的活跃 PID 数量)
@@ -185,6 +220,14 @@ def cleanup_dead_pids_on_startup():
         pid = entry.get('pid')
         process_name = entry.get('name')
         cwd = entry.get('cwd')
+
+        # 按项目目录过滤：只处理属于当前项目的 PID 条目
+        # 避免因共享 PID 文件而误操作其他项目的进程记录
+        if project_dir and cwd:
+            if not _is_same_project(cwd, project_dir):
+                # 属于其他项目的条目，跳过不做处理
+                alive_pids.append(entry)
+                continue
 
         if is_process_running(pid, process_name, cwd):
             # 进程还在运行，保留
@@ -322,9 +365,12 @@ def get_pids():
     return pids
 
 
-def get_pid_entries():
+def get_pid_entries(project_dir=None):
     """
     获取所有记录的 PID 条目（包含完整信息）
+
+    Args:
+        project_dir: 项目目录，传入后只返回属于当前项目的条目
 
     Returns:
         list: PID 条目列表，每个条目包含 pid, name, cwd, timestamp
@@ -344,12 +390,22 @@ def get_pid_entries():
     except (json.JSONDecodeError, Exception) as e:
         print(f"读取 PID 文件失败: {e}")
 
+    # 按项目目录过滤
+    if project_dir:
+        entries = [
+            e for e in entries
+            if e.get('cwd') and _is_same_project(e['cwd'], project_dir)
+        ]
+
     return entries
 
 
-def cleanup_dead_pids():
+def cleanup_dead_pids(project_dir=None):
     """
     清理已死掉的进程 PID（内部使用）
+
+    Args:
+        project_dir: 项目目录，传入后只清理属于当前项目的 PID
 
     Returns:
         list: 存活的 PID 列表
@@ -375,6 +431,13 @@ def cleanup_dead_pids():
         pid = entry.get('pid')
         process_name = entry.get('name')
         cwd = entry.get('cwd')
+
+        # 按项目目录过滤
+        if project_dir and cwd:
+            if not _is_same_project(cwd, project_dir):
+                alive_pids.append(pid)
+                continue
+
         if is_process_running(pid, process_name, cwd):
             alive_pids.append(pid)
         else:
@@ -384,27 +447,61 @@ def cleanup_dead_pids():
     return alive_pids
 
 
-def clear_pids():
+def clear_pids(project_dir=None):
     """
-    清空 PID 文件
+    清空 PID 记录
+
+    Args:
+        project_dir: 项目目录，传入后只清除属于当前项目的 PID 条目，
+                     不传入则清空整个 PID 文件（旧行为）
     """
     pid_file = get_pid_file_path()
 
-    if os.path.exists(pid_file):
+    if not os.path.exists(pid_file):
+        return
+
+    # 如果指定了项目目录，只移除属于当前项目的条目
+    if project_dir:
         try:
-            os.remove(pid_file)
-        except Exception as e:
-            print(f"删除 PID 文件失败: {e}")
+            with open(pid_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            if isinstance(data, dict) and 'pids' in data:
+                data['pids'] = [
+                    e for e in data['pids']
+                    if not (e.get('cwd') and _is_same_project(e['cwd'], project_dir))
+                ]
+
+                if not data['pids']:
+                    try:
+                        os.remove(pid_file)
+                    except Exception:
+                        pass
+                else:
+                    with open(pid_file, 'w', encoding='utf-8') as f:
+                        json.dump(data, f, indent=2, ensure_ascii=False)
+        except (json.JSONDecodeError, Exception) as e:
+            print(f"按项目清理 PID 文件失败: {e}")
+        return
+
+    # 未指定项目目录，清空整个文件
+    try:
+        os.remove(pid_file)
+    except Exception as e:
+        print(f"删除 PID 文件失败: {e}")
 
 
-def check_launcher_running():
+def check_launcher_running(project_dir=None):
     """
     检查是否有 launcher 在运行
+
+    Args:
+        project_dir: 项目目录，传入后只检查属于当前项目的 launcher
 
     Returns:
         tuple: (是否在运行, launcher PID)
     """
-    entries = get_pid_entries()
+    entries = get_pid_entries(project_dir=project_dir)
 
     for entry in entries:
         name = entry.get('name', '').lower()
@@ -422,12 +519,16 @@ if __name__ == "__main__":
     # 测试代码
     print(f"PID 文件路径: {get_pid_file_path()}")
 
-    # 清理死亡进程
-    dead_count, alive_count = cleanup_dead_pids_on_startup()
+    # 使用当前工作目录作为项目目录进行过滤
+    current_project = os.getcwd()
+    print(f"当前项目目录: {current_project}")
+
+    # 清理死亡进程（只处理当前项目的 PID）
+    dead_count, alive_count = cleanup_dead_pids_on_startup(project_dir=current_project)
     print(f"清理了 {dead_count} 个死亡进程，保留了 {alive_count} 个活跃进程")
 
     # 显示当前记录的 PID
-    entries = get_pid_entries()
-    print(f"\n当前记录的进程:")
+    entries = get_pid_entries(project_dir=current_project)
+    print(f"\n当前项目的进程:")
     for entry in entries:
         print(f"  PID: {entry.get('pid')}, 名称: {entry.get('name')}, 目录: {entry.get('cwd')}, 时间: {entry.get('timestamp')}")
