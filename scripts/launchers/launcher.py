@@ -121,8 +121,8 @@ class TrayLauncher:
         self.should_stop = False
         self.current_dir = self._get_current_dir()
 
-        # 启动时清理残留的死亡进程 PID
-        cleanup_dead_pids_on_startup()
+        # 启动时清理残留的死亡进程 PID（只清理当前项目的）
+        cleanup_dead_pids_on_startup(project_dir=self.current_dir)
 
         # 记录 launcher 自身的 PID（带进程名和工作目录）
         launcher_name = "点我启动.exe" if getattr(sys, 'frozen', False) else "python"
