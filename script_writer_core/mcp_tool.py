@@ -3626,6 +3626,14 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
             
             # 创建后台任务跟踪记录
             task_id = None
+            
+            # 读取自动重试配置
+            max_retries = 0
+            try:
+                max_retries = get_config().get("image", {}).get("max_retry_count", 0) or 0
+            except Exception:
+                pass
+            
             if item_type is not None and item_name:
                 # 绑定到具体角色/场景/道具的任务
                 try:
@@ -3637,7 +3645,13 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
                         comfyui_base_url=comfyui_base_url,
                         auth_token=auth_token,
                         user_id=user_id,
-                        world_id=world_id
+                        world_id=world_id,
+                        prompt=prompt,
+                        task_config_id=text_to_image_task_id,
+                        aspect_ratio=aspect_ratio,
+                        image_size=request_data.get('image_size'),
+                        is_grid=is_grid,
+                        max_retries=max_retries
                     )
                 except ValueError as e:
                     # 任务冲突
@@ -3674,7 +3688,13 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
                         world_id=world_id,
                         comfyui_base_url=comfyui_base_url,
                         auth_token=auth_token,
-                        max_attempts=60
+                        max_attempts=60,
+                        prompt=prompt,
+                        task_config_id=text_to_image_task_id,
+                        aspect_ratio=aspect_ratio,
+                        image_size=request_data.get('image_size'),
+                        is_grid=is_grid,
+                        max_retries=max_retries
                     )
                     task_id = general_task_key
                     logger.info(f"创建通用生图后台任务: {general_task_key}, project_id: {project_ids[0]}")
