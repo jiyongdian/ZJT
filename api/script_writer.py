@@ -3447,38 +3447,38 @@ async def check_assets_complete(request: Request, check_request: CheckAssetsRequ
         characters_result = CharacterModel.list_by_world(world_id, page=1, page_size=1000)
         characters = characters_result.get('data', [])
         missing_characters = [
-            c['name'] for c in characters 
+            c['name'] for c in characters
             if not c.get('reference_image')
         ]
         if missing_characters:
             result['missing_assets'].append({
-                'type': '角色',
+                'type': 'characters',
                 'items': missing_characters
             })
-        
+
         # 3. 检查场景参考图
         locations_result = LocationModel.list_by_world(world_id, page=1, page_size=1000)
         locations = locations_result.get('data', [])
         missing_locations = [
-            loc['name'] for loc in locations 
+            loc['name'] for loc in locations
             if not loc.get('reference_image')
         ]
         if missing_locations:
             result['missing_assets'].append({
-                'type': '场景',
+                'type': 'locations',
                 'items': missing_locations
             })
-        
+
         # 4. 检查道具参考图
         props_result = PropsModel.list_by_world(world_id, page=1, page_size=1000)
         props = props_result.get('data', [])
         missing_props = [
-            p['name'] for p in props 
+            p['name'] for p in props
             if not p.get('reference_image')
         ]
         if missing_props:
             result['missing_assets'].append({
-                'type': '道具',
+                'type': 'props',
                 'items': missing_props
             })
         

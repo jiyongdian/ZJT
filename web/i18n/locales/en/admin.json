@@ -7,6 +7,7 @@
   "nav_config": "System Config",
   "nav_checkin": "Check-in",
   "nav_implementations": "Providers",
+  "nav_models": "Models",
   "nav_notifications": "Notifications",
   "logout": "Logout",
   "loading": "Loading...",
@@ -358,5 +359,19 @@
   "field_api_key_placeholder_qwen": "Enter your Qwen API Key",
   "field_api_key_placeholder_deepseek": "Enter your DeepSeek API Key",
   "field_ywapi_name_label": "Site Name",
-  "field_ywapi_name_placeholder": "ZJT API"
+  "field_ywapi_name_placeholder": "ZJT API",
+  "models_title": "Model Management",
+  "models_col_name": "Model Name",
+  "models_col_context": "Context Window",
+  "models_col_tools": "Tool Calling",
+  "models_col_vl": "Vision-Language",
+  "models_col_thinking": "Thinking",
+  "models_col_enabled": "Enabled",
+  "models_col_note": "Note",
+  "models_enabled": "Enabled",
+  "models_disabled": "Disabled",
+  "toast_load_models_failed": "Failed to load models",
+  "toast_model_enabled": "Model enabled",
+  "toast_model_disabled": "Model disabled",
+  "toast_model_toggle_failed": "Failed to toggle model status"
 }

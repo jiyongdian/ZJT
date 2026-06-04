@@ -153,6 +153,30 @@ class GridImageTasksModel:
             raise
     
     @staticmethod
+    def exists_by_project_id(project_id: str) -> bool:
+        """
+        检查是否存在关联指定 project_id 的活跃 grid_image_task
+        
+        Args:
+            project_id: ai_tools.id（字符串形式）
+        
+        Returns:
+            True 如果存在活跃的 grid_image_task
+        """
+        sql = "SELECT COUNT(*) as cnt FROM grid_image_tasks WHERE project_id = %s AND status IN (%s, %s)"
+        
+        try:
+            result = execute_query(
+                sql, 
+                (str(project_id), GridImageTaskStatus.QUEUED, GridImageTaskStatus.PROCESSING), 
+                fetch_one=True
+            )
+            return result and result.get('cnt', 0) > 0
+        except Exception as e:
+            logger.error(f"Failed to check grid image task by project_id {project_id}: {e}")
+            return False
+
+    @staticmethod
     def get_by_task_key(task_key: str) -> Optional[GridImageTask]:
         """
         根据task_key获取任务

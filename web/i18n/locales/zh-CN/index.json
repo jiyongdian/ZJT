@@ -989,5 +989,19 @@
   "label_premium": "付费",
   "label_cloud": "云端",
   "label_local": "本地",
-  "welcome_hint_select": "选择下方需求或直接输入，开始您的创作之旅！"
+  "welcome_hint_select": "选择下方需求或直接输入，开始您的创作之旅！",
+  "alert_file_diff_warning": "⚠️ 检测到本地文件与数据库存在差异：\n\n",
+  "alert_file_diff_skipped": "📝 内容差异文件（本地修改已保留）：\n  • {files}\n\n",
+  "alert_file_diff_local_only": "📁 本地独有文件（数据库中不存在）：\n  • {files}\n\n",
+  "alert_file_diff_hint": "💡 提示：这些文件的本地内容已保留，不会被数据库覆盖。如需同步，请使用「提交数据」按钮。",
+  "asset_confirm_title": "检测到以下问题：\n\n",
+  "asset_confirm_no_script": "⚠️ 当前世界还没有剧本\n",
+  "asset_confirm_missing_images": "\n以下资产图片尚未生成：\n",
+  "asset_confirm_item_count": " 等{count}项",
+  "asset_confirm_hint": "\n💡 提示：请点击「提交数据」按钮生成资产图片后再进入制作工坊\n",
+  "asset_confirm_enter_workflow": "\n是否仍要进入制作工坊？",
+  "label_characters": "角色",
+  "label_locations": "场景",
+  "label_props": "道具",
+  "label_scripts": "剧本"
 }

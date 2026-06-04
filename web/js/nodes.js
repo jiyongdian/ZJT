@@ -8886,24 +8886,46 @@
     function convertVideoPromptToText(jsonString){
       try {
         const data = JSON.parse(jsonString);
-        
+        const t = window.t || ((key, params) => {
+          // 回退：从 key 中提取默认值
+          const fallbacks = {
+            'video_prompt_duration': '时长：{value}秒',
+            'video_prompt_time': '时间：{value}',
+            'video_prompt_weather': '天气：{value}',
+            'video_prompt_scene': '场景：{value}',
+            'video_prompt_shot_type': '镜头类型：{value}',
+            'video_prompt_camera_movement': '运镜：{value}',
+            'video_prompt_description': '描述：{value}',
+            'video_prompt_scene_detail': '场景细节：{value}',
+            'video_prompt_action': '动作：{value}',
+            'video_prompt_mood': '情绪：{value}',
+            'video_prompt_dialogue': '对话：{value}',
+            'video_prompt_audio_notes': '音频备注：{value}',
+            'video_prompt_environment_sound': '环境音：{value}',
+            'video_prompt_background_music': '背景音乐：{value}'
+          };
+          let str = fallbacks[key] || key;
+          if(params) Object.keys(params).forEach(k => { str = str.replace(`{${k}}`, params[k]); });
+          return str;
+        });
+
         let text = '';
-        if(data.duration) text += `时长：${data.duration}秒\n`;
-        if(data.time_of_day) text += `时间：${data.time_of_day}\n`;
-        if(data.weather) text += `天气：${data.weather}\n`;
-        if(data.location_name) text += `场景：${data.location_name}\n`;
-        if(data.shot_type) text += `镜头类型：${data.shot_type}\n`;
-        if(data.camera_movement) text += `运镜：${data.camera_movement}\n`;
-        if(data.description) text += `描述：${data.description}\n`;
-        if(data.scene_detail) text += `场景细节：${data.scene_detail}\n`;
-        if(data.action) text += `动作：${data.action}\n`;
-        if(data.mood) text += `情绪：${data.mood}\n`;
+        if(data.duration) text += t('video_prompt_duration', { value: data.duration }) + '\n';
+        if(data.time_of_day) text += t('video_prompt_time', { value: data.time_of_day }) + '\n';
+        if(data.weather) text += t('video_prompt_weather', { value: data.weather }) + '\n';
+        if(data.location_name) text += t('video_prompt_scene', { value: data.location_name }) + '\n';
+        if(data.shot_type) text += t('video_prompt_shot_type', { value: data.shot_type }) + '\n';
+        if(data.camera_movement) text += t('video_prompt_camera_movement', { value: data.camera_movement }) + '\n';
+        if(data.description) text += t('video_prompt_description', { value: data.description }) + '\n';
+        if(data.scene_detail) text += t('video_prompt_scene_detail', { value: data.scene_detail }) + '\n';
+        if(data.action) text += t('video_prompt_action', { value: data.action }) + '\n';
+        if(data.mood) text += t('video_prompt_mood', { value: data.mood }) + '\n';
         if(data.dialogue && Array.isArray(data.dialogue) && data.dialogue.length > 0){
-          text += `对话：${data.dialogue.map(d => `${d.character_name}: ${d.text}`).join('; ')}\n`;
+          text += t('video_prompt_dialogue', { value: data.dialogue.map(d => `${d.character_name}: ${d.text}`).join('; ') }) + '\n';
         }
-        if(data.audio_notes) text += `音频备注：${data.audio_notes}\n`;
-        if(data.environment_sound) text += `环境音：${data.environment_sound}\n`;
-        if(data.background_music) text += `背景音乐：${data.background_music}\n`;
+        if(data.audio_notes) text += t('video_prompt_audio_notes', { value: data.audio_notes }) + '\n';
+        if(data.environment_sound) text += t('video_prompt_environment_sound', { value: data.environment_sound }) + '\n';
+        if(data.background_music) text += t('video_prompt_background_music', { value: data.background_music }) + '\n';
         return text;
       } catch(e){
         console.error('Failed to convert video prompt to text:', e);
@@ -9308,6 +9330,31 @@
         if(generateImageBtn) generateImageBtn.style.opacity = isRefMode ? '0.4' : '1';
         if(modelFieldEl) modelFieldEl.style.opacity = isRefMode ? '0.4' : '1';
 
+        // 参考模式下，图片提示词和视频首帧区域显示为灰色/禁用
+        const imagePromptFieldEl = el.querySelector('.shot-frame-image-prompt')?.closest('.field');
+        const previewFieldEl = el.querySelector('.shot-frame-preview-field');
+        const firstFramePortEl = el.querySelector('.first-frame-port');
+        const imageFieldEl = el.querySelector('.shot-frame-image-field');
+        if(imagePromptFieldEl) {
+          imagePromptFieldEl.style.opacity = isRefMode ? '0.4' : '1';
+          imagePromptFieldEl.style.pointerEvents = isRefMode ? 'none' : 'auto';
+        }
+        if(previewFieldEl) {
+          previewFieldEl.style.opacity = isRefMode ? '0.4' : '1';
+          previewFieldEl.style.pointerEvents = isRefMode ? 'none' : 'auto';
+        }
+        if(firstFramePortEl) {
+          firstFramePortEl.style.opacity = isRefMode ? '0.4' : '1';
+          firstFramePortEl.style.pointerEvents = isRefMode ? 'none' : 'auto';
+        }
+        if(imageFieldEl) {
+          imageFieldEl.style.opacity = isRefMode ? '0.4' : '1';
+          imageFieldEl.style.pointerEvents = isRefMode ? 'none' : 'auto';
+        }
+
+        // 参考模式下角色列表从视频提示词提取，切换模式时需刷新
+        updateShotReferences();
+
         // 参考音视频字段可见性（参考图模式下由模型配置决定，首帧模式同理）
         updateRefAudioVideoVisibility();
       }
@@ -9457,8 +9504,12 @@
         return names;
       }
 
-      // 初始匹配角色
-      node.data.refCharacters = extractCharacterNames(node.data.imagePrompt || '');
+      // 初始匹配角色（根据当前模式选择提示词源）
+      const initMode = node.data.videoMode || 'first_last_frame';
+      const initPromptSource = initMode === 'multi_reference'
+        ? (node.data.videoPromptText || node.data.videoPrompt || '')
+        : (node.data.imagePrompt || '');
+      node.data.refCharacters = extractCharacterNames(initPromptSource);
 
       // 获取所有可用场景列表（从 state.worldLocations 获取）
       function getAvailableLocations() {
@@ -9839,8 +9890,12 @@
 
       // 触发全部引用匹配并渲染
       function updateShotReferences() {
-        // 重新匹配角色
-        node.data.refCharacters = extractCharacterNames(node.data.imagePrompt || '');
+        // 重新匹配角色（参考模式从视频提示词提取，首帧模式从图片提示词提取）
+        const mode = node.data.videoMode || 'first_last_frame';
+        const promptSource = mode === 'multi_reference'
+          ? (node.data.videoPromptText || node.data.videoPrompt || '')
+          : (node.data.imagePrompt || '');
+        node.data.refCharacters = extractCharacterNames(promptSource);
         renderSceneTags();
         renderPropTags();
         renderCharTags();
@@ -10294,7 +10349,8 @@
         e.stopPropagation();
         showPromptExpandModal(videoPromptEl, '视频提示词', (newValue) => {
           node.data.videoPromptText = newValue;
-        });
+          updateShotReferences();
+        }, { enableCharacterDropdown: true, nodeId: id, dropdownKey: 'videoprompt' });
       });
 
       const reduceViolationBtn = el.querySelector('.reduce-violation-btn');
@@ -10802,19 +10858,20 @@
         showToast(`${title}已更新`, 'success');
       });
 
-      // 支持 / 键触发角色列表（仅分镜节点图片提示词放大窗口）
+      // 支持 / 键触发角色列表（分镜节点提示词放大窗口）
       if(opts && opts.enableCharacterDropdown && opts.nodeId != null){
+        const dropdownKey = opts.dropdownKey || 'imageprompt';
         expandTextarea.addEventListener('keydown', (e) => {
           if(e.key === '/') {
             e.preventDefault();
-            showCharacterDropdownForImagePrompt(opts.nodeId, expandTextarea, expandTextarea.selectionStart);
+            showCharacterDropdownForImagePrompt(opts.nodeId, expandTextarea, expandTextarea.selectionStart, dropdownKey);
           }
         });
         expandTextarea.addEventListener('input', () => {
-          hideCharacterDropdownForImagePrompt(opts.nodeId);
+          hideCharacterDropdownForImagePrompt(opts.nodeId, dropdownKey);
         });
         expandTextarea.addEventListener('blur', () => {
-          setTimeout(() => hideCharacterDropdownForImagePrompt(opts.nodeId), 200);
+          setTimeout(() => hideCharacterDropdownForImagePrompt(opts.nodeId, dropdownKey), 200);
         });
       }
 
@@ -11322,8 +11379,8 @@
     }
 
     // 显示角色选择下拉框（用于图片提示词，使用 state.worldCharacters）
-    function showCharacterDropdownForImagePrompt(nodeId, textarea, cursorPos) {
-      const dropdownId = `character-dropdown-imageprompt-${nodeId}`;
+    function showCharacterDropdownForImagePrompt(nodeId, textarea, cursorPos, dropdownKey = 'imageprompt') {
+      const dropdownId = `character-dropdown-${dropdownKey}-${nodeId}`;
       let dropdown = document.getElementById(dropdownId);
       
       // 如果下拉框不存在，创建一个
@@ -11386,8 +11443,8 @@
     }
 
     // 隐藏角色选择下拉框（图片提示词用）
-    function hideCharacterDropdownForImagePrompt(nodeId) {
-      const dropdown = document.getElementById(`character-dropdown-imageprompt-${nodeId}`);
+    function hideCharacterDropdownForImagePrompt(nodeId, dropdownKey = 'imageprompt') {
+      const dropdown = document.getElementById(`character-dropdown-${dropdownKey}-${nodeId}`);
       if (dropdown) {
         dropdown.style.display = 'none';
       }

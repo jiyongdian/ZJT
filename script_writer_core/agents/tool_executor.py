@@ -97,12 +97,13 @@ class ToolExecutor:
         self.tool_map.update(_enterprise_tool_functions)
     
     def execute_tool(
-        self, 
-        tool_name: str, 
+        self,
+        tool_name: str,
         tool_args: Dict[str, Any],
         user_id: str,
         world_id: str,
-        auth_token: str
+        auth_token: str,
+        language: str = "zh-CN"
     ) -> Dict[str, Any]:
         """执行工具"""
         # 调试日志：记录接收到的工具名称和参数
@@ -130,10 +131,20 @@ class ToolExecutor:
                 "fetch_image_as_base64",
                 "generate_character_reference_audio", "check_reference_audio_status"
             ]
-            
+
+            # 需要传递 language 参数的创建工具（update 函数不调用 validate_name_for_filename，不需要此参数）
+            language_aware_tools = [
+                "create_character_json", "create_script_json",
+                "create_location_json", "create_prop_json"
+            ]
+
             if tool_name in mcp_tool_names:
                 # MCP 工具：将 user_id, world_id, auth_token 作为前三个参数传递
-                result = tool_func(user_id, world_id, auth_token, **tool_args)
+                if tool_name in language_aware_tools:
+                    # 创建/更新工具需要传递 language 参数
+                    result = tool_func(user_id, world_id, auth_token, language=language, **tool_args)
+                else:
+                    result = tool_func(user_id, world_id, auth_token, **tool_args)
             else:
                 # 兼容旧逻辑，但理论上现在应该都走上面
                 tool_args["user_id"] = user_id
