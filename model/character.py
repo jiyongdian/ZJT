@@ -107,9 +107,9 @@ class CharacterModel:
 
         Args:
             world_id: World ID
-            name: Character name
+            name: Character name (max 255 chars)
             user_id: User ID
-            age: Age (optional)
+            age: Age (max 50 chars, optional)
             identity: Identity (optional)
             appearance: Appearance description (optional)
             personality: Personality traits (optional)
@@ -124,6 +124,14 @@ class CharacterModel:
         Returns:
             Inserted record ID
         """
+        # 长度限制验证
+        if len(name) > 255:
+            logger.warning(f"Character name truncated from {len(name)} to 255 chars: {name[:50]}...")
+            name = name[:255]
+        if age and len(age) > 50:
+            logger.warning(f"Character age truncated from {len(age)} to 50 chars: {age}")
+            age = age[:50]
+        
         sql = """
             INSERT INTO `character`
             (world_id, name, age, identity, appearance, personality, behavior, other_info,
@@ -167,6 +175,14 @@ class CharacterModel:
         Returns:
             Record ID (inserted or existing)
         """
+        # 长度限制验证
+        if len(name) > 255:
+            logger.warning(f"Character name truncated from {len(name)} to 255 chars: {name[:50]}...")
+            name = name[:255]
+        if age and len(age) > 50:
+            logger.warning(f"Character age truncated from {len(age)} to 50 chars: {age}")
+            age = age[:50]
+        
         emotion_voices_str = json.dumps(emotion_voices, ensure_ascii=False) if emotion_voices else None
         reference_images_str = json.dumps(reference_images, ensure_ascii=False) if reference_images else None
         sql = """
@@ -459,7 +475,7 @@ CREATE TABLE IF NOT EXISTS `character` (
   `world_id` int unsigned NOT NULL COMMENT '所属世界ID',
   `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '角色姓名',
   `age` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '年龄',
-  `identity` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '身份/职业',
+  `identity` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '身份/职业',
   `appearance` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '外貌描述',
   `personality` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '性格特征',
   `behavior` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '行为习惯',
