@@ -3,7 +3,7 @@
 角色身份描述字段过短，导致数据截断。将 identity 字段从 varchar(100) 扩展为 text 类型。
 
 Revision ID: 20260604_char_identity
-Revises: 20260603_email_support
+Revises: 20260604_image_retry
 Create Date: 2026-06-04
 """
 from typing import Sequence, Union
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 # revision identifiers, used by Alembic.
 revision: str = '20260604_char_identity'
-down_revision: Union[str, None] = '20260603_email_support'
+down_revision: Union[str, None] = '20260604_image_retry'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
