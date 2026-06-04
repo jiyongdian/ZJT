@@ -1618,3 +1618,62 @@ async def admin_update_sort_orders(
     except Exception as e:
         logger.error(f"Failed to update sort orders: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== 模型管理 API ====================
+
+from model.model import ModelModel
+
+
+@router.get("/models")
+async def admin_get_models(auth_token: str = Header(None, alias="Authorization")):
+    """
+    获取所有模型列表（含 enabled 状态）
+    """
+    await require_admin(auth_token)
+
+    try:
+        models = ModelModel.get_all(limit=0)
+        return {
+            "code": 0,
+            "data": [m.to_dict() for m in models]
+        }
+    except Exception as e:
+        logger.error(f"Failed to get models: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class UpdateModelEnabledRequest(BaseModel):
+    enabled: int
+
+
+@router.put("/models/{model_id}/enabled")
+async def admin_update_model_enabled(
+    model_id: int = Path(...),
+    request: UpdateModelEnabledRequest = ...,
+    auth_token: str = Header(None, alias="Authorization")
+):
+    """
+    切换模型启用/禁用状态
+    """
+    await require_admin(auth_token)
+
+    try:
+        model = ModelModel.get_by_id(model_id)
+        if not model:
+            raise HTTPException(status_code=404, detail="模型不存在")
+
+        enabled_val = 1 if request.enabled else 0
+        ModelModel.set_enabled(model_id, enabled_val)
+        logger.info(f"Model {model_id} ({model.model_name}) enabled set to {enabled_val}")
+
+        return {
+            "code": 0,
+            "message": f"模型 {model.model_name} 已{'启用' if enabled_val else '禁用'}",
+            "data": {"model_id": model_id, "enabled": enabled_val}
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update model {model_id} enabled: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

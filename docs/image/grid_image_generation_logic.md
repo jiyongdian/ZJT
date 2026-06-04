@@ -449,6 +449,64 @@ def get_task_status(user_id, world_id, auth_token, item_type, item_name)
 
 ---
 
+## 自动重试机制
+
+### 概述
+
+宫格生图支持失败后自动重试。当 ai_tools 任务失败时，`process_grid_image_tasks` 自动创建新的 ai_tools 重新提交，直到达到最大重试次数。
+
+**关键设计**：grid image retry 完全独立于 `ai_tool_pipeline_steps` 的 `before_finish` (implementation_retry) 机制。宫格生图的 ai_tools 失败时，`_handle_task_failure` 会跳过 pipeline 重试，直接走 FAILED + 退费，由 `process_grid_image_tasks` 统一管理重试。
+
+### 重试流程
+
+```
+ai_tools 失败
+    ↓
+_handle_task_failure 检测到关联 grid_image_tasks → 跳过 create_before_finish_steps
+    ↓
+ai_tools 标记 FAILED → 退费
+    ↓
+process_grid_image_tasks 检测到 FAILED
+    ↓ retry_count < max_retries 且 prompt/task_config_id 存在?
+YES → _resubmit_image_request → POST /api/text-to-image → 新建 ai_tools（扣费）
+    → grid_image_tasks.reset_for_retry(new_project_id)
+    → 继续监控新 ai_tools
+    ↓ NO
+grid_image_tasks 标记为终态 FAILED
+```
+
+### 算力流转
+
+每次重试独立扣费独立退费，不干预 `visual_task.py` 的退费逻辑：
+- 旧 ai_tools 失败 → `visual_task.py` 退费 +X
+- 新 ai_tools 创建 → `/api/text-to-image` 扣费 -X
+- 最终成功 → 净值 -X（只扣一次）
+- 全部失败 → 每次都退费 → 净值 0
+
+### 数据库字段（迁移：`no_93_20260604_add_image_auto_retry.py`）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `prompt` | text | 生图提示词（用于重试时重新提交） |
+| `task_config_id` | varchar(100) | 生图模型配置 ID |
+| `aspect_ratio` | varchar(20) | 图片宽高比 |
+| `image_size` | varchar(20) | 图片尺寸 |
+| `is_grid` | tinyint | 是否为宫格生成（0/1） |
+| `retry_count` | int | 已重试次数（默认 0） |
+| `max_retries` | int | 最大重试次数（默认 0=不重试） |
+
+### 相关代码
+
+| 文件 | 函数/方法 | 说明 |
+|---|---|---|
+| `task/grid_image_task.py` | `_resubmit_image_request` | 调用 `/api/text-to-image` 创建新 ai_tools |
+| `task/grid_image_task.py` | `process_grid_image_tasks` | 检测 FAILED 并触发重试 |
+| `model/grid_image_tasks.py` | `reset_for_retry` | 重置任务状态、更新 project_id |
+| `model/grid_image_tasks.py` | `exists_by_project_id` | 检查 ai_tools 是否关联 grid_image_task |
+| `task/visual_task.py` | `_handle_task_failure` | 对 grid image 跳过 pipeline 重试 |
+
+---
+
 ## 注意事项与已知问题
 
 1. **同步阻塞风险**：`generate_text_to_image` 使用 `requests.post` 同步发起 HTTP 请求。若该 MCP 工具在异步事件循环中被调用，会阻塞整个事件循环。这是后续改造的首要优化点。
@@ -528,3 +586,4 @@ def get_task_status(user_id, world_id, auth_token, item_type, item_name)
 
 - **2026-05-06**：初版文档，整理 Agent 4宫格生图完整链路
 - **2026-05-06**：新增算力感知工具（`get_text_to_image_model_info`、`get_user_computing_power`），更新 `generate_text_to_image` 支持 `image_size` 参数和算力返回，修正 "4k" 硬编码描述
+- **2026-06-04**：新增自动重试机制文档；grid image 跳过 pipeline before_finish 重试，由 `process_grid_image_tasks` 独立管理

@@ -106,6 +106,13 @@ def make_perseids_request(endpoint=None, data=None, method='POST', headers=None)
             )
             return result.get('success', False), result.get('message', ''), result.get('data', {})
         
+        elif endpoint == 'send_email_verify_code':
+            result = VerifyCodeService.create_email_verify_code(
+                email=payload.get('email'),
+                code_type=payload.get('type', 'register')
+            )
+            return result.get('success', False), result.get('message', ''), result.get('data', {})
+        
         elif endpoint == 'auth/logout':
             result = AuthService.logout(token)
             return result.get('success', False), result.get('message', ''), result.get('data', {})
@@ -162,7 +169,7 @@ async def async_make_perseids_request(endpoint=None, data=None, method='POST', h
     return await asyncio.to_thread(make_perseids_request, endpoint, data, method, headers)
 
 
-async def async_call_external_auth_server(phone, password, device_uuid=None, auth_type='login', extra_data=None):
+async def async_call_external_auth_server(phone, password, device_uuid=None, auth_type='login', extra_data=None, email=None):
     """
     内部认证服务调用（异步非阻塞版本）
     :param phone: 手机号
@@ -170,14 +177,15 @@ async def async_call_external_auth_server(phone, password, device_uuid=None, aut
     :param device_uuid: 设备UUID
     :param auth_type: 认证类型，'login', 'register' 或 'reset_password'
     :param extra_data: 额外数据
+    :param email: 邮箱
     :return: (bool, str, dict) 是否成功，消息，数据
     """
     return await asyncio.to_thread(
-        call_external_auth_server, phone, password, device_uuid, auth_type, extra_data
+        call_external_auth_server, phone, password, device_uuid, auth_type, extra_data, email
     )
 
 
-def call_external_auth_server(phone, password, device_uuid=None, auth_type='login', extra_data=None):
+def call_external_auth_server(phone, password, device_uuid=None, auth_type='login', extra_data=None, email=None):
     """
     内部认证服务调用（同步版本）
     :param phone: 手机号
@@ -185,18 +193,20 @@ def call_external_auth_server(phone, password, device_uuid=None, auth_type='logi
     :param device_uuid: 设备UUID
     :param auth_type: 认证类型，'login', 'register' 或 'reset_password'
     :param extra_data: 额外数据
+    :param email: 邮箱
     :return: (bool, str, dict) 是否成功，消息，数据
     """
     try:
         extra = extra_data or {}
-        logger.debug(f"内部认证调用: {auth_type}, phone: {phone}")
+        logger.debug(f"内部认证调用: {auth_type}, phone: {phone}, email: {email}")
         
         if auth_type == 'login':
             result = AuthService.login(
                 phone=phone,
                 password=password,
                 device_uuid=device_uuid,
-                terms_agreed=extra.get('terms_agreed')
+                terms_agreed=extra.get('terms_agreed'),
+                email=email
             )
             return result.get('success', False), result.get('message', ''), result.get('data', {})
         
@@ -205,7 +215,8 @@ def call_external_auth_server(phone, password, device_uuid=None, auth_type='logi
                 phone=phone,
                 password=password,
                 verify_code=extra.get('code'),
-                invite_code=extra.get('invite_code')
+                invite_code=extra.get('invite_code'),
+                email=email
             )
             return result.get('success', False), result.get('message', ''), result.get('data', {})
         
@@ -213,7 +224,8 @@ def call_external_auth_server(phone, password, device_uuid=None, auth_type='logi
             result = AuthService.reset_password(
                 phone=phone,
                 new_password=password,
-                verify_code=extra.get('code')
+                verify_code=extra.get('code'),
+                email=email
             )
             return result.get('success', False), result.get('message', ''), result.get('data', {})
         

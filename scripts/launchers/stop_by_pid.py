@@ -6,6 +6,7 @@
 1. PID 残留：只停止实际运行的进程
 2. PID 重用：通过进程名 + 目录验证避免误杀
 3. 文件损坏：自动处理损坏的文件
+4. 多项目隔离：只停止属于当前项目的进程，避免误杀其他项目的进程
 """
 import os
 import sys
@@ -18,6 +19,14 @@ from pid_manager import (
     clear_pids,
     is_process_running
 )
+
+
+def get_project_dir():
+    """
+    获取当前项目根目录
+    stop_by_pid.py 位于 scripts/launchers/ 下，向上两级到项目根目录
+    """
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def kill_process(pid, process_name=None):
@@ -47,7 +56,10 @@ def kill_process(pid, process_name=None):
 
 def main():
     """主函数"""
-    entries = get_pid_entries()
+    project_dir = get_project_dir()
+
+    # 只获取属于当前项目的 PID 条目，避免误杀其他项目的进程
+    entries = get_pid_entries(project_dir=project_dir)
 
     if not entries:
         return
@@ -75,8 +87,8 @@ def main():
         else:
             failed_count += 1
 
-    # 无论成功失败，都清空 PID 文件
-    clear_pids()
+    # 只清除当前项目的 PID 记录，不影响其他项目
+    clear_pids(project_dir=project_dir)
 
 
 if __name__ == "__main__":

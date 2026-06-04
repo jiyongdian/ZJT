@@ -159,6 +159,15 @@ async function generateShotFrameVideo(nodeId, node){
         form.set('prompt', videoPrompt);
       }
 
+      // 参考模式下追加画风描述（首帧模式不添加，保持原状）
+      if(state.style && state.style.name) {
+        videoPrompt = videoPrompt + '\n\n视频风格：' + state.style.name;
+        if(state.style.compositionPreference) {
+          videoPrompt = videoPrompt + '\n构图倾向：' + state.style.compositionPreference;
+        }
+        form.set('prompt', videoPrompt);
+      }
+
       if(referenceImageUrls.length > 0) {
         // 有参考图 → image_to_video + multi_reference
         const taskId = TaskConfig.getTaskIdByKey(videoModel, 'image_to_video');

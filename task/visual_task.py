@@ -650,27 +650,38 @@ def _handle_task_failure(project_id, task_id, ai_tool_type, reason, user_id):
         reason = "此内容可能违反了我们关于与第三方内容相似性的规定"
 
     # 检查 before_finish 步骤（失败后重试阶段）
+    # 宫格生图任务跳过 pipeline 重试，由 process_grid_image_tasks 管理重试
     try:
-        from task.pipeline_processor import PipelineProcessor
-        ai_tool = AIToolsModel.get_by_id(task_id)
-        if ai_tool:
-            retry_steps = PipelineProcessor.create_before_finish_steps(
-                ai_tool_id=task_id,
-                ai_tool_type=ai_tool_type,
-                failed_implementation=ai_tool.implementation or 0,
-                failure_reason=reason
-            )
-            if retry_steps:
-                AIToolsModel.update(task_id, status=AI_TOOL_STATUS_WAITING_BEFORE_FINISH, message=reason)
-                TasksModel.update_by_task_id(task_id, status=TASK_STATUS_WAITING_BEFORE_FINISH)
-                logger.info(f"Task {task_id} entering before_finish pipeline with {len(retry_steps)} retry steps")
-                # 释放 RunningHub 槽位（重试时会重新获取）
-                if ai_tool_type in RUNNINGHUB_TASK_TYPES and project_id:
-                    RunningHubSlotsModel.release_slot_by_project_id(project_id)
-                return True
+        from model import GridImageTasksModel
+        is_grid_image_task = GridImageTasksModel.exists_by_project_id(str(task_id))
     except Exception as e:
-        logger.warning(f"Failed to create before_finish steps for task {task_id}: {e}")
-        # 不阻断原有失败处理流程
+        logger.warning(f"Failed to check grid_image_task for task {task_id}: {e}")
+        is_grid_image_task = False
+
+    if not is_grid_image_task:
+        try:
+            from task.pipeline_processor import PipelineProcessor
+            ai_tool = AIToolsModel.get_by_id(task_id)
+            if ai_tool:
+                retry_steps = PipelineProcessor.create_before_finish_steps(
+                    ai_tool_id=task_id,
+                    ai_tool_type=ai_tool_type,
+                    failed_implementation=ai_tool.implementation or 0,
+                    failure_reason=reason
+                )
+                if retry_steps:
+                    AIToolsModel.update(task_id, status=AI_TOOL_STATUS_WAITING_BEFORE_FINISH, message=reason)
+                    TasksModel.update_by_task_id(task_id, status=TASK_STATUS_WAITING_BEFORE_FINISH)
+                    logger.info(f"Task {task_id} entering before_finish pipeline with {len(retry_steps)} retry steps")
+                    # 释放 RunningHub 槽位（重试时会重新获取）
+                    if ai_tool_type in RUNNINGHUB_TASK_TYPES and project_id:
+                        RunningHubSlotsModel.release_slot_by_project_id(project_id)
+                    return True
+        except Exception as e:
+            logger.warning(f"Failed to create before_finish steps for task {task_id}: {e}")
+            # 不阻断原有失败处理流程
+    else:
+        logger.info(f"Task {task_id} is grid image task, skip before_finish pipeline, direct fail + refund")
 
     try:
         AIToolsModel.update_by_project_id(

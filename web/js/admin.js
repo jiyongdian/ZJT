@@ -683,6 +683,12 @@ const AdminApp = {
                 updating: null  // 正在更新的实现方名称
             },
 
+            // 模型管理
+            models: {
+                list: [],
+                loading: false
+            },
+
             // 实现方编辑弹窗
             implEditModal: {
                 show: false,
@@ -1076,6 +1082,8 @@ const AdminApp = {
                 this.loadCheckinConfig();
             } else if (page === 'implementations') {
                 this.loadImplementations();
+            } else if (page === 'models') {
+                this.loadModels();
             }
         },
         
@@ -2267,6 +2275,67 @@ const AdminApp = {
             const confirmed = confirm(this.t('confirm_jiekou_tip'));
             if (confirmed) {
                 window.open('https://jiekou.ai/user/register?invited_code=119T5V', '_blank');
+            }
+        },
+
+        // ==================== 模型管理方法 ====================
+
+        // 格式化上下文窗口大小
+        formatContextWindow(tokens) {
+            if (tokens >= 1000000) {
+                return (tokens / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+            } else if (tokens >= 1000) {
+                return (tokens / 1000).toFixed(0) + 'K';
+            }
+            return tokens.toString();
+        },
+
+        // 加载模型列表
+        async loadModels() {
+            this.models.loading = true;
+            try {
+                const response = await axios.get('/api/admin/models', {
+                    headers: { 'Authorization': `Bearer ${this.authToken}` }
+                });
+
+                if (response.data.code === 0) {
+                    this.models.list = response.data.data;
+                }
+            } catch (error) {
+                console.error('加载模型列表失败:', error);
+                if (error.response?.status === 401 || error.response?.status === 403) {
+                    this.handleAuthError(error.response.status);
+                } else {
+                    this.showToast(this.t('toast_load_models_failed'), 'error');
+                }
+            } finally {
+                this.models.loading = false;
+            }
+        },
+
+        // 切换模型启用/禁用状态
+        async toggleModelEnabled(model) {
+            const newEnabled = model.enabled ? 0 : 1;
+            try {
+                const response = await axios.put(`/api/admin/models/${model.id}/enabled`,
+                    { enabled: newEnabled },
+                    { headers: { 'Authorization': `Bearer ${this.authToken}` } }
+                );
+
+                if (response.data.code === 0) {
+                    model.enabled = newEnabled;
+                    this.showToast(
+                        newEnabled ? this.t('toast_model_enabled') : this.t('toast_model_disabled'),
+                        'success'
+                    );
+                }
+            } catch (error) {
+                console.error('切换模型状态失败:', error);
+                if (error.response?.status === 401 || error.response?.status === 403) {
+                    this.handleAuthError(error.response.status);
+                } else {
+                    this.showToast(this.t('toast_model_toggle_failed'), 'error');
+                }
             }
         },
 

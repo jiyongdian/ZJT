@@ -13,7 +13,7 @@ from model.computing_power_log import ComputingPowerLogModel
 from model.login_log import LoginLogModel
 
 from ..utils.token import generate_token, hash_password, verify_password, generate_secret_key
-from ..utils.validator import validate_phone, validate_password
+from ..utils.validator import validate_phone, validate_password, validate_email
 
 logger = logging.getLogger(__name__)
 
@@ -35,28 +35,39 @@ class AuthService:
         device_uuid: Optional[str] = None,
         terms_agreed: Optional[int] = None,
         ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None
+        user_agent: Optional[str] = None,
+        email: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        用户登录
+        用户登录（支持手机号或邮箱）
         
         Args:
-            phone: 手机号
+            phone: 手机号（与email二选一）
             password: 密码
             device_uuid: 设备UUID
             terms_agreed: 是否同意条款
             ip_address: IP地址
             user_agent: 用户代理
+            email: 邮箱（与phone二选一）
             
         Returns:
             登录结果字典
         """
-        # 验证手机号格式
-        if not validate_phone(phone):
-            return {"success": False, "message": "无效的手机号格式"}
+        # 确定标识符：优先使用email参数，否则使用phone
+        identifier = email if email else phone
         
-        # 查找用户
-        user = UsersModel.get_by_phone(phone)
+        if not identifier:
+            return {"success": False, "message": "请输入手机号或邮箱"}
+        
+        # 根据输入判断是手机号还是邮箱，查找用户
+        if validate_email(identifier):
+            user = UsersModel.get_by_email(identifier)
+        elif validate_phone(identifier):
+            user = UsersModel.get_by_phone(identifier)
+        else:
+            # 尝试两种方式
+            user = UsersModel.get_by_phone_or_email(identifier)
+        
         if not user:
             return {"success": False, "message": "用户不存在"}
         
@@ -110,7 +121,7 @@ class AuthService:
         # 记录登录日志
         LoginLogModel.create(user.id, ip_address, user_agent, 1)
         
-        logger.info(f"用户登录成功 - ID: {user.id}, 手机号: {phone}")
+        logger.info(f"用户登录成功 - ID: {user.id}, 标识: {identifier}")
         
         return {
             "success": True,
@@ -118,6 +129,7 @@ class AuthService:
             "data": {
                 "user_id": user.id,
                 "phone": user.phone,
+                "email": user.email,
                 "status": user.status,
                 "token": token,
                 "invite_code": user.invite_code,
@@ -133,22 +145,123 @@ class AuthService:
         verify_code: str,
         invite_code: Optional[str] = None,
         ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None
+        user_agent: Optional[str] = None,
+        email: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        用户注册
+        用户注册（支持手机号或邮箱）
         
         Args:
-            phone: 手机号
+            phone: 手机号（与email二选一）
             password: 密码
             verify_code: 验证码
             invite_code: 邀请码（可选）
             ip_address: IP地址
             user_agent: 用户代理
+            email: 邮箱（与phone二选一）
             
         Returns:
             注册结果字典
         """
+        is_email_registration = bool(email and not phone)
+        is_phone_registration = bool(phone and not email)
+        
+        if not is_email_registration and not is_phone_registration:
+            return {"success": False, "message": "请提供手机号或邮箱进行注册"}
+        
+        # 邮箱注册流程
+        if is_email_registration:
+            # 验证邮箱格式
+            if not validate_email(email):
+                return {"success": False, "message": "无效的邮箱格式"}
+            
+            # 验证密码强度
+            valid, msg = validate_password(password)
+            if not valid:
+                return {"success": False, "message": msg}
+            
+            # 检查邮箱是否已注册
+            existing_user = UsersModel.get_by_email(email)
+            if existing_user:
+                return {"success": False, "message": "该邮箱已注册"}
+            
+            # 验证邮箱验证码
+            if not VerifyCodesModel.verify_for_email(email, verify_code, "register"):
+                return {"success": False, "message": "验证码不正确或已过期"}
+            
+            # 检查邀请码
+            inviter_id = None
+            if invite_code:
+                inviter = UsersModel.get_by_invite_code(invite_code)
+                if not inviter:
+                    return {"success": False, "message": "无效邀请码"}
+                inviter_id = inviter.id
+            
+            # 生成密码哈希
+            password_hash = hash_password(password)
+            
+            # 生成用户邀请码
+            user_invite_code = UsersModel.generate_unique_invite_code()
+            
+            # 生成密钥
+            secret_key = generate_secret_key()
+
+            # 判断是否是第一个用户
+            total_count = UsersModel.get_total_count()
+            is_first_user = total_count == 0
+            user_role = "admin" if is_first_user else "user"
+
+            # 根据配置决定初始状态
+            from config.config_util import get_dynamic_config_value
+            require_approval = get_dynamic_config_value('user_registration', 'require_admin_approval', default=False)
+            initial_status = 2 if require_approval else 1
+
+            # 创建用户（phone为None，email有值）
+            from model.database import execute_insert
+            user_id = execute_insert(
+                """INSERT INTO users (phone, email, password_hash, status, role, secret_key, invite_code, inviter_id)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+                (None, email, password_hash, initial_status, user_role, secret_key, user_invite_code, inviter_id)
+            )
+            
+            # 删除验证码
+            VerifyCodesModel.delete_by_email(email)
+
+            # 设置初始算力
+            if is_first_user:
+                new_user_power = AuthService.FIRST_ADMIN_POWER
+            elif inviter_id:
+                new_user_power = AuthService.INVITED_USER_POWER
+            else:
+                new_user_power = AuthService.DEFAULT_COMPUTING_POWER
+            ComputingPowerModel.create(user_id, new_user_power, None)
+            
+            # 给邀请人增加算力
+            if inviter_id:
+                AuthService._add_inviter_reward(inviter_id, user_id)
+            
+            # 记录注册日志
+            LoginLogModel.create(user_id, ip_address, user_agent, 1)
+            
+            logger.info(f"邮箱用户注册成功 - ID: {user_id}, 邮箱: {email}")
+
+            result = {
+                "success": True,
+                "message": "注册成功，请等待管理员审核" if require_approval else "注册成功",
+                "data": {
+                    "user_id": user_id,
+                    "phone": None,
+                    "email": email,
+                    "status": initial_status,
+                    "role": user_role,
+                    "is_first_admin": is_first_user,
+                }
+            }
+            if require_approval:
+                result["data"]["pending_approval"] = True
+            return result
+        
+        # ===== 以下为手机号注册流程（原有逻辑） =====
         # 验证手机号格式
         if not validate_phone(phone):
             return {"success": False, "message": "无效的手机号格式"}
@@ -295,19 +408,55 @@ class AuthService:
     def reset_password(
         phone: str,
         new_password: str,
-        verify_code: str
+        verify_code: str,
+        email: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        重置密码
+        重置密码（支持手机号或邮箱）
         
         Args:
-            phone: 手机号
+            phone: 手机号（与email二选一）
             new_password: 新密码
             verify_code: 验证码
+            email: 邮箱（与phone二选一）
             
         Returns:
             重置结果
         """
+        is_email_reset = bool(email and not phone)
+        
+        if is_email_reset:
+            # 邮箱重置密码流程
+            if not validate_email(email):
+                return {"success": False, "message": "无效的邮箱格式"}
+            
+            valid, msg = validate_password(new_password)
+            if not valid:
+                return {"success": False, "message": msg}
+            
+            # 验证邮箱验证码
+            if not VerifyCodesModel.verify_for_email(email, verify_code, "reset_password"):
+                return {"success": False, "message": "验证码不正确或已过期"}
+            
+            # 查找用户
+            user = UsersModel.get_by_email(email)
+            if not user:
+                return {"success": False, "message": "该邮箱未注册"}
+            
+            # 更新密码
+            password_hash = hash_password(new_password)
+            UsersModel.update_password(user.id, password_hash)
+            
+            # 删除验证码
+            VerifyCodesModel.delete_by_email(email)
+            
+            # 删除所有token
+            UserTokensModel.delete_by_user_id(user.id)
+            
+            logger.info(f"邮箱用户密码重置成功 - ID: {user.id}, 邮箱: {email}")
+            return {"success": True, "message": "密码重置成功"}
+        
+        # ===== 手机号重置密码流程 =====
         # 验证手机号格式
         if not validate_phone(phone):
             return {"success": False, "message": "无效的手机号格式"}

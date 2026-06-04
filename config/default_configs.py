@@ -27,6 +27,22 @@ DEFAULT_CONFIGS: List[Dict[str, Any]] = [
         'is_sensitive': False,
         'quick_config': True
     },
+    {
+        'key': 'email.enabled',
+        'value_type': 'bool',
+        'description': '是否启用邮箱注册/登录功能（关闭后仅支持手机号）',
+        'editable': True,
+        'is_sensitive': False,
+        'quick_config': True
+    },
+    {
+        'key': 'captcha.enabled',
+        'value_type': 'bool',
+        'description': '是否启用阿里云 CAPTCHA 2.0 人机验证（启用后发送邮箱验证码前需通过验证）',
+        'editable': True,
+        'is_sensitive': False,
+        'quick_config': True
+    },
 
     # ==================== 任务队列配置 ====================
     {
@@ -171,6 +187,13 @@ DEFAULT_CONFIGS: List[Dict[str, Any]] = [
         'key': 'image.enable_download',
         'value_type': 'bool',
         'description': '是否启用图片下载',
+        'editable': True,
+        'is_sensitive': False
+    },
+    {
+        'key': 'image.max_retry_count',
+        'value_type': 'int',
+        'description': '图片生成失败后自动重试次数（ComfyUI返回FAILED时自动重新提交，0=不重试）',
         'editable': True,
         'is_sensitive': False
     },

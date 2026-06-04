@@ -208,7 +208,10 @@ class TaskManager:
             return {}
     
     def create_image_task(self, project_id: str, item_type: int, item_name: str, 
-                         comfyui_base_url: str, auth_token: str, user_id: str, world_id: str) -> str:
+                         comfyui_base_url: str, auth_token: str, user_id: str, world_id: str,
+                         prompt: str = None, task_config_id: str = None,
+                         aspect_ratio: str = None, image_size: str = None,
+                         is_grid: bool = False, max_retries: int = 0) -> str:
         """创建图片生成后台任务（全局唯一性约束）"""
         task_key = self._generate_task_key(item_type, item_name)
         
@@ -234,7 +237,13 @@ class TaskManager:
                     world_id=world_id,
                     comfyui_base_url=comfyui_base_url,
                     auth_token=auth_token,
-                    max_attempts=60
+                    max_attempts=60,
+                    prompt=prompt,
+                    task_config_id=task_config_id,
+                    aspect_ratio=aspect_ratio,
+                    image_size=image_size,
+                    is_grid=is_grid,
+                    max_retries=max_retries
                 )
                 logger.info(f"创建宫格生图任务: {task_key}, project_id: {project_id}")
             except Exception as e:

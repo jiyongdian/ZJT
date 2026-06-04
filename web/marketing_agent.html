@@ -1334,6 +1334,7 @@
             const userId = ref('');
             const authToken = ref('');
             const userPhone = ref('');
+            const userEmail = ref('');
             const worldId = ref('');
 
             // ========== 计算属性 ==========
@@ -1345,12 +1346,26 @@
             });
 
             const userInitial = computed(() => {
-                return userPhone.value ? userPhone.value.charAt(0).toUpperCase() : 'U';
+                if (userPhone.value) return userPhone.value.charAt(0).toUpperCase();
+                if (userEmail.value) return userEmail.value.charAt(0).toUpperCase();
+                return 'U';
             });
+
+            const maskEmail = (email) => {
+                if (!email || !email.includes('@')) return email || '';
+                const [local, domain] = email.split('@');
+                if (local.length <= 2) {
+                    return local[0] + '***@' + domain;
+                }
+                return local.substring(0, 2) + '***@' + domain;
+            };
 
             const maskedPhone = computed(() => {
                 const phone = userPhone.value;
-                if (!phone || phone.length < 7) return phone || '';
+                const email = userEmail.value;
+                // 无手机号但有邮箱时显示掩码邮箱
+                if (!phone && email) return maskEmail(email);
+                if (!phone || phone.length < 7) return phone || (email ? maskEmail(email) : '');
                 return phone.substring(0, 3) + '****' + phone.substring(7);
             });
 
@@ -3387,6 +3402,7 @@
                 userId.value = getUrlParam('user_id') || localStorage.getItem('user_id') || '';
                 authToken.value = localStorage.getItem('auth_token') || '';
                 userPhone.value = localStorage.getItem('phone') || '';
+                userEmail.value = localStorage.getItem('email') || '';
 
                 if (!userId.value || !authToken.value) {
                     isInitializing.value = false;
@@ -5432,6 +5448,7 @@
                 currentDate,
                 userInitial,
                 userPhone,
+                userEmail,
                 maskedPhone,
                 filteredSessions,
                 formatTime,

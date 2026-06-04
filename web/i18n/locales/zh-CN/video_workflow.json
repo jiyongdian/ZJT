@@ -81,6 +81,7 @@
   "shot_group_details": "分镜组详情",
   "shot_detail": "分镜详情",
   "edit_shot_group": "编辑分镜组",
+  "create_edit_shot": "新建/编辑分镜",
   "select_character": "选择角色",
   "select_location": "选择场景",
   "select_props": "选择道具",
@@ -676,6 +677,20 @@
   "draw_count_simple": "抽卡次数: {count}",
   "timeline_pillar_mode": "柱子模式",
   "shot_group_grid_overflow": "分镜数量超过25，不支持宫格预览",
-  "shot_group_grid_suffix": "宫格"
+  "shot_group_grid_suffix": "宫格",
+  "video_prompt_duration": "时长：{value}秒",
+  "video_prompt_time": "时间：{value}",
+  "video_prompt_weather": "天气：{value}",
+  "video_prompt_scene": "场景：{value}",
+  "video_prompt_shot_type": "镜头类型：{value}",
+  "video_prompt_camera_movement": "运镜：{value}",
+  "video_prompt_description": "描述：{value}",
+  "video_prompt_scene_detail": "场景细节：{value}",
+  "video_prompt_action": "动作：{value}",
+  "video_prompt_mood": "情绪：{value}",
+  "video_prompt_dialogue": "对话：{value}",
+  "video_prompt_audio_notes": "音频备注：{value}",
+  "video_prompt_environment_sound": "环境音：{value}",
+  "video_prompt_background_music": "背景音乐：{value}"
 }
 

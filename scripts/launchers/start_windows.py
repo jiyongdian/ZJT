@@ -993,8 +993,11 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    # 启动时清理残留的死亡进程 PID
-    cleanup_dead_pids_on_startup()
+    # 获取当前项目目录（必须在 cleanup 之前，用于按项目过滤 PID）
+    current_dir = get_current_dir()
+
+    # 启动时清理残留的死亡进程 PID（只清理当前项目的）
+    cleanup_dead_pids_on_startup(project_dir=current_dir)
 
     env = get_env()
     logger.info("=" * 50)
@@ -1002,7 +1005,6 @@ def main():
     logger.info("=" * 50)
 
     # 检查关键路径是否包含空格
-    current_dir = get_current_dir()
     if not check_path_no_spaces(current_dir, "项目根目录"):
         sys.exit(1)
 

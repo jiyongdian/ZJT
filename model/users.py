@@ -18,6 +18,7 @@ class User:
     def __init__(self, **kwargs):
         self.id = kwargs.get('id')
         self.phone = kwargs.get('phone')
+        self.email = kwargs.get('email')
         self.password_hash = kwargs.get('password_hash')
         self.status = kwargs.get('status', 1)
         self.serial_number = kwargs.get('serial_number', '')
@@ -43,6 +44,7 @@ class User:
         return {
             'user_id': self.id,
             'phone': self.phone,
+            'email': self.email,
             'status': self.status,
             'serial_number': self.serial_number,
             'created_at': self.created_at.isoformat() if self.created_at else None,
@@ -87,6 +89,47 @@ class UsersModel:
         except Exception as e:
             logger.error(f"Failed to get user by phone {phone}: {e}")
             raise
+
+    @staticmethod
+    def get_by_email(email: str) -> Optional[User]:
+        """根据邮箱获取用户"""
+        sql = "SELECT * FROM users WHERE email = %s"
+        try:
+            result = execute_query(sql, (email,), fetch_one=True)
+            if result:
+                return User(**result)
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get user by email {email}: {e}")
+            raise
+
+    @staticmethod
+    def get_by_phone_or_email(identifier: str) -> Optional[User]:
+        """根据手机号或邮箱获取用户（用于统一登录）"""
+        # 先判断是手机号还是邮箱
+        import re
+        if re.match(r'^1[3-9]\d{9}$', identifier):
+            return UsersModel.get_by_phone(identifier)
+        elif '@' in identifier:
+            return UsersModel.get_by_email(identifier)
+        else:
+            # 尝试两种都查
+            user = UsersModel.get_by_phone(identifier)
+            if not user:
+                user = UsersModel.get_by_email(identifier)
+            return user
+
+    @staticmethod
+    def update_email(user_id: int, email: Optional[str]) -> int:
+        """更新用户邮箱"""
+        sql = "UPDATE users SET email = %s, updated_at = NOW() WHERE id = %s"
+        try:
+            affected = execute_update(sql, (email, user_id))
+            logger.info(f"Updated user {user_id} email to {email}")
+            return affected
+        except Exception as e:
+            logger.error(f"Failed to update email for user {user_id}: {e}")
+            raise
     
     @staticmethod
     def get_by_invite_code(invite_code: str) -> Optional[User]:
@@ -108,15 +151,16 @@ class UsersModel:
         role: str = 'user',
         terms_agreed: int = 0,
         invite_code: Optional[str] = None,
-        inviter_id: Optional[int] = None
+        inviter_id: Optional[int] = None,
+        email: Optional[str] = None
     ) -> int:
         """创建新用户"""
         sql = """
-            INSERT INTO users (phone, password_hash, role, terms_agreed, invite_code, inviter_id)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO users (phone, email, password_hash, role, terms_agreed, invite_code, inviter_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """
         try:
-            user_id = execute_insert(sql, (phone, password_hash, role, terms_agreed, invite_code, inviter_id))
+            user_id = execute_insert(sql, (phone, email, password_hash, role, terms_agreed, invite_code, inviter_id))
             logger.info(f"Created user with ID: {user_id}")
             return user_id
         except Exception as e:
@@ -267,7 +311,8 @@ class UsersModel:
         params = []
         
         if keyword:
-            where_conditions.append("phone LIKE %s")
+            where_conditions.append("(phone LIKE %s OR email LIKE %s)")
+            params.append(f"%{keyword}%")
             params.append(f"%{keyword}%")
         
         if status is not None:
@@ -292,7 +337,7 @@ class UsersModel:
         # 获取分页数据
         offset = (page - 1) * page_size
         data_sql = f"""
-            SELECT id, phone, status, role, created_at, updated_at, invite_code, inviter_id, first_recharge,
+            SELECT id, phone, email, status, role, created_at, updated_at, invite_code, inviter_id, first_recharge,
                    zjt_token_enabled, zjt_token_expire_at
             FROM users
             WHERE {where_clause}
@@ -711,7 +756,8 @@ class UsersModel:
 CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS `users` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `phone` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `phone` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '手机号',
+  `email` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '邮箱',
   `password_hash` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `status` tinyint NOT NULL DEFAULT '1' COMMENT '用户状态：1-正常，0-禁用',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
@@ -730,6 +776,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   `zjt_token_expire_at` datetime DEFAULT NULL COMMENT '智剧通Token过期时间',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE KEY `idx_phone` (`phone`) USING BTREE,
+  UNIQUE KEY `idx_email` (`email`) USING BTREE,
   UNIQUE KEY `idx_serial_number` (`serial_number`) USING BTREE,
   UNIQUE KEY `idx_api_token` (`api_token`),
   KEY `invite_code` (`invite_code`) USING BTREE,
