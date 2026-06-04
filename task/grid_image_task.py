@@ -7,6 +7,7 @@ import uuid
 import logging
 import requests
 import urllib.parse
+import httpx
 from datetime import datetime
 from typing import Dict, Any
 from model import GridImageTasksModel, GridImageTaskStatus
@@ -121,6 +122,52 @@ def _update_task_status_file(item_type: int, item_name: str, status: str, user_i
         task_manager.update_task_status(item_type, item_name, status, user_id, world_id)
     except Exception as e:
         logger.error(f"同步任务状态到文件失败: {e}")
+
+
+def _resubmit_image_request(task) -> str:
+    """
+    重新提交图片生成请求到 ComfyUI，返回新的 project_id
+    
+    Args:
+        task: GridImageTask对象（必须包含 prompt, task_config_id, comfyui_base_url, auth_token, user_id）
+    
+    Returns:
+        新的 project_id，失败返回 None
+    """
+    if not task.prompt or not task.task_config_id:
+        logger.warning(f"任务 {task.task_key} 缺少 prompt 或 task_config_id，无法重试")
+        return None
+    
+    try:
+        api_url = f"{task.comfyui_base_url.rstrip('/')}/api/text-to-image"
+        request_data = {
+            'prompt': task.prompt,
+            'task_id': task.task_config_id,
+            'user_id': task.user_id,
+            'auth_token': task.auth_token,
+            'count': 1
+        }
+        if task.aspect_ratio:
+            request_data['aspect_ratio'] = task.aspect_ratio
+        if task.image_size:
+            request_data['image_size'] = task.image_size
+        
+        response = httpx.post(api_url, data=request_data, timeout=30, verify=False)
+        response.raise_for_status()
+        
+        result_data = response.json()
+        project_ids = result_data.get('project_ids', [])
+        
+        if project_ids:
+            logger.info(f"任务 {task.task_key} 重试提交成功，新 project_id: {project_ids[0]}")
+            return project_ids[0]
+        else:
+            logger.warning(f"任务 {task.task_key} 重试提交成功但未返回 project_id")
+            return None
+            
+    except Exception as e:
+        logger.error(f"任务 {task.task_key} 重试提交失败: {e}")
+        return None
 
 
 def _handle_task_success(task: Any, comfyui_task_data: Dict):
@@ -347,6 +394,27 @@ def process_grid_image_tasks(app=None):
                     # 图片生成失败
                     failure_reason = comfyui_task.get('reason', '生成失败')
                     logger.error(f"ComfyUI任务失败: {task.task_key}, 原因: {failure_reason}")
+                    
+                    # 检查是否可以自动重试
+                    max_retries = getattr(task, 'max_retries', 0) or 0
+                    retry_count = getattr(task, 'retry_count', 0) or 0
+                    
+                    if retry_count < max_retries and task.prompt and task.task_config_id:
+                        # 尝试重新提交请求
+                        logger.info(f"任务 {task.task_key} 准备自动重试 ({retry_count + 1}/{max_retries})")
+                        new_project_id = _resubmit_image_request(task)
+                        
+                        if new_project_id:
+                            # 重置任务状态，等待下一轮轮询
+                            GridImageTasksModel.reset_for_retry(task.task_key, new_project_id)
+                            _update_task_status_file(task.item_type, task.item_name, 'retrying',
+                                                   task.user_id, task.world_id)
+                            logger.info(f"任务 {task.task_key} 已重置为重试状态，新 project_id: {new_project_id}")
+                            continue  # 继续处理下一个任务
+                        else:
+                            logger.error(f"任务 {task.task_key} 重试提交失败，标记为终态失败")
+                    
+                    # 无法重试或重试失败，标记为终态失败
                     GridImageTasksModel.update_status(
                         task_key=task.task_key,
                         status=GridImageTaskStatus.FAILED,

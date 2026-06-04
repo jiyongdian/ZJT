@@ -190,6 +190,13 @@ DEFAULT_CONFIGS: List[Dict[str, Any]] = [
         'editable': True,
         'is_sensitive': False
     },
+    {
+        'key': 'image.max_retry_count',
+        'value_type': 'int',
+        'description': '图片生成失败后自动重试次数（ComfyUI返回FAILED时自动重新提交，0=不重试）',
+        'editable': True,
+        'is_sensitive': False
+    },
     
     # ==================== RunningHub 配置 ====================
     {

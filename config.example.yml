@@ -276,6 +276,7 @@ file_storage:
 
 image:
   enable_download: true
+  max_retry_count: 2  # 图片生成失败后自动重试次数
 
 # 媒体文件缓存配置
 media_cache:
