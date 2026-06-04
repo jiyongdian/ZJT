@@ -11007,7 +11007,15 @@
         if(videoGenMode === 'multi_reference' && refPromptSuffix && refPromptSuffix.length > 0 && !useTextToVideo) {
           finalVideoPrompt = `${finalVideoPrompt}\n\n${refPromptSuffix.join('，')}。`;
         }
-        
+
+        // 参考模式下追加画风描述（首帧模式不添加，保持原状）
+        if(videoGenMode === 'multi_reference' && state.style && state.style.name) {
+          finalVideoPrompt = `${finalVideoPrompt}\n\n视频风格：${state.style.name}`;
+          if(state.style.compositionPreference) {
+            finalVideoPrompt = `${finalVideoPrompt}\n构图倾向：${state.style.compositionPreference}`;
+          }
+        }
+
         generateBtn.textContent = '提交视频...';
         showToast(`正在生成 ${count} 个视频...`, 'info');
 
