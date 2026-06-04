@@ -58,3 +58,20 @@ def validate_verify_code(code: str) -> bool:
     
     pattern = r'^\d{4,6}$'
     return bool(re.match(pattern, code))
+
+
+def validate_email(email: str) -> bool:
+    """
+    验证邮箱格式
+    
+    Args:
+        email: 邮箱地址
+        
+    Returns:
+        是否为有效的邮箱格式
+    """
+    if not email:
+        return False
+    
+    pattern = r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$'
+    return bool(re.match(pattern, email))

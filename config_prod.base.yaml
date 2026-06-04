@@ -147,6 +147,7 @@ frontend:
 
 image:
   enable_download: true
+  max_retry_count: 2
 
 media_cache:
   enabled: true

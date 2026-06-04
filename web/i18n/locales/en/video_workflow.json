@@ -81,6 +81,7 @@
   "shot_group_details": "Shot Group Details",
   "shot_detail": "Shot Detail",
   "edit_shot_group": "Edit Shot Group",
+  "create_edit_shot": "Create/Edit Shot",
   "select_character": "Select Character",
   "select_location": "Select Location",
   "select_props": "Select Props",
@@ -675,6 +676,20 @@
   "draw_count_simple": "Draw count: {count}",
   "timeline_pillar_mode": "Pillar mode",
   "shot_group_grid_overflow": "Shot count exceeds 25, grid preview not supported",
-  "shot_group_grid_suffix": "grid"
+  "shot_group_grid_suffix": "grid",
+  "video_prompt_duration": "Duration: {value}s",
+  "video_prompt_time": "Time: {value}",
+  "video_prompt_weather": "Weather: {value}",
+  "video_prompt_scene": "Scene: {value}",
+  "video_prompt_shot_type": "Shot Type: {value}",
+  "video_prompt_camera_movement": "Camera Movement: {value}",
+  "video_prompt_description": "Description: {value}",
+  "video_prompt_scene_detail": "Scene Detail: {value}",
+  "video_prompt_action": "Action: {value}",
+  "video_prompt_mood": "Mood: {value}",
+  "video_prompt_dialogue": "Dialogue: {value}",
+  "video_prompt_audio_notes": "Audio Notes: {value}",
+  "video_prompt_environment_sound": "Environment Sound: {value}",
+  "video_prompt_background_music": "Background Music: {value}"
 }
 

@@ -2459,20 +2459,117 @@ async def get_task_implementations(
 
 
 class SendVerifyCodeRequest(BaseModel):
-    phone: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
     type: str
     agent: Optional[str] = 'default'
+    captcha_verify_param: Optional[str] = None  # 阿里云 CAPTCHA 验证参数
 
 @app.post('/api/auth/send_verify_code')
 async def send_verify_code(request: SendVerifyCodeRequest):
     """
-    发送验证码
+    发送验证码（支持手机号和邮箱）
     """
     try:
         phone = request.phone
+        email = request.email
         verify_type = request.type
         agent = request.agent
 
+        # 至少需要提供一个标识
+        if not phone and not email:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    'success': False,
+                    'message': '手机号或邮箱不能为空'
+                }
+            )
+
+        # 邮箱验证码发送
+        if email and not phone:
+            # 检查邮箱功能是否启用
+            from config.config_util import get_dynamic_config_value
+            if not get_dynamic_config_value('email', 'enabled', default=False):
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        'success': False,
+                        'message': '邮箱注册功能未启用，请使用手机号注册'
+                    }
+                )
+
+            # 验证邮箱格式
+            import re
+            if not re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', email):
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        'success': False,
+                        'message': '无效的邮箱格式'
+                    }
+                )
+
+            # 验证码类型检查
+            valid_types = ['register', 'login', 'reset_password', 'get_serial', 'update_serial']
+            if verify_type not in valid_types:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        'success': False,
+                        'message': '无效的验证码类型'
+                    }
+                )
+
+            # CAPTCHA 人机验证（仅邮箱发送时需要）
+            from perseids_server.services.captcha_service import CaptchaService
+            if CaptchaService.is_enabled():
+                captcha_param = request.captcha_verify_param
+                if not captcha_param:
+                    return JSONResponse(
+                        status_code=400,
+                        content={
+                            'success': False,
+                            'message': '请先完成人机验证'
+                        }
+                    )
+                captcha_result = CaptchaService.verify_captcha(captcha_param)
+                if not captcha_result.get('success'):
+                    return JSONResponse(
+                        status_code=400,
+                        content={
+                            'success': False,
+                            'message': captcha_result.get('message', '人机验证失败，请重试')
+                        }
+                    )
+
+            # 调用邮箱验证码发送
+            success, message, response_data = await async_make_perseids_request(
+                endpoint='send_email_verify_code',
+                data={
+                    'email': email,
+                    'type': verify_type,
+                    'agent': agent
+                }
+            )
+
+            if success:
+                return JSONResponse(
+                    content={
+                        'success': True,
+                        'message': '验证码已发送至您的邮箱'
+                    }
+                )
+            else:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        'success': False,
+                        'message': message or '验证码发送失败'
+                    }
+                )
+
+        # 手机验证码发送（原有逻辑）
         if not phone or not verify_type:
             return JSONResponse(
                 status_code=400,
@@ -2541,7 +2638,8 @@ async def send_verify_code(request: SendVerifyCodeRequest):
         )
 
 class RegisterRequest(BaseModel):
-    phone: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
     code: str
     password: str
     agent: Optional[str] = 'default'
@@ -2550,32 +2648,23 @@ class RegisterRequest(BaseModel):
 @app.post('/api/auth/register')
 async def register(request: RegisterRequest):
     """
-    用户注册接口
+    用户注册接口（支持手机号和邮箱）
     """
     try:
         phone = request.phone
+        email = request.email
         password = request.password
         verify_code = request.code
         
-        logger.info(f"收到注册请求 - 手机号: {phone}")
+        logger.info(f"收到注册请求 - 手机号: {phone}, 邮箱: {email}")
 
-        # 验证必填字段
-        if not all([phone, password, verify_code]):
+        # 验证至少提供一个标识
+        if not phone and not email:
             return JSONResponse(
                 status_code=400,
                 content={
                     'success': False,
-                    'message': '手机号、密码和验证码不能为空'
-                }
-            )
-
-        # 验证手机号格式
-        if not phone.isdigit() or len(phone) != 11:
-            return JSONResponse(
-                status_code=400,
-                content={
-                    'success': False,
-                    'message': '无效的手机号格式'
+                    'message': '手机号或邮箱不能为空'
                 }
             )
 
@@ -2589,12 +2678,72 @@ async def register(request: RegisterRequest):
                 }
             )
 
+        # 邮箱注册
+        if email and not phone:
+            # 检查邮箱功能是否启用
+            from config.config_util import get_dynamic_config_value
+            if not get_dynamic_config_value('email', 'enabled', default=False):
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        'success': False,
+                        'message': '邮箱注册功能未启用，请使用手机号注册'
+                    }
+                )
+
+            import re
+            if not re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', email):
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        'success': False,
+                        'message': '无效的邮箱格式'
+                    }
+                )
+
+            success, message, auth_data = await async_call_external_auth_server(
+                phone=None,
+                password=password,
+                auth_type='register',
+                extra_data={'code': verify_code, 'invite_code': request.invite_code},
+                email=email
+            )
+            
+            if success:
+                logger.info(f"邮箱用户注册成功 - 邮箱: {email}")
+                return JSONResponse(
+                    content={
+                        'success': True,
+                        'message': '注册成功',
+                        'data': auth_data
+                    }
+                )
+            else:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        'success': False,
+                        'message': message or '注册失败'
+                    }
+                )
+
+        # 手机号注册（原有逻辑）
+        # 验证手机号格式
+        if not phone.isdigit() or len(phone) != 11:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    'success': False,
+                    'message': '无效的手机号格式'
+                }
+            )
+
         # 调用认证服务器注册
         success, message, auth_data = await async_call_external_auth_server(
             phone=phone,
             password=password,
             auth_type='register',
-            extra_data={'code': verify_code, 'invite_code': request.invite_code}  # 使用 code 而不是 verify_code
+            extra_data={'code': verify_code, 'invite_code': request.invite_code}
         )
         
         if success:
@@ -2627,7 +2776,8 @@ async def register(request: RegisterRequest):
         )
 
 class LoginRequest(BaseModel):
-    phone: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
     password: str
     agent: Optional[str] = 'default'
     terms_agreed: Optional[int] = 0
@@ -2635,34 +2785,39 @@ class LoginRequest(BaseModel):
 @app.post('/api/auth/login')
 async def login(request: LoginRequest):
     """
-    用户登录接口
+    用户登录接口（支持手机号和邮箱）
     """
     try:
         phone = request.phone
+        email = request.email
         password = request.password
         terms_agreed = request.terms_agreed
         
-        logger.info(f"收到登录请求 - 手机号: {phone}")
+        identifier = email if email else phone
+        logger.info(f"收到登录请求 - 标识: {identifier}")
 
         # 验证必填字段
-        if not all([phone, password]):
+        if not identifier or not password:
             return JSONResponse(
                 status_code=400,
                 content={
                     'success': False,
-                    'message': '手机号和密码不能为空'
+                    'message': '手机号/邮箱和密码不能为空'
                 }
             )
 
-        # 验证手机号格式
-        if not phone.isdigit() or len(phone) != 11:
-            return JSONResponse(
-                status_code=400,
-                content={
-                    'success': False,
-                    'message': '无效的手机号格式'
-                }
-            )
+        # 如果使用邮箱登录，检查邮箱功能是否启用
+        if email and not phone:
+            from config.config_util import get_dynamic_config_value
+            if not get_dynamic_config_value('email', 'enabled', default=False):
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        'success': False,
+                        'message': '邮箱登录功能未启用，请使用手机号登录'
+                    }
+                )
+
         device_uuid = await asyncio.to_thread(get_device_uuid)
         if device_uuid is None:
             return JSONResponse(
@@ -2674,7 +2829,10 @@ async def login(request: LoginRequest):
             )
         # 调用认证服务器登录
         extra_data={'terms_agreed': terms_agreed}
-        success, message, auth_data = await async_call_external_auth_server(phone, password, device_uuid,'login', extra_data)
+        success, message, auth_data = await async_call_external_auth_server(
+            phone=phone, password=password, device_uuid=device_uuid,
+            auth_type='login', extra_data=extra_data, email=email
+        )
         
         if success:
             logger.info(f"用户登录成功 - 手机号: {phone}")
@@ -2761,7 +2919,8 @@ async def logout(request: Request, logout_request: LogoutRequest):
         )
 
 class ResetPasswordRequest(BaseModel):
-    phone: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
     code: str
     new_password: str
 
@@ -2769,14 +2928,15 @@ class ResetPasswordRequest(BaseModel):
 @require_permission("user:reset_password")
 async def reset_password(request: Request, reset_request: ResetPasswordRequest):
     """
-    重置密码
+    重置密码（支持手机号和邮箱）
     """
     try:
         phone = reset_request.phone
+        email = reset_request.email
         code = reset_request.code
         new_password = reset_request.new_password
 
-        if not all([phone, code, new_password]):
+        if not (phone or email) or not code or not new_password:
             return JSONResponse(
                 status_code=400,
                 content={
@@ -2784,6 +2944,18 @@ async def reset_password(request: Request, reset_request: ResetPasswordRequest):
                     'message': '缺少必要参数'
                 }
             )
+
+        # 如果使用邮箱重置，检查邮箱功能是否启用
+        if email and not phone:
+            from config.config_util import get_dynamic_config_value
+            if not get_dynamic_config_value('email', 'enabled', default=False):
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        'success': False,
+                        'message': '邮箱重置功能未启用，请使用手机号重置'
+                    }
+                )
 
         # 调用外部认证服务器重置密码
         success, message, response_data = await async_call_external_auth_server(
@@ -2793,7 +2965,8 @@ async def reset_password(request: Request, reset_request: ResetPasswordRequest):
             extra_data={
                 'code': code,
                 'new_password': new_password
-            }
+            },
+            email=email
         )
 
         if success:

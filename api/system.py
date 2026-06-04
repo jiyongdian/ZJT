@@ -96,6 +96,17 @@ async def get_server_config():
         max_video_size_mb = get_dynamic_config_value('upload', 'max_video_size_mb', default=50)
         max_video_duration_seconds = get_dynamic_config_value('upload', 'max_video_duration_seconds', default=15)
         enable_vue_error_output = get_config_value('frontend', 'enable_vue_error_output', default=False)
+        email_enabled = get_dynamic_config_value('email', 'enabled', default=False)
+
+        # CAPTCHA 配置（仅暴露前端需要的公开字段，不暴露 access_key_secret）
+        captcha_enabled = get_dynamic_config_value('captcha', 'enabled', default=False)
+        captcha_prefix = ''
+        captcha_scene_id = ''
+        if captcha_enabled:
+            captcha_config = get_config_value('captcha', default={})
+            aliyun_config = captcha_config.get('aliyun', {}) if isinstance(captcha_config, dict) else {}
+            captcha_prefix = aliyun_config.get('prefix', '')
+            captcha_scene_id = aliyun_config.get('scene_id', '')
 
         return {
             "code": 0,
@@ -108,6 +119,10 @@ async def get_server_config():
                 "is_enterprise": not IS_COMMUNITY_EDITION,
                 "shared_space": not Edition.is_space_isolated(),
                 "enable_vue_error_output": enable_vue_error_output,
+                "email_enabled": email_enabled,
+                "captcha_enabled": captcha_enabled,
+                "captcha_prefix": captcha_prefix,
+                "captcha_scene_id": captcha_scene_id,
                 "footer": {
                     "copyright": footer.get('copyright', ''),
                     "icp_number": footer.get('icp_number', ''),

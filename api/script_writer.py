@@ -1827,7 +1827,8 @@ async def submit_to_database(request: SubmitDatabaseRequest):
             characters = file_manager.list_characters(str(user_id), str(world_id))
             for char in characters:
                 try:
-                    char_data = file_manager.get_character_json(char['name'], str(user_id), str(world_id))
+                    # 直接使用 list_characters 返回的 json_data，避免用中文名查找拼音文件名导致找不到
+                    char_data = char.get('json_data')
                     if char_data and isinstance(char_data, dict):
                         name = char_data.get('name', char['name'])
                         age = char_data.get('age')
@@ -1933,7 +1934,8 @@ async def submit_to_database(request: SubmitDatabaseRequest):
             locations = file_manager.list_locations(str(user_id), str(world_id))
             for loc in locations:
                 try:
-                    loc_data = file_manager.get_location_json(loc['name'], str(user_id), str(world_id))
+                    # 直接使用 list_locations 返回的 json_data，避免用中文名查找拼音文件名导致找不到
+                    loc_data = loc.get('json_data')
                     if loc_data and isinstance(loc_data, dict):
                         name = loc_data.get('name', loc['name'])
                         parent_id_raw = loc_data.get('parent_id')
@@ -1985,7 +1987,8 @@ async def submit_to_database(request: SubmitDatabaseRequest):
             props = file_manager.list_props(str(user_id), str(world_id))
             for prop in props:
                 try:
-                    prop_data = file_manager.get_prop_json(prop['name'], str(user_id), str(world_id))
+                    # 直接使用 list_props 返回的 json_data，避免用中文名查找拼音文件名导致找不到
+                    prop_data = prop.get('json_data')
                     if prop_data and isinstance(prop_data, dict):
                         name = prop_data.get('name', prop['name'])
                         description = prop_data.get('description')
@@ -3444,38 +3447,38 @@ async def check_assets_complete(request: Request, check_request: CheckAssetsRequ
         characters_result = CharacterModel.list_by_world(world_id, page=1, page_size=1000)
         characters = characters_result.get('data', [])
         missing_characters = [
-            c['name'] for c in characters 
+            c['name'] for c in characters
             if not c.get('reference_image')
         ]
         if missing_characters:
             result['missing_assets'].append({
-                'type': '角色',
+                'type': 'characters',
                 'items': missing_characters
             })
-        
+
         # 3. 检查场景参考图
         locations_result = LocationModel.list_by_world(world_id, page=1, page_size=1000)
         locations = locations_result.get('data', [])
         missing_locations = [
-            loc['name'] for loc in locations 
+            loc['name'] for loc in locations
             if not loc.get('reference_image')
         ]
         if missing_locations:
             result['missing_assets'].append({
-                'type': '场景',
+                'type': 'locations',
                 'items': missing_locations
             })
-        
+
         # 4. 检查道具参考图
         props_result = PropsModel.list_by_world(world_id, page=1, page_size=1000)
         props = props_result.get('data', [])
         missing_props = [
-            p['name'] for p in props 
+            p['name'] for p in props
             if not p.get('reference_image')
         ]
         if missing_props:
             result['missing_assets'].append({
-                'type': '道具',
+                'type': 'props',
                 'items': missing_props
             })
         

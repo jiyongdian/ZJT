@@ -41,6 +41,13 @@ class GridImageTask:
         self.result_url = kwargs.get('result_url')
         self.local_file_path = kwargs.get('local_file_path')
         self.update_success = kwargs.get('update_success', 0)
+        self.prompt = kwargs.get('prompt')
+        self.task_config_id = kwargs.get('task_config_id')
+        self.aspect_ratio = kwargs.get('aspect_ratio')
+        self.image_size = kwargs.get('image_size')
+        self.is_grid = kwargs.get('is_grid', 0)
+        self.retry_count = kwargs.get('retry_count', 0)
+        self.max_retries = kwargs.get('max_retries', 0)
         self.created_at = kwargs.get('created_at')
         self.updated_at = kwargs.get('updated_at')
         self.completed_at = kwargs.get('completed_at')
@@ -63,6 +70,13 @@ class GridImageTask:
             'result_url': self.result_url,
             'local_file_path': self.local_file_path,
             'update_success': self.update_success,
+            'prompt': self.prompt,
+            'task_config_id': self.task_config_id,
+            'aspect_ratio': self.aspect_ratio,
+            'image_size': self.image_size,
+            'is_grid': self.is_grid,
+            'retry_count': self.retry_count,
+            'max_retries': self.max_retries,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'completed_at': self.completed_at.isoformat() if self.completed_at else None,
@@ -83,7 +97,13 @@ class GridImageTasksModel:
         world_id: str,
         comfyui_base_url: str,
         auth_token: str,
-        max_attempts: int = 60
+        max_attempts: int = 60,
+        prompt: str = None,
+        task_config_id: str = None,
+        aspect_ratio: str = None,
+        image_size: str = None,
+        is_grid: bool = False,
+        max_retries: int = 0
     ) -> int:
         """
         创建新的宫格生图任务
@@ -98,6 +118,12 @@ class GridImageTasksModel:
             comfyui_base_url: ComfyUI服务地址
             auth_token: 认证令牌
             max_attempts: 最大尝试次数
+            prompt: 生图提示词（用于自动重试）
+            task_config_id: 生图模型配置ID（用于自动重试）
+            aspect_ratio: 图片宽高比（用于自动重试）
+            image_size: 图片尺寸（用于自动重试）
+            is_grid: 是否为宫格生成
+            max_retries: 最大重试次数
         
         Returns:
             插入的记录ID
@@ -108,12 +134,14 @@ class GridImageTasksModel:
         sql = """
             INSERT INTO grid_image_tasks 
             (task_key, project_id, item_type, item_name, user_id, world_id, 
-             comfyui_base_url, auth_token, status, max_attempts)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+             comfyui_base_url, auth_token, status, max_attempts,
+             prompt, task_config_id, aspect_ratio, image_size, is_grid, max_retries)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         params = (
             task_key, project_id, item_type, item_name, user_id, world_id,
-            comfyui_base_url, auth_token, GridImageTaskStatus.QUEUED, max_attempts
+            comfyui_base_url, auth_token, GridImageTaskStatus.QUEUED, max_attempts,
+            prompt, task_config_id, aspect_ratio, image_size, 1 if is_grid else 0, max_retries
         )
         
         try:
@@ -124,6 +152,30 @@ class GridImageTasksModel:
             logger.error(f"Failed to create grid image task {task_key}: {e}")
             raise
     
+    @staticmethod
+    def exists_by_project_id(project_id: str) -> bool:
+        """
+        检查是否存在关联指定 project_id 的活跃 grid_image_task
+        
+        Args:
+            project_id: ai_tools.id（字符串形式）
+        
+        Returns:
+            True 如果存在活跃的 grid_image_task
+        """
+        sql = "SELECT COUNT(*) as cnt FROM grid_image_tasks WHERE project_id = %s AND status IN (%s, %s)"
+        
+        try:
+            result = execute_query(
+                sql, 
+                (str(project_id), GridImageTaskStatus.QUEUED, GridImageTaskStatus.PROCESSING), 
+                fetch_one=True
+            )
+            return result and result.get('cnt', 0) > 0
+        except Exception as e:
+            logger.error(f"Failed to check grid image task by project_id {project_id}: {e}")
+            return False
+
     @staticmethod
     def get_by_task_key(task_key: str) -> Optional[GridImageTask]:
         """
@@ -339,6 +391,42 @@ class GridImageTasksModel:
             raise
     
     @staticmethod
+    def reset_for_retry(task_key: str, new_project_id: str) -> int:
+        """
+        重置任务以供重试（更新 project_id、重置状态、增加 retry_count）
+        
+        Args:
+            task_key: 任务唯一键
+            new_project_id: 新的 ComfyUI project_id
+        
+        Returns:
+            影响的行数
+        """
+        sql = """
+            UPDATE grid_image_tasks 
+            SET project_id = %s, 
+                status = %s, 
+                try_count = 0, 
+                retry_count = retry_count + 1,
+                error_message = NULL,
+                result_url = NULL,
+                local_file_path = NULL,
+                update_success = 0,
+                failed_at = NULL,
+                completed_at = NULL
+            WHERE task_key = %s
+        """
+        params = (new_project_id, GridImageTaskStatus.QUEUED, task_key)
+        
+        try:
+            affected_rows = execute_update(sql, params)
+            logger.info(f"Reset grid image task {task_key} for retry, new project_id: {new_project_id}, affected rows: {affected_rows}")
+            return affected_rows
+        except Exception as e:
+            logger.error(f"Failed to reset grid image task {task_key} for retry: {e}")
+            raise
+    
+    @staticmethod
     def cleanup_old_tasks(days: int = 7) -> int:
         """
         清理旧任务（已完成或失败的任务）
@@ -391,6 +479,13 @@ CREATE TABLE IF NOT EXISTS `grid_image_tasks` (
   `result_url` varchar(1000) DEFAULT NULL COMMENT '结果图片URL',
   `local_file_path` varchar(1000) DEFAULT NULL COMMENT '本地文件路径',
   `update_success` tinyint DEFAULT '0' COMMENT '是否成功更新到item (0-否, 1-是)',
+  `prompt` text COMMENT '生图提示词（用于自动重试）',
+  `task_config_id` varchar(100) DEFAULT NULL COMMENT '生图模型配置ID（用于自动重试）',
+  `aspect_ratio` varchar(20) DEFAULT NULL COMMENT '图片宽高比（用于自动重试）',
+  `image_size` varchar(20) DEFAULT NULL COMMENT '图片尺寸（用于自动重试）',
+  `is_grid` tinyint DEFAULT '0' COMMENT '是否为宫格生成 (0-否, 1-是)',
+  `retry_count` int DEFAULT '0' COMMENT '已重试次数',
+  `max_retries` int DEFAULT '0' COMMENT '最大重试次数（0=不重试）',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `completed_at` datetime DEFAULT NULL COMMENT '完成时间',

@@ -78,6 +78,14 @@
                     </a>
                 </li>
                 <li>
+                    <a href="#" :class="{ active: currentPage === 'models' }" @click.prevent="switchPage('models')">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        <span>{{ t('nav_models') }}</span>
+                    </a>
+                </li>
+                <li>
                     <a href="#" :class="{ active: currentPage === 'notifications' }" @click.prevent="switchPage('notifications')">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
@@ -98,6 +106,7 @@
                 <h2 v-else-if="currentPage === 'config'">{{ t('nav_config') }}</h2>
                 <h2 v-else-if="currentPage === 'checkin'">{{ t('nav_checkin') }}</h2>
                 <h2 v-else-if="currentPage === 'implementations'">{{ t('nav_implementations') }}</h2>
+                <h2 v-else-if="currentPage === 'models'">{{ t('nav_models') }}</h2>
                 <h2 v-else-if="currentPage === 'notifications'">{{ t('nav_notifications') }}</h2>
 
                 <div class="admin-user">
@@ -635,6 +644,106 @@
                                 </tbody>
                             </table>
                         </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 模型管理页面 -->
+            <section v-if="currentPage === 'models'">
+                <!-- 统计卡片 -->
+                <div class="stats-grid" style="margin-bottom: 20px;">
+                    <div class="stat-card">
+                        <div class="stat-card-label">{{ t('models_col_name') }}</div>
+                        <div class="stat-card-value primary">{{ models.list.length }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-label">{{ t('models_enabled') }}</div>
+                        <div class="stat-card-value success">{{ models.list.filter(m => m.enabled).length }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-label">{{ t('models_disabled') }}</div>
+                        <div class="stat-card-value" style="color: var(--admin-danger);">{{ models.list.filter(m => !m.enabled).length }}</div>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <div class="table-header">
+                        <h3>{{ t('models_title') }}</h3>
+                        <div class="table-actions">
+                            <button class="action-btn primary" @click="loadModels" :disabled="models.loading">
+                                {{ models.loading ? t('btn_reload_loading') : t('btn_refresh') }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div v-if="models.loading" class="loading">
+                        <div class="loading-spinner"></div>
+                        <p>{{ t('loading') }}</p>
+                    </div>
+
+                    <div v-else>
+                        <div v-if="models.list.length === 0" style="text-align: center; color: var(--admin-text-muted); padding: 60px 20px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" style="width:48px;height:48px;margin:0 auto 12px;display:block;color:var(--admin-border);" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                            <p>{{ t('no_data') }}</p>
+                        </div>
+
+                        <table v-else class="admin-table models-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px;">ID</th>
+                                    <th>{{ t('models_col_name') }}</th>
+                                    <th style="width: 120px;">{{ t('models_col_context') }}</th>
+                                    <th style="width: 100px;">{{ t('models_col_tools') }}</th>
+                                    <th style="width: 80px;">{{ t('models_col_vl') }}</th>
+                                    <th style="width: 100px;">{{ t('models_col_thinking') }}</th>
+                                    <th style="width: 100px;">{{ t('models_col_enabled') }}</th>
+                                    <th>{{ t('models_col_note') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="model in models.list" :key="model.id" :class="{ 'model-disabled': !model.enabled }">
+                                    <td><span class="model-id">{{ model.id }}</span></td>
+                                    <td>
+                                        <div class="model-name-cell">
+                                            <code class="model-name-code">{{ model.model_name }}</code>
+                                            <span v-if="!model.enabled" class="model-status-tag disabled">{{ t('models_disabled') }}</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="model-ctx">{{ model.context_window ? formatContextWindow(model.context_window) : '-' }}</span>
+                                    </td>
+                                    <td>
+                                        <span v-if="model.supports_tools" class="capability-badge yes">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                                        </span>
+                                        <span v-else class="capability-badge no">—</span>
+                                    </td>
+                                    <td>
+                                        <span v-if="model.supports_vl" class="capability-badge yes">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                                        </span>
+                                        <span v-else class="capability-badge no">—</span>
+                                    </td>
+                                    <td>
+                                        <span v-if="model.supports_thinking" class="capability-badge yes">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                                        </span>
+                                        <span v-else class="capability-badge no">—</span>
+                                    </td>
+                                    <td>
+                                        <label class="switch">
+                                            <input type="checkbox"
+                                                :checked="model.enabled"
+                                                @change="toggleModelEnabled(model)">
+                                            <span class="slider"></span>
+                                        </label>
+                                    </td>
+                                    <td><span class="model-note">{{ model.note || '-' }}</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </section>

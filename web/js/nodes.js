@@ -50,6 +50,26 @@
       });
     }
 
+    /**
+     * 确保select元素包含已保存的值作为选项
+     * 当TaskConfig未加载时使用硬编码回退选项，但已保存的值可能不在回退列表中
+     * 此函数将已保存的值作为临时选项添加，确保视觉显示正确
+     * 后续 refreshShotGroupNodesModels/refreshShotFrameNodesModels 会用完整列表替换
+     */
+    function ensureSelectHasSavedOption(selectEl, savedValue) {
+      if (!selectEl || !savedValue) return;
+      // 检查已保存的值是否已在选项中
+      for (let i = 0; i < selectEl.options.length; i++) {
+        if (selectEl.options[i].value === savedValue) return;
+      }
+      // 值不在选项中，添加为临时选项并选中
+      const optEl = document.createElement('option');
+      optEl.value = savedValue;
+      optEl.textContent = savedValue;
+      optEl.selected = true;
+      selectEl.insertBefore(optEl, selectEl.firstChild);
+    }
+
     // 检查指定模型是否可用
     function isModelAvailable(modelValue) {
       const driverStatus = getDriverStatusConfig();
@@ -1617,6 +1637,8 @@
             node.data.model = firstModelValue;
             shotGroupModelEl.value = firstModelValue;
           }
+          // 确保已保存的模型值在下拉框中可见（防止TaskConfig未加载时硬编码选项不包含已保存值）
+          ensureSelectHasSavedOption(shotGroupModelEl, node.data.model);
         }
 
         const newDetailBtn = nodeBody.querySelector('.shot-group-detail-btn');
@@ -1668,6 +1690,8 @@
           if(!node.data.gridModel){
             node.data.gridModel = 'auto';
           }
+          // 确保已保存的宫格模型值在下拉框中可见
+          ensureSelectHasSavedOption(shotGroupGridModelEl, node.data.gridModel);
           shotGroupGridModelEl.value = node.data.gridModel;
           // 应用驱动状态禁用未配置的宫格生图模型选项
           applyDriverStatusToSelect(shotGroupGridModelEl);
@@ -1711,6 +1735,8 @@
             `;
           }
           if(!node.data.videoModel) node.data.videoModel = shotGroupVideoModelEl.value;
+          // 确保已保存的视频模型值在下拉框中可见
+          ensureSelectHasSavedOption(shotGroupVideoModelEl, node.data.videoModel);
           // 应用驱动状态禁用未配置的视频模型选项
           applyDriverStatusToSelect(shotGroupVideoModelEl);
         }
@@ -3367,6 +3393,9 @@
           });
         }
         
+        // 确保已保存的视频模型值在下拉框中可见（防止TaskConfig未加载时硬编码选项不包含已保存值）
+        ensureSelectHasSavedOption(videoModelSelect, currentValue);
+
         // 恢复之前的选择（如果仍然可用且支持当前模式）
         const selectedOption = videoModelSelect.querySelector(`option[value="${currentValue}"]:not([disabled])`);
         if(selectedOption) {
@@ -5166,7 +5195,11 @@
         if(!node.data.model) {
           node.data.model = firstImageModelValue;
         }
-        if(modelEl) modelEl.value = node.data.model;
+        // 确保已保存的模型值在下拉框中可见
+        if(modelEl) {
+          ensureSelectHasSavedOption(modelEl, node.data.model);
+          modelEl.value = node.data.model;
+        }
       }
       populateImageModelOptions();
 
@@ -5969,6 +6002,8 @@
 
           // 恢复之前的选择，默认使用后端配置的第一个模型（与分镜组节点和图生图片节点一致）
           const currentValue = node.data.videoModel || firstVideoModelValue;
+          // 确保已保存的视频模型值在下拉框中可见（防止TaskConfig未加载时硬编码选项不包含已保存值）
+          ensureSelectHasSavedOption(videoModelSelect, currentValue);
           const selectedOption = videoModelSelect.querySelector(`option[value="${currentValue}"]`);
           if(selectedOption) {
             videoModelSelect.value = currentValue;
@@ -6118,8 +6153,20 @@
           splitModelSelect.appendChild(optGroup);
         });
 
-        // 默认选中第一个
-        if(firstEnabled) {
+        // 恢复已保存的拆分模型选择，若无保存值则选中第一个
+        const savedSplitModel = node.data.splitModel;
+        let restored = false;
+        if(savedSplitModel) {
+          const savedOption = splitModelSelect.querySelector(`option[value="${savedSplitModel}"]`);
+          if(savedOption && !savedOption.disabled) {
+            savedOption.selected = true;
+            node.data.splitModelId = savedOption.dataset.modelId || '';
+            node.data.splitModelVendorId = savedOption.dataset.vendorId || '';
+            node.data.splitModelVendorName = savedOption.dataset.vendorName || '';
+            restored = true;
+          }
+        }
+        if(!restored && firstEnabled) {
           firstEnabled.selected = true;
           node.data.splitModel = firstEnabled.value;
           node.data.splitModelId = firstEnabled.dataset.modelId || '';
@@ -6183,17 +6230,23 @@
       // 初始化宫格生图模型
       populateScriptGridModelOptions();
       
-      // 初始化节点数据中的最大时长和选项
-      node.data.maxGroupDuration = 15;
-      node.data.forceMediumShot = true;
-      node.data.noBgMusic = true;
-      node.data.splitMultiDialogue = false;
-      node.data.narrationAsDialogue = false;
-      node.data.language = '';
-      node.data.gridModel = 'auto';
-      node.data.splitModelVendorId = '';
-      node.data.splitModelVendorName = '';
-      
+      // 初始化节点数据中的最大时长和选项（仅设置默认值，不覆盖已保存的值）
+      if(node.data.maxGroupDuration === undefined) node.data.maxGroupDuration = 15;
+      if(node.data.forceMediumShot === undefined) node.data.forceMediumShot = true;
+      if(node.data.noBgMusic === undefined) node.data.noBgMusic = true;
+      if(node.data.splitMultiDialogue === undefined) node.data.splitMultiDialogue = false;
+      if(node.data.narrationAsDialogue === undefined) node.data.narrationAsDialogue = false;
+      if(!node.data.language) node.data.language = '';
+      if(!node.data.gridModel) node.data.gridModel = 'auto';
+      if(!node.data.splitModelVendorId) node.data.splitModelVendorId = '';
+      if(!node.data.splitModelVendorName) node.data.splitModelVendorName = '';
+
+      // 确保已保存的宫格模型值在下拉框中可见，并恢复选中状态
+      if(gridModelSelect) {
+        ensureSelectHasSavedOption(gridModelSelect, node.data.gridModel);
+        gridModelSelect.value = node.data.gridModel;
+      }
+
       // 应用驱动状态禁用未配置的宫格生图模型选项
       if(gridModelSelect) applyDriverStatusToSelect(gridModelSelect);
 
@@ -8051,6 +8104,8 @@
         node.data.gridModel = 'auto';
       }
       if(gridModelSelect){
+        // 确保已保存的宫格模型值在下拉框中可见
+        ensureSelectHasSavedOption(gridModelSelect, node.data.gridModel);
         gridModelSelect.value = node.data.gridModel;
         // 应用驱动状态禁用未配置的宫格生图模型选项
         applyDriverStatusToSelect(gridModelSelect);
@@ -8118,10 +8173,14 @@
 
       // 初始化视频模型和时长（使用后端配置的第一个选项作为默认值）
       if(!node.data.videoModel) node.data.videoModel = firstShotGroupVideoModelValue;
-      if(videoModelEl) videoModelEl.value = node.data.videoModel;
+      // 确保已保存的视频模型值在下拉框中可见
+      if(videoModelEl) {
+        ensureSelectHasSavedOption(videoModelEl, node.data.videoModel);
+        videoModelEl.value = node.data.videoModel;
+      }
       if(videoDurationEl) videoDurationEl.value = node.data.videoDuration;
       if(videoGenModeEl) videoGenModeEl.value = node.data.videoGenMode || 'first_last_frame';
-      
+
       // 应用驱动状态禁用未配置的选项
       if(videoModelEl) applyDriverStatusToSelect(videoModelEl);
 
@@ -8827,24 +8886,46 @@
     function convertVideoPromptToText(jsonString){
       try {
         const data = JSON.parse(jsonString);
-        
+        const t = window.t || ((key, params) => {
+          // 回退：从 key 中提取默认值
+          const fallbacks = {
+            'video_prompt_duration': '时长：{value}秒',
+            'video_prompt_time': '时间：{value}',
+            'video_prompt_weather': '天气：{value}',
+            'video_prompt_scene': '场景：{value}',
+            'video_prompt_shot_type': '镜头类型：{value}',
+            'video_prompt_camera_movement': '运镜：{value}',
+            'video_prompt_description': '描述：{value}',
+            'video_prompt_scene_detail': '场景细节：{value}',
+            'video_prompt_action': '动作：{value}',
+            'video_prompt_mood': '情绪：{value}',
+            'video_prompt_dialogue': '对话：{value}',
+            'video_prompt_audio_notes': '音频备注：{value}',
+            'video_prompt_environment_sound': '环境音：{value}',
+            'video_prompt_background_music': '背景音乐：{value}'
+          };
+          let str = fallbacks[key] || key;
+          if(params) Object.keys(params).forEach(k => { str = str.replace(`{${k}}`, params[k]); });
+          return str;
+        });
+
         let text = '';
-        if(data.duration) text += `时长：${data.duration}秒\n`;
-        if(data.time_of_day) text += `时间：${data.time_of_day}\n`;
-        if(data.weather) text += `天气：${data.weather}\n`;
-        if(data.location_name) text += `场景：${data.location_name}\n`;
-        if(data.shot_type) text += `镜头类型：${data.shot_type}\n`;
-        if(data.camera_movement) text += `运镜：${data.camera_movement}\n`;
-        if(data.description) text += `描述：${data.description}\n`;
-        if(data.scene_detail) text += `场景细节：${data.scene_detail}\n`;
-        if(data.action) text += `动作：${data.action}\n`;
-        if(data.mood) text += `情绪：${data.mood}\n`;
+        if(data.duration) text += t('video_prompt_duration', { value: data.duration }) + '\n';
+        if(data.time_of_day) text += t('video_prompt_time', { value: data.time_of_day }) + '\n';
+        if(data.weather) text += t('video_prompt_weather', { value: data.weather }) + '\n';
+        if(data.location_name) text += t('video_prompt_scene', { value: data.location_name }) + '\n';
+        if(data.shot_type) text += t('video_prompt_shot_type', { value: data.shot_type }) + '\n';
+        if(data.camera_movement) text += t('video_prompt_camera_movement', { value: data.camera_movement }) + '\n';
+        if(data.description) text += t('video_prompt_description', { value: data.description }) + '\n';
+        if(data.scene_detail) text += t('video_prompt_scene_detail', { value: data.scene_detail }) + '\n';
+        if(data.action) text += t('video_prompt_action', { value: data.action }) + '\n';
+        if(data.mood) text += t('video_prompt_mood', { value: data.mood }) + '\n';
         if(data.dialogue && Array.isArray(data.dialogue) && data.dialogue.length > 0){
-          text += `对话：${data.dialogue.map(d => `${d.character_name}: ${d.text}`).join('; ')}\n`;
+          text += t('video_prompt_dialogue', { value: data.dialogue.map(d => `${d.character_name}: ${d.text}`).join('; ') }) + '\n';
         }
-        if(data.audio_notes) text += `音频备注：${data.audio_notes}\n`;
-        if(data.environment_sound) text += `环境音：${data.environment_sound}\n`;
-        if(data.background_music) text += `背景音乐：${data.background_music}\n`;
+        if(data.audio_notes) text += t('video_prompt_audio_notes', { value: data.audio_notes }) + '\n';
+        if(data.environment_sound) text += t('video_prompt_environment_sound', { value: data.environment_sound }) + '\n';
+        if(data.background_music) text += t('video_prompt_background_music', { value: data.background_music }) + '\n';
         return text;
       } catch(e){
         console.error('Failed to convert video prompt to text:', e);
@@ -9165,6 +9246,8 @@
             <option value="seedream-5.0">Seedream 5.0 (6算力)</option>
           `;
         }
+        // 确保已保存的模型值在下拉框中可见
+        ensureSelectHasSavedOption(modelEl, node.data.model);
         modelEl.value = node.data.model || firstImageModelValue;
         applyDriverStatusToSelect(modelEl);
       }
@@ -9221,6 +9304,8 @@
         if(validValues.length > 0 && !validValues.includes(node.data.videoModel)) {
           node.data.videoModel = firstVideoModelValue;
         }
+        // 确保已保存的视频模型值在下拉框中可见
+        ensureSelectHasSavedOption(videoModelEl, node.data.videoModel);
         videoModelEl.value = node.data.videoModel || firstVideoModelValue;
         applyDriverStatusToSelect(videoModelEl);
       }
@@ -9244,6 +9329,31 @@
         const modelFieldEl = el.querySelector('.shot-frame-model')?.closest('.field');
         if(generateImageBtn) generateImageBtn.style.opacity = isRefMode ? '0.4' : '1';
         if(modelFieldEl) modelFieldEl.style.opacity = isRefMode ? '0.4' : '1';
+
+        // 参考模式下，图片提示词和视频首帧区域显示为灰色/禁用
+        const imagePromptFieldEl = el.querySelector('.shot-frame-image-prompt')?.closest('.field');
+        const previewFieldEl = el.querySelector('.shot-frame-preview-field');
+        const firstFramePortEl = el.querySelector('.first-frame-port');
+        const imageFieldEl = el.querySelector('.shot-frame-image-field');
+        if(imagePromptFieldEl) {
+          imagePromptFieldEl.style.opacity = isRefMode ? '0.4' : '1';
+          imagePromptFieldEl.style.pointerEvents = isRefMode ? 'none' : 'auto';
+        }
+        if(previewFieldEl) {
+          previewFieldEl.style.opacity = isRefMode ? '0.4' : '1';
+          previewFieldEl.style.pointerEvents = isRefMode ? 'none' : 'auto';
+        }
+        if(firstFramePortEl) {
+          firstFramePortEl.style.opacity = isRefMode ? '0.4' : '1';
+          firstFramePortEl.style.pointerEvents = isRefMode ? 'none' : 'auto';
+        }
+        if(imageFieldEl) {
+          imageFieldEl.style.opacity = isRefMode ? '0.4' : '1';
+          imageFieldEl.style.pointerEvents = isRefMode ? 'none' : 'auto';
+        }
+
+        // 参考模式下角色列表从视频提示词提取，切换模式时需刷新
+        updateShotReferences();
 
         // 参考音视频字段可见性（参考图模式下由模型配置决定，首帧模式同理）
         updateRefAudioVideoVisibility();
@@ -9394,8 +9504,12 @@
         return names;
       }
 
-      // 初始匹配角色
-      node.data.refCharacters = extractCharacterNames(node.data.imagePrompt || '');
+      // 初始匹配角色（根据当前模式选择提示词源）
+      const initMode = node.data.videoMode || 'first_last_frame';
+      const initPromptSource = initMode === 'multi_reference'
+        ? (node.data.videoPromptText || node.data.videoPrompt || '')
+        : (node.data.imagePrompt || '');
+      node.data.refCharacters = extractCharacterNames(initPromptSource);
 
       // 获取所有可用场景列表（从 state.worldLocations 获取）
       function getAvailableLocations() {
@@ -9776,8 +9890,12 @@
 
       // 触发全部引用匹配并渲染
       function updateShotReferences() {
-        // 重新匹配角色
-        node.data.refCharacters = extractCharacterNames(node.data.imagePrompt || '');
+        // 重新匹配角色（参考模式从视频提示词提取，首帧模式从图片提示词提取）
+        const mode = node.data.videoMode || 'first_last_frame';
+        const promptSource = mode === 'multi_reference'
+          ? (node.data.videoPromptText || node.data.videoPrompt || '')
+          : (node.data.imagePrompt || '');
+        node.data.refCharacters = extractCharacterNames(promptSource);
         renderSceneTags();
         renderPropTags();
         renderCharTags();
@@ -10231,7 +10349,8 @@
         e.stopPropagation();
         showPromptExpandModal(videoPromptEl, '视频提示词', (newValue) => {
           node.data.videoPromptText = newValue;
-        });
+          updateShotReferences();
+        }, { enableCharacterDropdown: true, nodeId: id, dropdownKey: 'videoprompt' });
       });
 
       const reduceViolationBtn = el.querySelector('.reduce-violation-btn');
@@ -10739,19 +10858,20 @@
         showToast(`${title}已更新`, 'success');
       });
 
-      // 支持 / 键触发角色列表（仅分镜节点图片提示词放大窗口）
+      // 支持 / 键触发角色列表（分镜节点提示词放大窗口）
       if(opts && opts.enableCharacterDropdown && opts.nodeId != null){
+        const dropdownKey = opts.dropdownKey || 'imageprompt';
         expandTextarea.addEventListener('keydown', (e) => {
           if(e.key === '/') {
             e.preventDefault();
-            showCharacterDropdownForImagePrompt(opts.nodeId, expandTextarea, expandTextarea.selectionStart);
+            showCharacterDropdownForImagePrompt(opts.nodeId, expandTextarea, expandTextarea.selectionStart, dropdownKey);
           }
         });
         expandTextarea.addEventListener('input', () => {
-          hideCharacterDropdownForImagePrompt(opts.nodeId);
+          hideCharacterDropdownForImagePrompt(opts.nodeId, dropdownKey);
         });
         expandTextarea.addEventListener('blur', () => {
-          setTimeout(() => hideCharacterDropdownForImagePrompt(opts.nodeId), 200);
+          setTimeout(() => hideCharacterDropdownForImagePrompt(opts.nodeId, dropdownKey), 200);
         });
       }
 
@@ -10944,7 +11064,15 @@
         if(videoGenMode === 'multi_reference' && refPromptSuffix && refPromptSuffix.length > 0 && !useTextToVideo) {
           finalVideoPrompt = `${finalVideoPrompt}\n\n${refPromptSuffix.join('，')}。`;
         }
-        
+
+        // 参考模式下追加画风描述（首帧模式不添加，保持原状）
+        if(videoGenMode === 'multi_reference' && state.style && state.style.name) {
+          finalVideoPrompt = `${finalVideoPrompt}\n\n视频风格：${state.style.name}`;
+          if(state.style.compositionPreference) {
+            finalVideoPrompt = `${finalVideoPrompt}\n构图倾向：${state.style.compositionPreference}`;
+          }
+        }
+
         generateBtn.textContent = '提交视频...';
         showToast(`正在生成 ${count} 个视频...`, 'info');
 
@@ -11251,8 +11379,8 @@
     }
 
     // 显示角色选择下拉框（用于图片提示词，使用 state.worldCharacters）
-    function showCharacterDropdownForImagePrompt(nodeId, textarea, cursorPos) {
-      const dropdownId = `character-dropdown-imageprompt-${nodeId}`;
+    function showCharacterDropdownForImagePrompt(nodeId, textarea, cursorPos, dropdownKey = 'imageprompt') {
+      const dropdownId = `character-dropdown-${dropdownKey}-${nodeId}`;
       let dropdown = document.getElementById(dropdownId);
       
       // 如果下拉框不存在，创建一个
@@ -11315,8 +11443,8 @@
     }
 
     // 隐藏角色选择下拉框（图片提示词用）
-    function hideCharacterDropdownForImagePrompt(nodeId) {
-      const dropdown = document.getElementById(`character-dropdown-imageprompt-${nodeId}`);
+    function hideCharacterDropdownForImagePrompt(nodeId, dropdownKey = 'imageprompt') {
+      const dropdown = document.getElementById(`character-dropdown-${dropdownKey}-${nodeId}`);
       if (dropdown) {
         dropdown.style.display = 'none';
       }

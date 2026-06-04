@@ -1549,7 +1549,8 @@
                 node.data.videoModel = firstAvailable;
               }
             } else {
-              // 回退：直接设置保存的值
+              // 回退：确保已保存的值在下拉框中可见
+              ensureSelectHasSavedOption(videoModelSelect, savedVideoModel);
               videoModelSelect.value = savedVideoModel;
             }
           }
@@ -2093,7 +2094,15 @@
         node.data.noBgMusic = nodeData.data.noBgMusic !== undefined ? nodeData.data.noBgMusic : true;
         node.data.splitMultiDialogue = nodeData.data.splitMultiDialogue !== undefined ? nodeData.data.splitMultiDialogue : false;
         node.data.narrationAsDialogue = nodeData.data.narrationAsDialogue !== undefined ? nodeData.data.narrationAsDialogue : false;
-        
+        // 恢复模型相关字段（防止被 createScriptNode 的默认值覆盖）
+        if(nodeData.data.videoModel) node.data.videoModel = nodeData.data.videoModel;
+        if(nodeData.data.gridModel) node.data.gridModel = nodeData.data.gridModel;
+        if(nodeData.data.gridLayout) node.data.gridLayout = nodeData.data.gridLayout;
+        if(nodeData.data.splitModel) node.data.splitModel = nodeData.data.splitModel;
+        if(nodeData.data.splitModelId) node.data.splitModelId = nodeData.data.splitModelId;
+        if(nodeData.data.splitModelVendorId) node.data.splitModelVendorId = nodeData.data.splitModelVendorId;
+        if(nodeData.data.splitModelVendorName) node.data.splitModelVendorName = nodeData.data.splitModelVendorName;
+
         const el = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
         if(el){
           const textareaEl = el.querySelector('.script-textarea');
@@ -2107,14 +2116,35 @@
           const nameEl = el.querySelector('.script-name');
           const lengthEl = el.querySelector('.script-length');
           const charCountEl = el.querySelector('.script-char-count');
-          
+
           if(textareaEl) textareaEl.value = node.data.scriptContent;
           if(durationSelectEl) durationSelectEl.value = String(node.data.maxGroupDuration);
           if(forceMediumShotEl) forceMediumShotEl.checked = node.data.forceMediumShot;
           if(noBgMusicEl) noBgMusicEl.checked = node.data.noBgMusic;
           if(splitMultiDialogueEl) splitMultiDialogueEl.checked = node.data.splitMultiDialogue;
           if(narrationAsDialogueEl) narrationAsDialogueEl.checked = node.data.narrationAsDialogue;
-          
+
+          // 恢复模型选择器的显示状态
+          const videoModelEl = el.querySelector('.script-video-model');
+          if(videoModelEl && node.data.videoModel){
+            ensureSelectHasSavedOption(videoModelEl, node.data.videoModel);
+            videoModelEl.value = node.data.videoModel;
+          }
+          const gridModelEl = el.querySelector('.script-grid-model');
+          if(gridModelEl && node.data.gridModel){
+            ensureSelectHasSavedOption(gridModelEl, node.data.gridModel);
+            gridModelEl.value = node.data.gridModel;
+          }
+          const gridLayoutEl = el.querySelector('.script-grid-layout');
+          if(gridLayoutEl && node.data.gridLayout){
+            gridLayoutEl.value = node.data.gridLayout;
+          }
+          const splitModelEl = el.querySelector('.script-split-model');
+          if(splitModelEl && node.data.splitModel){
+            ensureSelectHasSavedOption(splitModelEl, node.data.splitModel);
+            splitModelEl.value = node.data.splitModel;
+          }
+
           if(node.data.scriptContent && node.data.scriptContent.trim().length > 0){
             if(splitBtn) splitBtn.disabled = false;
             if(nameEl) nameEl.textContent = node.data.name || '来源: 已加载';
@@ -2471,11 +2501,13 @@
     function createShotFrameNodeWithData(nodeData){
       const savedNextNodeId = state.nextNodeId;
       state.nextNodeId = nodeData.id;
-      
-      createShotFrameNode({ 
-        x: nodeData.x, 
+
+      createShotFrameNode({
+        x: nodeData.x,
         y: nodeData.y,
-        shotData: nodeData.data.shotJson || {}
+        shotData: nodeData.data.shotJson || {},
+        model: nodeData.data.model,
+        videoModel: nodeData.data.videoModel
       });
       
       // 恢复节点数据
@@ -2561,11 +2593,19 @@
             });
           }
 
+          // 恢复分镜模型选择器（确保已保存的值在下拉框中可见）
+          const modelEl = nodeEl.querySelector('.shot-frame-model');
+          if(modelEl && nodeData.data.model){
+            ensureSelectHasSavedOption(modelEl, nodeData.data.model);
+            modelEl.value = nodeData.data.model;
+          }
+
           // 根据模式重新填充视频模型列表，再恢复选中值
           if(node.populateVideoModelOptions) {
             node.populateVideoModelOptions();
           }
           if(videoModelEl && nodeData.data.videoModel){
+            ensureSelectHasSavedOption(videoModelEl, nodeData.data.videoModel);
             videoModelEl.value = nodeData.data.videoModel;
           }
 
