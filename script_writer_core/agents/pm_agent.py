@@ -456,7 +456,8 @@ class PMAgent(BaseAgent, AskUserMixin):
                     tool_args=tool_args,
                     user_id=self.user_id,
                     world_id=self.world_id,
-                    auth_token=self.auth_token
+                    auth_token=self.auth_token,
+                    language=getattr(self, 'current_language', 'zh-CN')
                 )
         except InsufficientComputingPowerError:
             raise

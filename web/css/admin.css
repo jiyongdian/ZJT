@@ -2245,3 +2245,102 @@ body {
   background-color: #e0e7ff;
   color: #4f46e5;
 }
+
+/* ==================== 模型管理页面 ==================== */
+
+.models-table th {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--admin-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.models-table td {
+    vertical-align: middle;
+}
+
+.models-table tr.model-disabled {
+    opacity: 0.55;
+}
+
+.models-table tr.model-disabled:hover {
+    opacity: 0.85;
+}
+
+.model-id {
+    display: inline-block;
+    background: #f1f5f9;
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+}
+
+.model-name-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.model-name-code {
+    display: inline-block;
+    background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+    color: #4338ca;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+    border: 1px solid #c7d2fe;
+    white-space: nowrap;
+}
+
+.model-status-tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+.model-status-tag.disabled {
+    background: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+}
+
+.model-ctx {
+    font-size: 13px;
+    color: var(--admin-text);
+    font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+}
+
+.capability-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+}
+
+.capability-badge.yes {
+    background: #ecfdf5;
+    color: #059669;
+}
+
+.capability-badge.no {
+    background: #f8fafc;
+    color: #cbd5e1;
+    font-size: 14px;
+}
+
+.model-note {
+    font-size: 13px;
+    color: var(--admin-text-muted);
+}

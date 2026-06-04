@@ -1769,20 +1769,20 @@
                     const hasLocalOnlyFiles = data.local_only_files && data.local_only_files.length > 0;
                     
                     if (hasSkippedFiles || hasLocalOnlyFiles) {
-                        let warningMsg = '⚠️ 检测到本地文件与数据库存在差异：\n\n';
-                        
+                        let warningMsg = window.t ? window.t('alert_file_diff_warning') : '⚠️ 检测到本地文件与数据库存在差异：\n\n';
+
                         if (hasSkippedFiles) {
                             const fileList = data.skipped_files.join('\n  • ');
-                            warningMsg += `📝 内容差异文件（本地修改已保留）：\n  • ${fileList}\n\n`;
+                            warningMsg += window.t ? window.t('alert_file_diff_skipped', { files: fileList }) : `📝 内容差异文件（本地修改已保留）：\n  • ${fileList}\n\n`;
                         }
-                        
+
                         if (hasLocalOnlyFiles) {
                             const localOnlyList = data.local_only_files.join('\n  • ');
-                            warningMsg += `📁 本地独有文件（数据库中不存在）：\n  • ${localOnlyList}\n\n`;
+                            warningMsg += window.t ? window.t('alert_file_diff_local_only', { files: localOnlyList }) : `📁 本地独有文件（数据库中不存在）：\n  • ${localOnlyList}\n\n`;
                         }
-                        
-                        warningMsg += '💡 提示：这些文件的本地内容已保留，不会被数据库覆盖。如需同步，请使用"提交数据"按钮。';
-                        
+
+                        warningMsg += window.t ? window.t('alert_file_diff_hint') : '💡 提示：这些文件的本地内容已保留，不会被数据库覆盖。如需同步，请使用"提交数据"按钮。';
+
                         alert(warningMsg);
                         updateStatus(window.t ? window.t('status_orchestrator_ready_local') : '剧本编排系统已就绪（检测到未提交的本地修改）');
                     } else {
@@ -1799,7 +1799,7 @@
         }
 
         async function newSession() {
-            const confirmMessage = '⚠️ 确定要删除暂存并重置会话吗？\n\n这将会：\n1. 删除本地所有未提交到数据库的文件\n2. 从数据库同步最新数据到本地\n3. 清空当前对话历史\n\n⚠️ 请确保已将重要内容提交到数据库！\n\n是否继续？';
+            const confirmMessage = window.t ? window.t('confirm_reset_session') : '⚠️ 确定要删除暂存并重置会话吗？\n\n这将会：\n1. 删除本地所有未提交到数据库的文件\n2. 从数据库同步最新数据到本地\n3. 清空当前对话历史\n\n⚠️ 请确保已将重要内容提交到数据库！\n\n是否继续？';
             
             if (confirm(confirmMessage)) {
                 try {
@@ -6696,28 +6696,29 @@
         // 显示资产检查确认弹窗
         function showAssetConfirmModal(hasScript, missingAssets) {
             return new Promise((resolve) => {
-                let message = '检测到以下问题：\n\n';
-                
+                let message = window.t ? window.t('asset_confirm_title') : '检测到以下问题：\n\n';
+
                 // 检查剧本
                 if (!hasScript) {
-                    message += '⚠️ 当前世界还没有剧本\n';
+                    message += window.t ? window.t('asset_confirm_no_script') : '⚠️ 当前世界还没有剧本\n';
                 }
-                
+
                 // 检查资产图片
                 if (missingAssets && missingAssets.length > 0) {
-                    message += '\n以下资产图片尚未生成：\n';
+                    message += window.t ? window.t('asset_confirm_missing_images') : '\n以下资产图片尚未生成：\n';
                     missingAssets.forEach(asset => {
-                        message += `【${asset.type}】${asset.items.slice(0, 3).join('、')}`;
+                        const typeLabel = window.t ? window.t(`label_${asset.type}`) || asset.type : asset.type;
+                        message += `【${typeLabel}】${asset.items.slice(0, 3).join(window.t ? window.t('separator_comma') || '、' : '、')}`;
                         if (asset.items.length > 3) {
-                            message += ` 等${asset.items.length}项`;
+                            message += window.t ? window.t('asset_confirm_item_count', { count: asset.items.length }) : ` 等${asset.items.length}项`;
                         }
                         message += '\n';
                     });
-                    message += '\n💡 提示：请点击「提交数据」按钮生成资产图片后再进入制作工坊\n';
+                    message += window.t ? window.t('asset_confirm_hint') : '\n💡 提示：请点击「提交数据」按钮生成资产图片后再进入制作工坊\n';
                 }
 
-                message += '\n是否仍要进入制作工坊？';
-                
+                message += window.t ? window.t('asset_confirm_enter_workflow') : '\n是否仍要进入制作工坊？';
+
                 if (confirm(message)) {
                     resolve(true);
                 } else {

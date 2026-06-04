@@ -558,6 +558,7 @@ class LLMModel:
     """LLM 模型名称常量"""
     # Gemini 模型
     GEMINI_3_FLASH = 'gemini-3-flash-preview'
+    GEMINI_3_5_FLASH = 'gemini-3.5-flash'
     GEMINI_3_1_PRO = 'gemini-3.1-pro-preview'
 
     # Qwen 模型

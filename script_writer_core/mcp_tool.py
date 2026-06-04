@@ -657,14 +657,19 @@ def edit_image(user_id: str, world_id: str, auth_token: str, prompt: str,
         return {'success': False, 'error': f'图片编辑失败: {str(e)}'}
 
 
-def validate_name_for_filename(name: str, field_name: str = "名称") -> Dict[str, Any]:
+def validate_name_for_filename(name: str, field_name: str = "名称", language: str = "zh-CN") -> Dict[str, Any]:
     """
-    验证名称是否只包含中文、英文、数字、点号、下划线，确保可以用作文件名
-    
+    验证名称是否只包含允许的字符，确保可以用作文件名
+
+    根据语言设置验证名称：
+    - language="en": 只允许英文字母、数字、点号、下划线
+    - language="zh-CN" 或其他: 允许中文、英文、数字、点号、下划线
+
     Args:
         name: 要验证的名称
         field_name: 字段名称，用于错误提示
-        
+        language: 语言设置，默认 "zh-CN"，"en" 表示英文模式
+
     Returns:
         dict: 包含验证结果和清理后的名称
     """
@@ -674,37 +679,43 @@ def validate_name_for_filename(name: str, field_name: str = "名称") -> Dict[st
             'error': f'{field_name}不能为空',
             'cleaned_name': ''
         }
-    
-    # 使用正则表达式检查是否只包含中文、英文字母、数字
+
     import re
-    
-    # 匹配中文字符、英文字母、数字、点号、下划线
-    valid_pattern = re.compile(r'^[\u4e00-\u9fff\w._]+$')
-    
-    # 清理名称：只保留中文、英文、数字、点号、下划线
-    cleaned_name = re.sub(r'[^\u4e00-\u9fff\w._]', '', name.strip())
-    
+
+    # 根据语言设置选择验证模式
+    if language == "en":
+        # 英文模式：只允许英文字母、数字、点号、下划线
+        valid_pattern = re.compile(r'^[a-zA-Z0-9._]+$')
+        # 清理名称：只保留英文、数字、点号、下划线
+        cleaned_name = re.sub(r'[^a-zA-Z0-9._]', '', name.strip())
+        lang_error_hint = "英文字母、数字、点号(.)、下划线(_)"
+    else:
+        # 中文模式（默认）：允许中文、英文、数字、点号、下划线
+        valid_pattern = re.compile(r'^[\u4e00-\u9fff\w._]+$')
+        # 清理名称：只保留中文、英文、数字、点号、下划线
+        cleaned_name = re.sub(r'[^\u4e00-\u9fff\w._]', '', name.strip())
+        lang_error_hint = "中文、英文字母、数字、点号(.)、下划线(_)"
+
     if not cleaned_name:
         return {
             'valid': False,
-            'error': f'{field_name}必须包含至少一个中文、英文、数字、点号或下划线字符',
+            'error': f'{field_name}必须包含至少一个{lang_error_hint}字符',
             'cleaned_name': ''
         }
-    
+
     # 检查原始名称是否包含非法字符
     if not valid_pattern.match(name.strip()):
         return {
             'valid': False,
-            'error': f'{field_name}只能包含中文、英文字母、数字、点号(.) 和下划线(_)，不能包含其他特殊字符、空格或符号。建议使用: "{cleaned_name}"',
+            'error': f'{field_name}只能包含{lang_error_hint}，不能包含其他特殊字符、空格或符号。建议使用: "{cleaned_name}"',
             'cleaned_name': cleaned_name
         }
-    
+
     return {
         'valid': True,
         'error': None,
         'cleaned_name': cleaned_name
     }
-
 
 def validate_image_url(url: str, field_name: str = "reference_image") -> Dict[str, Any]:
     """
@@ -756,7 +767,7 @@ def validate_image_url(url: str, field_name: str = "reference_image") -> Dict[st
 def create_character_json(user_id: str, world_id: str, auth_token: str, name: str, age: str = None, identity: str = None, 
                          appearance: str = None, personality: str = None, behavior: str = None, 
                          other_info: str = None, reference_image: str = None, 
-                         _temp_filename: str = None, **additional_fields) -> Dict[str, Any]:
+                         _temp_filename: str = None, language: str = "zh-CN", **additional_fields) -> Dict[str, Any]:
     """
     创建标准格式的角色JSON文件 - MCP工具函数
     
@@ -786,7 +797,7 @@ def create_character_json(user_id: str, world_id: str, auth_token: str, name: st
             }
         
         # 验证名称
-        validation_result = validate_name_for_filename(name, "角色名称")
+        validation_result = validate_name_for_filename(name, "角色名称", language)
         if not validation_result['valid']:
             return {
                 'success': False,
@@ -862,7 +873,7 @@ def create_character_json(user_id: str, world_id: str, auth_token: str, name: st
         }
 
 
-def create_script_json(user_id: str, world_id: str, auth_token: str, title: str, episode_number: int, content: str = None, **additional_fields) -> Dict[str, Any]:
+def create_script_json(user_id: str, world_id: str, auth_token: str, title: str, episode_number: int, content: str = None, language: str = "zh-CN", **additional_fields) -> Dict[str, Any]:
     """
     创建标准格式的剧本JSON文件 - MCP工具函数
 
@@ -897,7 +908,7 @@ def create_script_json(user_id: str, world_id: str, auth_token: str, title: str,
             }
 
         # 验证名称
-        validation_result = validate_name_for_filename(title, "剧本标题")
+        validation_result = validate_name_for_filename(title, "剧本标题", language)
         if not validation_result['valid']:
             return {
                 'success': False,
@@ -1214,7 +1225,7 @@ def update_world(
 
 
 def create_location_json(user_id: str, world_id: str, auth_token: str, name: str, description: str = None, 
-                        reference_image: str = None, _temp_filename: str = None, **additional_fields) -> Dict[str, Any]:
+                        reference_image: str = None, _temp_filename: str = None, language: str = "zh-CN", **additional_fields) -> Dict[str, Any]:
     """
     创建标准格式的地点JSON文件 - MCP工具函数
     
@@ -1239,7 +1250,7 @@ def create_location_json(user_id: str, world_id: str, auth_token: str, name: str
             }
         
         # 验证名称
-        validation_result = validate_name_for_filename(name, "地点名称")
+        validation_result = validate_name_for_filename(name, "地点名称", language)
         if not validation_result['valid']:
             return {
                 'success': False,
@@ -1306,7 +1317,7 @@ def create_location_json(user_id: str, world_id: str, auth_token: str, name: str
         }
 
 
-def create_prop_json(user_id: str, world_id: str, auth_token: str, name: str, prop_type: str = None, description: str = None, reference_image: str = None, _temp_filename: str = None, **additional_fields) -> Dict[str, Any]:
+def create_prop_json(user_id: str, world_id: str, auth_token: str, name: str, prop_type: str = None, description: str = None, reference_image: str = None, _temp_filename: str = None, language: str = "zh-CN", **additional_fields) -> Dict[str, Any]:
     """
     创建标准格式的道具JSON文件 - MCP工具函数
     
@@ -1332,7 +1343,7 @@ def create_prop_json(user_id: str, world_id: str, auth_token: str, name: str, pr
             }
         
         # 验证名称
-        validation_result = validate_name_for_filename(name, "道具名称")
+        validation_result = validate_name_for_filename(name, "道具名称", language)
         if not validation_result['valid']:
             return {
                 'success': False,
@@ -2308,13 +2319,13 @@ def set_script_problem(user_id: str, world_id: str, auth_token: str, verdict: bo
 MCP_TOOLS = [
     {
         "name": "create_character_json",
-        "description": "创建或者更新标准格式的角色JSON文件，确保数据格式一致性",
+        "description": "创建或者更新标准格式的角色JSON文件，确保数据格式一致性。名称语言必须与剧本原文一致（英文剧本用英文名，中文剧本用中文名）",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "name": {
                     "type": "string",
-                    "description": "角色名称（允许中文、英文、数字、点号、下划线）"
+                    "description": "角色名称（必须与剧本原文语言一致：英文剧本用英文名，中文剧本用中文名；允许中文、英文、数字、点号、下划线）"
                 },
                 "age": {
                     "type": "string",
@@ -2350,13 +2361,13 @@ MCP_TOOLS = [
     },
     {
         "name": "create_script_json",
-        "description": "创建或者更新标准格式的剧本JSON文件",
+        "description": "创建或者更新标准格式的剧本JSON文件。标题语言必须与剧本原文一致",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "title": {
                     "type": "string",
-                    "description": "剧本标题（允许中文、英文、数字、点号、下划线）"
+                    "description": "剧本标题（必须与剧本原文语言一致；允许中文、英文、数字、点号、下划线）"
                 },
                 "episode_number": {
                     "type": "integer",
@@ -2372,13 +2383,13 @@ MCP_TOOLS = [
     },
     {
         "name": "create_location_json",
-        "description": "创建或者更新标准格式的地点JSON文件",
+        "description": "创建或者更新标准格式的地点JSON文件。名称语言必须与剧本原文一致（英文剧本用英文名，中文剧本用中文名）",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "name": {
                     "type": "string",
-                    "description": "地点名称（允许中文、英文、数字、点号、下划线）"
+                    "description": "地点名称（必须与剧本原文语言一致：英文剧本用英文名，中文剧本用中文名；允许中文、英文、数字、点号、下划线）"
                 },
                 "parent_id": {
                     "type": "string",
@@ -2398,13 +2409,13 @@ MCP_TOOLS = [
     },
     {
         "name": "create_prop_json",
-        "description": "创建或者更新标准格式的道具JSON文件",
+        "description": "创建或者更新标准格式的道具JSON文件。名称语言必须与剧本原文一致（英文剧本用英文名，中文剧本用中文名）",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "name": {
                     "type": "string",
-                    "description": "道具名称（允许中文、英文、数字、点号、下划线）"
+                    "description": "道具名称（必须与剧本原文语言一致：英文剧本用英文名，中文剧本用中文名；允许中文、英文、数字、点号、下划线）"
                 },
                 "prop_type": {
                     "type": "string",

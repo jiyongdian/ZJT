@@ -4,7 +4,7 @@
 新增字段：prompt, task_config_id, aspect_ratio, image_size, is_grid, retry_count, max_retries
 
 Revision ID: 20260604_image_retry
-Revises: 20260603_email_support
+Revises: 20260604_model_enabled
 Create Date: 2026-06-04
 """
 from typing import Sequence, Union
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 # revision identifiers, used by Alembic.
 revision: str = '20260604_image_retry'
-down_revision: Union[str, None] = '20260603_email_support'
+down_revision: Union[str, None] = '20260604_model_enabled'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

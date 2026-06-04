@@ -175,7 +175,7 @@ async def get_available_models() -> dict:
 
         # 获取模型详情
         local_model = ModelModel.get_by_id(model_id)
-        if not local_model or not local_model.supports_tools:
+        if not local_model or not local_model.supports_tools or not local_model.enabled:
             continue
 
         # 获取 billing 配置
