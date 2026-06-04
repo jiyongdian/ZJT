@@ -1827,7 +1827,8 @@ async def submit_to_database(request: SubmitDatabaseRequest):
             characters = file_manager.list_characters(str(user_id), str(world_id))
             for char in characters:
                 try:
-                    char_data = file_manager.get_character_json(char['name'], str(user_id), str(world_id))
+                    # 直接使用 list_characters 返回的 json_data，避免用中文名查找拼音文件名导致找不到
+                    char_data = char.get('json_data')
                     if char_data and isinstance(char_data, dict):
                         name = char_data.get('name', char['name'])
                         age = char_data.get('age')
@@ -1933,7 +1934,8 @@ async def submit_to_database(request: SubmitDatabaseRequest):
             locations = file_manager.list_locations(str(user_id), str(world_id))
             for loc in locations:
                 try:
-                    loc_data = file_manager.get_location_json(loc['name'], str(user_id), str(world_id))
+                    # 直接使用 list_locations 返回的 json_data，避免用中文名查找拼音文件名导致找不到
+                    loc_data = loc.get('json_data')
                     if loc_data and isinstance(loc_data, dict):
                         name = loc_data.get('name', loc['name'])
                         parent_id_raw = loc_data.get('parent_id')
@@ -1985,7 +1987,8 @@ async def submit_to_database(request: SubmitDatabaseRequest):
             props = file_manager.list_props(str(user_id), str(world_id))
             for prop in props:
                 try:
-                    prop_data = file_manager.get_prop_json(prop['name'], str(user_id), str(world_id))
+                    # 直接使用 list_props 返回的 json_data，避免用中文名查找拼音文件名导致找不到
+                    prop_data = prop.get('json_data')
                     if prop_data and isinstance(prop_data, dict):
                         name = prop_data.get('name', prop['name'])
                         description = prop_data.get('description')
