@@ -7420,6 +7420,13 @@
         return token.substring(0, 6) + '****' + token.substring(token.length - 4);
       }
     },
+    watch: {
+      showLoginModal(newVal) {
+        if (newVal && this.captchaEnabled && this.captchaPrefix) {
+          this.$nextTick(() => { this.loadCaptchaSdk(); });
+        }
+      }
+    },
     methods: {
       goHome(){ this.$router.push({name:'list'}); },
       
@@ -8643,10 +8650,7 @@
               this.footerConfig.version = response.data.data.version;
             }
 
-            // 如果 CAPTCHA 启用且有配置，动态加载 SDK
-            if (this.captchaEnabled && this.captchaPrefix) {
-              this.loadCaptchaSdk();
-            }
+            // CAPTCHA SDK 不在此处加载，延迟到登录弹框出现时再初始化
           }
         } catch (error) {
           console.error('Failed to fetch server config:', error);
