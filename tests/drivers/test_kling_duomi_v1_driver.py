@@ -364,7 +364,8 @@ class TestKlingBuildCreateRequest(unittest.TestCase):
             image_path='http://example.com/first.jpg',
             duration=5
         )
-        with patch.object(self.driver, 'get_all_images_by_mode') as mock_get:
+        with patch.object(self.driver, 'get_all_images_by_mode') as mock_get, \
+             patch.object(self.driver, 'ensure_public_urls', side_effect=lambda urls: urls):
             mock_get.return_value = {
                 'mode': 'first_last_frame',
                 'first_frame': 'http://example.com/first.jpg',
@@ -386,7 +387,8 @@ class TestKlingBuildCreateRequest(unittest.TestCase):
             image_path='http://example.com/first.jpg,http://example.com/last.jpg',
             duration=10
         )
-        with patch.object(self.driver, 'get_all_images_by_mode') as mock_get:
+        with patch.object(self.driver, 'get_all_images_by_mode') as mock_get, \
+             patch.object(self.driver, 'ensure_public_urls', side_effect=lambda urls: urls):
             mock_get.return_value = {
                 'mode': 'first_last_frame',
                 'first_frame': 'http://example.com/first.jpg',
@@ -408,7 +410,8 @@ class TestKlingBuildCreateRequest(unittest.TestCase):
                 'http://example.com/ref2.jpg'
             ]
         )
-        with patch.object(self.driver, 'get_all_images_by_mode') as mock_get:
+        with patch.object(self.driver, 'get_all_images_by_mode') as mock_get, \
+             patch.object(self.driver, 'ensure_public_urls', side_effect=lambda urls: urls):
             mock_get.return_value = {
                 'mode': 'multi_reference',
                 'first_frame': None,
@@ -429,7 +432,8 @@ class TestKlingBuildCreateRequest(unittest.TestCase):
             image_path='http://example.com/first.jpg',
             reference_images=['http://example.com/ref.jpg']
         )
-        with patch.object(self.driver, 'get_all_images_by_mode') as mock_get:
+        with patch.object(self.driver, 'get_all_images_by_mode') as mock_get, \
+             patch.object(self.driver, 'ensure_public_urls', side_effect=lambda urls: urls):
             mock_get.return_value = {
                 'mode': 'first_last_with_ref',
                 'first_frame': 'http://example.com/first.jpg',
@@ -443,7 +447,8 @@ class TestKlingBuildCreateRequest(unittest.TestCase):
     def test_request_headers(self):
         """验证请求 headers"""
         tool = _make_ai_tool()
-        with patch.object(self.driver, 'get_all_images_by_mode') as mock_get:
+        with patch.object(self.driver, 'get_all_images_by_mode') as mock_get, \
+             patch.object(self.driver, 'ensure_public_urls', side_effect=lambda urls: urls):
             mock_get.return_value = {
                 'mode': 'first_last_frame',
                 'first_frame': 'http://example.com/first.jpg',
@@ -459,7 +464,8 @@ class TestKlingBuildCreateRequest(unittest.TestCase):
     def test_request_url(self):
         """验证请求 URL"""
         tool = _make_ai_tool()
-        with patch.object(self.driver, 'get_all_images_by_mode') as mock_get:
+        with patch.object(self.driver, 'get_all_images_by_mode') as mock_get, \
+             patch.object(self.driver, 'ensure_public_urls', side_effect=lambda urls: urls):
             mock_get.return_value = {
                 'mode': 'first_last_frame',
                 'first_frame': 'http://example.com/first.jpg',

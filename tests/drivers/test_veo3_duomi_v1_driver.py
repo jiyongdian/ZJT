@@ -284,7 +284,8 @@ class TestVeo3BuildCreateRequest(unittest.TestCase):
             ratio='16:9',
             image_path='http://example.com/first.jpg,http://example.com/last.jpg'
         )
-        with patch.object(self.driver, 'get_all_images_by_mode') as mock_get:
+        with patch.object(self.driver, 'get_all_images_by_mode') as mock_get, \
+             patch.object(self.driver, 'ensure_public_urls', side_effect=lambda urls: urls):
             mock_get.return_value = {
                 'mode': 'first_last_frame',
                 'first_frame': 'http://example.com/first.jpg',
@@ -308,7 +309,8 @@ class TestVeo3BuildCreateRequest(unittest.TestCase):
                 'http://example.com/ref3.jpg'
             ]
         )
-        with patch.object(self.driver, 'get_all_images_by_mode') as mock_get:
+        with patch.object(self.driver, 'get_all_images_by_mode') as mock_get, \
+             patch.object(self.driver, 'ensure_public_urls', side_effect=lambda urls: urls):
             mock_get.return_value = {
                 'mode': 'multi_reference',
                 'first_frame': None,
@@ -329,7 +331,8 @@ class TestVeo3BuildCreateRequest(unittest.TestCase):
         reference_images = [f'http://example.com/ref{i}.jpg' for i in range(1, 6)]
         tool = _make_ai_tool(reference_images=reference_images)
 
-        with patch.object(self.driver, 'get_all_images_by_mode') as mock_get:
+        with patch.object(self.driver, 'get_all_images_by_mode') as mock_get, \
+             patch.object(self.driver, 'ensure_public_urls', side_effect=lambda urls: urls):
             mock_get.return_value = {
                 'mode': 'multi_reference',
                 'first_frame': None,

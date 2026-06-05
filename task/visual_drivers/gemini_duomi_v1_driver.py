@@ -8,7 +8,6 @@ from .base_video_driver import BaseVideoDriver
 from config.config_util import get_config, get_dynamic_config_value
 from config.unified_config import TaskTypeId
 from utils.sentry_util import SentryUtil, AlertLevel
-from utils.image_upload_utils import upload_local_images_to_cdn_sync
 
 
 class GeminiDuomiV1Driver(BaseVideoDriver):
@@ -174,11 +173,9 @@ class GeminiDuomiV1Driver(BaseVideoDriver):
         else:
             image_urls = None
 
-        # 如果是本地环境，将本地图片上传到图床
-        if self._is_local and image_urls:
-            self.logger.info(f"本地环境检测到图片路径，准备上传到图床: {image_urls}")
-            image_urls = upload_local_images_to_cdn_sync(image_urls, self._config)
-            self.logger.info(f"图片上传完成，CDN链接: {image_urls}")
+        # 上传图片到CDN图床，确保外部API可访问
+        if image_urls:
+            image_urls = self.ensure_public_urls(image_urls)
 
         # 根据 task_id 选择模型
         task_type = getattr(ai_tool, 'type', None)

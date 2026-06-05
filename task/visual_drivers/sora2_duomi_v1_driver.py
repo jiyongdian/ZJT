@@ -6,7 +6,6 @@ import traceback
 from .base_video_driver import BaseVideoDriver, ImageMode
 from config.config_util import get_config, get_dynamic_config_value
 from utils.sentry_util import SentryUtil, AlertLevel
-from utils.image_upload_utils import upload_local_images_to_cdn_sync
 
 
 class Sora2DuomiV1Driver(BaseVideoDriver):
@@ -175,13 +174,9 @@ class Sora2DuomiV1Driver(BaseVideoDriver):
             if last_frame or reference_images:
                 self.logger.warning(f"Sora2 不支持首尾帧+参考图模式，仅使用首帧")
 
-        # 如果是本地环境，将本地图片上传到图床
-        if self._is_local and image_urls:
-            self.logger.info(f"本地环境检测到图片路径，准备上传到图床: {image_urls}")
-            cdn_urls = upload_local_images_to_cdn_sync(image_urls, self._config)
-            self.logger.info(f"图片上传完成，CDN链接: {cdn_urls}")
-            if cdn_urls:
-                image_urls = cdn_urls
+        # 上传图片到CDN图床，确保外部API可访问
+        if image_urls:
+            image_urls = self.ensure_public_urls(image_urls)
         
         payload = {
             "model": "sora-2-temporary",

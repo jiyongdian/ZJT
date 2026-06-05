@@ -551,6 +551,32 @@ class BaseVideoDriver(ABC):
         """
         return ai_tool.video_path if hasattr(ai_tool, 'video_path') else None
 
+    def ensure_public_urls(self, urls: List[str]) -> List[str]:
+        """
+        确保图片/媒体URL可被外部API访问，统一上传到CDN图床
+        
+        无论是本地环境还是服务器环境，都上传到CDN以确保外部API可访问。
+        upload_local_images_to_cdn_sync 内部已处理：
+        - 外网URL直接返回不再上传
+        - 本地文件路径会上传到CDN
+        - 局域网URL会下载后上传
+        
+        Args:
+            urls: 图片/媒体路径列表
+            
+        Returns:
+            List[str]: CDN链接列表
+        """
+        if not urls:
+            return urls
+        
+        from utils.image_upload_utils import upload_local_images_to_cdn_sync
+        
+        self.logger.info(f"准备上传媒体到CDN图床: {urls}")
+        cdn_urls = upload_local_images_to_cdn_sync(urls, self._config)
+        self.logger.info(f"CDN上传完成: {cdn_urls}")
+        return cdn_urls if cdn_urls else urls
+
     def __str__(self):
         return f"{self.__class__.__name__}(driver_name={self.driver_name}, driver_type={self.driver_type})"
     
