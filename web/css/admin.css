@@ -2344,3 +2344,51 @@ body {
     font-size: 13px;
     color: var(--admin-text-muted);
 }
+
+/* ==================== 敏感字段小眼睛样式 ==================== */
+
+/* 表格单元格内的敏感字段 */
+.sensitive-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+
+/* 弹窗表单中的敏感字段 */
+.sensitive-field {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sensitive-field input {
+    flex: 1;
+}
+
+/* 眼睛切换按钮 */
+.eye-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid var(--admin-border, #e2e8f0);
+    border-radius: 4px;
+    background: #fff;
+    color: var(--admin-text-muted, #64748b);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+}
+
+.eye-toggle:hover {
+    background: var(--admin-primary, #4f46e5);
+    color: #fff;
+    border-color: var(--admin-primary, #4f46e5);
+}
+
+.eye-toggle svg {
+    display: block;
+}

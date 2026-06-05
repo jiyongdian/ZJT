@@ -156,11 +156,17 @@ class PipelineDriverFactory:
 
         failed_impl_name = get_implementation_name(failed_implementation)
 
-        # 收集替代实现方（排除已失败的）
+        # 收集替代实现方（排除已失败的 + 未启用的）
         alternatives = []
         for impl_name in task_config.implementations:
-            if impl_name != failed_impl_name:
-                alternatives.append(impl_name)
+            if impl_name == failed_impl_name:
+                continue
+            # 检查实现方是否启用
+            impl_config = UnifiedConfigRegistry.get_implementation(impl_name)
+            if impl_config and not impl_config.is_enabled(task_config.driver_name):
+                logger.info(f"Skipping disabled implementation {impl_name} for retry")
+                continue
+            alternatives.append(impl_name)
 
         if not alternatives:
             logger.info(f"No alternative implementations for ai_tool {ai_tool_id}")

@@ -77,27 +77,48 @@ class Action:
 
 class Edition:
     """版本模式管理类"""
-    
+
     # 版本模式常量
     COMMUNITY = "community"
     ENTERPRISE = "enterprise"
-    
+
+    _enterprise_available = None  # 缓存：enterprise/ 目录是否存在
+
+    @staticmethod
+    def _is_enterprise_available() -> bool:
+        """检查 enterprise/ 代码目录是否实际存在（结果缓存）"""
+        if Edition._enterprise_available is None:
+            import os
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            Edition._enterprise_available = os.path.isdir(
+                os.path.join(project_root, "enterprise")
+            )
+        return Edition._enterprise_available
+
     @staticmethod
     def get_mode() -> str:
-        """获取当前版本模式"""
+        """获取当前版本模式
+
+        企业版需要同时满足：
+        1. 配置文件 edition.mode = enterprise
+        2. enterprise/ 目录实际存在
+        """
         from config.config_util import get_config_value
-        return get_config_value("edition", "mode", default=Edition.COMMUNITY)
-    
+        mode = get_config_value("edition", "mode", default=Edition.COMMUNITY)
+        if mode == Edition.ENTERPRISE and not Edition._is_enterprise_available():
+            return Edition.COMMUNITY
+        return mode
+
     @staticmethod
     def is_community() -> bool:
         """判断是否为开源/社区版"""
         return Edition.get_mode() == Edition.COMMUNITY
-    
+
     @staticmethod
     def is_enterprise() -> bool:
         """判断是否为商业版"""
         return not Edition.is_community()
-    
+
     @staticmethod
     def get_label() -> str:
         """获取版本模式标签"""

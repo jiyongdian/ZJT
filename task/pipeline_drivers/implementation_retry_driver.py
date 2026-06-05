@@ -67,6 +67,21 @@ class ImplementationRetryPipelineDriver(BasePipelineDriver):
                 message=None  # 清除旧的错误信息
             )
 
+            # 记录重试实现方尝试
+            try:
+                from model.implementation_attempts import ImplementationAttemptModel
+                from datetime import datetime as dt
+                attempt_number = step.step_order + 2  # step_order 从 0 开始，首次是 1
+                ImplementationAttemptModel.create(
+                    ai_tool_id=ai_tool.id,
+                    implementation=target_impl_id,
+                    attempt_number=attempt_number,
+                    status=0,
+                    started_at=dt.now()
+                )
+            except Exception as e:
+                self.logger.warning(f"Failed to record retry attempt for ai_tool {ai_tool.id}: {e}")
+
             self.logger.info(
                 f"Implementation retry: ai_tool_id={ai_tool.id}, "
                 f"old_impl={ai_tool.implementation}, new_impl={target_impl_id} ({target_implementation})"

@@ -32,6 +32,28 @@ from model.ai_tool_pipeline_steps import PipelineStepStatus, PipelineStage
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# 企业版失败重试处理器钩子
+# 企业版模块加载时通过 register_enterprise_failure_handler() 注册
+# 社区版不注册，_enterprise_failure_handler 保持 None
+_enterprise_failure_handler = None
+
+
+def register_enterprise_failure_handler(handler):
+    """
+    注册企业版失败重试处理器
+
+    由 enterprise/__init__.py 在加载时调用，将 before_finish 重试逻辑
+    注入到主任务处理流程中。社区版不调用此函数，重试逻辑不生效。
+
+    Args:
+        handler: 重试处理函数，签名为:
+            handler(task_id, ai_tool_type, reason, user_id, project_id=None) -> bool|None
+            返回 True 表示已进入重试流程，返回 None/False 表示无可用重试
+    """
+    global _enterprise_failure_handler
+    _enterprise_failure_handler = handler
+    logger.info("[Enterprise] Failure retry handler registered")
+
 def _is_test_mode_enabled():
     """动态获取测试模式状态"""
     return get_dynamic_config_value("test_mode", "enabled", default=False)
@@ -209,6 +231,19 @@ async def _submit_new_task(ai_tool):
             if implementation_id > 0:
                 AIToolsModel.update(task_id, implementation=implementation_id)
                 logger.info(f"Recorded implementation {implementation_name} (id: {implementation_id}) for task {task_id}")
+
+                # 记录初始实现方尝试
+                try:
+                    from model.implementation_attempts import ImplementationAttemptModel
+                    ImplementationAttemptModel.create(
+                        ai_tool_id=task_id,
+                        implementation=implementation_id,
+                        attempt_number=1,
+                        status=0,
+                        started_at=datetime.now()
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to record implementation attempt for task {task_id}: {e}")
             else:
                 logger.warning(f"Implementation name '{implementation_name}' not found in IMPLEMENTATION_TO_ID mapping for task {task_id}")
 
@@ -239,7 +274,7 @@ async def _submit_new_task(ai_tool):
                 error_message = f"不支持的任务类型: {ai_tool_type}"
                 logger.error(f"Unsupported driver type: {ai_tool_type}")
             # 更新任务状态为失败
-            AIToolsModel.update(task_id, status=AI_TOOL_STATUS_FAILED, message=error_message)
+            AIToolsModel.update(task_id, status=AI_TOOL_STATUS_FAILED, message=error_message, completed_time=datetime.now())
             TasksModel.update_by_task_id(task_id, status=TASK_STATUS_FAILED)
             # 释放 RunningHub 槽位（如果是 RunningHub 任务且已获取槽位）
             if ai_tool_type in RUNNINGHUB_TASK_TYPES:
@@ -276,29 +311,14 @@ async def _submit_new_task(ai_tool):
                 # 返回 False，让 process_task_with_retry 增加重试计数并设置延迟
                 return False
             
-            # 根据错误类型处理（不需要重试的错误）
-            if error_type == "USER":
-                # 用户错误，直接返回给用户，标记任务失败
-                AIToolsModel.update(task_id, status=AI_TOOL_STATUS_FAILED, message=error)
-                TasksModel.update_by_task_id(task_id, status=TASK_STATUS_FAILED)
-            else:
-                # 系统错误，已通过 Sentry 报警，标记任务失败
-                AIToolsModel.update(task_id, status=AI_TOOL_STATUS_FAILED, message="服务异常，请联系技术支持")
-                TasksModel.update_by_task_id(task_id, status=TASK_STATUS_FAILED)
-            
-            # 释放 RunningHub 槽位（如果是 RunningHub 任务）
-            is_runninghub = ai_tool_type in RUNNINGHUB_TASK_TYPES
-            if is_runninghub:
-                task = TasksModel.get_by_task_id(task_id)
-                if task:
-                    RunningHubSlotsModel.release_slot(task.id, source=RunningHubSlot.SOURCE_TASK)
-                    logger.info(f"Released RunningHub slot for failed task {task_id}")
-
-            # 退还算力
-            _refund_computing_power(ai_tool, f"任务提交失败: {error}")
-
-            # 返回 True 表示任务已处理完成（虽然失败了），不需要重试
-            return True
+            # 提交失败：尝试通过 before_finish 切换备用实现方重试
+            # 无论是 USER 错误还是 SYSTEM 错误，都尝试重试
+            # 因为不同供应商的审核策略、网络状况、API 行为都不同
+            return _handle_task_failure(
+                task_id=task_id, ai_tool_type=ai_tool_type,
+                reason=error if error_type == "USER" else "服务异常，请联系技术支持",
+                user_id=ai_tool.user_id
+            )
         
         # 4. 提交成功，检查是否同步模式
         if result.get("sync_mode"):
@@ -333,6 +353,14 @@ async def _submit_new_task(ai_tool):
             from datetime import datetime
             AIToolsModel.update_with_cdn_sync(task_id, result_url=final_url, status=AI_TOOL_STATUS_COMPLETED, completed_time=datetime.now())
             TasksModel.update_by_task_id(task_id, status=TASK_STATUS_COMPLETED)
+
+            # 标记当前实现方尝试为成功
+            try:
+                from model.implementation_attempts import ImplementationAttemptModel, ATTEMPT_STATUS_SUCCESS
+                ImplementationAttemptModel.mark_active_attempt_completed(task_id, ATTEMPT_STATUS_SUCCESS)
+            except Exception as e:
+                logger.warning(f"Failed to mark attempt as success for sync task {task_id}: {e}")
+
             logger.info(f"Sync task {task_id} completed with result: {final_url}")
             return True
 
@@ -341,10 +369,12 @@ async def _submit_new_task(ai_tool):
 
         if not project_id:
             logger.error(f"Task {task_id} submitted but no project_id returned")
-            AIToolsModel.update(task_id, status=AI_TOOL_STATUS_FAILED, message="服务异常，未返回任务ID")
-            TasksModel.update_by_task_id(task_id, status=TASK_STATUS_FAILED)
-            # 返回 True 表示任务已处理完成（失败），不需要重试
-            return True
+            # 尝试通过 before_finish 切换备用实现方重试
+            return _handle_task_failure(
+                task_id=task_id, ai_tool_type=ai_tool_type,
+                reason="服务异常，未返回任务ID",
+                user_id=ai_tool.user_id
+            )
         
         # 更新 AITools 和 Tasks 表状态
         AIToolsModel.update(task_id, project_id=project_id, status=AI_TOOL_STATUS_PROCESSING)
@@ -368,7 +398,7 @@ async def _submit_new_task(ai_tool):
         logger.error(traceback.format_exc())
         
         # 更新任务状态为失败
-        AIToolsModel.update(task_id, status=AI_TOOL_STATUS_FAILED, message="服务异常，请联系技术支持")
+        AIToolsModel.update(task_id, status=AI_TOOL_STATUS_FAILED, message="服务异常，请联系技术支持", completed_time=datetime.now())
         TasksModel.update_by_task_id(task_id, status=TASK_STATUS_FAILED)
 
         # 退还算力
@@ -440,7 +470,7 @@ async def _check_task_status(ai_tool):
                 error_message = f"不支持的任务类型: {ai_tool_type}"
                 logger.error(f"Unsupported driver type: {ai_tool_type}")
             # 更新任务状态为失败
-            AIToolsModel.update(task_id, status=AI_TOOL_STATUS_FAILED, message=error_message)
+            AIToolsModel.update(task_id, status=AI_TOOL_STATUS_FAILED, message=error_message, completed_time=datetime.now())
             TasksModel.update_by_task_id(task_id, status=TASK_STATUS_FAILED)
             # 释放 RunningHub 槽位（如果是 RunningHub 任务）
             if ai_tool_type in RUNNINGHUB_TASK_TYPES:
@@ -466,7 +496,7 @@ async def _check_task_status(ai_tool):
             result_url = result.get("result_url")        
             if not result_url:
                 logger.error(f"Task {task_id} succeeded but no result URL returned")
-                return _handle_task_failure(project_id, task_id, ai_tool_type, "任务成功但未返回结果URL", ai_tool.user_id)
+                return _handle_task_failure(task_id, ai_tool_type, "任务成功但未返回结果URL", ai_tool.user_id, project_id=project_id)
             
             logger.info(f"Task {task_id} completed successfully, result_url: {result_url}")
             return await _handle_task_success(project_id, task_id, result_url)
@@ -477,7 +507,7 @@ async def _check_task_status(ai_tool):
             error_type = result.get("error_type", "SYSTEM")
             
             logger.error(f"Task {task_id} failed: {error} (type: {error_type})")
-            return _handle_task_failure(project_id, task_id, ai_tool_type, error, ai_tool.user_id)
+            return _handle_task_failure(task_id, ai_tool_type, error, ai_tool.user_id, project_id=project_id)
             
         elif status == "RUNNING":
             # 任务仍在处理中
@@ -541,7 +571,7 @@ def _check_pipeline_stage(ai_tool, stage):
                 None
             )
             error_msg = failed_step.error_message if failed_step else "数据预处理失败"
-            AIToolsModel.update(ai_tool.id, status=AI_TOOL_STATUS_FAILED, message=f"数据预处理失败: {error_msg}")
+            AIToolsModel.update(ai_tool.id, status=AI_TOOL_STATUS_FAILED, message=f"数据预处理失败: {error_msg}", completed_time=datetime.now())
             TasksModel.update_by_task_id(ai_tool.id, status=TASK_STATUS_FAILED)
             _refund_computing_power(ai_tool, f"数据预处理失败: {error_msg}")
             logger.info(f"Task {ai_tool.id} failed: param_prepare step failed")
@@ -555,10 +585,21 @@ def _check_pipeline_stage(ai_tool, stage):
             AIToolsModel.update(
                 ai_tool.id,
                 status=AI_TOOL_STATUS_FAILED,
-                message=ai_tool.message or "所有重试失败"
+                message=ai_tool.message or "所有重试失败",
+                completed_time=datetime.now()
             )
             TasksModel.update_by_task_id(ai_tool.id, status=TASK_STATUS_FAILED)
             _refund_computing_power(ai_tool, "所有重试失败")
+
+            # 标记当前实现方尝试为失败
+            try:
+                from model.implementation_attempts import ImplementationAttemptModel, ATTEMPT_STATUS_FAILED
+                ImplementationAttemptModel.mark_active_attempt_completed(
+                    ai_tool.id, ATTEMPT_STATUS_FAILED, error_message="所有重试失败"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to mark attempt as failed for task {ai_tool.id}: {e}")
+
             logger.info(f"Task {ai_tool.id} failed: all retry attempts exhausted")
         return True
 
@@ -618,6 +659,13 @@ async def _handle_task_success(project_id, task_id, media_url):
         )
         TasksModel.update_by_task_id(task_id, status=TASK_STATUS_COMPLETED)
 
+        # 标记当前实现方尝试为成功
+        try:
+            from model.implementation_attempts import ImplementationAttemptModel, ATTEMPT_STATUS_SUCCESS
+            ImplementationAttemptModel.mark_active_attempt_completed(task_id, ATTEMPT_STATUS_SUCCESS)
+        except Exception as e:
+            logger.warning(f"Failed to mark attempt as success for task {task_id}: {e}")
+
         logger.info(f"Task {project_id} completed successfully")
         return True
     except Exception as db_error:
@@ -629,66 +677,57 @@ async def _handle_task_success(project_id, task_id, media_url):
         logger.info(f"Released RunningHub slot for project_id: {project_id}")
 
 
-def _handle_task_failure(project_id, task_id, ai_tool_type, reason, user_id):
+def _handle_task_failure(task_id, ai_tool_type, reason, user_id, project_id=None):
     """
-    Handle failed task
-    
+    Handle failed task - 统一失败处理入口
+
+    企业版：先尝试通过 before_finish 重试（切换备用实现方），无可用重试则直接失败
+    社区版：直接标记失败并退还算力
+
     Args:
-        project_id: Project ID
-        task_id: Task ID
+        task_id: Task ID (ai_tools.id)
         ai_tool_type: AI tool type
         reason: Failure reason
         user_id: User ID for refund tracking
-    
+        project_id: Project ID (可选，提交阶段失败时为 None)
+
     Returns:
         bool: True if handled successfully
     """
-    # Translate error messages
-    if reason and "We currently do not support uploads of images containing photorealistic people" in reason:
-        reason = "图片包含真人，无法处理"
-    elif reason and "This content may violate our guardrails concerning similarity to third-party content. " in reason:
-        reason = "此内容可能违反了我们关于与第三方内容相似性的规定"
-
-    # 检查 before_finish 步骤（失败后重试阶段）
-    # 宫格生图任务跳过 pipeline 重试，由 process_grid_image_tasks 管理重试
-    try:
-        from model import GridImageTasksModel
-        is_grid_image_task = GridImageTasksModel.exists_by_project_id(str(task_id))
-    except Exception as e:
-        logger.warning(f"Failed to check grid_image_task for task {task_id}: {e}")
-        is_grid_image_task = False
-
-    if not is_grid_image_task:
+    # 尝试企业版重试处理器（before_finish 切换备用实现方）
+    if _enterprise_failure_handler:
         try:
-            from task.pipeline_processor import PipelineProcessor
-            ai_tool = AIToolsModel.get_by_id(task_id)
-            if ai_tool:
-                retry_steps = PipelineProcessor.create_before_finish_steps(
-                    ai_tool_id=task_id,
-                    ai_tool_type=ai_tool_type,
-                    failed_implementation=ai_tool.implementation or 0,
-                    failure_reason=reason
-                )
-                if retry_steps:
-                    AIToolsModel.update(task_id, status=AI_TOOL_STATUS_WAITING_BEFORE_FINISH, message=reason)
-                    TasksModel.update_by_task_id(task_id, status=TASK_STATUS_WAITING_BEFORE_FINISH)
-                    logger.info(f"Task {task_id} entering before_finish pipeline with {len(retry_steps)} retry steps")
-                    # 释放 RunningHub 槽位（重试时会重新获取）
-                    if ai_tool_type in RUNNINGHUB_TASK_TYPES and project_id:
-                        RunningHubSlotsModel.release_slot_by_project_id(project_id)
-                    return True
+            result = _enterprise_failure_handler(task_id, ai_tool_type, reason, user_id, project_id=project_id)
+            if result:
+                return True  # 企业版已处理（进入重试流程）
         except Exception as e:
-            logger.warning(f"Failed to create before_finish steps for task {task_id}: {e}")
+            logger.warning(f"Enterprise failure handler error for task {task_id}: {e}")
             # 不阻断原有失败处理流程
-    else:
-        logger.info(f"Task {task_id} is grid image task, skip before_finish pipeline, direct fail + refund")
+
+    # 社区版 / 企业版兜底：直接标记失败
+    try:
+        from model.implementation_attempts import ImplementationAttemptModel, ATTEMPT_STATUS_FAILED
+        ImplementationAttemptModel.mark_active_attempt_completed(
+            task_id, ATTEMPT_STATUS_FAILED, error_message=reason
+        )
+    except Exception as e:
+        logger.warning(f"Failed to mark attempt as failed for task {task_id}: {e}")
 
     try:
-        AIToolsModel.update_by_project_id(
-            project_id=project_id,
-            status=AI_TOOL_STATUS_FAILED,
-            message=reason
-        )
+        if project_id:
+            AIToolsModel.update_by_project_id(
+                project_id=project_id,
+                status=AI_TOOL_STATUS_FAILED,
+                message=reason,
+                completed_time=datetime.now()
+            )
+        else:
+            AIToolsModel.update(
+                task_id,
+                status=AI_TOOL_STATUS_FAILED,
+                message=reason,
+                completed_time=datetime.now()
+            )
         TasksModel.update_by_task_id(task_id, status=TASK_STATUS_FAILED)
         
         # 释放 RunningHub 槽位
@@ -902,8 +941,17 @@ def process_task_with_retry(task_type, process_func):
                 if _check_task_expiration(task):
                     # 标记任务为失败
                     TasksModel.update_by_task_id(task.task_id, status=TASK_STATUS_FAILED)
-                    AIToolsModel.update(task.task_id, status=AI_TOOL_STATUS_FAILED, message="任务已过期")
-                    
+                    AIToolsModel.update(task.task_id, status=AI_TOOL_STATUS_FAILED, message="任务已过期", completed_time=datetime.now())
+
+                    # 标记当前实现方尝试为失败
+                    try:
+                        from model.implementation_attempts import ImplementationAttemptModel, ATTEMPT_STATUS_FAILED
+                        ImplementationAttemptModel.mark_active_attempt_completed(
+                            task.task_id, ATTEMPT_STATUS_FAILED, error_message="任务已过期"
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to mark attempt as failed for expired task {task.task_id}: {e}")
+
                     # 释放 RunningHub 槽位
                     ai_tool = AIToolsModel.get_by_id(task.task_id)
                     if ai_tool and ai_tool.type in RUNNINGHUB_TASK_TYPES:
@@ -911,7 +959,7 @@ def process_task_with_retry(task_type, process_func):
                             RunningHubSlotsModel.release_slot_by_project_id(ai_tool.project_id)
                         else:
                             RunningHubSlotsModel.release_slot(task.id, source=RunningHubSlot.SOURCE_TASK)
-                    
+
                     expired_count += 1
                     logger.info(f"Task {task.task_id} marked as expired")
                     continue
@@ -920,8 +968,17 @@ def process_task_with_retry(task_type, process_func):
                 if _check_max_retry_exceeded(task):
                     # 标记任务为失败
                     TasksModel.update_by_task_id(task.task_id, status=TASK_STATUS_FAILED)
-                    AIToolsModel.update(task.task_id, status=AI_TOOL_STATUS_FAILED, message=f"超过最大重试次数({_get_max_retry_count()})")
-                    
+                    AIToolsModel.update(task.task_id, status=AI_TOOL_STATUS_FAILED, message=f"超过最大重试次数({_get_max_retry_count()})", completed_time=datetime.now())
+
+                    # 标记当前实现方尝试为失败
+                    try:
+                        from model.implementation_attempts import ImplementationAttemptModel, ATTEMPT_STATUS_FAILED
+                        ImplementationAttemptModel.mark_active_attempt_completed(
+                            task.task_id, ATTEMPT_STATUS_FAILED, error_message=f"超过最大重试次数({_get_max_retry_count()})"
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to mark attempt as failed for max-retry task {task.task_id}: {e}")
+
                     # 获取 AI 工具详情用于退还算力和释放槽位
                     ai_tool = AIToolsModel.get_by_id(task.task_id)
                     if ai_tool:

@@ -9,6 +9,7 @@ Pipeline 编排器
 4. 将步骤结果应用回 ai_tool
 """
 import logging
+from datetime import datetime
 from typing import List, Optional, Dict, Any
 import pymysql
 
@@ -390,5 +391,5 @@ class PipelineProcessor:
                 logger.info(f"ai_tool {ai_tool_id} param_prepare all completed, status -> PENDING")
             elif failed:
                 # 有失败：标记 ai_tool 失败
-                AIToolsModel.update(ai_tool_id, status=AI_TOOL_STATUS_FAILED)
+                AIToolsModel.update(ai_tool_id, status=AI_TOOL_STATUS_FAILED, completed_time=datetime.now())
                 logger.warning(f"ai_tool {ai_tool_id} param_prepare has {len(failed)} failed steps, status -> FAILED")

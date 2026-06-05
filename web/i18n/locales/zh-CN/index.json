@@ -83,6 +83,7 @@
   "enter_password": "请输入密码",
   "verification_code": "验证码",
   "enter_code": "请输入验证码",
+  "enter_verification_code": "请输入验证码",
   "new_password": "新密码",
   "enter_new_password": "请输入新密码",
   "confirm_password": "确认新密码",
