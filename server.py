@@ -7992,10 +7992,14 @@ async def export_timeline_draft(
                         logger.info(f"已复用本地上传文件: {local_asset_path} -> {file_path}")
                     else:
                         logger.info(f"正在下载视频 {idx + 1}/{len(payload.video_clips)}: {video_name}")
-                        
+
+                        # 刷新 CDN URL 签名（防止 token 过期导致 403）
+                        from utils.cdn_util import CDNUtil
+                        download_url = CDNUtil.refresh_cdn_signed_url(video_url)
+
                         # 下载视频 (异步)
                         async with httpx.AsyncClient(timeout=300.0) as http_client:
-                            async with http_client.stream('GET', video_url) as response:
+                            async with http_client.stream('GET', download_url) as response:
                                 response.raise_for_status()
                                 
                                 # 确定文件扩展名
@@ -8065,10 +8069,14 @@ async def export_timeline_draft(
                         logger.info(f"已复用本地上传音频文件: {local_asset_path} -> {file_path}")
                     else:
                         logger.info(f"正在下载音频 {idx + 1}/{len(payload.audio_clips)}: {audio_name}")
-                        
+
+                        # 刷新 CDN URL 签名（防止 token 过期导致 403）
+                        from utils.cdn_util import CDNUtil
+                        download_url = CDNUtil.refresh_cdn_signed_url(audio_url)
+
                         # 下载音频 (异步)
                         async with httpx.AsyncClient(timeout=300.0) as http_client:
-                            async with http_client.stream('GET', audio_url) as response:
+                            async with http_client.stream('GET', download_url) as response:
                                 response.raise_for_status()
                                 
                                 # 确定文件扩展名
