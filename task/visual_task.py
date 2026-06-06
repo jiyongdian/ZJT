@@ -204,7 +204,7 @@ async def _submit_new_task(ai_tool):
         bool: True 表示成功，False 表示失败
     """
     from task.visual_drivers import VideoDriverFactory
-    from config.unified_config import UnifiedConfigRegistry, get_implementation_id
+    from config.unified_config import UnifiedConfigRegistry, get_implementation_id, get_implementation_name
     from task.sync_task_executor import get_sync_task_executor
 
     ai_tool_type = ai_tool.type
@@ -225,25 +225,37 @@ async def _submit_new_task(ai_tool):
             return True  # 调度器会自动分发 PENDING 步骤
 
         # 0b. 获取 implementation 并立即记录（确保无论后续成功/失败/异常都有记录）
-        implementation_name = VideoDriverFactory.get_implementation_for_user(ai_tool_type, ai_tool.user_id)
+        # 优先使用已记录的 implementation（如由 retry driver 设置），回退到用户偏好
+        implementation_name = None
+        if ai_tool.implementation:
+            existing_impl_name = get_implementation_name(ai_tool.implementation)
+            if existing_impl_name and existing_impl_name != 'unknown':
+                implementation_name = existing_impl_name
+                logger.info(f"Using recorded implementation {existing_impl_name} (id: {ai_tool.implementation}) for task {task_id}")
+
+        if not implementation_name:
+            implementation_name = VideoDriverFactory.get_implementation_for_user(ai_tool_type, ai_tool.user_id)
+
         if implementation_name:
             implementation_id = get_implementation_id(implementation_name)
             if implementation_id > 0:
                 AIToolsModel.update(task_id, implementation=implementation_id)
                 logger.info(f"Recorded implementation {implementation_name} (id: {implementation_id}) for task {task_id}")
 
-                # 记录初始实现方尝试
-                try:
-                    from model.implementation_attempts import ImplementationAttemptModel
-                    ImplementationAttemptModel.create(
-                        ai_tool_id=task_id,
-                        implementation=implementation_id,
-                        attempt_number=1,
-                        status=0,
-                        started_at=datetime.now()
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to record implementation attempt for task {task_id}: {e}")
+                # 仅在首次提交时记录实现方尝试（attempt_number=1）
+                # 重试由 ImplementationRetryPipelineDriver 记录（attempt_number>=2）
+                if not ai_tool.implementation:
+                    try:
+                        from model.implementation_attempts import ImplementationAttemptModel
+                        ImplementationAttemptModel.create(
+                            ai_tool_id=task_id,
+                            implementation=implementation_id,
+                            attempt_number=1,
+                            status=0,
+                            started_at=datetime.now()
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to record implementation attempt for task {task_id}: {e}")
             else:
                 logger.warning(f"Implementation name '{implementation_name}' not found in IMPLEMENTATION_TO_ID mapping for task {task_id}")
 
@@ -261,8 +273,15 @@ async def _submit_new_task(ai_tool):
                 else:
                     logger.warning(f"[SyncTask] Sync task executor not running, falling back to normal processing")
 
-        # 1. 根据任务类型创建对应的驱动实例（传递 user_id 以应用用户偏好）
-        driver = VideoDriverFactory.create_driver_by_type(ai_tool_type, user_id=ai_tool.user_id)
+        # 1. 优先使用记录的 implementation 创建驱动，确保重试时使用正确的实现方
+        driver = None
+        if ai_tool.implementation:
+            impl_name = get_implementation_name(ai_tool.implementation)
+            if impl_name and impl_name != 'unknown':
+                driver = VideoDriverFactory.create_driver_by_implementation(impl_name)
+
+        if not driver:
+            driver = VideoDriverFactory.create_driver_by_type(ai_tool_type, user_id=ai_tool.user_id)
 
         if not driver:
             # 获取详细的错误原因
@@ -1123,6 +1142,29 @@ def process_task_with_retry(task_type, process_func):
                 logger.error(traceback.format_exc())
                 
         logger.info(f"Summary: processed={processed_count}, succeeded={success_count}, delayed={delayed_count}, expired={expired_count}")
+
+        # 恢复机制：检测卡死的 WAITING_BEFORE_FINISH 任务
+        # 当 pipeline 步骤已完成但 tasks.status 未同步更新时，自动修复
+        try:
+            stuck_tasks = TasksModel.list_by_type_and_status(
+                task_type, status_list=[TASK_STATUS_WAITING_BEFORE_FINISH]
+            )
+            if stuck_tasks:
+                for st in stuck_tasks:
+                    st_ai_tool = AIToolsModel.get_by_id(st.task_id)
+                    if not st_ai_tool:
+                        continue
+                    if st_ai_tool.status == AI_TOOL_STATUS_PENDING:
+                        # pipeline 步骤已完成但 tasks.status 未更新 → 修复
+                        TasksModel.update_by_task_id(st.task_id, status=TASK_STATUS_QUEUED)
+                        logger.info(f"Recovered stuck task {st.task_id}: tasks.status 5->0")
+                    elif st_ai_tool.status == AI_TOOL_STATUS_FAILED:
+                        # 任务已失败但 tasks.status 未同步
+                        TasksModel.update_by_task_id(st.task_id, status=TASK_STATUS_FAILED)
+                        logger.info(f"Recovered stuck task {st.task_id}: tasks.status 5->FAILED")
+        except Exception as e:
+            logger.warning(f"Recovery check error: {e}")
+
         return processed_count > 0, success_count > 0
             
     except Exception as e:

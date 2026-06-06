@@ -2392,3 +2392,75 @@ body {
 .eye-toggle svg {
     display: block;
 }
+
+/* ============ 常量参考页面 ============ */
+
+.constants-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+    gap: 16px;
+}
+
+.constant-card {
+    background: var(--admin-card-bg, #fff);
+    border-radius: 8px;
+    border: 1px solid var(--admin-border, #e2e8f0);
+    overflow: hidden;
+}
+
+.constant-card-header {
+    padding: 12px 16px;
+    background: #f1f5f9;
+    border-bottom: 1px solid var(--admin-border, #e2e8f0);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.constant-card-header h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--admin-text, #1e293b);
+    margin: 0 0 2px 0;
+}
+
+.constant-card-desc {
+    font-size: 12px;
+    color: var(--admin-text-muted, #64748b);
+    margin: 0;
+}
+
+.constant-type-badge {
+    font-size: 11px;
+    padding: 2px 10px;
+    border-radius: 12px;
+    background: #e0e7ff;
+    color: #4338ca;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: 12px;
+}
+
+.constant-table {
+    margin: 0;
+}
+
+.constant-table td,
+.constant-table th {
+    padding: 6px 12px;
+    font-size: 13px;
+}
+
+.constant-table code {
+    background: #f1f5f9;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+}
+
+@media (max-width: 768px) {
+    .constants-grid {
+        grid-template-columns: 1fr;
+    }
+}

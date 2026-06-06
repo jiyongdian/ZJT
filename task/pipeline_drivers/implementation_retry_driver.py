@@ -6,8 +6,8 @@ import logging
 from typing import Dict, Any
 
 from .base_pipeline_driver import BasePipelineDriver
-from model import PipelineStep, AITool, AIToolsModel
-from config.constant import AI_TOOL_STATUS_PENDING
+from model import PipelineStep, AITool, AIToolsModel, TasksModel
+from config.constant import AI_TOOL_STATUS_PENDING, TASK_STATUS_QUEUED
 from config.unified_config import get_implementation_id
 
 logger = logging.getLogger(__name__)
@@ -66,6 +66,9 @@ class ImplementationRetryPipelineDriver(BasePipelineDriver):
                 project_id=None,  # 清除旧的 project_id，让主流程重新提交
                 message=None  # 清除旧的错误信息
             )
+
+            # 同步更新 tasks 状态为 QUEUED，确保调度器能重新拾取
+            TasksModel.update_by_task_id(ai_tool.id, status=TASK_STATUS_QUEUED)
 
             # 记录重试实现方尝试
             try:

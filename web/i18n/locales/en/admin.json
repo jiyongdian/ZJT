@@ -381,5 +381,20 @@
   "toast_load_models_failed": "Failed to load models",
   "toast_model_enabled": "Model enabled",
   "toast_model_disabled": "Model disabled",
-  "toast_model_toggle_failed": "Failed to toggle model status"
+  "toast_model_toggle_failed": "Failed to toggle model status",
+
+  "nav_constants": "Constants",
+  "constants_search_placeholder": "Search class, constant name or value...",
+  "constants_all_groups": "All Groups",
+  "constants_all_types": "All Types",
+  "constants_type_int": "Integer",
+  "constants_type_string": "String",
+  "constants_col_name": "Name",
+  "constants_col_value": "Value",
+  "constants_col_label": "Description",
+  "constants_col_impl_name": "Implementation Name",
+  "constants_col_impl_id": "ID",
+  "constants_mappings_title": "Mappings",
+  "constants_count": "{{count}} constant classes",
+  "constants_load_failed": "Failed to load constants"
 }

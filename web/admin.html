@@ -94,6 +94,14 @@
                         <span v-if="unreadCount > 0" class="notification-badge">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
                     </a>
                 </li>
+                <li>
+                    <a href="#" :class="{ active: currentPage === 'constants' }" @click.prevent="switchPage('constants')">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                        </svg>
+                        <span>{{ t('nav_constants') }}</span>
+                    </a>
+                </li>
             </ul>
         </aside>
 
@@ -108,6 +116,7 @@
                 <h2 v-else-if="currentPage === 'implementations'">{{ t('nav_implementations') }}</h2>
                 <h2 v-else-if="currentPage === 'models'">{{ t('nav_models') }}</h2>
                 <h2 v-else-if="currentPage === 'notifications'">{{ t('nav_notifications') }}</h2>
+                <h2 v-else-if="currentPage === 'constants'">{{ t('nav_constants') }}</h2>
 
                 <div class="admin-user">
                     <span class="admin-user-name">{{ maskedPhone }}</span>
@@ -884,6 +893,90 @@
                                 {{ n.link_text || t('view_detail_link') }} &#8594;
                             </a>
                         </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 常量参考页面 -->
+            <section v-if="currentPage === 'constants'">
+                <div class="table-filters" style="margin-bottom: 16px;">
+                    <input type="text" class="filter-input" :placeholder="t('constants_search_placeholder')"
+                           v-model="constants.searchKeyword" style="width: 300px;">
+                    <select class="filter-select" v-model="constants.groupFilter">
+                        <option value="">{{ t('constants_all_groups') }}</option>
+                        <option v-for="group in constants.groups" :key="group.group_id" :value="group.group_id">
+                            {{ group.source }}
+                        </option>
+                    </select>
+                    <select class="filter-select" v-model="constants.typeFilter">
+                        <option value="">{{ t('constants_all_types') }}</option>
+                        <option value="int">{{ t('constants_type_int') }}</option>
+                        <option value="string">{{ t('constants_type_string') }}</option>
+                    </select>
+                    <span v-if="filteredConstantsClasses.length" style="color: #64748b; font-size: 13px; margin-left: 12px;">
+                        {{ t('constants_count', { count: filteredConstantsClasses.length }) }}
+                    </span>
+                </div>
+
+                <div v-if="constants.loading" class="loading">
+                    <div class="loading-spinner"></div>
+                    <p>{{ t('loading') }}</p>
+                </div>
+
+                <div v-else class="constants-grid">
+                    <div v-if="filteredConstantsClasses.length === 0" style="text-align: center; color: #94a3b8; padding: 40px; grid-column: 1 / -1;">
+                        {{ t('no_data') }}
+                    </div>
+                    <div v-for="cls in filteredConstantsClasses" :key="cls.class_name" class="constant-card">
+                        <div class="constant-card-header">
+                            <div>
+                                <h4>{{ cls.class_name }}</h4>
+                                <p class="constant-card-desc">{{ cls.description }}</p>
+                            </div>
+                            <span class="constant-type-badge">{{ cls.member_count }}</span>
+                        </div>
+                        <table class="admin-table constant-table">
+                            <thead>
+                                <tr>
+                                    <th>{{ t('constants_col_name') }}</th>
+                                    <th>{{ t('constants_col_value') }}</th>
+                                    <th>{{ t('constants_col_label') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="member in cls.members" :key="member.name">
+                                    <td><code>{{ member.name }}</code></td>
+                                    <td><code>{{ member.value }}</code></td>
+                                    <td>{{ member.label || '-' }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 映射关系 -->
+                <div v-if="constants.mappings && constants.mappings.length" style="margin-top: 24px;">
+                    <div class="table-container">
+                        <div class="table-header">
+                            <h3>{{ t('constants_mappings_title') }}</h3>
+                        </div>
+                        <template v-for="mapping in constants.mappings" :key="mapping.mapping_name">
+                            <p style="color: #64748b; font-size: 13px; margin: 8px 0;">{{ mapping.description }}</p>
+                            <table class="admin-table">
+                                <thead>
+                                    <tr>
+                                        <th>{{ t('constants_col_impl_name') }}</th>
+                                        <th>{{ t('constants_col_impl_id') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="entry in mapping.entries" :key="entry.name">
+                                        <td><code>{{ entry.name }}</code></td>
+                                        <td><code>{{ entry.id }}</code></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </template>
                     </div>
                 </div>
             </section>

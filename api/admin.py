@@ -1689,6 +1689,24 @@ async def admin_update_model_enabled(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/constants")
+async def admin_get_constants(
+    auth_token: str = Header(None, alias="Authorization")
+):
+    """获取系统中所有常量/枚举定义，用于管理后台常量参考页面"""
+    await require_admin(auth_token)
+
+    try:
+        from api.admin_constants_helper import build_constants_response
+        return {
+            "code": 0,
+            "data": build_constants_response()
+        }
+    except Exception as e:
+        logger.error(f"Failed to get constants: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class RetryGlobalEnabledRequest(BaseModel):
     enabled: bool
 
@@ -1711,12 +1729,10 @@ async def admin_update_retry_global_enabled(
         raise HTTPException(status_code=403, detail="此功能仅商业版本可用，请购买商业版本后解锁该功能")
 
     try:
-        from model.system_config import SystemConfigModel
-        value = "true" if request.enabled else "false"
-        SystemConfigModel.upsert(
-            env="default",
-            config_key="retry_settings.global_enabled",
-            config_value=value,
+        from config.config_util import set_dynamic_config_value
+        set_dynamic_config_value(
+            "retry_settings", "global_enabled",
+            value=request.enabled,
             value_type="bool",
             description="供应商自动切换总开关"
         )

@@ -80,9 +80,19 @@ def _execute_sync_task(task_id: int, ai_tool_type: int) -> SyncTaskResult:
 
         # 调用驱动提交任务（同步执行）
         from task.visual_drivers import VideoDriverFactory
+        from config.unified_config import get_implementation_name
 
-        # 传递 user_id 以应用用户偏好
-        driver = VideoDriverFactory.create_driver_by_type(ai_tool_type, user_id=ai_tool.user_id)
+        # 优先使用 ai_tools.implementation（如由 retry driver 设置），回退到用户偏好
+        driver = None
+        if ai_tool.implementation:
+            impl_name = get_implementation_name(ai_tool.implementation)
+            if impl_name and impl_name != 'unknown':
+                driver = VideoDriverFactory.create_driver_by_implementation(impl_name)
+                if driver:
+                    logger.info(f"[SyncTask] Using recorded implementation {impl_name} (id: {ai_tool.implementation}) for task {task_id}")
+
+        if not driver:
+            driver = VideoDriverFactory.create_driver_by_type(ai_tool_type, user_id=ai_tool.user_id)
         if not driver:
             logger.error(f"[SyncTask] Unsupported driver type: {ai_tool_type}")
             return SyncTaskResult(
@@ -381,6 +391,9 @@ class SyncTaskExecutor:
             error_type: 错误类型 (USER/SYSTEM)
             ai_tool_type: AI工具类型
         """
+        from model import AIToolsModel, TasksModel
+        from config.constant import AI_TOOL_STATUS_FAILED, TASK_STATUS_FAILED
+
         # 委托给 visual_task 的统一失败处理（尝试 before_finish 重试）
         try:
             ai_tool = AIToolsModel.get_by_id(task_id)

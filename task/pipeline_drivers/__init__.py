@@ -156,15 +156,37 @@ class PipelineDriverFactory:
 
         failed_impl_name = get_implementation_name(failed_implementation)
 
-        # 收集替代实现方（排除已失败的 + 未启用的）
-        alternatives = []
-        for impl_name in task_config.implementations:
+        # 收集替代实现方：只取失败实现方之后的下一个（有序队列，到尾即止，不回环）
+        impl_list = task_config.implementations
+        failed_index = -1
+        for i, impl_name in enumerate(impl_list):
             if impl_name == failed_impl_name:
-                continue
+                failed_index = i
+                break
+
+        if failed_index < 0:
+            logger.warning(f"Failed implementation {failed_impl_name} not found in task config implementations for ai_tool {ai_tool_id}")
+            return []
+
+        # 只考虑失败实现方之后的实现方（按 sort_order 排序的队列，向前推进）
+        alternatives = []
+        for impl_name in impl_list[failed_index + 1:]:
             # 检查实现方是否启用
             impl_config = UnifiedConfigRegistry.get_implementation(impl_name)
             if impl_config and not impl_config.is_enabled(task_config.driver_name):
                 logger.info(f"Skipping disabled implementation {impl_name} for retry")
+                continue
+            # 检查实现方是否能初始化（是否有关键配置/key）
+            try:
+                from task.visual_drivers import VideoDriverFactory
+                test_driver = VideoDriverFactory.create_driver_by_implementation(impl_name)
+                if not test_driver:
+                    create_error = VideoDriverFactory.get_last_create_error()
+                    skip_reason = create_error.get('message', '未知原因') if create_error else '未知原因'
+                    logger.info(f"Skipping implementation {impl_name} for retry: cannot initialize ({skip_reason})")
+                    continue
+            except Exception as e:
+                logger.info(f"Skipping implementation {impl_name} for retry: validation error ({e})")
                 continue
             alternatives.append(impl_name)
 

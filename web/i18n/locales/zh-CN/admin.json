@@ -381,5 +381,20 @@
   "toast_load_models_failed": "加载模型列表失败",
   "toast_model_enabled": "模型已启用",
   "toast_model_disabled": "模型已禁用",
-  "toast_model_toggle_failed": "切换模型状态失败"
+  "toast_model_toggle_failed": "切换模型状态失败",
+
+  "nav_constants": "常量参考",
+  "constants_search_placeholder": "搜索类名、常量名或值...",
+  "constants_all_groups": "全部分组",
+  "constants_all_types": "全部类型",
+  "constants_type_int": "整数型",
+  "constants_type_string": "字符串型",
+  "constants_col_name": "常量名",
+  "constants_col_value": "值",
+  "constants_col_label": "说明",
+  "constants_col_impl_name": "驱动实现名称",
+  "constants_col_impl_id": "ID",
+  "constants_mappings_title": "映射关系",
+  "constants_count": "共 {{count}} 个常量类",
+  "constants_load_failed": "加载常量定义失败"
 }

@@ -745,7 +745,17 @@ const AdminApp = {
                 feature: '新功能',
                 security: '安全'
             },
-            notificationsPollTimer: null
+            notificationsPollTimer: null,
+
+            // 常量参考
+            constants: {
+                groups: [],
+                mappings: [],
+                loading: false,
+                searchKeyword: '',
+                groupFilter: '',
+                typeFilter: ''
+            }
         };
     },
     
@@ -780,6 +790,28 @@ const AdminApp = {
             }
 
             return groups;
+        },
+
+        filteredConstantsClasses() {
+            let allClasses = [];
+            for (const group of this.constants.groups) {
+                if (this.constants.groupFilter && group.group_id !== this.constants.groupFilter) continue;
+                for (const cls of group.classes) {
+                    if (this.constants.typeFilter) {
+                        const hasType = cls.members.some(m => m.type === this.constants.typeFilter);
+                        if (!hasType) continue;
+                    }
+                    if (this.constants.searchKeyword) {
+                        const kw = this.constants.searchKeyword.toLowerCase();
+                        const match = cls.class_name.toLowerCase().includes(kw)
+                            || cls.description.toLowerCase().includes(kw)
+                            || cls.members.some(m => m.name.toLowerCase().includes(kw) || String(m.value).toLowerCase().includes(kw) || (m.label && m.label.toLowerCase().includes(kw)));
+                        if (!match) continue;
+                    }
+                    allClasses.push(cls);
+                }
+            }
+            return allClasses;
         },
 
         minDate() {
@@ -1088,6 +1120,8 @@ const AdminApp = {
                 this.loadImplementations();
             } else if (page === 'models') {
                 this.loadModels();
+            } else if (page === 'constants') {
+                this.loadConstants();
             }
         },
         
@@ -2332,6 +2366,30 @@ const AdminApp = {
                 }
             } finally {
                 this.models.loading = false;
+            }
+        },
+
+        // 加载常量参考
+        async loadConstants() {
+            if (this.constants.groups.length > 0) return; // 已加载过，不重复请求
+            this.constants.loading = true;
+            try {
+                const response = await axios.get('/api/admin/constants', {
+                    headers: { 'Authorization': `Bearer ${this.authToken}` }
+                });
+                if (response.data.code === 0) {
+                    this.constants.groups = response.data.data.groups || [];
+                    this.constants.mappings = response.data.data.mappings || [];
+                }
+            } catch (error) {
+                console.error('加载常量定义失败:', error);
+                if (error.response?.status === 401 || error.response?.status === 403) {
+                    this.handleAuthError(error.response.status);
+                } else {
+                    this.showToast(this.t('constants_load_failed'), 'error');
+                }
+            } finally {
+                this.constants.loading = false;
             }
         },
 
