@@ -9885,6 +9885,31 @@
             }
             charTagsEl.appendChild(tag);
           });
+          // 角色标签末尾添加编辑提示词按钮
+          if(validChars.length > 0) {
+            const editBtn = document.createElement('button');
+            editBtn.className = 'char-ref-edit-btn';
+            editBtn.type = 'button';
+            editBtn.title = '编辑提示词';
+            editBtn.textContent = '✏️';
+            editBtn.style.cssText = 'background: none; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; font-size: 11px; padding: 1px 6px; vertical-align: middle; margin-left: 4px;';
+            editBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              const mode = node.data.videoMode || 'first_last_frame';
+              if(mode === 'multi_reference') {
+                showPromptExpandModal(videoPromptEl, '视频提示词', (newValue) => {
+                  node.data.videoPromptText = newValue;
+                  updateShotReferences();
+                }, { enableCharacterDropdown: true, nodeId: id, dropdownKey: 'videoprompt' });
+              } else {
+                showPromptExpandModal(imagePromptEl, '图片提示词', (newValue) => {
+                  node.data.imagePrompt = newValue;
+                  updateShotReferences();
+                }, { enableCharacterDropdown: true, nodeId: id });
+              }
+            });
+            charTagsEl.appendChild(editBtn);
+          }
         }
       }
 

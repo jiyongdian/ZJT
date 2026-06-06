@@ -159,7 +159,18 @@ def get_text_to_image_model_info(user_id: str, world_id: str, auth_token: str) -
         power_default = get_computing_power_for_task(task_id, context={'resolution': default_size} if default_size else None)
         power_max = get_computing_power_for_task(task_id, context={'resolution': max_size} if max_size else None)
 
-        return {
+        # 获取第一个顺位实现方的 agent_hint
+        driver_hint = None
+        try:
+            from task.visual_drivers.driver_factory import VideoDriverFactory
+            uid = int(user_id) if user_id else None
+            hint_info = VideoDriverFactory.get_agent_hint_for_task(task_id, uid)
+            if hint_info:
+                driver_hint = hint_info['hint']
+        except Exception:
+            pass
+
+        result = {
             'success': True,
             'task_id': task_id,
             'name': config.name,
@@ -172,6 +183,10 @@ def get_text_to_image_model_info(user_id: str, world_id: str, auth_token: str) -
             'cost_per_image_default_size': power_default,
             'cost_per_image_max_size': power_max,
         }
+        if driver_hint:
+            result['driver_hint'] = driver_hint
+
+        return result
     except Exception as e:
         return {'success': False, 'error': f'获取模型信息失败: {str(e)}'}
 
@@ -3267,7 +3282,9 @@ def skill(SkillName: str) -> Dict[str, Any]:
 def generate_character_reference_audio(user_id: str, world_id: str, auth_token: str,
                                        character_name: str,
                                        style_prompt: Optional[str] = None,
-                                       text: Optional[str] = None) -> Dict[str, Any]:
+                                       text: Optional[str] = None,
+                                       model: Optional[str] = None,
+                                       vendor_id: Optional[int] = None) -> Dict[str, Any]:
     """
     为角色生成参考音频 - MCP工具函数（同步非阻塞）
 
@@ -3323,12 +3340,11 @@ def generate_character_reference_audio(user_id: str, world_id: str, auth_token: 
             asyncio.set_event_loop(loop)
         
         # 使用 LLM 智能判断角色发声类型并生成文本和风格提示词
-        # 注意：这里暂时不传 model 参数，使用默认逻辑
         final_text = loop.run_until_complete(
-            build_character_audio_text(character_data, text)
+            build_character_audio_text(character_data, text, model=model, vendor_id=vendor_id)
         )
         final_style_prompt = loop.run_until_complete(
-            build_character_audio_style_prompt(character_data, style_prompt)
+            build_character_audio_style_prompt(character_data, style_prompt, model=model, vendor_id=vendor_id)
         )
 
         # 验证 user_id

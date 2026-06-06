@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any, List, Callable
+from typing import Dict, Any, List, Callable, Optional
 from script_writer_core.file_manager import FileManager
 from script_writer_core.mcp_tool import (
     MCP_TOOLS,
@@ -103,7 +103,9 @@ class ToolExecutor:
         user_id: str,
         world_id: str,
         auth_token: str,
-        language: str = "zh-CN"
+        language: str = "zh-CN",
+        model: Optional[str] = None,
+        vendor_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """执行工具"""
         # 调试日志：记录接收到的工具名称和参数
@@ -138,13 +140,20 @@ class ToolExecutor:
                 "create_location_json", "create_prop_json"
             ]
 
+            # 需要传递 model/vendor_id 参数的工具（内部调用 LLM 时需要使用用户选择的模型）
+            model_aware_tools = [
+                "generate_character_reference_audio"
+            ]
+
             if tool_name in mcp_tool_names:
                 # MCP 工具：将 user_id, world_id, auth_token 作为前三个参数传递
+                extra_kwargs = {}
                 if tool_name in language_aware_tools:
-                    # 创建/更新工具需要传递 language 参数
-                    result = tool_func(user_id, world_id, auth_token, language=language, **tool_args)
-                else:
-                    result = tool_func(user_id, world_id, auth_token, **tool_args)
+                    extra_kwargs['language'] = language
+                if tool_name in model_aware_tools:
+                    extra_kwargs['model'] = model
+                    extra_kwargs['vendor_id'] = vendor_id
+                result = tool_func(user_id, world_id, auth_token, **extra_kwargs, **tool_args)
             else:
                 # 兼容旧逻辑，但理论上现在应该都走上面
                 tool_args["user_id"] = user_id

@@ -48,11 +48,15 @@ api_logger = _setup_api_logger()
 class BaseVideoDriver(ABC):
     """
     视频生成驱动抽象基类
-    
+
     所有视频生成驱动必须继承此类并实现以下方法：
     - submit_task: 提交任务到外部API
     - check_status: 检查任务状态
     """
+
+    # 智能体提示 - 告知 Agent 该实现方的限制和注意事项
+    # 子类按需覆盖，为空则不提示
+    agent_hint: str = ""
     
     def __init__(self, driver_name: str, driver_type: int):
         """

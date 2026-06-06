@@ -27,41 +27,73 @@ logger = logging.getLogger(__name__)
 
 
 class TaskCategory:
-    """任务分类常量"""
-    IMAGE_EDIT = 'image_edit'           # 图片编辑
-    TEXT_TO_VIDEO = 'text_to_video'     # 文生视频
-    IMAGE_TO_VIDEO = 'image_to_video'   # 图生视频
-    TEXT_TO_IMAGE = 'text_to_image'     # 文生图
-    VISUAL_ENHANCE = 'visual_enhance'   # 视觉增强
-    AUDIO = 'audio'                     # 音频
-    DIGITAL_HUMAN = 'digital_human'     # 数字人
-    OTHER = 'other'                     # 其他
+    """任务分类"""
+    _CONSTANT_GROUP = True
+    _LABELS = {
+        'IMAGE_EDIT': '图片编辑',
+        'TEXT_TO_VIDEO': '文生视频',
+        'IMAGE_TO_VIDEO': '图生视频',
+        'TEXT_TO_IMAGE': '文生图',
+        'VISUAL_ENHANCE': '视觉增强',
+        'AUDIO': '音频',
+        'DIGITAL_HUMAN': '数字人',
+        'OTHER': '其他',
+    }
+    IMAGE_EDIT = 'image_edit'
+    TEXT_TO_VIDEO = 'text_to_video'
+    IMAGE_TO_VIDEO = 'image_to_video'
+    TEXT_TO_IMAGE = 'text_to_image'
+    VISUAL_ENHANCE = 'visual_enhance'
+    AUDIO = 'audio'
+    DIGITAL_HUMAN = 'digital_human'
+    OTHER = 'other'
 
 
 class ImageMode:
-    """图片输入模式常量（用于图生视频任务）"""
-    FIRST_LAST_FRAME = 'first_last_frame'     # 首尾帧模式
-    MULTI_REFERENCE = 'multi_reference'       # 多参考图模式
-    FIRST_LAST_WITH_REF = 'first_last_with_ref'  # 首尾帧+参考图模式
+    """图片输入模式（图生视频）"""
+    _CONSTANT_GROUP = True
+    _LABELS = {
+        'FIRST_LAST_FRAME': '首尾帧模式',
+        'MULTI_REFERENCE': '多参考图模式',
+        'FIRST_LAST_WITH_REF': '首尾帧+参考图模式',
+    }
+    FIRST_LAST_FRAME = 'first_last_frame'
+    MULTI_REFERENCE = 'multi_reference'
+    FIRST_LAST_WITH_REF = 'first_last_with_ref'
 
     ALL_MODES = [FIRST_LAST_FRAME, MULTI_REFERENCE, FIRST_LAST_WITH_REF]
 
 
 class TaskProvider:
-    """任务供应商常量"""
-    DUOMI = 'duomi'           # 多米供应商
-    RUNNINGHUB = 'runninghub' # RunningHub 供应商
-    VIDU = 'vidu'             # Vidu 官方
-    VOLCENGINE = 'volcengine' # 火山引擎
-    LOCAL = 'local'           # 本地处理
+    """任务供应商"""
+    _CONSTANT_GROUP = True
+    _LABELS = {
+        'DUOMI': '多米供应商',
+        'RUNNINGHUB': 'RunningHub 供应商',
+        'VIDU': 'Vidu 官方',
+        'VOLCENGINE': '火山引擎',
+        'LOCAL': '本地处理',
+        'ZJT': 'ZJT API',
+    }
+    DUOMI = 'duomi'
+    RUNNINGHUB = 'runninghub'
+    VIDU = 'vidu'
+    VOLCENGINE = 'volcengine'
+    LOCAL = 'local'
     ZJT = 'zjt'
 
 # ============ 异步任务实现 ID 常量 ============
 class AsyncTaskImplementationId:
-    """异步任务实现 ID 常量（用于 async_tasks 表的 implementation 字段）"""
+    """异步任务实现ID"""
+    _CONSTANT_GROUP = True
+    _LABELS = {
+        'UNKNOWN': '未知',
+        'RUNNINGHUB_AUDIO': 'RunningHub 音频生成',
+        'RUNNINGHUB_FACE_MASK': 'RunningHub 人脸遮盖视频生成',
+    }
     UNKNOWN = 0
-    RUNNINGHUB_AUDIO = 1  # RunningHub 音频生成
-    RUNNINGHUB_FACE_MASK = 2  # RunningHub 人脸遮盖视频生成
+    RUNNINGHUB_AUDIO = 1
+    RUNNINGHUB_FACE_MASK = 2
 
 
 @dataclass
@@ -792,7 +824,8 @@ class UnifiedConfigRegistry:
 
 # ============ 驱动实现类名常量 ============
 class DriverImplementation:
-    """驱动实现类名常量"""
+    """驱动实现类名"""
+    _CONSTANT_GROUP = True
     # Sora2
     SORA2_DUOMI_V1 = 'sora2_duomi_v1'
 
@@ -880,7 +913,8 @@ class DriverImplementation:
 
 # ============ 驱动实现 ID 常量（用于数据库存储） ============
 class DriverImplementationId:
-    """驱动实现 ID 常量，与 DriverImplementation 字符串一一对应"""
+    """驱动实现ID（数据库存储）"""
+    _CONSTANT_GROUP = True
     UNKNOWN = 0
     SORA2_DUOMI_V1 = 1
     KLING_DUOMI_V1 = 2
@@ -1017,39 +1051,40 @@ def get_implementation_name(id: int) -> str:
 
 # ============ 业务驱动名称常量 ============
 class DriverKey:
-    """业务驱动名称常量"""
+    """业务驱动名称"""
+    _CONSTANT_GROUP = True
     # Sora2 相关
     SORA2_TEXT_TO_VIDEO = 'sora2_text_to_video'
     SORA2_IMAGE_TO_VIDEO = 'sora2_image_to_video'
-    
+
     # Kling 相关
     KLING_IMAGE_TO_VIDEO = 'kling_image_to_video'
-    
+
     # Gemini 相关
     GEMINI_IMAGE_EDIT = 'gemini_image_edit'
     GEMINI_IMAGE_EDIT_PRO = 'gemini_image_edit_pro'
     GEMINI_3_1_FLASH_IMAGE_EDIT = 'gemini_3_1_flash_image_edit'
-    
+
     # VEO3 相关
     VEO3_IMAGE_TO_VIDEO = 'veo3_image_to_video'
-    
+
     # LTX2 相关
     LTX2_IMAGE_TO_VIDEO = 'ltx2_image_to_video'
     LTX2_3_IMAGE_TO_VIDEO = 'ltx2_3_image_to_video'
 
     # Wan22 相关
     WAN22_IMAGE_TO_VIDEO = 'wan22_image_to_video'
-    
+
     # Vidu 相关
     VIDU_IMAGE_TO_VIDEO = 'vidu_image_to_video'
     VIDU_Q2_IMAGE_TO_VIDEO = 'vidu_q2_image_to_video'
-    
+
     # 数字人
     DIGITAL_HUMAN = 'digital_human'
 
     # Qwen Multi-Angle
     QWEN_MULTI_ANGLE_IMAGE_EDIT = 'qwen_multi_angle_image_edit'
-    
+
     # 文生图
     SEEDREAM_TEXT_TO_IMAGE = 'seedream_text_to_image'
     GPT_IMAGE_2 = 'gpt_image_2'
@@ -1073,55 +1108,87 @@ class DriverKey:
 
 
 # ============ Agent 相关常量 ============
-ASK_USER_MAX_CONSECUTIVE_FAILS = 2  # ask_user 连续失败/超时上限，超过则终止任务
+ASK_USER_MAX_CONSECUTIVE_FAILS = 3  # ask_user 连续失败上限（不含超时），超过则终止任务
 COMPUTING_POWER_CHECK_THRESHOLD = 1  # Agent 循环算力检查阈值，低于此值停止任务
 
 
 # ============ 任务类型 ID 常量 ============
 class TaskTypeId:
-    """任务类型ID常量"""
+    """任务类型ID"""
+    _CONSTANT_GROUP = True
+    _LABELS = {
+        'GEMINI_2_5_FLASH_IMAGE': 'Gemini 2.5 Flash 图片编辑',
+        'GEMINI_3_PRO_IMAGE': 'Gemini 3 Pro 图片编辑',
+        'GEMINI_3_1_FLASH_IMAGE': 'Gemini 3.1 Flash 图片编辑',
+        'SEEDREAM_TEXT_TO_IMAGE': 'Seedream 5.0 文生图',
+        'SEEDREAM_4_5_IMAGE': 'Seedream 4.5 图片编辑',
+        'QWEN_MULTI_ANGLE_IMAGE': 'Qwen 多角度图片编辑',
+        'GPT_IMAGE_2': 'GPT Image 2 文生图',
+        'GPT_IMAGE_2_EDIT': 'GPT Image 2 图片编辑',
+        'SORA2_TEXT_TO_VIDEO': 'Sora2 文生视频',
+        'SORA2_IMAGE_TO_VIDEO': 'Sora2 图生视频',
+        'LTX2_IMAGE_TO_VIDEO': 'LTX2.0 图生视频',
+        'LTX2_3_IMAGE_TO_VIDEO': 'LTX2.3 图生视频',
+        'WAN22_IMAGE_TO_VIDEO': 'Wan2.2 图生视频',
+        'KLING_IMAGE_TO_VIDEO': '可灵图生视频',
+        'VIDU_IMAGE_TO_VIDEO': 'Vidu 图生视频',
+        'VEO3_IMAGE_TO_VIDEO': 'VEO3.1 图生视频',
+        'VIDU_Q2_IMAGE_TO_VIDEO': 'Vidu Q2 图生视频',
+        'SEEDANCE_1_5_PRO_IMAGE_TO_VIDEO': 'Seedance 1.5 Pro 图生视频',
+        'SEEDANCE_2_0_FAST_IMAGE_TO_VIDEO': 'Seedance 2.0 Fast 图生视频',
+        'SEEDANCE_2_0_IMAGE_TO_VIDEO': 'Seedance 2.0 图生视频',
+        'GROK_IMAGE_TO_VIDEO': 'Grok 图生视频',
+        'HAPPY_HORSE_IMAGE_TO_VIDEO': 'Happy Horse 图生视频',
+        'HAPPY_HORSE_REFERENCE_TO_VIDEO': 'Happy Horse 参考生视频',
+        'HAPPY_HORSE_TEXT_TO_VIDEO': 'Happy Horse 文生视频',
+        'IMAGE_ENHANCE': '图片高清放大',
+        'VIDEO_ENHANCE': 'AI视频高清修复',
+        'CHARACTER_CARD': '创建角色卡',
+        'AUDIO_GENERATE': '音频生成',
+        'DIGITAL_HUMAN': '数字人生成',
+    }
     # 图片编辑
-    GEMINI_2_5_FLASH_IMAGE = 1          # Gemini 2.5 Flash 图片编辑（标准版）
-    GEMINI_3_PRO_IMAGE = 7              # Gemini 3 Pro 图片编辑（加强版）
-    GEMINI_3_1_FLASH_IMAGE = 17         # Gemini 3.1 Flash 图片编辑
-    SEEDREAM_TEXT_TO_IMAGE = 16         # Seedream 5.0 文生图/图片编辑
-    SEEDREAM_4_5_IMAGE = 18             # Seedream 4.5 图片编辑
-    QWEN_MULTI_ANGLE_IMAGE = 24         # Qwen 多角度图片编辑
-    GPT_IMAGE_2 = 25                     # GPT Image 2 文生图
-    GPT_IMAGE_2_EDIT = 26                # GPT Image 2 图片编辑
+    GEMINI_2_5_FLASH_IMAGE = 1
+    GEMINI_3_PRO_IMAGE = 7
+    GEMINI_3_1_FLASH_IMAGE = 17
+    SEEDREAM_TEXT_TO_IMAGE = 16
+    SEEDREAM_4_5_IMAGE = 18
+    QWEN_MULTI_ANGLE_IMAGE = 24
+    GPT_IMAGE_2 = 25
+    GPT_IMAGE_2_EDIT = 26
 
     # 文生视频
-    SORA2_TEXT_TO_VIDEO = 2             # Sora2 文生视频
-    
+    SORA2_TEXT_TO_VIDEO = 2
+
     # 图生视频
-    SORA2_IMAGE_TO_VIDEO = 3            # Sora2 图生视频
-    LTX2_IMAGE_TO_VIDEO = 10            # LTX2.0 图生视频
-    LTX2_3_IMAGE_TO_VIDEO = 20          # LTX2.3 图生视频
-    WAN22_IMAGE_TO_VIDEO = 11           # Wan2.2 图生视频
-    KLING_IMAGE_TO_VIDEO = 12           # 可灵图生视频
-    VIDU_IMAGE_TO_VIDEO = 14            # Vidu 图生视频
-    VEO3_IMAGE_TO_VIDEO = 15            # VEO3.1 图生视频
-    VIDU_Q2_IMAGE_TO_VIDEO = 19         # Vidu Q2 图生视频
-    SEEDANCE_1_5_PRO_IMAGE_TO_VIDEO = 21  # Seedance 1.5 Pro 图生视频
-    SEEDANCE_2_0_FAST_IMAGE_TO_VIDEO = 22 # Seedance 2.0 Fast 图生视频
-    SEEDANCE_2_0_IMAGE_TO_VIDEO = 23      # Seedance 2.0 图生视频
-    GROK_IMAGE_TO_VIDEO = 27             # Grok 图生视频
-    HAPPY_HORSE_IMAGE_TO_VIDEO = 28      # Happy Horse 图生视频
-    HAPPY_HORSE_REFERENCE_TO_VIDEO = 29  # Happy Horse 参考生视频
-    HAPPY_HORSE_TEXT_TO_VIDEO = 30       # Happy Horse 文生视频
+    SORA2_IMAGE_TO_VIDEO = 3
+    LTX2_IMAGE_TO_VIDEO = 10
+    LTX2_3_IMAGE_TO_VIDEO = 20
+    WAN22_IMAGE_TO_VIDEO = 11
+    KLING_IMAGE_TO_VIDEO = 12
+    VIDU_IMAGE_TO_VIDEO = 14
+    VEO3_IMAGE_TO_VIDEO = 15
+    VIDU_Q2_IMAGE_TO_VIDEO = 19
+    SEEDANCE_1_5_PRO_IMAGE_TO_VIDEO = 21
+    SEEDANCE_2_0_FAST_IMAGE_TO_VIDEO = 22
+    SEEDANCE_2_0_IMAGE_TO_VIDEO = 23
+    GROK_IMAGE_TO_VIDEO = 27
+    HAPPY_HORSE_IMAGE_TO_VIDEO = 28
+    HAPPY_HORSE_REFERENCE_TO_VIDEO = 29
+    HAPPY_HORSE_TEXT_TO_VIDEO = 30
 
     # 图片/视频 增强
-    IMAGE_ENHANCE = 4                   # 图片高清放大
-    VIDEO_ENHANCE = 5                   # AI视频高清修复
-    
+    IMAGE_ENHANCE = 4
+    VIDEO_ENHANCE = 5
+
     # 其他
-    CHARACTER_CARD = 8                  # 创建角色卡
-    
+    CHARACTER_CARD = 8
+
     # 音频
-    AUDIO_GENERATE = 9                  # 音频生成
-    
+    AUDIO_GENERATE = 9
+
     # 数字人
-    DIGITAL_HUMAN = 13                  # 数字人生成
+    DIGITAL_HUMAN = 13
 
 
 # ============ 所有任务配置（声明式定义）============

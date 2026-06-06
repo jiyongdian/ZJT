@@ -1,0 +1,11 @@
+{
+  "sop-new-script": {
+    "allowed_tools": []
+  },
+  "sop-continue-script": {
+    "allowed_tools": []
+  },
+  "sop-split-script": {
+    "allowed_tools": []
+  }
+}

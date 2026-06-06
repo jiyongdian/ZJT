@@ -1891,7 +1891,7 @@ async def submit_to_database(request: SubmitDatabaseRequest):
             scripts = file_manager.list_scripts(str(user_id), str(world_id))
             for script in scripts:
                 try:
-                    script_data = file_manager.get_script(script['name'], str(user_id), str(world_id))
+                    script_data = file_manager.get_script(script['file_name'], str(user_id), str(world_id))
                     if script_data and isinstance(script_data, dict):
                         title = script_data.get('title', script['name'])
                         episode_number = script_data.get('episode_number')

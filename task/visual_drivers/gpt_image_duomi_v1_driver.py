@@ -15,6 +15,8 @@ class GptImageDuomiV1Driver(BaseVideoDriver):
     支持文生图任务
     """
 
+    agent_hint = "提示词长度请控制在5000字符以内，超出将被API拒绝。请精简描述，避免冗余。"
+
     # 比例映射：前端比例 -> API 支持的比例
     # API 仅支持 1:1, 3:2, 2:3，需要将 16:9 映射为 3:2，9:16 映射为 2:3
     RATIO_MAPPING = {

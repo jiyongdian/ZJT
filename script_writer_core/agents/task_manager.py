@@ -550,6 +550,7 @@ class TaskManager:
 
                     result = db_verification.result or {}
                     result["success"] = db_verification.status == "approved"
+                    result["status"] = db_verification.status  # "approved" 或 "rejected" 等
                     return result
             except Exception as e:
                 logger.error(f"Error polling verification {verification.verification_id}: {e}")
@@ -562,7 +563,7 @@ class TaskManager:
             AgentVerificationsModel.submit_result(
                 verification.verification_id,
                 status='cancelled',
-                result={"success": False, "error": "验证超时"}
+                result={"success": False, "status": "timeout", "error": "验证超时"}
             )
         except Exception as e:
             logger.error(f"Failed to cancel verification on timeout: {e}")
@@ -584,7 +585,7 @@ class TaskManager:
             'error': '验证超时'
         })
 
-        return {"success": False, "error": "验证超时"}
+        return {"success": False, "status": "timeout", "error": "验证超时"}
     
     def submit_verification(
         self,

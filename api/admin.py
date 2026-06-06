@@ -1697,7 +1697,7 @@ async def admin_get_constants(
     await require_admin(auth_token)
 
     try:
-        from api.admin_constants_helper import build_constants_response
+        from config.constants_registry import build_constants_response
         return {
             "code": 0,
             "data": build_constants_response()

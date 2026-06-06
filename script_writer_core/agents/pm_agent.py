@@ -389,8 +389,17 @@ class PMAgent(BaseAgent, AskUserMixin):
             tool_name = tool_call.function.name
             try:
                 tool_args = json.loads(tool_call.function.arguments) if isinstance(tool_call.function.arguments, str) else tool_call.function.arguments
-            except:
-                tool_args = {}
+            except json.JSONDecodeError as e:
+                logger.error(f"{self.agent_id}: Failed to parse tool arguments for {tool_name}: {e}")
+                logger.error(f"{self.agent_id}: Raw arguments: {tool_call.function.arguments[:500]}")
+                error_msg = f"JSON参数解析失败: {str(e)}。请检查参数格式，确保所有字符串中的引号和特殊字符已正确转义。"
+                result = {"error": error_msg}
+                self.add_to_history("tool", {
+                    "tool_call_id": tool_call.id,
+                    "name": tool_name,
+                    "content": json.dumps(result, ensure_ascii=False)
+                })
+                continue
 
             result = self._execute_tool(tool_name, tool_args, task, session_data)
 
@@ -457,7 +466,9 @@ class PMAgent(BaseAgent, AskUserMixin):
                     user_id=self.user_id,
                     world_id=self.world_id,
                     auth_token=self.auth_token,
-                    language=getattr(self, 'current_language', 'zh-CN')
+                    language=getattr(self, 'current_language', 'zh-CN'),
+                    model=self.model,
+                    vendor_id=task.vendor_id,
                 )
         except InsufficientComputingPowerError:
             raise
@@ -535,7 +546,10 @@ class PMAgent(BaseAgent, AskUserMixin):
             task_manager=self.task_manager,
             task_id=task.task_id,
             max_iterations=expert_config.get("max_iterations", 10),
-            language=task.language
+            language=task.language,
+            max_consecutive_no_progress=expert_config.get("max_consecutive_no_progress", 3),
+            max_consecutive_errors=expert_config.get("max_consecutive_errors", 3),
+            max_total_errors=expert_config.get("max_total_errors", 7)
         )
 
         # 合并 LLM 提供的 conversation_history 和 PM 已有的 ask_user 交互
