@@ -38,6 +38,24 @@ class ImplementationAttemptModel:
     """实现方尝试记录数据库操作"""
 
     @staticmethod
+    def _build_date_filter(
+        days: int,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        use_current_date: bool = False
+    ) -> tuple:
+        if start_date and end_date:
+            return "a.create_at >= %s AND a.create_at < DATE_ADD(%s, INTERVAL 1 DAY)", [start_date, end_date]
+        if start_date:
+            return "a.create_at >= %s", [start_date]
+        if end_date:
+            return "a.create_at < DATE_ADD(%s, INTERVAL 1 DAY)", [end_date]
+
+        interval_days = max(days - 1, 0) if use_current_date else days
+        base_func = "CURDATE()" if use_current_date else "NOW()"
+        return f"a.create_at >= DATE_SUB({base_func}, INTERVAL %s DAY)", [interval_days]
+
+    @staticmethod
     def create(
         ai_tool_id: int,
         implementation: int,
@@ -201,7 +219,7 @@ class ImplementationAttemptModel:
             return set()
 
     @staticmethod
-    def get_stats(days: int = 7) -> List[Dict[str, Any]]:
+    def get_stats(days: int = 7, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         获取各实现方的统计数据（从 implementation_attempts 表）
 
@@ -213,7 +231,8 @@ class ImplementationAttemptModel:
         Returns:
             统计结果列表
         """
-        sql = """
+        date_filter, date_params = ImplementationAttemptModel._build_date_filter(days, start_date, end_date)
+        sql = f"""
             SELECT
                 t.type,
                 a.implementation,
@@ -225,7 +244,7 @@ class ImplementationAttemptModel:
                     ELSE NULL END) as avg_duration_ms
             FROM implementation_attempts a
             JOIN ai_tools t ON t.id = a.ai_tool_id
-            WHERE a.create_at >= DATE_SUB(NOW(), INTERVAL %s DAY)
+            WHERE {date_filter}
                 AND a.status IN (%s, %s)
                 AND a.implementation > 0
             GROUP BY t.type, a.implementation
@@ -236,7 +255,7 @@ class ImplementationAttemptModel:
             results = execute_query(sql, (
                 ATTEMPT_STATUS_SUCCESS,
                 ATTEMPT_STATUS_FAILED,
-                days,
+                *date_params,
                 ATTEMPT_STATUS_SUCCESS,
                 ATTEMPT_STATUS_FAILED
             ), fetch_all=True)
@@ -260,6 +279,69 @@ class ImplementationAttemptModel:
             return stats
         except Exception as e:
             logger.error(f"Failed to get implementation attempt stats: {e}")
+            raise
+
+    @staticmethod
+    def get_daily_stats(days: int = 7, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        获取按天聚合的实现方统计数据。
+
+        Args:
+            days: 统计天数范围
+
+        Returns:
+            按日期、类型、实现方聚合的统计列表
+        """
+        date_filter, date_params = ImplementationAttemptModel._build_date_filter(
+            days,
+            start_date,
+            end_date,
+            use_current_date=True
+        )
+        sql = f"""
+            SELECT
+                DATE(a.create_at) as stat_date,
+                t.type,
+                a.implementation,
+                COUNT(*) as total_count,
+                SUM(CASE WHEN a.status = %s THEN 1 ELSE 0 END) as success_count,
+                SUM(CASE WHEN a.status = %s THEN 1 ELSE 0 END) as fail_count
+            FROM implementation_attempts a
+            JOIN ai_tools t ON t.id = a.ai_tool_id
+            WHERE {date_filter}
+                AND a.status IN (%s, %s)
+                AND a.implementation > 0
+            GROUP BY DATE(a.create_at), t.type, a.implementation
+            ORDER BY stat_date ASC, total_count DESC
+        """
+
+        try:
+            results = execute_query(sql, (
+                ATTEMPT_STATUS_SUCCESS,
+                ATTEMPT_STATUS_FAILED,
+                *date_params,
+                ATTEMPT_STATUS_SUCCESS,
+                ATTEMPT_STATUS_FAILED
+            ), fetch_all=True)
+
+            stats = []
+            for row in results:
+                total = int(row['total_count'])
+                success_count = int(row['success_count']) if row['success_count'] else 0
+                fail_count = int(row['fail_count']) if row['fail_count'] else 0
+                success_rate = (success_count / total * 100) if total > 0 else 0.0
+                stats.append({
+                    'date': row['stat_date'].isoformat() if hasattr(row['stat_date'], 'isoformat') else str(row['stat_date']),
+                    'type': row['type'],
+                    'implementation': row['implementation'],
+                    'total_count': total,
+                    'success_count': success_count,
+                    'fail_count': fail_count,
+                    'success_rate': round(success_rate, 2)
+                })
+            return stats
+        except Exception as e:
+            logger.error(f"Failed to get daily implementation attempt stats: {e}")
             raise
 
 
