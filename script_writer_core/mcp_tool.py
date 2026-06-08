@@ -3109,6 +3109,38 @@ MCP_TOOLS = [
             },
             "required": ["task_id"]
         }
+    },
+    {
+        "name": "generate_character_variant_image",
+        "description": "为角色生成造型变体图（服装/造型三视角参考图）。变体图与主图格式一致（正面、侧面、背面三视角），只是服装/造型不同。生成完成后自动写入角色的 reference_images 数组。注意：角色必须已存在且已有主参考图(reference_image)，才能生成变体图。不同生图模型算力价格不同，请先调用 get_text_to_image_model_info 了解当前模型。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "character_name": {
+                    "type": "string",
+                    "description": "角色名称（必填），如\"豆包\""
+                },
+                "variant_label": {
+                    "type": "string",
+                    "description": "变体标签（必填），如\"晚礼服\"、\"战斗装\"、\"黑化形态\"，用于在 reference_images 中标识该变体"
+                },
+                "variant_prompt": {
+                    "type": "string",
+                    "description": "三视角提示词（必填），与主图模板一致但服装/造型描述不同。必须包含三视角（正面、侧面、背面）的描述，末尾必须包含反文字声明"
+                },
+                "aspect_ratio": {
+                    "type": "string",
+                    "description": "图片宽高比（默认：16:9）",
+                    "default": "16:9"
+                },
+                "force_update": {
+                    "type": "boolean",
+                    "description": "是否覆盖已有同标签变体图（默认：False）",
+                    "default": False
+                }
+            },
+            "required": ["character_name", "variant_label", "variant_prompt"]
+        }
     }
 ]
 
@@ -3520,10 +3552,10 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
         # 验证item_type和item_name参数
         if item_type is not None:
             # 检测是否应该使用4宫格生成
-            if not isinstance(item_type, int) or item_type not in [1, 2, 3, 4, 5, 6]:
+            if not isinstance(item_type, int) or item_type not in [1, 2, 3, 4, 5, 6, 7]:
                 return {
                     'success': False,
-                    'error': 'item_type参数错误。正确值：1=角色, 2=地点, 3=道具, 4=角色四宫格, 5=场景四宫格, 6=道具四宫格'
+                    'error': 'item_type参数错误。正确值：1=角色, 2=地点, 3=道具, 4=角色四宫格, 5=场景四宫格, 6=道具四宫格, 7=角色变体图'
                 }
 
             # 如果是单个角色/场景/道具类型(1/2/3)，但没有设置is_grid=True，给出提示
@@ -3548,7 +3580,7 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
             # 检查是否已存在参考图像（除非强制更新）
             if not force_update_exist_image:
                 file_manager = get_file_manager()
-                
+
                 # 根据item_type检查对应的JSON文件
                 existing_data = None
                 if item_type == 1:  # 角色
@@ -3557,8 +3589,23 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
                     existing_data = file_manager.get_location_json(item_name, user_id, world_id)
                 elif item_type == 3:  # 道具
                     existing_data = file_manager.get_prop_json(item_name, user_id, world_id)
-                
-                # 如果找到数据且已有参考图像，则跳过生成
+                elif item_type == 7:  # 角色变体图 - item_name 格式为 "角色名|变体标签"
+                    char_name = item_name.split('|')[0] if '|' in item_name else item_name
+                    variant_label = item_name.split('|')[1] if '|' in item_name else ''
+                    existing_data = file_manager.get_character_json(char_name, user_id, world_id)
+                    # 变体图不检查 reference_image，只检查 reference_images 中是否已有同标签的条目
+                    if existing_data and variant_label:
+                        existing_variants = existing_data.get('reference_images', [])
+                        if any(v.get('label') == variant_label for v in existing_variants if isinstance(v, dict)):
+                            return {
+                                'success': False,
+                                'error': f'角色 "{char_name}" 已存在标签为 "{variant_label}" 的变体图，如需更新请设置 force_update_exist_image=True',
+                                'skip_reason': 'already_has_variant'
+                            }
+                    # 变体图不需要检查 reference_image，跳过后续检查
+                    existing_data = None
+
+                # 如果找到数据且已有参考图像，则跳过生成（仅对1/2/3类型）
                 if existing_data and existing_data.get('reference_image'):
                     item_type_name = {1: '角色', 2: '地点', 3: '道具'}.get(item_type, '项目')
                     return {
@@ -3942,6 +3989,84 @@ def generate_4grid_character_images(user_id: str, world_id: str, auth_token: str
     # 转换返回格式以保持向后兼容
     if result.get('success') and 'items' in result:
         result['characters'] = result['items']
+
+    return result
+
+
+def generate_character_variant_image(user_id: str, world_id: str, auth_token: str,
+                                      character_name: str, variant_label: str,
+                                      variant_prompt: str, aspect_ratio: str = "16:9",
+                                      force_update: bool = False) -> Dict[str, Any]:
+    """
+    生成角色造型变体图 - 为角色生成指定造型/服装的三视角参考图，并写入 reference_images 数组
+
+    变体图与主图（reference_image）格式相同，都是三视角参考图（正面、侧面、背面），但服装/造型不同。
+    生成的图片完成后会自动追加到角色 JSON 的 reference_images 数组中。
+
+    注意：不同生图模型算力价格不同，请先调用 get_text_to_image_model_info 了解当前模型。
+
+    Args:
+        user_id: 用户ID（必填）
+        world_id: 世界ID（必填）
+        auth_token: 认证令牌（必填）
+        character_name: 角色名称（必填），如"豆包"
+        variant_label: 变体标签（必填），如"晚礼服"、"战斗装"，用于在 reference_images 中标识该变体
+        variant_prompt: 三视角提示词（必填），与主图模板一致但服装/造型描述不同
+        aspect_ratio: 图片宽高比（默认：16:9）
+        force_update: 是否覆盖已有同标签变体图（默认：False）
+
+    Returns:
+        dict: 操作结果，包含 success 状态、project_ids、角色名、变体标签等
+    """
+    # 检查角色是否存在
+    file_manager = get_file_manager()
+    character_data = file_manager.get_character_json(character_name, user_id, world_id)
+    if not character_data:
+        return {
+            'success': False,
+            'error': f'角色 "{character_name}" 不存在，请先创建角色'
+        }
+
+    # 检查是否已有同标签的变体图（除非 force_update=True）
+    if not force_update:
+        existing_variants = character_data.get('reference_images', [])
+        if any(v.get('label') == variant_label for v in existing_variants if isinstance(v, dict)):
+            return {
+                'success': False,
+                'error': f'角色 "{character_name}" 已存在标签为 "{variant_label}" 的变体图，如需更新请设置 force_update=True',
+                'existing_variant': [v for v in existing_variants if v.get('label') == variant_label][0],
+                'skip_reason': 'already_has_variant'
+            }
+
+    # 检查角色是否已有主参考图（变体图需要基于主图的角色特征）
+    if not character_data.get('reference_image'):
+        return {
+            'success': False,
+            'error': f'角色 "{character_name}" 尚未生成主参考图(reference_image)，请先生成主图后再生成变体图',
+            'skip_reason': 'no_main_image'
+        }
+
+    # 构造复合 item_name：角色名|变体标签，用于任务追踪和回调时区分
+    composite_item_name = f"{character_name}|{variant_label}"
+
+    # 调用 generate_text_to_image 提交生图任务，item_type=7 表示角色变体图
+    result = generate_text_to_image(
+        user_id=user_id,
+        world_id=world_id,
+        auth_token=auth_token,
+        prompt=variant_prompt,
+        aspect_ratio=aspect_ratio,
+        item_type=7,
+        item_name=composite_item_name,
+        force_update_exist_image=force_update,
+        is_grid=False
+    )
+
+    # 添加角色名和变体标签到返回结果中
+    if result.get('success'):
+        result['character_name'] = character_name
+        result['variant_label'] = variant_label
+        result['composite_item_name'] = composite_item_name
 
     return result
 

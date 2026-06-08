@@ -182,6 +182,25 @@ class ImplementationAttemptModel:
             return False
 
     @staticmethod
+    def get_attempted_implementations(ai_tool_id: int) -> set:
+        """
+        获取某个 ai_tool 已经尝试过的所有实现方 ID
+
+        Args:
+            ai_tool_id: ai_tools.id
+
+        Returns:
+            已尝试的实现方 ID 集合
+        """
+        sql = "SELECT DISTINCT implementation FROM implementation_attempts WHERE ai_tool_id = %s"
+        try:
+            results = execute_query(sql, (ai_tool_id,), fetch_all=True)
+            return {row['implementation'] for row in results} if results else set()
+        except Exception as e:
+            logger.error(f"Failed to get attempted implementations for ai_tool_id={ai_tool_id}: {e}")
+            return set()
+
+    @staticmethod
     def get_stats(days: int = 7) -> List[Dict[str, Any]]:
         """
         获取各实现方的统计数据（从 implementation_attempts 表）

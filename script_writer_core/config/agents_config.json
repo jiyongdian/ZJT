@@ -153,11 +153,14 @@
         "read_character_json",
         "generate_text_to_image",
         "generate_4grid_character_images",
+        "generate_character_variant_image",
         "generate_character_reference_audio",
         "check_reference_audio_status",
         "get_text_to_image_model_info",
         "get_task_status",
         "read_world",
+        "list_script_jsons",
+        "read_script_json",
         "ask_user"
       ],
       "summary_only": true

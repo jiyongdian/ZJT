@@ -156,21 +156,26 @@ class PipelineDriverFactory:
 
         failed_impl_name = get_implementation_name(failed_implementation)
 
-        # 收集替代实现方：只取失败实现方之后的下一个（有序队列，到尾即止，不回环）
-        impl_list = task_config.implementations
-        failed_index = -1
-        for i, impl_name in enumerate(impl_list):
-            if impl_name == failed_impl_name:
-                failed_index = i
-                break
+        # 收集替代实现方：按 sort_order 优先级从头遍历，跳过已尝试过的（包括当前失败的）
+        impl_list = [impl['name'] for impl in task_config._get_implementations_info()]
 
-        if failed_index < 0:
-            logger.warning(f"Failed implementation {failed_impl_name} not found in task config implementations for ai_tool {ai_tool_id}")
-            return []
+        # 获取该 ai_tool 历史上已尝试过的所有实现方
+        attempted_ids = set()
+        try:
+            from model.implementation_attempts import ImplementationAttemptModel
+            attempted_ids = ImplementationAttemptModel.get_attempted_implementations(ai_tool_id)
+        except Exception as e:
+            logger.warning(f"Failed to get attempted implementations for ai_tool {ai_tool_id}: {e}")
 
-        # 只考虑失败实现方之后的实现方（按 sort_order 排序的队列，向前推进）
+        attempted_names = {get_implementation_name(i) for i in attempted_ids}
+        attempted_names.discard(None)
+        attempted_names.discard('unknown')
+        attempted_names.add(failed_impl_name)  # 确保当前失败的也被跳过
+
         alternatives = []
-        for impl_name in impl_list[failed_index + 1:]:
+        for impl_name in impl_list:
+            if impl_name in attempted_names:
+                continue
             # 检查实现方是否启用
             impl_config = UnifiedConfigRegistry.get_implementation(impl_name)
             if impl_config and not impl_config.is_enabled(task_config.driver_name):

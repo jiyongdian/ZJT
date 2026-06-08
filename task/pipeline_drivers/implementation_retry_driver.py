@@ -58,6 +58,9 @@ class ImplementationRetryPipelineDriver(BasePipelineDriver):
                     'error': f'未知的实现方: {target_implementation}'
                 }
 
+            # 在更新前保存旧的 implementation 值（用于 result_data 记录）
+            old_implementation = ai_tool.implementation
+
             # 更新 ai_tools 实现方和状态
             AIToolsModel.update(
                 ai_tool.id,
@@ -87,13 +90,13 @@ class ImplementationRetryPipelineDriver(BasePipelineDriver):
 
             self.logger.info(
                 f"Implementation retry: ai_tool_id={ai_tool.id}, "
-                f"old_impl={ai_tool.implementation}, new_impl={target_impl_id} ({target_implementation})"
+                f"old_impl={old_implementation}, new_impl={target_impl_id} ({target_implementation})"
             )
 
             return {
                 'success': True,
                 'result_data': {
-                    'old_implementation': ai_tool.implementation,
+                    'old_implementation': old_implementation,
                     'new_implementation': target_impl_id,
                     'new_implementation_name': target_implementation
                 }

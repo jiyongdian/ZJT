@@ -565,24 +565,43 @@ class ExpertAgent(BaseAgent, AskUserMixin):
             wid = self.world_id
             seen = set()
 
-            # 工具名 → task_id 获取函数 的映射
+            # 工具名 → (task_id 获取函数, 视频分类回退) 的映射
+            # category 仅在 getter 返回 None 时用于回退查找第一个可用模型
             tool_task_map = {
-                'generate_text_to_image': _get_text_to_image_task_id,
-                'edit_image': _get_text_to_image_task_id,
-                'generate_4grid_character_images': _get_text_to_image_task_id,
-                'generate_4grid_location_images': _get_text_to_image_task_id,
-                'generate_4grid_prop_images': _get_text_to_image_task_id,
-                'generate_text_to_video': _get_text_to_video_task_id,
-                'image_to_video': _get_image_to_video_task_id,
+                'generate_text_to_image': (_get_text_to_image_task_id, None),
+                'edit_image': (_get_text_to_image_task_id, None),
+                'generate_4grid_character_images': (_get_text_to_image_task_id, None),
+                'generate_4grid_location_images': (_get_text_to_image_task_id, None),
+                'generate_4grid_prop_images': (_get_text_to_image_task_id, None),
+                'generate_text_to_video': (_get_text_to_video_task_id, 'text_to_video'),
+                'image_to_video': (_get_image_to_video_task_id, 'image_to_video'),
             }
 
             for tool_def in tool_defs:
                 tool_name = tool_def.get("function", {}).get("name", "")
-                getter = tool_task_map.get(tool_name)
-                if not getter:
+                entry = tool_task_map.get(tool_name)
+                if not entry:
                     continue
 
+                getter, fallback_category = entry
                 task_id = getter(uid, wid)
+
+                # 回退逻辑：与 enterprise/tools/video_tools.py 的 _get_video_task_id 保持一致
+                # 当用户未设置视频模型偏好时，getter 返回 None，
+                # 此时使用分类下第一个启用的模型，确保 hint 能被注入
+                if not task_id and fallback_category:
+                    try:
+                        from config.unified_config import UnifiedConfigRegistry
+                        configs = UnifiedConfigRegistry.get_by_category(fallback_category)
+                        if configs:
+                            enabled = [c for c in configs if c.enabled and not getattr(c, 'hidden', False)]
+                            if enabled:
+                                task_id = enabled[0].id
+                            elif configs:
+                                task_id = configs[0].id
+                    except Exception as e:
+                        logger.debug(f"Failed to fallback task_id for {tool_name}: {e}")
+
                 if not task_id:
                     continue
 
