@@ -13,6 +13,7 @@ from model.computing_power import ComputingPowerModel
 from model.computing_power_log import ComputingPowerLogModel
 from model.video_workflow import VideoWorkflowModel
 from model.ai_tools import AIToolsModel
+from model.implementation_attempts import ImplementationAttemptModel
 from config.unified_config import UnifiedConfigRegistry, IMPLEMENTATION_FROM_ID
 from model.system_config import SystemConfigModel
 from model.system_config_history import SystemConfigHistoryModel
@@ -126,7 +127,7 @@ async def admin_model_analysis(
     await require_admin(auth_token)
 
     try:
-        raw_stats = AIToolsModel.get_implementation_stats(days=days)
+        raw_stats = ImplementationAttemptModel.get_stats(days=days)
 
         # 获取类型ID -> 名称映射
         type_name_map = UnifiedConfigRegistry.get_name_map()
@@ -1501,7 +1502,7 @@ async def admin_get_implementation_configs(
                 impl_data = {
                     'name': impl_name,
                     'display_name': display_name if impl_config.site_number is not None else (db_config.get('display_name') if db_config else None) or display_name,  # 聚合站点始终使用系统配置名称，其他实现方优先使用数据库值
-                    'enabled': db_config.get('enabled') if db_config and db_config.get('enabled') is not None else impl_config.enabled,
+                    'enabled': bool(db_config.get('enabled')) if db_config and db_config.get('enabled') is not None else impl_config.enabled,
                     'sort_order': db_config.get('sort_order') if db_config else impl_config.sort_order,  # 优先使用数据库排序，否则使用配置文件默认值
                     'driver_key': db_config.get('driver_key') if db_config else impl_config.driver_class,  # 使用 driver_key 字段
                     # 优先使用任务配置中的 computing_power，其次使用实现方的默认算力
@@ -1559,9 +1560,18 @@ async def admin_get_implementation_configs(
             for driver_key, impls in sorted(driver_key_groups.items())
         ]
 
+        # 获取重试总开关状态
+        retry_global_enabled = True
+        try:
+            from config.config_util import get_dynamic_config_value
+            retry_global_enabled = get_dynamic_config_value("retry_settings", "global_enabled", default=False)
+        except Exception:
+            pass
+
         return {
             "code": 0,
-            "data": result
+            "data": result,
+            "retry_global_enabled": retry_global_enabled
         }
     except Exception as e:
         logger.error(f"Failed to get implementation configs: {e}")
@@ -1676,4 +1686,63 @@ async def admin_update_model_enabled(
         raise
     except Exception as e:
         logger.error(f"Failed to update model {model_id} enabled: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/constants")
+async def admin_get_constants(
+    auth_token: str = Header(None, alias="Authorization")
+):
+    """获取系统中所有常量/枚举定义，用于管理后台常量参考页面"""
+    await require_admin(auth_token)
+
+    try:
+        from config.constants_registry import build_constants_response
+        return {
+            "code": 0,
+            "data": build_constants_response()
+        }
+    except Exception as e:
+        logger.error(f"Failed to get constants: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class RetryGlobalEnabledRequest(BaseModel):
+    enabled: bool
+
+
+@router.put("/retry-global-enabled")
+async def admin_update_retry_global_enabled(
+    request: RetryGlobalEnabledRequest,
+    auth_token: str = Header(None, alias="Authorization")
+):
+    """
+    更新供应商自动切换总开关
+
+    企业版可用，社区版返回 403
+    """
+    from config.strategy.edition_strategy import IS_COMMUNITY_EDITION
+
+    await require_admin(auth_token)
+
+    if IS_COMMUNITY_EDITION:
+        raise HTTPException(status_code=403, detail="此功能仅商业版本可用，请购买商业版本后解锁该功能")
+
+    try:
+        from config.config_util import set_dynamic_config_value
+        set_dynamic_config_value(
+            "retry_settings", "global_enabled",
+            value=request.enabled,
+            value_type="bool",
+            description="供应商自动切换总开关"
+        )
+        logger.info(f"Retry global enabled set to {request.enabled}")
+
+        return {
+            "code": 0,
+            "message": f"供应商自动切换已{'开启' if request.enabled else '关闭'}",
+            "data": {"enabled": request.enabled}
+        }
+    except Exception as e:
+        logger.error(f"Failed to update retry global enabled: {e}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -4,7 +4,7 @@
 定期计算并更新 implementation_stats_cache 表
 """
 import logging
-from model.ai_tools import AIToolsModel
+from model.implementation_attempts import ImplementationAttemptModel
 from model.implementation_stats_cache import ImplementationStatsCacheModel
 
 logger = logging.getLogger(__name__)
@@ -14,7 +14,7 @@ def refresh_implementation_stats_cache():
     """
     刷新实现方统计数据缓存
 
-    计算 7天 和 30天 两个时间范围的统计，
+    从 implementation_attempts 表计算 7天 和 30天 两个时间范围的统计，
     并更新到 implementation_stats_cache 表。
     """
     logger.info("[StatsCache] Starting implementation stats cache refresh")
@@ -24,8 +24,8 @@ def refresh_implementation_stats_cache():
             # 清除旧缓存
             ImplementationStatsCacheModel.clear_by_days(days)
 
-            # 计算新统计
-            stats = AIToolsModel.get_implementation_stats(days)
+            # 计算新统计（从 implementation_attempts 表）
+            stats = ImplementationAttemptModel.get_stats(days)
             logger.info(f"[StatsCache] Calculated {len(stats)} records for {days}-day stats")
 
             # 写入缓存

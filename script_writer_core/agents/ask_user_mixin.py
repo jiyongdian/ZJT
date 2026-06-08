@@ -109,8 +109,13 @@ class AskUserMixin:
 
             # 检查是否超时或出错
             if not result.get("success"):
-                self._ask_fail_count = getattr(self, '_ask_fail_count', 0) + 1
-                logger.warning(f"{self.agent_id}: ask_user failed ({self._ask_fail_count}/{ASK_USER_MAX_CONSECUTIVE_FAILS})")
+                status = result.get("status", "")
+                if status != "timeout":
+                    # 只有非超时的失败才计入连续失败计数
+                    self._ask_fail_count = getattr(self, '_ask_fail_count', 0) + 1
+                    logger.warning(f"{self.agent_id}: ask_user failed ({self._ask_fail_count}/{ASK_USER_MAX_CONSECUTIVE_FAILS})")
+                else:
+                    logger.info(f"{self.agent_id}: ask_user 超时，不计入失败计数")
                 return {
                     "error": result.get("error", "验证失败"),
                     "user_input": None

@@ -135,7 +135,15 @@
           // 配置加载完成后，更新所有图生视频节点和分镜节点的算力显示
           updateAllImageToVideoNodesPower();
           updateAllShotFrameNodesPower();
-          
+          // 刷新所有分镜组和分镜节点的视频模型选项，修复 TaskConfig 异步加载完成前
+          // 节点已创建导致使用 hardcoded fallback 值的时序竞争问题
+          if (typeof refreshShotGroupNodesModels === 'function') {
+            refreshShotGroupNodesModels();
+          }
+          if (typeof refreshShotFrameNodesModels === 'function') {
+            refreshShotFrameNodesModels();
+          }
+
           // 驱动状态仍从原接口获取（暂未迁移）
           const response = await fetch('/api/computing-power-config');
           if(response.ok){
@@ -801,9 +809,14 @@
           }
         }
 
-        // 刷新生视频模型
+        // 刷新生视频模型（根据当前视频生成模式过滤）
         if (videoModelEl && window.TaskConfig) {
-          const videoOptions = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+          const allVideoOptions = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+          const mode = node.data.videoGenMode || 'first_last_frame';
+          const videoOptions = allVideoOptions.filter(opt => {
+            const modes = opt.supportedImageModes || ['first_last_frame'];
+            return modes.includes(mode);
+          });
           if (videoOptions.length > 0) {
             videoModelEl.innerHTML = '';
             videoOptions.forEach(opt => {
@@ -861,9 +874,14 @@
           }
         }
 
-        // 刷新生视频模型
+        // 刷新生视频模型（根据当前视频模式过滤）
         if (videoModelEl) {
-          const videoOptions = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+          const allVideoOptions = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+          const mode = node.data.videoMode || 'first_last_frame';
+          const videoOptions = allVideoOptions.filter(opt => {
+            const modes = opt.supportedImageModes || ['first_last_frame'];
+            return modes.includes(mode);
+          });
           if (videoOptions.length > 0) {
             const currentVideoModel = node.data.videoModel;
             videoModelEl.innerHTML = '';

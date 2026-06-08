@@ -361,6 +361,7 @@ async def _analyze_character_voice_capability(
         'name': '角色名',
         'age': '年龄',
         'identity': '身份',
+        'appearance': '外貌',
         'personality': '性格',
         'behavior': '行为习惯',
         'other_info': '补充设定',

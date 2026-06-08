@@ -2344,3 +2344,123 @@ body {
     font-size: 13px;
     color: var(--admin-text-muted);
 }
+
+/* ==================== 敏感字段小眼睛样式 ==================== */
+
+/* 表格单元格内的敏感字段 */
+.sensitive-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+
+/* 弹窗表单中的敏感字段 */
+.sensitive-field {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sensitive-field input {
+    flex: 1;
+}
+
+/* 眼睛切换按钮 */
+.eye-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid var(--admin-border, #e2e8f0);
+    border-radius: 4px;
+    background: #fff;
+    color: var(--admin-text-muted, #64748b);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+}
+
+.eye-toggle:hover {
+    background: var(--admin-primary, #4f46e5);
+    color: #fff;
+    border-color: var(--admin-primary, #4f46e5);
+}
+
+.eye-toggle svg {
+    display: block;
+}
+
+/* ============ 常量参考页面 ============ */
+
+.constants-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+    gap: 16px;
+}
+
+.constant-card {
+    background: var(--admin-card-bg, #fff);
+    border-radius: 8px;
+    border: 1px solid var(--admin-border, #e2e8f0);
+    overflow: hidden;
+}
+
+.constant-card-header {
+    padding: 12px 16px;
+    background: #f1f5f9;
+    border-bottom: 1px solid var(--admin-border, #e2e8f0);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.constant-card-header h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--admin-text, #1e293b);
+    margin: 0 0 2px 0;
+}
+
+.constant-card-desc {
+    font-size: 12px;
+    color: var(--admin-text-muted, #64748b);
+    margin: 0;
+}
+
+.constant-type-badge {
+    font-size: 11px;
+    padding: 2px 10px;
+    border-radius: 12px;
+    background: #e0e7ff;
+    color: #4338ca;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: 12px;
+}
+
+.constant-table {
+    margin: 0;
+}
+
+.constant-table td,
+.constant-table th {
+    padding: 6px 12px;
+    font-size: 13px;
+}
+
+.constant-table code {
+    background: #f1f5f9;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+}
+
+@media (max-width: 768px) {
+    .constants-grid {
+        grid-template-columns: 1fr;
+    }
+}

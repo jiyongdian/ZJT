@@ -1,6 +1,7 @@
 import logging
 import json
-from typing import Dict, Any, List, Optional
+from dataclasses import dataclass
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 from .base_agent import BaseAgent, InsufficientComputingPowerError, check_computing_power_sync
 from .ask_user_mixin import AskUserMixin
@@ -12,6 +13,24 @@ from script_writer_core.skill_loader import SkillLoader
 from model.model import ModelModel
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class LoopState:
+    """Expert Agent 任务循环状态跟踪器"""
+    iteration: int = 0
+
+    # 进展检测：连续相同工具调用签名次数
+    last_tool_signature: str = ""
+    consecutive_no_progress: int = 0
+
+    # 错误检测
+    consecutive_errors: int = 0
+    total_errors: int = 0
+
+    # 优雅收尾
+    graceful_shutdown_requested: bool = False
+    graceful_shutdown_iterations: int = 0
 
 
 class ExpertAgent(BaseAgent, AskUserMixin):
@@ -35,7 +54,10 @@ class ExpertAgent(BaseAgent, AskUserMixin):
         task_manager: Optional[Any] = None,
         task_id: Optional[str] = None,
         max_iterations: int = 10,
-        language: str = "zh-CN"
+        language: str = "zh-CN",
+        max_consecutive_no_progress: int = 3,
+        max_consecutive_errors: int = 3,
+        max_total_errors: int = 7
     ):
         # 使用第一个技能名称作为主要标识
         primary_skill = skill_names[0] if skill_names else "unknown"
@@ -69,7 +91,13 @@ class ExpertAgent(BaseAgent, AskUserMixin):
         self.task_manager = task_manager
         self.task_id = task_id
         self.max_iterations = max_iterations
-        
+        self.max_consecutive_no_progress = max_consecutive_no_progress
+        self.max_consecutive_errors = max_consecutive_errors
+        self.max_total_errors = max_total_errors
+
+        # 显式初始化 ask_user 失败计数器，确保每个新实例从 0 开始
+        self._ask_fail_count = 0
+
         self.history_manager = ExpertHistoryManager(
             file_manager=file_manager,
             user_id=user_id,
@@ -195,13 +223,14 @@ class ExpertAgent(BaseAgent, AskUserMixin):
             }
     
     def _run_task_loop(self, task_description: str, max_iterations: int = None) -> str:
-        """运行任务循环"""
+        """运行任务循环（带智能终止策略）"""
         if max_iterations is None:
             max_iterations = self.max_iterations
-        iteration = 0
-        
-        while iteration < max_iterations:
-            iteration += 1
+        state = LoopState()
+        max_graceful_shutdown_iterations = 2  # 优雅收尾最多给 2 次迭代
+
+        while state.iteration < max_iterations:
+            state.iteration += 1
 
             # 检查算力是否充足
             check_computing_power_sync(self.auth_token, self.agent_id)
@@ -233,11 +262,27 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                     enable_thinking=self.enable_thinking,
                     thinking_effort=self.thinking_effort
                 )
-                
+
                 message = response.choices[0].message
-                
+
                 if hasattr(message, 'tool_calls') and message.tool_calls:
+                    # 计算工具签名（在执行前）
+                    signature = self._compute_tool_signature(message.tool_calls)
+
                     self._handle_tool_calls(message)
+
+                    # 获取本轮工具执行结果
+                    current_batch_results = self.outputs[-len(message.tool_calls):]
+
+                    # 进展检测
+                    should_stop, reason = self._check_progress(state, signature, current_batch_results)
+                    if should_stop:
+                        logger.warning(f"{self.agent_id}: 进展检测触发停止 - {reason}")
+                        self._request_graceful_shutdown(reason, state)
+                        if state.graceful_shutdown_iterations >= max_graceful_shutdown_iterations:
+                            # 已给过收尾机会，直接退出
+                            break
+                        state.graceful_shutdown_iterations += 1
                 else:
                     content = message.content or ""
                     reasoning_content = getattr(message, 'reasoning_content', None)
@@ -257,8 +302,14 @@ class ExpertAgent(BaseAgent, AskUserMixin):
             except Exception as e:
                 logger.error(f"{self.agent_id}: Error in task loop - {e}", exc_info=True)
                 raise
-        
-        logger.warning(f"{self.agent_id}: Max iterations reached")
+
+        # 兜底：达到安全上限或收尾完成
+        logger.warning(f"{self.agent_id}: 任务循环结束 (iterations={state.iteration})")
+        if state.graceful_shutdown_requested:
+            # 已做过优雅收尾，从历史中取最后的 assistant 消息
+            for msg in reversed(self.conversation_history):
+                if msg.get("role") == "assistant" and isinstance(msg.get("content"), str):
+                    return msg["content"]
         return "任务执行达到最大迭代次数，可能未完全完成"
     
     def _handle_tool_calls(self, message):
@@ -297,7 +348,27 @@ class ExpertAgent(BaseAgent, AskUserMixin):
 
         for tool_call in tool_calls:
             tool_name = tool_call.function.name
-            tool_args = json.loads(tool_call.function.arguments) if isinstance(tool_call.function.arguments, str) else tool_call.function.arguments
+
+            # 解析工具参数，容错处理 LLM 返回的非法 JSON
+            try:
+                tool_args = json.loads(tool_call.function.arguments) if isinstance(tool_call.function.arguments, str) else tool_call.function.arguments
+            except json.JSONDecodeError as e:
+                logger.error(f"{self.agent_id}: Failed to parse tool arguments for {tool_name}: {e}")
+                logger.error(f"{self.agent_id}: Raw arguments: {tool_call.function.arguments[:500]}")
+                error_msg = f"JSON参数解析失败: {str(e)}。请检查参数格式，确保所有字符串中的引号和特殊字符已正确转义。"
+                error_result = {"error": error_msg}
+                self.tool_calls_made.append({
+                    "tool": tool_name,
+                    "args": {"_parse_error": True},
+                    "timestamp": datetime.now().isoformat()
+                })
+                self.outputs.append(error_result)
+                self.add_to_history("tool", {
+                    "tool_call_id": tool_call.id,
+                    "name": tool_name,
+                    "content": json.dumps(error_result, ensure_ascii=False)
+                })
+                continue
 
             self.tool_calls_made.append({
                 "tool": tool_name,
@@ -379,7 +450,9 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                 tool_args=tool_args,
                 user_id=self.user_id,
                 world_id=self.world_id,
-                auth_token=self.auth_token
+                auth_token=self.auth_token,
+                model=self.model,
+                vendor_id=self.vendor_id,
             )
             logger.info(f"{self.agent_id}: Tool {tool_name} executed successfully")
             return result
@@ -470,8 +543,152 @@ class ExpertAgent(BaseAgent, AskUserMixin):
         if self.task_manager and self.task_id:
             tool_defs.append(ASK_USER_TOOL_DEFINITION)
 
+        # 将实现方的 agent_hint 注入到工具描述中
+        self._inject_driver_hints(tool_defs)
+
         return tool_defs
-    
+
+    def _inject_driver_hints(self, tool_defs: List[Dict[str, Any]]):
+        """
+        将第一个顺位实现方的 agent_hint 注入到对应工具的 description 中。
+        走与 create_driver_by_type 相同的选择逻辑（用户偏好 → 排序 → 可用性）。
+        """
+        try:
+            from script_writer_core.mcp_tool import (
+                _get_text_to_image_task_id,
+                _get_text_to_video_task_id,
+                _get_image_to_video_task_id
+            )
+            from task.visual_drivers.driver_factory import VideoDriverFactory
+
+            uid = int(self.user_id) if self.user_id else None
+            wid = self.world_id
+            seen = set()
+
+            # 工具名 → (task_id 获取函数, 视频分类回退) 的映射
+            # category 仅在 getter 返回 None 时用于回退查找第一个可用模型
+            tool_task_map = {
+                'generate_text_to_image': (_get_text_to_image_task_id, None),
+                'edit_image': (_get_text_to_image_task_id, None),
+                'generate_4grid_character_images': (_get_text_to_image_task_id, None),
+                'generate_4grid_location_images': (_get_text_to_image_task_id, None),
+                'generate_4grid_prop_images': (_get_text_to_image_task_id, None),
+                'generate_text_to_video': (_get_text_to_video_task_id, 'text_to_video'),
+                'image_to_video': (_get_image_to_video_task_id, 'image_to_video'),
+            }
+
+            for tool_def in tool_defs:
+                tool_name = tool_def.get("function", {}).get("name", "")
+                entry = tool_task_map.get(tool_name)
+                if not entry:
+                    continue
+
+                getter, fallback_category = entry
+                task_id = getter(uid, wid)
+
+                # 回退逻辑：与 enterprise/tools/video_tools.py 的 _get_video_task_id 保持一致
+                # 当用户未设置视频模型偏好时，getter 返回 None，
+                # 此时使用分类下第一个启用的模型，确保 hint 能被注入
+                if not task_id and fallback_category:
+                    try:
+                        from config.unified_config import UnifiedConfigRegistry
+                        configs = UnifiedConfigRegistry.get_by_category(fallback_category)
+                        if configs:
+                            enabled = [c for c in configs if c.enabled and not getattr(c, 'hidden', False)]
+                            if enabled:
+                                task_id = enabled[0].id
+                            elif configs:
+                                task_id = configs[0].id
+                    except Exception as e:
+                        logger.debug(f"Failed to fallback task_id for {tool_name}: {e}")
+
+                if not task_id:
+                    continue
+
+                hint_info = VideoDriverFactory.get_agent_hint_for_task(task_id, uid)
+                if not hint_info or hint_info['impl_name'] in seen:
+                    continue
+                seen.add(hint_info['impl_name'])
+
+                # 将 hint 追加到工具描述末尾
+                desc = tool_def["function"].get("description", "")
+                desc += f"\n\n【实现方限制 - {hint_info['display_name']}】{hint_info['hint']}"
+                tool_def["function"]["description"] = desc
+
+        except Exception as e:
+            logger.warning(f"Failed to inject driver hints: {e}")
+
+    def _compute_tool_signature(self, tool_calls) -> str:
+        """计算当前迭代的工具调用签名，用于进展检测
+
+        将本轮所有工具调用的 name + 参数关键特征组合为字符串。
+        例如: "generate_text_to_image(prompt=xxx,character=yyy)"
+        """
+        if not tool_calls:
+            return "__no_tool_calls__"
+
+        parts = []
+        for tc in tool_calls:
+            name = tc.function.name
+            try:
+                args = json.loads(tc.function.arguments) if isinstance(tc.function.arguments, str) else tc.function.arguments
+            except (json.JSONDecodeError, TypeError):
+                args = {}
+
+            # 只取前 3 个参数的前 30 字符，避免签名过长
+            arg_keys = sorted(args.keys()) if isinstance(args, dict) else []
+            arg_summary = ",".join(f"{k}={str(args[k])[:30]}" for k in arg_keys[:3])
+            parts.append(f"{name}({arg_summary})")
+
+        return "+".join(parts)
+
+    def _check_progress(self, state: LoopState, signature: str, tool_results: List[Any]) -> Tuple[bool, str]:
+        """检查是否有进展，返回 (should_stop, reason)
+
+        检测逻辑:
+        1. 连续相同工具调用签名 → 无进展
+        2. 连续工具返回错误 → 卡死
+        3. 累计错误过多 → 放弃
+        """
+        # 检查连续相同签名
+        if signature == state.last_tool_signature and signature != "__no_tool_calls__":
+            state.consecutive_no_progress += 1
+            if state.consecutive_no_progress >= self.max_consecutive_no_progress:
+                return True, f"连续{self.max_consecutive_no_progress}次执行完全相同的操作，可能陷入死循环"
+        else:
+            state.consecutive_no_progress = 0
+
+        state.last_tool_signature = signature
+
+        # 检查工具结果中的错误
+        error_count = sum(1 for r in tool_results if isinstance(r, dict) and r.get("error"))
+        if error_count > 0:
+            state.consecutive_errors += 1
+            state.total_errors += error_count
+        else:
+            state.consecutive_errors = 0
+
+        if state.consecutive_errors >= self.max_consecutive_errors:
+            return True, f"连续{self.max_consecutive_errors}次工具调用返回错误"
+
+        if state.total_errors >= self.max_total_errors:
+            return True, f"累计工具调用失败{self.total_errors}次"
+
+        return False, ""
+
+    def _request_graceful_shutdown(self, reason: str, state: LoopState) -> None:
+        """请求优雅收尾：向对话历史注入收尾指令，给 LLM 最后机会做总结"""
+        if state.graceful_shutdown_requested:
+            return
+
+        state.graceful_shutdown_requested = True
+        shutdown_prompt = (
+            f"[系统通知] 由于以下原因，任务循环即将结束：{reason}\n"
+            f"请立即停止调用工具，用一段文字总结目前已完成的工作和未完成的部分。"
+            f"如果已提交了生成任务但尚未完成，请说明任务状态。"
+        )
+        self.add_to_history("user", shutdown_prompt)
+
     def _save_session_history(
         self,
         session_id: str,

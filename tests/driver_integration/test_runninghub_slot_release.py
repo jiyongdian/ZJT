@@ -82,8 +82,11 @@ class TestRunningHubSlotRelease(BaseVideoDriverTest):
         mock_driver.driver_name = 'ltx2_runninghub_v1'
 
         # Mock VideoDriverFactory.create_driver_by_type 返回 mock 驱动
-        with patch('task.visual_drivers.driver_factory.VideoDriverFactory.create_driver_by_type') as mock_create:
+        # Mock make_perseids_request 用于退还算力流程
+        with patch('task.visual_drivers.driver_factory.VideoDriverFactory.create_driver_by_type') as mock_create, \
+             patch('task.visual_task.make_perseids_request') as mock_perseids:
             mock_create.return_value = mock_driver
+            mock_perseids.return_value = (True, 'success', {'token': 'mock_token'})
 
             # Mock 驱动的 submit_task 返回失败（用户错误，不重试）
             mock_driver.submit_task.return_value = {
@@ -120,8 +123,11 @@ class TestRunningHubSlotRelease(BaseVideoDriverTest):
         mock_driver.driver_name = 'wan22_runninghub_v1'
 
         # Mock VideoDriverFactory.create_driver_by_type 返回 mock 驱动
-        with patch('task.visual_drivers.driver_factory.VideoDriverFactory.create_driver_by_type') as mock_create:
+        # Mock make_perseids_request 用于退还算力流程
+        with patch('task.visual_drivers.driver_factory.VideoDriverFactory.create_driver_by_type') as mock_create, \
+             patch('task.visual_task.make_perseids_request') as mock_perseids:
             mock_create.return_value = mock_driver
+            mock_perseids.return_value = (True, 'success', {'token': 'mock_token'})
 
             # Mock 驱动的 submit_task 返回失败
             mock_driver.submit_task.return_value = {
@@ -148,8 +154,11 @@ class TestRunningHubSlotRelease(BaseVideoDriverTest):
         mock_driver.driver_name = 'digital_human_runninghub_v1'
 
         # Mock VideoDriverFactory.create_driver_by_type 返回 mock 驱动
-        with patch('task.visual_drivers.driver_factory.VideoDriverFactory.create_driver_by_type') as mock_create:
+        # Mock make_perseids_request 用于退还算力流程
+        with patch('task.visual_drivers.driver_factory.VideoDriverFactory.create_driver_by_type') as mock_create, \
+             patch('task.visual_task.make_perseids_request') as mock_perseids:
             mock_create.return_value = mock_driver
+            mock_perseids.return_value = (True, 'success', {'token': 'mock_token'})
 
             # Mock 驱动的 submit_task 返回失败
             mock_driver.submit_task.return_value = {

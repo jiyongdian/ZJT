@@ -585,6 +585,9 @@ const AdminApp = {
                 statusFilter: '',
                 roleFilter: ''
             },
+
+            // 敏感字段可见性控制（手机号、邮箱的小眼睛切换）
+            visibleFields: {},
             
             // 算力调整弹窗
             powerModal: {
@@ -680,7 +683,8 @@ const AdminApp = {
                 groups: [],  // 分组数据
                 loading: false,
                 keyword: '',
-                updating: null  // 正在更新的实现方名称
+                updating: null,  // 正在更新的实现方名称
+                retryGlobalEnabled: false  // 供应商自动切换总开关
             },
 
             // 模型管理
@@ -741,7 +745,17 @@ const AdminApp = {
                 feature: '新功能',
                 security: '安全'
             },
-            notificationsPollTimer: null
+            notificationsPollTimer: null,
+
+            // 常量参考
+            constants: {
+                groups: [],
+                mappings: [],
+                loading: false,
+                searchKeyword: '',
+                groupFilter: '',
+                typeFilter: ''
+            }
         };
     },
     
@@ -776,6 +790,28 @@ const AdminApp = {
             }
 
             return groups;
+        },
+
+        filteredConstantsClasses() {
+            let allClasses = [];
+            for (const group of this.constants.groups) {
+                if (this.constants.groupFilter && group.group_id !== this.constants.groupFilter) continue;
+                for (const cls of group.classes) {
+                    if (this.constants.typeFilter) {
+                        const hasType = cls.members.some(m => m.type === this.constants.typeFilter);
+                        if (!hasType) continue;
+                    }
+                    if (this.constants.searchKeyword) {
+                        const kw = this.constants.searchKeyword.toLowerCase();
+                        const match = cls.class_name.toLowerCase().includes(kw)
+                            || cls.description.toLowerCase().includes(kw)
+                            || cls.members.some(m => m.name.toLowerCase().includes(kw) || String(m.value).toLowerCase().includes(kw) || (m.label && m.label.toLowerCase().includes(kw)));
+                        if (!match) continue;
+                    }
+                    allClasses.push(cls);
+                }
+            }
+            return allClasses;
         },
 
         minDate() {
@@ -1084,6 +1120,8 @@ const AdminApp = {
                 this.loadImplementations();
             } else if (page === 'models') {
                 this.loadModels();
+            } else if (page === 'constants') {
+                this.loadConstants();
             }
         },
         
@@ -1255,6 +1293,9 @@ const AdminApp = {
         closeUserDetailModal() {
             this.userDetailModal.show = false;
             this.userDetailModal.user = null;
+            // 清理详情弹窗的可见性状态
+            delete this.visibleFields['detail_phone'];
+            delete this.visibleFields['detail_email'];
         },
         
         // 更新用户状态
@@ -1566,6 +1607,21 @@ const AdminApp = {
         formatPhone(phone) {
             if (!phone || phone.length !== 11) return phone || '-';
             return phone.substring(0, 3) + '****' + phone.substring(7);
+        },
+
+        // 格式化邮箱（掩码处理）
+        formatEmail(email) {
+            if (!email) return '-';
+            const atIndex = email.indexOf('@');
+            if (atIndex <= 1) return email;
+            const prefix = email.substring(0, Math.min(2, atIndex));
+            const suffix = email.substring(atIndex);
+            return prefix + '***' + suffix;
+        },
+
+        // 切换敏感字段的可见性
+        toggleFieldVisibility(fieldKey) {
+            this.visibleFields[fieldKey] = !this.visibleFields[fieldKey];
         },
         
         // ==================== 配置管理方法 ====================
@@ -2313,6 +2369,30 @@ const AdminApp = {
             }
         },
 
+        // 加载常量参考
+        async loadConstants() {
+            if (this.constants.groups.length > 0) return; // 已加载过，不重复请求
+            this.constants.loading = true;
+            try {
+                const response = await axios.get('/api/admin/constants', {
+                    headers: { 'Authorization': `Bearer ${this.authToken}` }
+                });
+                if (response.data.code === 0) {
+                    this.constants.groups = response.data.data.groups || [];
+                    this.constants.mappings = response.data.data.mappings || [];
+                }
+            } catch (error) {
+                console.error('加载常量定义失败:', error);
+                if (error.response?.status === 401 || error.response?.status === 403) {
+                    this.handleAuthError(error.response.status);
+                } else {
+                    this.showToast(this.t('constants_load_failed'), 'error');
+                }
+            } finally {
+                this.constants.loading = false;
+            }
+        },
+
         // 切换模型启用/禁用状态
         async toggleModelEnabled(model) {
             const newEnabled = model.enabled ? 0 : 1;
@@ -2353,6 +2433,8 @@ const AdminApp = {
                     console.log('加载实现方数据:', response.data.data);
                     // 后端现在返回分组数据
                     this.implementations.groups = response.data.data;
+                    // 读取重试总开关状态
+                    this.implementations.retryGlobalEnabled = response.data.retry_global_enabled !== false;
                     console.log('更新后的 groups:', this.implementations.groups);
 
                     // 强制触发 Vue 响应式更新
@@ -2363,6 +2445,40 @@ const AdminApp = {
                 this.showToast(this.t('toast_load_impl_failed'), 'error');
             } finally {
                 this.implementations.loading = false;
+            }
+        },
+
+        // 切换供应商自动切换总开关
+        async toggleRetryGlobal() {
+            // 社区版限制
+            if (this.isCommunityEdition) {
+                this.showToast(this.t('toast_community_feature_locked'), 'warning');
+                this.implementations.retryGlobalEnabled = false;
+                return;
+            }
+
+            try {
+                const response = await axios.put('/api/admin/retry-global-enabled', {
+                    enabled: this.implementations.retryGlobalEnabled
+                }, {
+                    headers: { 'Authorization': `Bearer ${this.authToken}` }
+                });
+
+                if (response.data.code === 0) {
+                    this.showToast(response.data.message, 'success');
+                } else {
+                    this.showToast(response.data.detail || this.t('toast_save_failed'), 'error');
+                    this.implementations.retryGlobalEnabled = !this.implementations.retryGlobalEnabled;
+                }
+            } catch (error) {
+                console.error('Toggle retry global failed:', error);
+                if (error.response && error.response.status === 403) {
+                    this.showToast(error.response.data.detail || this.t('toast_community_feature_locked'), 'warning');
+                    this.implementations.retryGlobalEnabled = false;
+                } else {
+                    this.showToast(this.t('toast_save_failed'), 'error');
+                    this.implementations.retryGlobalEnabled = !this.implementations.retryGlobalEnabled;
+                }
             }
         },
 
@@ -2502,10 +2618,6 @@ const AdminApp = {
             const actionKey = impl.enabled ? 'btn_disable' : 'btn_enable';
             const newEnabled = !impl.enabled;
 
-            if (!confirm(this.t('confirm_impl_action', { action: this.t(actionKey), name: impl.display_name }))) {
-                return;
-            }
-
             try {
                 const response = await axios.put('/api/admin/implementation-config', {
                     implementation_name: impl.name,
@@ -2516,10 +2628,8 @@ const AdminApp = {
                 });
 
                 if (response.data.code === 0) {
+                    impl.enabled = newEnabled;
                     this.showToast(this.t('toast_impl_toggled', { action: this.t(actionKey) }), 'success');
-                    // 重新加载数据以获取最新状态
-                    await this.loadImplementations();
-                    console.log('数据重新加载完成');
                 } else {
                     this.showToast(response.data.message || this.t('toast_impl_action_failed'), 'error');
                 }

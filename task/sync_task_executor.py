@@ -13,6 +13,7 @@ import os
 import sys
 import time
 import uuid
+from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor, Future
 from dataclasses import dataclass
 from typing import Dict, Optional, Any
@@ -79,9 +80,19 @@ def _execute_sync_task(task_id: int, ai_tool_type: int) -> SyncTaskResult:
 
         # 调用驱动提交任务（同步执行）
         from task.visual_drivers import VideoDriverFactory
+        from config.unified_config import get_implementation_name
 
-        # 传递 user_id 以应用用户偏好
-        driver = VideoDriverFactory.create_driver_by_type(ai_tool_type, user_id=ai_tool.user_id)
+        # 优先使用 ai_tools.implementation（如由 retry driver 设置），回退到用户偏好
+        driver = None
+        if ai_tool.implementation:
+            impl_name = get_implementation_name(ai_tool.implementation)
+            if impl_name and impl_name != 'unknown':
+                driver = VideoDriverFactory.create_driver_by_implementation(impl_name)
+                if driver:
+                    logger.info(f"[SyncTask] Using recorded implementation {impl_name} (id: {ai_tool.implementation}) for task {task_id}")
+
+        if not driver:
+            driver = VideoDriverFactory.create_driver_by_type(ai_tool_type, user_id=ai_tool.user_id)
         if not driver:
             logger.error(f"[SyncTask] Unsupported driver type: {ai_tool_type}")
             return SyncTaskResult(
@@ -321,7 +332,7 @@ class SyncTaskExecutor:
                         try:
                             from model import AIToolsModel, TasksModel
                             from config.constant import AI_TOOL_STATUS_FAILED, TASK_STATUS_FAILED
-                            AIToolsModel.update(task_id, status=AI_TOOL_STATUS_FAILED, message=f"系统异常: {str(e)}")
+                            AIToolsModel.update(task_id, status=AI_TOOL_STATUS_FAILED, message=f"系统异常: {str(e)}", completed_time=datetime.now())
                             TasksModel.update_by_task_id(task_id, status=TASK_STATUS_FAILED)
                         except Exception as e3:
                             logger.critical(f"[SyncTaskExecutor] CRITICAL: Cannot update status for task {task_id}: {e3}")
@@ -340,9 +351,7 @@ class SyncTaskExecutor:
         from model import AIToolsModel, TasksModel
         from config.constant import (
             AI_TOOL_STATUS_COMPLETED,
-            AI_TOOL_STATUS_FAILED,
             TASK_STATUS_COMPLETED,
-            TASK_STATUS_FAILED,
         )
 
         task_id = result.task_id
@@ -352,41 +361,66 @@ class SyncTaskExecutor:
             AIToolsModel.update_with_cdn_sync(
                 task_id,
                 result_url=result.result_url,
-                status=AI_TOOL_STATUS_COMPLETED
+                status=AI_TOOL_STATUS_COMPLETED,
+                completed_time=datetime.now()
             )
             TasksModel.update_by_task_id(task_id, status=TASK_STATUS_COMPLETED)
+
+            # 标记当前实现方尝试为成功
+            try:
+                from model.implementation_attempts import ImplementationAttemptModel, ATTEMPT_STATUS_SUCCESS
+                ImplementationAttemptModel.mark_active_attempt_completed(task_id, ATTEMPT_STATUS_SUCCESS)
+            except Exception as e:
+                logger.warning(f"[SyncTaskExecutor] Failed to mark attempt as success for task {task_id}: {e}")
+
             logger.info(f"[SyncTaskExecutor] Task {task_id} completed successfully")
         else:
             # 任务失败
-            self._handle_task_failure(task_id, result.error, result.error_type)
+            self._handle_task_failure(task_id, result.error, result.error_type, result.ai_tool_type)
 
-    def _handle_task_failure(self, task_id: int, error: str, error_type: str = "SYSTEM") -> None:
+    def _handle_task_failure(self, task_id: int, error: str, error_type: str = "SYSTEM", ai_tool_type: int = None) -> None:
         """
-        处理任务失败 - 直接标记失败并退还算力
+        处理任务失败 - 委托给 visual_task 的统一失败处理（尝试 before_finish 重试）
+
+        无论是 USER 错误还是 SYSTEM 错误，都尝试重试，
+        因为不同供应商的审核策略、网络状况、API 行为都不同。
 
         Args:
             task_id: 任务ID
             error: 错误信息
-            error_type: 错误类型
+            error_type: 错误类型 (USER/SYSTEM)
+            ai_tool_type: AI工具类型
         """
         from model import AIToolsModel, TasksModel
-        from config.constant import (
-            AI_TOOL_STATUS_FAILED,
-            TASK_STATUS_FAILED,
-        )
+        from config.constant import AI_TOOL_STATUS_FAILED, TASK_STATUS_FAILED
 
-        # 更新任务状态
-        AIToolsModel.update(task_id, status=AI_TOOL_STATUS_FAILED, message=error)
+        # 委托给 visual_task 的统一失败处理（尝试 before_finish 重试）
+        try:
+            ai_tool = AIToolsModel.get_by_id(task_id)
+            if ai_tool:
+                from task.visual_task import _handle_task_failure as unified_failure
+                unified_failure(
+                    task_id=task_id,
+                    ai_tool_type=ai_tool_type or ai_tool.type,
+                    reason=error,
+                    user_id=ai_tool.user_id
+                )
+                logger.info(f"[SyncTaskExecutor] Task {task_id} delegated to unified failure handler")
+                return
+        except Exception as e:
+            logger.error(f"[SyncTaskExecutor] Unified handler failed for task {task_id}: {e}")
+
+        # 兜底：直接标记失败
+        AIToolsModel.update(task_id, status=AI_TOOL_STATUS_FAILED, message=error, completed_time=datetime.now())
         TasksModel.update_by_task_id(task_id, status=TASK_STATUS_FAILED)
 
-        # 退还算力
         try:
             ai_tool = AIToolsModel.get_by_id(task_id)
             if ai_tool:
                 from task.visual_task import _refund_computing_power
                 _refund_computing_power(ai_tool, error)
         except Exception as e:
-            logger.error(f"[SyncTaskExecutor] Failed to refund computing power for task {task_id}: {e}")
+            logger.error(f"[SyncTaskExecutor] Failed to refund for task {task_id}: {e}")
 
         logger.info(f"[SyncTaskExecutor] Task {task_id} marked as failed: {error}")
 

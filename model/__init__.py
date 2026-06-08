@@ -22,6 +22,7 @@ from .skill_definitions import SkillDefinitionsModel, SkillDefinition
 from .notifications import NotificationsModel, NotificationEntity
 from .async_tasks import AsyncTasksModel, AsyncTask, AsyncTaskStatus
 from .ai_tool_pipeline_steps import PipelineStepModel, PipelineStep, PipelineStepStatus, PipelineStage, PipelineStepType
+from .implementation_attempts import ImplementationAttemptModel, ImplementationAttempt
 
 __all__ = [
     'AIToolsModel',
@@ -77,4 +78,6 @@ __all__ = [
     'PipelineStepStatus',
     'PipelineStage',
     'PipelineStepType',
+    'ImplementationAttemptModel',
+    'ImplementationAttempt',
 ]

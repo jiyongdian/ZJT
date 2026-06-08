@@ -614,6 +614,29 @@ class TaskManager:
                             if result.get('success', False):
                                 print(f"已更新道具 {name} 的参考图 (位置: {'左上' if idx==0 else '右上' if idx==1 else '左下' if idx==2 else '右下'})")
                         update_success = True
+                elif item_type == 7:  # character_variant (角色变体图)
+                    # item_name 格式为 "角色名|变体标签"
+                    parts = item_name.split('|', 1)
+                    char_name = parts[0]
+                    variant_label = parts[1] if len(parts) > 1 else '变体'
+                    # 将变体图追加到角色的 reference_images 数组
+                    file_manager = mcp_tool.get_file_manager()
+                    char_data = file_manager.get_character_json(char_name, user_id, world_id)
+                    if char_data:
+                        import uuid
+                        existing_variants = char_data.get('reference_images', [])
+                        # 如果 force_update 且已有同标签变体，先删除旧的
+                        new_variant = {'id': str(uuid.uuid4()), 'label': variant_label, 'url': local_image_url}
+                        # 移除同标签的旧条目（如果存在）
+                        existing_variants = [v for v in existing_variants if v.get('label') != variant_label]
+                        existing_variants.append(new_variant)
+                        # 使用 update_character_json 更新 reference_images
+                        result = mcp_tool.update_character_json(user_id, world_id, auth_token, char_name, reference_images=existing_variants)
+                        update_success = result.get('success', False)
+                        if update_success:
+                            print(f"已追加角色 {char_name} 的变体图 [{variant_label}]: {local_image_url}")
+                    else:
+                        print(f"警告: 角色 {char_name} 不存在，无法更新变体图")
             except Exception as e:
                 # 更新失败但不影响图片下载成功
                 update_success = False

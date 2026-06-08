@@ -30,13 +30,14 @@ sys.modules['config.config_util'] = MagicMock()
 sys.modules['utils.file_storage'] = MagicMock()
 
 # 如果模块已被加载（可能被其他测试用不同 mock 加载过），reload 以使用当前 mock
-for _mod in [
+_reloaded_modules = [
     'model.ai_tool_pipeline_steps', 'model.ai_tools', 'model.runninghub_slots',
     'task.pipeline_drivers.base_pipeline_driver',
     'task.pipeline_drivers.face_mask_driver',
     'task.pipeline_drivers.implementation_retry_driver',
     'task.pipeline_drivers',
-]:
+]
+for _mod in _reloaded_modules:
     if _mod in sys.modules:
         importlib.reload(sys.modules[_mod])
 
@@ -50,6 +51,10 @@ for _key, _orig in _saved_modules.items():
         sys.modules[_key] = _orig
     else:
         sys.modules.pop(_key, None)
+
+# 清除被 reload 过的模块缓存，它们在 mock 环境下导入，需强制重新导入
+for _mod in _reloaded_modules:
+    sys.modules.pop(_mod, None)
 
 
 class TestPipelineDriverFactoryCreateDriver(unittest.TestCase):
@@ -226,3 +231,129 @@ class TestImplementationRetryPipelineDriverExecute(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+# ==================== 新增：PipelineDriverFactory.create_param_prepare_steps 测试 ====================
+
+class TestCreateParamPrepareSteps(unittest.TestCase):
+    """测试 PipelineDriverFactory.create_param_prepare_steps()"""
+
+    @patch('task.pipeline_drivers.AIToolsModel')
+    @patch('task.pipeline_drivers.UnifiedConfigRegistry')
+    def test_unknown_task_type_returns_empty(self, MockRegistry, MockAITools):
+        """未知任务类型返回空列表"""
+        MockRegistry.get_by_id.return_value = None
+
+        result = PipelineDriverFactory.create_param_prepare_steps(ai_tool_id=1, ai_tool_type=999)
+        self.assertEqual(result, [])
+
+    @patch('task.pipeline_drivers.AIToolsModel')
+    @patch('task.pipeline_drivers.UnifiedConfigRegistry')
+    def test_no_rule_for_key_returns_empty(self, MockRegistry, MockAITools):
+        """没有匹配的规则返回空列表"""
+        mock_config = MagicMock()
+        mock_config.key = 'some_unknown_key'
+        MockRegistry.get_by_id.return_value = mock_config
+
+        result = PipelineDriverFactory.create_param_prepare_steps(ai_tool_id=1, ai_tool_type=1)
+        self.assertEqual(result, [])
+
+    @patch('task.pipeline_drivers.AIToolsModel')
+    @patch('task.pipeline_drivers.UnifiedConfigRegistry')
+    def test_ai_tool_not_found_returns_empty(self, MockRegistry, MockAITools):
+        """ai_tool 不存在返回空列表"""
+        mock_config = MagicMock()
+        mock_config.key = 'seedance_2_0_image_to_video'
+        MockRegistry.get_by_id.return_value = mock_config
+        MockAITools.get_by_id.return_value = None
+
+        result = PipelineDriverFactory.create_param_prepare_steps(ai_tool_id=999, ai_tool_type=1)
+        self.assertEqual(result, [])
+
+
+# ==================== 新增：PipelineDriverFactory.create_before_finish_steps 测试 ====================
+
+class TestCreateBeforeFinishSteps(unittest.TestCase):
+    """测试 PipelineDriverFactory.create_before_finish_steps()"""
+
+    @patch('task.pipeline_drivers.UnifiedConfigRegistry')
+    def test_no_task_config_returns_empty(self, MockRegistry):
+        """无任务配置返回空列表"""
+        MockRegistry.get_by_id.return_value = None
+
+        result = PipelineDriverFactory.create_before_finish_steps(
+            ai_tool_id=1, ai_tool_type=999,
+            failed_implementation=1, failure_reason='timeout'
+        )
+        self.assertEqual(result, [])
+
+    @patch('task.pipeline_drivers.UnifiedConfigRegistry')
+    def test_no_implementations_returns_empty(self, MockRegistry):
+        """任务配置无实现方返回空列表"""
+        mock_config = MagicMock()
+        mock_config.implementations = None
+        MockRegistry.get_by_id.return_value = mock_config
+
+        result = PipelineDriverFactory.create_before_finish_steps(
+            ai_tool_id=1, ai_tool_type=1,
+            failed_implementation=1, failure_reason='error'
+        )
+        self.assertEqual(result, [])
+
+    @patch('model.implementation_attempts.ImplementationAttemptModel')
+    @patch('task.pipeline_drivers.UnifiedConfigRegistry')
+    def test_no_alternatives_returns_empty(self, MockRegistry, MockAttemptModel):
+        """无可用替代实现方返回空列表"""
+        mock_config = MagicMock()
+        mock_config._get_implementations_info.return_value = [
+            {'name': 'impl_a', 'sort_order': 100},
+            {'name': 'impl_b', 'sort_order': 200},
+        ]
+        MockRegistry.get_by_id.return_value = mock_config
+
+        # 所有实现方都已尝试过
+        MockAttemptModel.get_attempted_implementations.return_value = {1, 2}
+
+        with patch('task.pipeline_drivers.get_implementation_name', return_value='impl_a'):
+            result = PipelineDriverFactory.create_before_finish_steps(
+                ai_tool_id=1, ai_tool_type=1,
+                failed_implementation=1, failure_reason='error'
+            )
+        self.assertEqual(result, [])
+
+    @patch('model.implementation_attempts.ImplementationAttemptModel')
+    @patch('task.pipeline_drivers.UnifiedConfigRegistry')
+    @patch('task.pipeline_drivers.PipelineStepModel')
+    def test_creates_retry_steps_for_alternatives(
+        self, MockStepModel, MockRegistry, MockAttemptModel
+    ):
+        """为可用替代方创建重试步骤"""
+        mock_config = MagicMock()
+        mock_config._get_implementations_info.return_value = [
+            {'name': 'impl_a', 'sort_order': 100},
+            {'name': 'impl_b', 'sort_order': 200},
+        ]
+        MockRegistry.get_by_id.return_value = mock_config
+
+        # 只尝试过 impl_a
+        MockAttemptModel.get_attempted_implementations.return_value = {1}
+
+        # impl_b 的驱动可用
+        MockRegistry.get_implementation.return_value = MagicMock(is_enabled=MagicMock(return_value=True))
+        mock_vdf = MagicMock()
+        mock_vdf.create_driver_by_implementation.return_value = MagicMock()
+
+        MockStepModel.create.return_value = 42
+
+        # 通过 sys.modules 注入 mock，避免触发 VideoDriverFactory 真实 import chain
+        mock_visual = MagicMock()
+        mock_visual.VideoDriverFactory = mock_vdf
+        with patch.dict('sys.modules', {'task.visual_drivers': mock_visual}):
+            with patch('task.pipeline_drivers.get_implementation_name', side_effect=lambda x: 'impl_a' if x == 1 else 'impl_b'):
+                with patch('task.pipeline_drivers.get_implementation_id', return_value=2):
+                    result = PipelineDriverFactory.create_before_finish_steps(
+                        ai_tool_id=1, ai_tool_type=1,
+                        failed_implementation=1, failure_reason='error'
+                    )
+        # 应创建了至少一个重试步骤
+        self.assertGreater(len(result), 0)

@@ -94,6 +94,14 @@
                         <span v-if="unreadCount > 0" class="notification-badge">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
                     </a>
                 </li>
+                <li>
+                    <a href="#" :class="{ active: currentPage === 'constants' }" @click.prevent="switchPage('constants')">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                        </svg>
+                        <span>{{ t('nav_constants') }}</span>
+                    </a>
+                </li>
             </ul>
         </aside>
 
@@ -108,6 +116,7 @@
                 <h2 v-else-if="currentPage === 'implementations'">{{ t('nav_implementations') }}</h2>
                 <h2 v-else-if="currentPage === 'models'">{{ t('nav_models') }}</h2>
                 <h2 v-else-if="currentPage === 'notifications'">{{ t('nav_notifications') }}</h2>
+                <h2 v-else-if="currentPage === 'constants'">{{ t('nav_constants') }}</h2>
 
                 <div class="admin-user">
                     <span class="admin-user-name">{{ maskedPhone }}</span>
@@ -268,6 +277,7 @@
                             <tr>
                                 <th>{{ t('col_id') }}</th>
                                 <th>{{ t('col_phone') }}</th>
+                                <th>{{ t('col_email') }}</th>
                                 <th>{{ t('col_role') }}</th>
                                 <th>{{ t('col_power') }}</th>
                                 <th>{{ t('col_status') }}</th>
@@ -277,11 +287,30 @@
                         </thead>
                         <tbody>
                             <tr v-if="users.list.length === 0">
-                                <td colspan="7" style="text-align: center; color: #64748b;">{{ t('no_data') }}</td>
+                                <td colspan="8" style="text-align: center; color: #64748b;">{{ t('no_data') }}</td>
                             </tr>
                             <tr v-for="user in users.list" :key="user.user_id">
                                 <td>{{ user.user_id }}</td>
-                                <td>{{ formatPhone(user.phone) }}</td>
+                                <td>
+                                    <span class="sensitive-cell">
+                                        <span>{{ visibleFields['phone_' + user.user_id] ? (user.phone || '-') : formatPhone(user.phone) }}</span>
+                                        <button class="eye-toggle" @click="toggleFieldVisibility('phone_' + user.user_id)"
+                                                :title="visibleFields['phone_' + user.user_id] ? t('btn_hide') : t('btn_show')">
+                                            <svg v-if="!visibleFields['phone_' + user.user_id]" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                            <svg v-else xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                                        </button>
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="sensitive-cell">
+                                        <span>{{ visibleFields['email_' + user.user_id] ? (user.email || '-') : formatEmail(user.email) }}</span>
+                                        <button v-if="user.email" class="eye-toggle" @click="toggleFieldVisibility('email_' + user.user_id)"
+                                                :title="visibleFields['email_' + user.user_id] ? t('btn_hide') : t('btn_show')">
+                                            <svg v-if="!visibleFields['email_' + user.user_id]" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                            <svg v-else xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                                        </button>
+                                    </span>
+                                </td>
                                 <td>
                                     <span class="status-badge" :class="{ admin: user.role === 'admin' }">
                                         {{ user.role === 'admin' ? t('user_role_admin') : t('user_role_user') }}
@@ -541,6 +570,24 @@
                         </ul>
                     </div>
 
+                    <!-- 供应商自动切换总开关 -->
+                    <div class="info-box" style="margin-bottom: 16px; padding: 12px 16px; background: #f0fdf4; border-left: 4px solid #22c55e; border-radius: 4px;">
+                        <div style="display:flex; align-items:center; justify-content:space-between;">
+                            <div>
+                                <p style="margin: 0; color: #166534; font-size: 13px;">
+                                    <strong>🔄 {{ t('impl_retry_global_title') }}</strong>
+                                    &nbsp;{{ t('impl_retry_global_desc') }}
+                                </p>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox"
+                                    v-model="implementations.retryGlobalEnabled"
+                                    @change="toggleRetryGlobal">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
                     <!-- 分组表格 -->
                     <div v-if="implementations.loading" class="loading">
                         <div class="loading-spinner"></div>
@@ -566,6 +613,7 @@
                                         <th class="sort-order-column">{{ t('impl_col_sort') }}</th>
                                         <th>{{ t('impl_col_name') }}</th>
                                         <th>{{ t('impl_col_display_name') }}</th>
+                                        <th>{{ t('impl_col_enabled') }}</th>
                                         <th>{{ t('impl_col_power_config') }}</th>
                                         <th>{{ t('impl_col_desc') }}</th>
                                     </tr>
@@ -594,6 +642,14 @@
                                         <td>
                                             {{ item.display_name }}
                                             <span v-if="isDefaultImplementation(item, group)" class="implementation-in-use-label">{{ t('impl_in_use') }}</span>
+                                        </td>
+                                        <td>
+                                            <label class="switch">
+                                                <input type="checkbox"
+                                                    :checked="item.enabled !== false"
+                                                    @change="toggleImplementation(item, group)">
+                                                <span class="slider"></span>
+                                            </label>
                                         </td>
                                         <td>
                                             <div v-if="item.duration_powers && item.duration_powers.length > 0" class="duration-power-list">
@@ -840,6 +896,90 @@
                     </div>
                 </div>
             </section>
+
+            <!-- 常量参考页面 -->
+            <section v-if="currentPage === 'constants'">
+                <div class="table-filters" style="margin-bottom: 16px;">
+                    <input type="text" class="filter-input" :placeholder="t('constants_search_placeholder')"
+                           v-model="constants.searchKeyword" style="width: 300px;">
+                    <select class="filter-select" v-model="constants.groupFilter">
+                        <option value="">{{ t('constants_all_groups') }}</option>
+                        <option v-for="group in constants.groups" :key="group.group_id" :value="group.group_id">
+                            {{ group.source }}
+                        </option>
+                    </select>
+                    <select class="filter-select" v-model="constants.typeFilter">
+                        <option value="">{{ t('constants_all_types') }}</option>
+                        <option value="int">{{ t('constants_type_int') }}</option>
+                        <option value="string">{{ t('constants_type_string') }}</option>
+                    </select>
+                    <span v-if="filteredConstantsClasses.length" style="color: #64748b; font-size: 13px; margin-left: 12px;">
+                        {{ t('constants_count', { count: filteredConstantsClasses.length }) }}
+                    </span>
+                </div>
+
+                <div v-if="constants.loading" class="loading">
+                    <div class="loading-spinner"></div>
+                    <p>{{ t('loading') }}</p>
+                </div>
+
+                <div v-else class="constants-grid">
+                    <div v-if="filteredConstantsClasses.length === 0" style="text-align: center; color: #94a3b8; padding: 40px; grid-column: 1 / -1;">
+                        {{ t('no_data') }}
+                    </div>
+                    <div v-for="cls in filteredConstantsClasses" :key="cls.class_name" class="constant-card">
+                        <div class="constant-card-header">
+                            <div>
+                                <h4>{{ cls.class_name }}</h4>
+                                <p class="constant-card-desc">{{ cls.description }}</p>
+                            </div>
+                            <span class="constant-type-badge">{{ cls.member_count }}</span>
+                        </div>
+                        <table class="admin-table constant-table">
+                            <thead>
+                                <tr>
+                                    <th>{{ t('constants_col_name') }}</th>
+                                    <th>{{ t('constants_col_value') }}</th>
+                                    <th>{{ t('constants_col_label') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="member in cls.members" :key="member.name">
+                                    <td><code>{{ member.name }}</code></td>
+                                    <td><code>{{ member.value }}</code></td>
+                                    <td>{{ member.label || '-' }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 映射关系 -->
+                <div v-if="constants.mappings && constants.mappings.length" style="margin-top: 24px;">
+                    <div class="table-container">
+                        <div class="table-header">
+                            <h3>{{ t('constants_mappings_title') }}</h3>
+                        </div>
+                        <template v-for="mapping in constants.mappings" :key="mapping.mapping_name">
+                            <p style="color: #64748b; font-size: 13px; margin: 8px 0;">{{ mapping.description }}</p>
+                            <table class="admin-table">
+                                <thead>
+                                    <tr>
+                                        <th>{{ t('constants_col_impl_name') }}</th>
+                                        <th>{{ t('constants_col_impl_id') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="entry in mapping.entries" :key="entry.name">
+                                        <td><code>{{ entry.name }}</code></td>
+                                        <td><code>{{ entry.id }}</code></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </template>
+                    </div>
+                </div>
+            </section>
         </main>
 
         <!-- 底部版本信息 -->
@@ -932,7 +1072,25 @@
                         </div>
                         <div class="form-group">
                             <label>{{ t('modal_phone') }}</label>
-                            <input type="text" :value="userDetailModal.user.phone" disabled>
+                            <div class="sensitive-field">
+                                <input type="text" :value="visibleFields['detail_phone'] ? (userDetailModal.user.phone || '-') : formatPhone(userDetailModal.user.phone)" disabled>
+                                <button class="eye-toggle" @click="toggleFieldVisibility('detail_phone')"
+                                        :title="visibleFields['detail_phone'] ? t('btn_hide') : t('btn_show')">
+                                    <svg v-if="!visibleFields['detail_phone']" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                    <svg v-else xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>{{ t('modal_email') }}</label>
+                            <div class="sensitive-field">
+                                <input type="text" :value="visibleFields['detail_email'] ? (userDetailModal.user.email || '-') : formatEmail(userDetailModal.user.email)" disabled>
+                                <button v-if="userDetailModal.user.email" class="eye-toggle" @click="toggleFieldVisibility('detail_email')"
+                                        :title="visibleFields['detail_email'] ? t('btn_hide') : t('btn_show')">
+                                    <svg v-if="!visibleFields['detail_email']" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                    <svg v-else xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                                </button>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label>{{ t('modal_role') }}</label>

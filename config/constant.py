@@ -69,35 +69,67 @@ class TaskTypeRegistry:
 
 
 class Action:
-    """资源操作类型常量"""
-    VIEW = "view"      # 查看权限
-    EDIT = "edit"      # 编辑权限
-    DELETE = "delete"  # 删除权限
+    """资源操作类型"""
+    _CONSTANT_GROUP = True
+    _LABELS = {
+        'VIEW': '查看权限',
+        'EDIT': '编辑权限',
+        'DELETE': '删除权限',
+    }
+    VIEW = "view"
+    EDIT = "edit"
+    DELETE = "delete"
 
 
 class Edition:
-    """版本模式管理类"""
-    
+    """版本模式"""
+    _CONSTANT_GROUP = True
+    _LABELS = {
+        'COMMUNITY': '社区版',
+        'ENTERPRISE': '企业版',
+    }
+
     # 版本模式常量
     COMMUNITY = "community"
     ENTERPRISE = "enterprise"
-    
+
+    _enterprise_available = None  # 缓存：enterprise/ 目录是否存在
+
+    @staticmethod
+    def _is_enterprise_available() -> bool:
+        """检查 enterprise/ 代码目录是否实际存在（结果缓存）"""
+        if Edition._enterprise_available is None:
+            import os
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            Edition._enterprise_available = os.path.isdir(
+                os.path.join(project_root, "enterprise")
+            )
+        return Edition._enterprise_available
+
     @staticmethod
     def get_mode() -> str:
-        """获取当前版本模式"""
+        """获取当前版本模式
+
+        企业版需要同时满足：
+        1. 配置文件 edition.mode = enterprise
+        2. enterprise/ 目录实际存在
+        """
         from config.config_util import get_config_value
-        return get_config_value("edition", "mode", default=Edition.COMMUNITY)
-    
+        mode = get_config_value("edition", "mode", default=Edition.COMMUNITY)
+        if mode == Edition.ENTERPRISE and not Edition._is_enterprise_available():
+            return Edition.COMMUNITY
+        return mode
+
     @staticmethod
     def is_community() -> bool:
         """判断是否为开源/社区版"""
         return Edition.get_mode() == Edition.COMMUNITY
-    
+
     @staticmethod
     def is_enterprise() -> bool:
         """判断是否为商业版"""
         return not Edition.is_community()
-    
+
     @staticmethod
     def get_label() -> str:
         """获取版本模式标签"""
@@ -121,7 +153,12 @@ class Edition:
 
 
 class TaskType:
-    """任务类型常量"""
+    """任务类型"""
+    _CONSTANT_GROUP = True
+    _LABELS = {
+        'GENERATE_VIDEO': '生成视频',
+        'GENERATE_AUDIO': '生成音频',
+    }
     GENERATE_VIDEO = 'generate_video'
     GENERATE_AUDIO = 'generate_audio'
 
@@ -301,44 +338,81 @@ RUNNINGHUB_TASK_TYPES = TaskTypeRegistry.get_by_provider(TaskProvider.RUNNINGHUB
 TASK_TYPE_NAME_MAP = TaskTypeRegistry.get_name_map()
 
 class AIToolStatus:
-    """AI工具状态常量"""
-    PENDING = 0       # 未处理
-    PROCESSING = 1    # 正在处理
-    SYNC_QUEUED = 3   # 已提交到同步任务进程池
-    FAILED = -1       # 处理失败
-    COMPLETED = 2     # 处理完成
-    WAITING_PARAM_PREPARE = 4    # 等待参数预处理（流水线步骤处理中）
-    WAITING_BEFORE_FINISH = 5    # 等待结束前处理（失败后重试中）
+    """AI工具任务状态"""
+    _CONSTANT_GROUP = True
+    _LABELS = {
+        'PENDING': '未处理',
+        'PROCESSING': '正在处理',
+        'SYNC_QUEUED': '已提交到同步任务进程池',
+        'FAILED': '处理失败',
+        'COMPLETED': '处理完成',
+        'WAITING_PARAM_PREPARE': '等待参数预处理',
+        'WAITING_BEFORE_FINISH': '等待结束前处理',
+    }
+    PENDING = 0
+    PROCESSING = 1
+    SYNC_QUEUED = 3
+    FAILED = -1
+    COMPLETED = 2
+    WAITING_PARAM_PREPARE = 4
+    WAITING_BEFORE_FINISH = 5
 
 
 class TaskStatus:
-    """任务状态常量"""
-    QUEUED = 0        # 队列中
-    PROCESSING = 1    # 处理中
-    SYNC_QUEUED = 3   # 已提交到同步任务进程池
-    COMPLETED = 2     # 处理完成
-    FAILED = -1       # 处理失败
-    WAITING_PARAM_PREPARE = 4    # 等待参数预处理
-    WAITING_BEFORE_FINISH = 5    # 等待结束前处理
+    """任务状态"""
+    _CONSTANT_GROUP = True
+    _LABELS = {
+        'QUEUED': '队列中',
+        'PROCESSING': '处理中',
+        'SYNC_QUEUED': '已提交到同步任务进程池',
+        'COMPLETED': '处理完成',
+        'FAILED': '处理失败',
+        'WAITING_PARAM_PREPARE': '等待参数预处理',
+        'WAITING_BEFORE_FINISH': '等待结束前处理',
+    }
+    QUEUED = 0
+    PROCESSING = 1
+    SYNC_QUEUED = 3
+    COMPLETED = 2
+    FAILED = -1
+    WAITING_PARAM_PREPARE = 4
+    WAITING_BEFORE_FINISH = 5
 
 
 class GridImageTaskStatus:
-    """宫格生图任务状态常量"""
-    QUEUED = 0          # 队列中
-    PROCESSING = 1      # 处理中
-    COMPLETED = 2       # 完成
-    FAILED = -1         # 失败
-    TIMEOUT = -2        # 超时
-    CANCELLED = -3      # 取消
-    DOWNLOAD_FAILED = -4  # 下载失败
+    """宫格生图任务状态"""
+    _CONSTANT_GROUP = True
+    _LABELS = {
+        'QUEUED': '队列中',
+        'PROCESSING': '处理中',
+        'COMPLETED': '完成',
+        'FAILED': '失败',
+        'TIMEOUT': '超时',
+        'CANCELLED': '取消',
+        'DOWNLOAD_FAILED': '下载失败',
+    }
+    QUEUED = 0
+    PROCESSING = 1
+    COMPLETED = 2
+    FAILED = -1
+    TIMEOUT = -2
+    CANCELLED = -3
+    DOWNLOAD_FAILED = -4
 
 
 class AIAudioStatus:
-    """AI音频状态常量"""
-    PENDING = 0       # 未处理
-    PROCESSING = 1    # 处理中
-    FAILED = -1       # 处理失败
-    COMPLETED = 2     # 处理完成
+    """AI音频任务状态"""
+    _CONSTANT_GROUP = True
+    _LABELS = {
+        'PENDING': '未处理',
+        'PROCESSING': '处理中',
+        'FAILED': '处理失败',
+        'COMPLETED': '处理完成',
+    }
+    PENDING = 0
+    PROCESSING = 1
+    FAILED = -1
+    COMPLETED = 2
 
 
 
@@ -544,18 +618,43 @@ class ExternalLinks:
 
 # LLM 模型和供应商常量
 class LLMVendor:
-    """LLM 供应商常量"""
-    JIEKOU = 'jiekou'      # 接口供应商（Gemini 模型）
-    ALIYUN = 'aliyun'      # 阿里云供应商（Qwen 模型）
-    OLLAMA = 'ollama'      # 本地运行供应商（Ollama 模型）
-    VOLCENGINE = 'volcengine'  # 火山引擎供应商（Doubao 模型）
-    CLAUDE = 'claude'      # Claude 供应商（Anthropic 模型）
-    ZJT_API = 'zjt_api'    # ZJT API 供应商（Qwen3.5/3.6 模型）
-    DEEPSEEK = 'deepseek'  # DeepSeek 供应商（DeepSeek-V4 模型）
+    """LLM 供应商"""
+    _CONSTANT_GROUP = True
+    _LABELS = {
+        'JIEKOU': '接口供应商（Gemini 模型）',
+        'ALIYUN': '阿里云供应商（Qwen 模型）',
+        'OLLAMA': '本地运行供应商（Ollama 模型）',
+        'VOLCENGINE': '火山引擎供应商（Doubao 模型）',
+        'CLAUDE': 'Claude 供应商（Anthropic 模型）',
+        'ZJT_API': 'ZJT API 供应商（Qwen3.5/3.6 模型）',
+        'DEEPSEEK': 'DeepSeek 供应商（DeepSeek-V4 模型）',
+    }
+    JIEKOU = 'jiekou'
+    ALIYUN = 'aliyun'
+    OLLAMA = 'ollama'
+    VOLCENGINE = 'volcengine'
+    CLAUDE = 'claude'
+    ZJT_API = 'zjt_api'
+    DEEPSEEK = 'deepseek'
 
 
 class LLMModel:
-    """LLM 模型名称常量"""
+    """LLM 模型名称"""
+    _CONSTANT_GROUP = True
+    _LABELS = {
+        'GEMINI_3_FLASH': 'Gemini 3 Flash Preview',
+        'GEMINI_3_5_FLASH': 'Gemini 3.5 Flash',
+        'GEMINI_3_1_PRO': 'Gemini 3.1 Pro Preview',
+        'QWEN_3_5_PLUS': 'Qwen 3.5 Plus',
+        'QWEN_3_6_PLUS': 'Qwen 3.6 Plus',
+        'QWEN_PLUS': 'Qwen Plus',
+        'OLLAMA_QWEN_3_6_35B': 'Ollama Qwen 3.6 35B',
+        'DOUBAO_SEED_2_0_PRO': 'Doubao Seed 2.0 Pro',
+        'DOUBAO_SEED_2_0_LITE': 'Doubao Seed 2.0 Lite',
+        'CLAUDE_HAIKU_4_5': 'Claude Haiku 4.5',
+        'DEEPSEEK_V4_FLASH': 'DeepSeek V4 Flash',
+        'DEEPSEEK_V4_PRO': 'DeepSeek V4 Pro',
+    }
     # Gemini 模型
     GEMINI_3_FLASH = 'gemini-3-flash-preview'
     GEMINI_3_5_FLASH = 'gemini-3.5-flash'
@@ -620,9 +719,20 @@ class UpgradeConstants:
 # ============ 通知系统常量 ============
 
 class NotificationConstants:
-    """远程通知系统配置"""
-    REMOTE_API_BASE = "https://ailive.perseids.cn:11443/api/v1"  # 远程通知 API 地址
-    CHECK_INTERVAL = 3600                            # 默认检查间隔（秒）
+    """通知系统常量"""
+    _CONSTANT_GROUP = True
+    _LABELS = {
+        'TYPE_ANNOUNCEMENT': '公告',
+        'TYPE_MAINTENANCE': '维护',
+        'TYPE_FEATURE': '新功能',
+        'TYPE_SECURITY': '安全',
+        'LEVEL_INFO': '信息',
+        'LEVEL_WARNING': '警告',
+        'LEVEL_ERROR': '错误',
+        'LEVEL_SUCCESS': '成功',
+    }
+    REMOTE_API_BASE = "https://ailive.perseids.cn:11443/api/v1"
+    CHECK_INTERVAL = 3600
 
     # 通知类型
     TYPE_ANNOUNCEMENT = "announcement"

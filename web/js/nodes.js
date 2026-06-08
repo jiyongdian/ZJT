@@ -104,15 +104,19 @@
         } else if(gridLayoutPref === '9') {
           finalModel = 'gemini-3-pro-image-preview';
         } else {
-          // auto: 根据分镜数量和参考图片数量自动选择
-          if(shotCount <= 5 && !forceEnhancedModel) {
+          // auto: 根据分镜数量自动选择宫格大小
+          if(shotCount <= 5) {
             gridSize = 4;
             gridLayout = '2x2';
-            finalModel = 'gemini-2.5-flash-image-preview';
           } else {
             gridSize = 9;
             gridLayout = '3x3';
+          }
+          // 根据参考图片数量选择模型（forceEnhancedModel 仅影响模型，不影响宫格大小）
+          if(forceEnhancedModel) {
             finalModel = 'gemini-3-pro-image-preview';
+          } else {
+            finalModel = 'gemini-2.5-flash-image-preview';
           }
         }
       } else if(gridModel === 'gemini-2.5-flash-image-preview' && !forceEnhancedModel) {
@@ -1712,11 +1716,17 @@
           });
         }
 
-        // 视频模型选择器和相关元素
+        // 视频模型选择器和相关元素（根据当前视频生成模式过滤）
         const shotGroupVideoModelEl = nodeBody.querySelector('.shot-group-video-model');
+        const shotGroupVideoGenMode = nodeBody.querySelector('.shot-group-video-gen-mode');
         if(shotGroupVideoModelEl) {
+          const mode = node.data.videoGenMode || 'first_last_frame';
           if(window.TaskConfig && window.TaskConfig.isLoaded()) {
-            const options = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+            const allOptions = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+            const options = allOptions.filter(opt => {
+              const modes = opt.supportedImageModes || ['first_last_frame'];
+              return modes.includes(mode);
+            });
             options.forEach(opt => {
               const optEl = document.createElement('option');
               optEl.value = opt.value;
@@ -8145,12 +8155,17 @@
       const computingPowerValue = el.querySelector('.shot-group-computing-power-value');
       const computingPowerDetail = el.querySelector('.shot-group-computing-power-detail');
 
-      // 动态填充视频模型选项
+      // 动态填充视频模型选项（根据当前视频生成模式过滤）
       let firstShotGroupVideoModelValue = 'wan22';
+      const shotGroupMode = node.data.videoGenMode || 'first_last_frame';
       if(videoModelEl) {
         videoModelEl.innerHTML = '';
         if(window.TaskConfig && window.TaskConfig.isLoaded()) {
-          const options = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+          const allOptions = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+          const options = allOptions.filter(opt => {
+            const modes = opt.supportedImageModes || ['first_last_frame'];
+            return modes.includes(shotGroupMode);
+          });
           if(options.length > 0) firstShotGroupVideoModelValue = options[0].value;
           options.forEach(opt => {
             const optEl = document.createElement('option');
@@ -8160,14 +8175,23 @@
             videoModelEl.appendChild(optEl);
           });
         } else {
-          videoModelEl.innerHTML = `
-            <option value="wan22" selected>Wan2.2</option>
-            <option value="sora2">Sora2</option>
-            <option value="ltx2">LTX2.0</option>
-            <option value="kling">可灵</option>
-            <option value="vidu">Vidu</option>
-            <option value="veo3">VEO3.1</option>
-          `;
+          if(shotGroupMode === 'multi_reference') {
+            videoModelEl.innerHTML = `
+              <option value="veo3">VEO3.1</option>
+              <option value="seedance_2_0">Seedance 2.0</option>
+              <option value="vidu_q2">Vidu-Q2</option>
+            `;
+            firstShotGroupVideoModelValue = 'veo3';
+          } else {
+            videoModelEl.innerHTML = `
+              <option value="wan22" selected>Wan2.2</option>
+              <option value="sora2">Sora2</option>
+              <option value="ltx2">LTX2.0</option>
+              <option value="kling">可灵</option>
+              <option value="vidu">Vidu</option>
+              <option value="veo3">VEO3.1</option>
+            `;
+          }
         }
       }
 
@@ -8220,8 +8244,64 @@
           node.data.videoDuration = firstOption;
         }
       }
-      
+
       updateVideoDurationOptions(node.data.videoModel);
+
+      // 根据当前视频生成模式重新填充视频模型选项
+      function populateShotGroupVideoModelOptions() {
+        if(!videoModelEl) return;
+        const mode = node.data.videoGenMode || 'first_last_frame';
+        let firstValue = mode === 'multi_reference' ? 'veo3' : 'wan22';
+        let filteredOptions = [];
+
+        videoModelEl.innerHTML = '';
+
+        if(window.TaskConfig && window.TaskConfig.isLoaded()) {
+          const allOptions = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+          filteredOptions = allOptions.filter(opt => {
+            const modes = opt.supportedImageModes || ['first_last_frame'];
+            return modes.includes(mode);
+          });
+          if(filteredOptions.length > 0) firstValue = filteredOptions[0].value;
+          filteredOptions.forEach(opt => {
+            const optEl = document.createElement('option');
+            optEl.value = opt.value;
+            optEl.textContent = opt.label;
+            videoModelEl.appendChild(optEl);
+          });
+        } else {
+          if(mode === 'multi_reference') {
+            videoModelEl.innerHTML = `
+              <option value="veo3">VEO3.1</option>
+              <option value="seedance_2_0">Seedance 2.0</option>
+              <option value="vidu_q2">Vidu-Q2</option>
+            `;
+            firstValue = 'veo3';
+          } else {
+            videoModelEl.innerHTML = `
+              <option value="wan22">Wan2.2</option>
+              <option value="sora2">Sora2</option>
+              <option value="ltx2">LTX2.0</option>
+              <option value="kling">可灵</option>
+              <option value="vidu">Vidu</option>
+              <option value="veo3">VEO3.1</option>
+            `;
+            firstValue = 'wan22';
+          }
+        }
+
+        // 如果当前选择的模型不在新列表中，切换到第一个可用模型
+        const validValues = filteredOptions.map(o => o.value);
+        if(validValues.length > 0 && !validValues.includes(node.data.videoModel)) {
+          node.data.videoModel = firstValue;
+        }
+        ensureSelectHasSavedOption(videoModelEl, node.data.videoModel);
+        videoModelEl.value = node.data.videoModel || firstValue;
+        applyDriverStatusToSelect(videoModelEl);
+        // 模型变更后联动更新时长选项和算力显示
+        updateVideoDurationOptions(videoModelEl.value);
+        updateVideoComputingPowerDisplay();
+      }
 
       // 计算视频生成算力消耗
       function calculateVideoComputingPower() {
@@ -8273,11 +8353,13 @@
         updateMergeButtonVisibility(videoModelEl.value);
       });
 
-      // 视频生成模式选择事件
+      // 视频生成模式选择事件（切换模式时重新过滤视频模型列表）
       if(videoGenModeEl) {
         videoGenModeEl.addEventListener('change', () => {
           node.data.videoGenMode = videoGenModeEl.value;
+          populateShotGroupVideoModelOptions();
           updateMergeButtonVisibility(videoModelEl.value);
+          try { autoSaveWorkflow(); } catch(e) {}
         });
       }
 
@@ -9264,12 +9346,10 @@
 
         if(window.TaskConfig && window.TaskConfig.isLoaded()) {
           allOptions = window.TaskConfig.getModelOptionsForCategory('image_to_video');
-          if(mode === 'multi_reference') {
-            allOptions = allOptions.filter(opt => {
-              const modes = opt.supportedImageModes || ['first_last_frame'];
-              return modes.includes('multi_reference');
-            });
-          }
+          allOptions = allOptions.filter(opt => {
+            const modes = opt.supportedImageModes || ['first_last_frame'];
+            return modes.includes(mode);
+          });
           if(allOptions.length > 0) firstVideoModelValue = allOptions[0].value;
           allOptions.forEach(opt => {
             const optEl = document.createElement('option');
@@ -9805,6 +9885,31 @@
             }
             charTagsEl.appendChild(tag);
           });
+          // 角色标签末尾添加编辑提示词按钮
+          if(validChars.length > 0) {
+            const editBtn = document.createElement('button');
+            editBtn.className = 'char-ref-edit-btn';
+            editBtn.type = 'button';
+            editBtn.title = '编辑提示词';
+            editBtn.textContent = '✏️';
+            editBtn.style.cssText = 'background: none; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; font-size: 11px; padding: 1px 6px; vertical-align: middle; margin-left: 4px;';
+            editBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              const mode = node.data.videoMode || 'first_last_frame';
+              if(mode === 'multi_reference') {
+                showPromptExpandModal(videoPromptEl, '视频提示词', (newValue) => {
+                  node.data.videoPromptText = newValue;
+                  updateShotReferences();
+                }, { enableCharacterDropdown: true, nodeId: id, dropdownKey: 'videoprompt' });
+              } else {
+                showPromptExpandModal(imagePromptEl, '图片提示词', (newValue) => {
+                  node.data.imagePrompt = newValue;
+                  updateShotReferences();
+                }, { enableCharacterDropdown: true, nodeId: id });
+              }
+            });
+            charTagsEl.appendChild(editBtn);
+          }
         }
       }
 
