@@ -29,7 +29,7 @@ from utils.cdn_util import CDNUtil, CDNStatus
 class TestIsCdnUrl(unittest.TestCase):
     """测试 CDNUtil.is_cdn_url()"""
 
-    @patch('utils.cdn_util.get_dynamic_config_value')
+    @patch('config.config_util.get_dynamic_config_value')
     def test_matching_long_term_domain(self, mock_get_config):
         """匹配 qiniu_long_term CDN 域名返回 True"""
         def side_effect(section, subsection, key, default=""):
@@ -40,7 +40,7 @@ class TestIsCdnUrl(unittest.TestCase):
 
         self.assertTrue(CDNUtil.is_cdn_url('https://cdn.example.com/upload/img/a.png'))
 
-    @patch('utils.cdn_util.get_dynamic_config_value')
+    @patch('config.config_util.get_dynamic_config_value')
     def test_matching_qiniu_domain(self, mock_get_config):
         """匹配 qiniu CDN 域名返回 True"""
         def side_effect(section, subsection, key, default=""):
@@ -51,32 +51,32 @@ class TestIsCdnUrl(unittest.TestCase):
 
         self.assertTrue(CDNUtil.is_cdn_url('https://qiniu.example.com/upload/img/a.png'))
 
-    @patch('utils.cdn_util.get_dynamic_config_value')
+    @patch('config.config_util.get_dynamic_config_value')
     def test_external_url_returns_false(self, mock_get_config):
         """外部 URL 返回 False"""
         mock_get_config.return_value = 'cdn.example.com'
 
         self.assertFalse(CDNUtil.is_cdn_url('https://other-cdn.com/image.png'))
 
-    @patch('utils.cdn_util.get_dynamic_config_value')
+    @patch('config.config_util.get_dynamic_config_value')
     def test_empty_string_returns_false(self, mock_get_config):
         """空字符串返回 False"""
         mock_get_config.return_value = ''
         self.assertFalse(CDNUtil.is_cdn_url(''))
 
-    @patch('utils.cdn_util.get_dynamic_config_value')
+    @patch('config.config_util.get_dynamic_config_value')
     def test_none_returns_false(self, mock_get_config):
         """None 返回 False"""
         mock_get_config.return_value = ''
         self.assertFalse(CDNUtil.is_cdn_url(None))
 
-    @patch('utils.cdn_util.get_dynamic_config_value')
+    @patch('config.config_util.get_dynamic_config_value')
     def test_no_netloc_returns_false(self, mock_get_config):
         """没有域名的路径返回 False"""
         mock_get_config.return_value = 'cdn.example.com'
         self.assertFalse(CDNUtil.is_cdn_url('/upload/img/a.png'))
 
-    @patch('utils.cdn_util.get_dynamic_config_value')
+    @patch('config.config_util.get_dynamic_config_value')
     def test_exception_returns_false(self, mock_get_config):
         """配置获取异常返回 False"""
         mock_get_config.side_effect = Exception("config error")
@@ -129,8 +129,8 @@ class TestGetMediaUrl(unittest.TestCase):
 class TestGetSignedDownloadUrl(unittest.TestCase):
     """测试 CDNUtil.get_signed_download_url()"""
 
-    @patch('utils.cdn_util.QiniuFileStorage')
-    @patch('utils.cdn_util.get_dynamic_config_value')
+    @patch('utils.file_storage.qiniu_storage.QiniuFileStorage')
+    @patch('config.config_util.get_dynamic_config_value')
     def test_matching_long_term_domain(self, mock_get_config, MockStorage):
         """匹配 qiniu_long_term 域名时生成签名 URL"""
         def side_effect(section, subsection, key, default=""):
@@ -157,7 +157,7 @@ class TestGetSignedDownloadUrl(unittest.TestCase):
             'upload/img/a.png', expires=100800, attname='my_file.png'
         )
 
-    @patch('utils.cdn_util.get_dynamic_config_value')
+    @patch('config.config_util.get_dynamic_config_value')
     def test_unmatched_domain_returns_none(self, mock_get_config):
         """未匹配的域名返回 None"""
         mock_get_config.return_value = ''
@@ -167,7 +167,7 @@ class TestGetSignedDownloadUrl(unittest.TestCase):
         )
         self.assertIsNone(result)
 
-    @patch('utils.cdn_util.get_dynamic_config_value')
+    @patch('config.config_util.get_dynamic_config_value')
     def test_incomplete_config_returns_none(self, mock_get_config):
         """配置不完整返回 None"""
         def side_effect(section, subsection, key, default=""):
@@ -181,7 +181,7 @@ class TestGetSignedDownloadUrl(unittest.TestCase):
         )
         self.assertIsNone(result)
 
-    @patch('utils.cdn_util.get_dynamic_config_value')
+    @patch('config.config_util.get_dynamic_config_value')
     def test_exception_returns_none(self, mock_get_config):
         """异常时返回 None"""
         mock_get_config.side_effect = Exception("config error")
@@ -206,8 +206,8 @@ class TestRefreshCdnSignedUrl(unittest.TestCase):
         url = 'http://localhost:8000/upload/img.png'
         self.assertEqual(CDNUtil.refresh_cdn_signed_url(url), url)
 
-    @patch('utils.cdn_util.QiniuFileStorage')
-    @patch('utils.cdn_util.get_dynamic_config_value')
+    @patch('utils.file_storage.qiniu_storage.QiniuFileStorage')
+    @patch('config.config_util.get_dynamic_config_value')
     @patch('utils.cdn_util.CDNUtil.is_cdn_url', return_value=True)
     def test_cdn_url_refreshed(self, mock_is_cdn, mock_get_config, MockStorage):
         """CDN URL 成功刷新签名"""
@@ -230,7 +230,7 @@ class TestRefreshCdnSignedUrl(unittest.TestCase):
         self.assertEqual(result, 'https://cdn.example.com/img.png?fresh_sig=1')
 
     @patch('utils.cdn_util.CDNUtil.is_cdn_url', return_value=True)
-    @patch('utils.cdn_util.get_dynamic_config_value')
+    @patch('config.config_util.get_dynamic_config_value')
     def test_exception_returns_original_url(self, mock_get_config, mock_is_cdn):
         """刷新异常时返回原始 URL"""
         mock_get_config.side_effect = Exception("unexpected")
