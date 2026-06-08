@@ -568,9 +568,19 @@ const AdminApp = {
                 },
                 modelAnalysis: {
                     days: 1,
+                    startDate: '',
+                    endDate: '',
+                    selectedTypes: [],
+                    chartMode: 'both',
                     loading: false,
                     models: [],
-                    expandedTypes: {}
+                    daily: [],
+                    expandedTypes: {},
+                    charts: {
+                        trend: null,
+                        stacked: null,
+                        rose: null
+                    }
                 }
             },
             
@@ -941,10 +951,19 @@ const AdminApp = {
     
     mounted() {
         this.initI18n().then(() => {
+            this.initModelAnalysisDates();
+            window.addEventListener('resize', this.resizeModelAnalysisCharts);
             this.initAuth();
             this.fetchServerConfig();
             this.pollNotifications();
             this.notificationsPollTimer = setInterval(() => this.pollNotifications(), 30000);
+        });
+    },
+
+    unmounted() {
+        window.removeEventListener('resize', this.resizeModelAnalysisCharts);
+        Object.values(this.dashboard.modelAnalysis.charts || {}).forEach(chart => {
+            if (chart) chart.dispose();
         });
     },
 
@@ -1173,13 +1192,29 @@ const AdminApp = {
         async loadModelAnalysis() {
             this.dashboard.modelAnalysis.loading = true;
             try {
+                const params = { days: this.dashboard.modelAnalysis.days };
+                if (this.dashboard.modelAnalysis.startDate) {
+                    params.start_date = this.dashboard.modelAnalysis.startDate;
+                }
+                if (this.dashboard.modelAnalysis.endDate) {
+                    params.end_date = this.dashboard.modelAnalysis.endDate;
+                }
+
                 const response = await axios.get('/api/admin/dashboard/model-analysis', {
-                    params: { days: this.dashboard.modelAnalysis.days },
+                    params,
                     headers: { 'Authorization': `Bearer ${this.authToken}` }
                 });
 
                 if (response.data.code === 0) {
-                    this.dashboard.modelAnalysis.models = response.data.data.models;
+                    const models = response.data.data.models || [];
+                    this.dashboard.modelAnalysis.models = models;
+                    this.dashboard.modelAnalysis.daily = response.data.data.daily || [];
+
+                    const availableTypes = models.map(model => model.type);
+                    const selectedTypes = (this.dashboard.modelAnalysis.selectedTypes || [])
+                        .filter(type => availableTypes.includes(type));
+                    this.dashboard.modelAnalysis.selectedTypes = selectedTypes.length ? selectedTypes : availableTypes;
+                    this.$nextTick(() => this.renderModelAnalysisCharts());
                 }
             } catch (error) {
                 console.error('Load model analysis failed:', error);
@@ -1192,8 +1227,75 @@ const AdminApp = {
         // 切换模型分析时间范围
         setModelAnalysisDays(days) {
             this.dashboard.modelAnalysis.days = days;
+            this.setModelAnalysisDateRangeFromDays(days);
+            this.dashboard.modelAnalysis.expandedTypes = {};
+            this.dashboard.modelAnalysis.daily = [];
+            this.loadModelAnalysis();
+        },
+
+        initModelAnalysisDates() {
+            this.setModelAnalysisDateRangeFromDays(this.dashboard.modelAnalysis.days || 1);
+        },
+
+        setModelAnalysisDateRangeFromDays(days) {
+            const end = new Date();
+            const start = new Date();
+            start.setDate(end.getDate() - Math.max(days - 1, 0));
+            this.dashboard.modelAnalysis.startDate = this.formatDateInput(start);
+            this.dashboard.modelAnalysis.endDate = this.formatDateInput(end);
+        },
+
+        formatDateInput(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        },
+
+        handleModelAnalysisDateChange() {
+            const { startDate, endDate } = this.dashboard.modelAnalysis;
+            if (startDate && endDate) {
+                const start = new Date(startDate);
+                const end = new Date(endDate);
+                if (start > end) {
+                    this.dashboard.modelAnalysis.endDate = startDate;
+                } else {
+                    const diffMs = end.getTime() - start.getTime();
+                    this.dashboard.modelAnalysis.days = Math.min(Math.floor(diffMs / 86400000) + 1, 30);
+                }
+            }
             this.dashboard.modelAnalysis.expandedTypes = {};
             this.loadModelAnalysis();
+        },
+
+        setModelAnalysisChartMode(mode) {
+            this.dashboard.modelAnalysis.chartMode = mode;
+            this.$nextTick(() => this.renderModelTrendChart());
+        },
+
+        selectAllModelAnalysisTypes() {
+            this.dashboard.modelAnalysis.selectedTypes = (this.dashboard.modelAnalysis.models || []).map(model => model.type);
+            this.$nextTick(() => this.renderModelAnalysisCharts());
+        },
+
+        clearModelAnalysisTypes() {
+            this.dashboard.modelAnalysis.selectedTypes = [];
+            this.$nextTick(() => this.renderModelAnalysisCharts());
+        },
+
+        toggleModelAnalysisType(type) {
+            const selected = new Set(this.dashboard.modelAnalysis.selectedTypes || []);
+            if (selected.has(type)) {
+                selected.delete(type);
+            } else {
+                selected.add(type);
+            }
+            this.dashboard.modelAnalysis.selectedTypes = Array.from(selected);
+            this.$nextTick(() => this.renderModelAnalysisCharts());
+        },
+
+        isModelAnalysisTypeSelected(type) {
+            return (this.dashboard.modelAnalysis.selectedTypes || []).includes(type);
         },
 
         // 展开/折叠模型供应商详情
@@ -1206,6 +1308,246 @@ const AdminApp = {
             if (rate >= 90) return 'rate-high';
             if (rate >= 70) return 'rate-medium';
             return 'rate-low';
+        },
+
+        getModelAnalysisSummary() {
+            const models = this.dashboard.modelAnalysis.models || [];
+            const total = models.reduce((sum, model) => sum + (model.total || 0), 0);
+            const success = models.reduce((sum, model) => sum + (model.success || 0), 0);
+            const fail = models.reduce((sum, model) => sum + (model.fail || 0), 0);
+            return {
+                total,
+                success,
+                fail,
+                successRate: total > 0 ? (success / total) * 100 : 0
+            };
+        },
+
+        sortedModelAnalysisModels() {
+            return [...(this.dashboard.modelAnalysis.models || [])]
+                .sort((a, b) => (b.total || 0) - (a.total || 0));
+        },
+
+        getDailyTrendItems() {
+            return this.dashboard.modelAnalysis.daily || [];
+        },
+
+        getSelectedModelAnalysisModels() {
+            const selected = new Set(this.dashboard.modelAnalysis.selectedTypes || []);
+            return this.sortedModelAnalysisModels().filter(model => selected.has(model.type));
+        },
+
+        getModelColor(index) {
+            const colors = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#14b8a6', '#e11d48', '#64748b'];
+            return colors[index % colors.length];
+        },
+
+        getDailyModelValue(day, type, field) {
+            const item = (day.models || []).find(model => model.type === type);
+            return item ? (item[field] || 0) : 0;
+        },
+
+        getModelChartBaseOption() {
+            return {
+                backgroundColor: 'transparent',
+                textStyle: {
+                    color: '#334155',
+                    fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: 'rgba(15, 23, 42, 0.92)',
+                    borderWidth: 0,
+                    textStyle: { color: '#fff' },
+                    axisPointer: { type: 'cross' }
+                },
+                legend: {
+                    type: 'scroll',
+                    top: 0,
+                    textStyle: { color: '#475569' }
+                },
+                grid: {
+                    left: 48,
+                    right: 58,
+                    top: 58,
+                    bottom: 36,
+                    containLabel: true
+                }
+            };
+        },
+
+        ensureModelChart(refName, key) {
+            if (!window.echarts) {
+                this.showToast(this.t('model_chart_dependency_missing'), 'error');
+                return null;
+            }
+            const el = this.$refs[refName];
+            if (!el) return null;
+            if (!this.dashboard.modelAnalysis.charts[key]) {
+                const chart = window.echarts.init(el);
+                this.dashboard.modelAnalysis.charts[key] = Vue.markRaw ? Vue.markRaw(chart) : chart;
+            }
+            return this.dashboard.modelAnalysis.charts[key];
+        },
+
+        renderModelAnalysisCharts() {
+            if (!this.dashboard.modelAnalysis.models.length) return;
+            this.renderModelTrendChart();
+            this.renderModelStackedChart();
+            this.renderModelRoseChart();
+        },
+
+        renderModelTrendChart() {
+            const chart = this.ensureModelChart('modelTrendChart', 'trend');
+            if (!chart) return;
+            const daily = this.getDailyTrendItems();
+            const models = this.getSelectedModelAnalysisModels();
+            const dates = daily.map(day => day.date);
+            const mode = this.dashboard.modelAnalysis.chartMode;
+            const series = [];
+
+            models.forEach((model, index) => {
+                const color = this.getModelColor(index);
+                if (mode === 'rate' || mode === 'both') {
+                    series.push({
+                        name: `${model.name} ${this.t('model_chart_mode_rate')}`,
+                        type: 'line',
+                        smooth: true,
+                        yAxisIndex: 0,
+                        symbolSize: 7,
+                        lineStyle: { width: 3, color },
+                        itemStyle: { color },
+                        data: daily.map(day => this.getDailyModelValue(day, model.type, 'success_rate'))
+                    });
+                }
+                if (mode === 'count' || mode === 'both') {
+                    series.push({
+                        name: `${model.name} ${this.t('model_chart_mode_count')}`,
+                        type: 'line',
+                        smooth: true,
+                        yAxisIndex: 1,
+                        symbolSize: 6,
+                        lineStyle: { width: 2, type: 'dashed', color },
+                        itemStyle: { color },
+                        data: daily.map(day => this.getDailyModelValue(day, model.type, 'total'))
+                    });
+                }
+            });
+
+            chart.setOption({
+                ...this.getModelChartBaseOption(),
+                xAxis: {
+                    type: 'category',
+                    data: dates,
+                    boundaryGap: false,
+                    axisLine: { lineStyle: { color: '#cbd5e1' } },
+                    axisLabel: { color: '#64748b' }
+                },
+                yAxis: [
+                    {
+                        type: 'value',
+                        name: this.t('model_chart_mode_rate'),
+                        min: 0,
+                        max: 100,
+                        axisLabel: { formatter: '{value}%' },
+                        splitLine: { lineStyle: { color: '#e2e8f0' } }
+                    },
+                    {
+                        type: 'value',
+                        name: this.t('model_chart_mode_count'),
+                        min: 0,
+                        axisLabel: { formatter: '{value}' },
+                        splitLine: { show: false }
+                    }
+                ],
+                series
+            }, true);
+        },
+
+        renderModelStackedChart() {
+            const chart = this.ensureModelChart('modelStackedChart', 'stacked');
+            if (!chart) return;
+            const daily = this.getDailyTrendItems();
+            const models = this.getSelectedModelAnalysisModels();
+            chart.setOption({
+                ...this.getModelChartBaseOption(),
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' },
+                    backgroundColor: 'rgba(15, 23, 42, 0.92)',
+                    borderWidth: 0,
+                    textStyle: { color: '#fff' }
+                },
+                xAxis: {
+                    type: 'category',
+                    data: daily.map(day => day.date),
+                    axisLine: { lineStyle: { color: '#cbd5e1' } },
+                    axisLabel: { color: '#64748b' }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: this.t('model_chart_mode_count'),
+                    splitLine: { lineStyle: { color: '#e2e8f0' } }
+                },
+                series: models.map((model, index) => ({
+                    name: model.name,
+                    type: 'bar',
+                    stack: 'models',
+                    barMaxWidth: 42,
+                    itemStyle: { color: this.getModelColor(index), borderRadius: [3, 3, 0, 0] },
+                    data: daily.map(day => this.getDailyModelValue(day, model.type, 'total'))
+                }))
+            }, true);
+        },
+
+        renderModelRoseChart() {
+            const chart = this.ensureModelChart('modelRoseChart', 'rose');
+            if (!chart) return;
+            const models = this.getSelectedModelAnalysisModels();
+            chart.setOption({
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'item',
+                    backgroundColor: 'rgba(15, 23, 42, 0.92)',
+                    borderWidth: 0,
+                    textStyle: { color: '#fff' }
+                },
+                legend: {
+                    type: 'scroll',
+                    orient: 'vertical',
+                    right: 10,
+                    top: 20,
+                    bottom: 20,
+                    textStyle: { color: '#475569' }
+                },
+                series: [{
+                    name: this.t('model_chart_rose_volume'),
+                    type: 'pie',
+                    roseType: 'radius',
+                    radius: ['24%', '72%'],
+                    center: ['42%', '52%'],
+                    label: {
+                        formatter: '{b}: {c}',
+                        color: '#334155'
+                    },
+                    itemStyle: {
+                        borderColor: '#fff',
+                        borderWidth: 2
+                    },
+                    data: models.map((model, index) => ({
+                        name: model.name,
+                        value: model.total || 0,
+                        itemStyle: { color: this.getModelColor(index) }
+                    }))
+                }]
+            }, true);
+        },
+
+        resizeModelAnalysisCharts() {
+            const charts = this.dashboard?.modelAnalysis?.charts || {};
+            Object.values(charts).forEach(chart => {
+                if (chart) chart.resize();
+            });
         },
 
         // 格式化耗时（毫秒 → 可读字符串）
@@ -1351,7 +1693,7 @@ const AdminApp = {
         // 更新用户角色
         async updateUserRole(userId, currentRole) {
             const newRole = currentRole === 'admin' ? 'user' : 'admin';
-            const actionKey = newRole === 'admin' ? 'btn_set_admin' : 'btn_set_admin';
+            const actionKey = newRole === 'admin' ? 'btn_set_admin' : 'btn_set_user';
 
             if (!confirm(this.t('confirm_action', { action: this.t(actionKey) }))) {
                 return;
@@ -1365,7 +1707,10 @@ const AdminApp = {
 
                 if (response.data.code === 0) {
                     this.showToast(this.t('toast_adjust_success'), 'success');
-                    this.loadUsers();
+                    if (this.userDetailModal.user && this.userDetailModal.user.user_id === userId) {
+                        this.userDetailModal.user.role = newRole;
+                    }
+                    await this.loadUsers();
                 }
             } catch (error) {
                 console.error('Update user role failed:', error);
@@ -1600,6 +1945,17 @@ const AdminApp = {
                 day: '2-digit',
                 hour: '2-digit',
                 minute: '2-digit'
+            });
+        },
+
+        formatDateOnly(dateStr) {
+            if (!dateStr) return '-';
+            const date = new Date(dateStr);
+            const locale = this.locale === 'en' ? 'en-US' : 'zh-CN';
+            return date.toLocaleDateString(locale, {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
             });
         },
         

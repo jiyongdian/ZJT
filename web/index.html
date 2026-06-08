@@ -7457,6 +7457,7 @@
           this.userId = '';
           this.inviteCode = '';
           this.computingPower = null;
+          this.userRole = '';
           
           // 设置错误信息并显示登录框
           this.loginError = '登录已过期，请重新登录';
@@ -7566,6 +7567,12 @@
               localStorage.setItem('email', this.userEmail);
               localStorage.setItem('user_id', this.userId);
               localStorage.setItem('invite_code', this.inviteCode);
+
+              await Promise.all([
+                this.fetchComputingPower(),
+                this.fetchUserRole(),
+                this.fetchCheckinStatus()
+              ]);
               
               // 检查是否需要跳转回原页面
               const redirectUrl = localStorage.getItem('redirect_after_login');
@@ -7778,6 +7785,7 @@
             this.userPhone = '';
             this.userEmail = '';
             this.computingPower = null;
+            this.userRole = '';
             localStorage.removeItem('auth_token');
             localStorage.removeItem('phone');
             localStorage.removeItem('email');
@@ -7792,6 +7800,7 @@
             this.userPhone = '';
             this.userEmail = '';
             this.computingPower = null;
+            this.userRole = '';
             localStorage.removeItem('auth_token');
             localStorage.removeItem('phone');
             localStorage.removeItem('email');
@@ -7807,6 +7816,7 @@
           this.userPhone = '';
           this.userEmail = '';
           this.computingPower = null;
+          this.userRole = '';
           localStorage.removeItem('auth_token');
           localStorage.removeItem('phone');
           localStorage.removeItem('email');
