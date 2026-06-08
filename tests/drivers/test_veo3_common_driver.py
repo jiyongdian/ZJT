@@ -14,6 +14,8 @@ from unittest.mock import patch, MagicMock
 # Mock 外部依赖（必须在 import driver 之前）
 sys.modules['utils.sentry_util'] = MagicMock()
 sys.modules['utils.image_upload_utils'] = MagicMock()
+# ensure_public_urls() 调用 upload_local_images_to_cdn_sync，配置为直接返回输入URL
+sys.modules['utils.image_upload_utils'].upload_local_images_to_cdn_sync = lambda urls, config=None: urls
 
 
 def _create_common_driver(site_id='site_1', api_key='test_api_key', base_url='https://yunwu.ai'):
