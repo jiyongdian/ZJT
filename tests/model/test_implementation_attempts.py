@@ -10,6 +10,7 @@ from datetime import datetime
 from unittest.mock import patch, MagicMock
 
 # Mock 数据库依赖
+_saved_db = sys.modules.get('model.database')
 sys.modules['model.database'] = MagicMock()
 
 from model.implementation_attempts import (
@@ -330,6 +331,13 @@ class TestImplementationAttemptModelGetStats(unittest.TestCase):
 
         with self.assertRaises(Exception):
             ImplementationAttemptModel.get_stats(days=7)
+
+
+# 恢复 sys.modules
+if _saved_db is not None:
+    sys.modules['model.database'] = _saved_db
+else:
+    sys.modules.pop('model.database', None)
 
 
 if __name__ == '__main__':

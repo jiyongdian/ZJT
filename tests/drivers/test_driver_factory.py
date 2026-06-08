@@ -13,6 +13,7 @@ from unittest.mock import patch, MagicMock
 import unittest
 
 # Mock 可能不存在的外部依赖
+_saved_sentry = sys.modules.get('utils.sentry_util')
 sys.modules['utils.sentry_util'] = MagicMock()
 
 from task.visual_drivers.driver_factory import VideoDriverFactory
@@ -717,3 +718,10 @@ class TestGetImplementationForUserPublic(unittest.TestCase):
 
         result = VideoDriverFactory.get_implementation_for_user(self.TASK_TYPE_ID)
         self.assertEqual(result, "test_pub_impl")
+
+
+# 恢复 sys.modules
+if _saved_sentry is not None:
+    sys.modules['utils.sentry_util'] = _saved_sentry
+else:
+    sys.modules.pop('utils.sentry_util', None)

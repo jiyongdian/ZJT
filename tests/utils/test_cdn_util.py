@@ -11,9 +11,11 @@ from unittest.mock import patch, MagicMock
 # Mock 外部依赖（import 前置）
 _saved_modules = {
     'config.config_util': sys.modules.get('config.config_util'),
+    'utils.file_storage': sys.modules.get('utils.file_storage'),
     'utils.file_storage.qiniu_storage': sys.modules.get('utils.file_storage.qiniu_storage'),
     'utils.project_path': sys.modules.get('utils.project_path'),
     'model.media_file_mapping': sys.modules.get('model.media_file_mapping'),
+    'model.database': sys.modules.get('model.database'),
 }
 
 sys.modules['config.config_util'] = MagicMock()

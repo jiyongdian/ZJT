@@ -30,13 +30,14 @@ sys.modules['config.config_util'] = MagicMock()
 sys.modules['utils.file_storage'] = MagicMock()
 
 # 如果模块已被加载（可能被其他测试用不同 mock 加载过），reload 以使用当前 mock
-for _mod in [
+_reloaded_modules = [
     'model.ai_tool_pipeline_steps', 'model.ai_tools', 'model.runninghub_slots',
     'task.pipeline_drivers.base_pipeline_driver',
     'task.pipeline_drivers.face_mask_driver',
     'task.pipeline_drivers.implementation_retry_driver',
     'task.pipeline_drivers',
-]:
+]
+for _mod in _reloaded_modules:
     if _mod in sys.modules:
         importlib.reload(sys.modules[_mod])
 
@@ -50,6 +51,10 @@ for _key, _orig in _saved_modules.items():
         sys.modules[_key] = _orig
     else:
         sys.modules.pop(_key, None)
+
+# 清除被 reload 过的模块缓存，它们在 mock 环境下导入，需强制重新导入
+for _mod in _reloaded_modules:
+    sys.modules.pop(_mod, None)
 
 
 class TestPipelineDriverFactoryCreateDriver(unittest.TestCase):
