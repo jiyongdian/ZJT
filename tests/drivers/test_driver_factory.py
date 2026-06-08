@@ -492,3 +492,228 @@ class TestGetImplementationForUserSkipsUnavailable(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ==================== 新增：get_agent_hint_for_task 测试 ====================
+
+class TestGetAgentHintForTask(unittest.TestCase):
+    """测试 VideoDriverFactory.get_agent_hint_for_task()"""
+
+    TASK_TYPE_ID = 9010
+
+    def setUp(self):
+        VideoDriverFactory._registered_drivers.clear()
+        VideoDriverFactory._last_create_error = None
+        self._original_configs = UnifiedConfigRegistry._configs.copy()
+        self._original_id_map = UnifiedConfigRegistry._id_map.copy()
+        self._original_implementations = UnifiedConfigRegistry._implementations.copy()
+
+    def tearDown(self):
+        VideoDriverFactory._registered_drivers.clear()
+        VideoDriverFactory._last_create_error = None
+        UnifiedConfigRegistry._configs = self._original_configs
+        UnifiedConfigRegistry._id_map = self._original_id_map
+        UnifiedConfigRegistry._implementations = self._original_implementations
+
+    def test_no_config_returns_none(self):
+        """无任务配置返回 None"""
+        result = VideoDriverFactory.get_agent_hint_for_task(99999)
+        self.assertIsNone(result)
+
+    def test_no_impl_name_returns_none(self):
+        """无实现方名称返回 None"""
+        config = UnifiedTaskConfig(
+            id=self.TASK_TYPE_ID,
+            key='test_hint_no_impl',
+            name='Test Hint No Impl',
+            category=TaskCategory.IMAGE_EDIT,
+            provider=TaskProvider.DUOMI,
+            driver_name='test_hint_driver',
+            implementation=None,
+            implementations=[],
+            computing_power=1,
+        )
+        UnifiedConfigRegistry._configs[config.key] = config
+        UnifiedConfigRegistry._id_map[config.id] = config.key
+
+        result = VideoDriverFactory.get_agent_hint_for_task(self.TASK_TYPE_ID)
+        self.assertIsNone(result)
+
+    def test_unregistered_driver_returns_none(self):
+        """未注册的驱动返回 None"""
+        impl_config = ImplementationConfig(
+            name="test_hint_unregistered",
+            display_name="Test Hint",
+            driver_class="SomeDriver",
+        )
+        UnifiedConfigRegistry.register_implementation(impl_config)
+
+        config = UnifiedTaskConfig(
+            id=self.TASK_TYPE_ID,
+            key='test_hint_unreg',
+            name='Test Hint Unreg',
+            category=TaskCategory.IMAGE_EDIT,
+            provider=TaskProvider.DUOMI,
+            driver_name='test_hint_driver',
+            implementation='test_hint_unregistered',
+            implementations=['test_hint_unregistered'],
+            computing_power=1,
+        )
+        UnifiedConfigRegistry._configs[config.key] = config
+        UnifiedConfigRegistry._id_map[config.id] = config.key
+
+        result = VideoDriverFactory.get_agent_hint_for_task(self.TASK_TYPE_ID)
+        self.assertIsNone(result)
+
+    def test_driver_with_hint_returns_dict(self):
+        """有 agent_hint 的驱动返回完整 dict"""
+        class HintDriver(BaseVideoDriver):
+            agent_hint = "这是一个测试提示"
+
+            def __init__(self, **kwargs):
+                super().__init__(driver_name="hint_driver", driver_type=999)
+
+            def build_create_request(self, ai_tool): return {}
+            def build_check_query(self, project_id): return {}
+            def submit_task(self, ai_tool): return {}
+            def check_status(self, project_id): return {}
+
+        impl_config = ImplementationConfig(
+            name="test_hint_impl",
+            display_name="测试实现方",
+            driver_class="HintDriver",
+        )
+        UnifiedConfigRegistry.register_implementation(impl_config)
+        VideoDriverFactory.register_driver("test_hint_impl", HintDriver)
+
+        config = UnifiedTaskConfig(
+            id=self.TASK_TYPE_ID,
+            key='test_hint_ok',
+            name='Test Hint OK',
+            category=TaskCategory.IMAGE_EDIT,
+            provider=TaskProvider.DUOMI,
+            driver_name='test_hint_driver',
+            implementation='test_hint_impl',
+            implementations=['test_hint_impl'],
+            computing_power=1,
+        )
+        UnifiedConfigRegistry._configs[config.key] = config
+        UnifiedConfigRegistry._id_map[config.id] = config.key
+
+        result = VideoDriverFactory.get_agent_hint_for_task(self.TASK_TYPE_ID)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result['impl_name'], 'test_hint_impl')
+        self.assertEqual(result['display_name'], '测试实现方')
+        self.assertEqual(result['hint'], '这是一个测试提示')
+
+    def test_driver_without_hint_returns_none(self):
+        """没有 agent_hint 的驱动返回 None"""
+        VideoDriverFactory.register_driver("test_no_hint", MockDriver)
+
+        impl_config = ImplementationConfig(
+            name="test_no_hint",
+            display_name="No Hint",
+            driver_class="MockDriver",
+        )
+        UnifiedConfigRegistry.register_implementation(impl_config)
+
+        config = UnifiedTaskConfig(
+            id=self.TASK_TYPE_ID,
+            key='test_no_hint_task',
+            name='Test No Hint',
+            category=TaskCategory.IMAGE_EDIT,
+            provider=TaskProvider.DUOMI,
+            driver_name='test_no_hint_driver',
+            implementation='test_no_hint',
+            implementations=['test_no_hint'],
+            computing_power=1,
+        )
+        UnifiedConfigRegistry._configs[config.key] = config
+        UnifiedConfigRegistry._id_map[config.id] = config.key
+
+        result = VideoDriverFactory.get_agent_hint_for_task(self.TASK_TYPE_ID)
+        self.assertIsNone(result)
+
+
+# ==================== 新增：_get_display_name_for_impl 测试 ====================
+
+class TestGetDisplayNameForImpl(unittest.TestCase):
+    """测试 VideoDriverFactory._get_display_name_for_impl()"""
+
+    def setUp(self):
+        self._original_implementations = UnifiedConfigRegistry._implementations.copy()
+
+    def tearDown(self):
+        UnifiedConfigRegistry._implementations = self._original_implementations
+
+    def test_with_display_name(self):
+        """有 display_name 时返回配置的名称"""
+        impl_config = ImplementationConfig(
+            name="test_display_impl",
+            display_name="友好的显示名",
+            driver_class="SomeDriver",
+        )
+        UnifiedConfigRegistry.register_implementation(impl_config)
+
+        result = VideoDriverFactory._get_display_name_for_impl("test_display_impl")
+        self.assertEqual(result, "友好的显示名")
+
+    def test_without_display_name_fallback(self):
+        """无 display_name 时返回 impl_name"""
+        result = VideoDriverFactory._get_display_name_for_impl("nonexistent_impl_xyz")
+        self.assertEqual(result, "nonexistent_impl_xyz")
+
+
+# ==================== 新增：get_implementation_for_user (公开方法) 测试 ====================
+
+class TestGetImplementationForUserPublic(unittest.TestCase):
+    """测试 VideoDriverFactory.get_implementation_for_user() 公开方法"""
+
+    TASK_TYPE_ID = 9011
+
+    def setUp(self):
+        VideoDriverFactory._registered_drivers.clear()
+        self._original_configs = UnifiedConfigRegistry._configs.copy()
+        self._original_id_map = UnifiedConfigRegistry._id_map.copy()
+        self._original_implementations = UnifiedConfigRegistry._implementations.copy()
+
+    def tearDown(self):
+        VideoDriverFactory._registered_drivers.clear()
+        UnifiedConfigRegistry._configs = self._original_configs
+        UnifiedConfigRegistry._id_map = self._original_id_map
+        UnifiedConfigRegistry._implementations = self._original_implementations
+
+    def test_no_config_returns_none(self):
+        """无任务配置返回 None"""
+        result = VideoDriverFactory.get_implementation_for_user(99999)
+        self.assertIsNone(result)
+
+    def test_returns_impl_name(self):
+        """返回实现方名称"""
+        VideoDriverFactory.register_driver("test_pub_impl", MockDriver)
+
+        impl_config = ImplementationConfig(
+            name="test_pub_impl",
+            display_name="Test Pub",
+            driver_class="MockDriver",
+            sort_order=100,
+        )
+        UnifiedConfigRegistry.register_implementation(impl_config)
+
+        config = UnifiedTaskConfig(
+            id=self.TASK_TYPE_ID,
+            key='test_pub_task',
+            name='Test Pub Task',
+            category=TaskCategory.IMAGE_EDIT,
+            provider=TaskProvider.DUOMI,
+            driver_name='test_pub_driver',
+            implementation='test_pub_impl',
+            implementations=['test_pub_impl'],
+            computing_power=1,
+        )
+        UnifiedConfigRegistry._configs[config.key] = config
+        UnifiedConfigRegistry._id_map[config.id] = config.key
+
+        result = VideoDriverFactory.get_implementation_for_user(self.TASK_TYPE_ID)
+        self.assertEqual(result, "test_pub_impl")
