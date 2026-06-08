@@ -75,19 +75,19 @@ class TestGetEndpoint(unittest.TestCase):
 class TestIsEnabled(unittest.TestCase):
     """测试 CaptchaService.is_enabled()"""
 
-    @patch('perseids_server.services.captcha_service.get_dynamic_config_value')
+    @patch('config.config_util.get_dynamic_config_value')
     def test_enabled_true(self, mock_get_config):
         """配置开启返回 True"""
         mock_get_config.return_value = True
         self.assertTrue(CaptchaService.is_enabled())
 
-    @patch('perseids_server.services.captcha_service.get_dynamic_config_value')
+    @patch('config.config_util.get_dynamic_config_value')
     def test_enabled_false(self, mock_get_config):
         """配置关闭返回 False"""
         mock_get_config.return_value = False
         self.assertFalse(CaptchaService.is_enabled())
 
-    @patch('perseids_server.services.captcha_service.get_dynamic_config_value')
+    @patch('config.config_util.get_dynamic_config_value')
     def test_enabled_called_with_correct_params(self, mock_get_config):
         """is_enabled 调用正确的配置路径"""
         mock_get_config.return_value = False

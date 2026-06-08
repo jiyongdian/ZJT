@@ -301,7 +301,7 @@ class TestCreateBeforeFinishSteps(unittest.TestCase):
         self.assertEqual(result, [])
 
     @patch('task.pipeline_drivers.VideoDriverFactory')
-    @patch('task.pipeline_drivers.ImplementationAttemptModel')
+    @patch('model.implementation_attempts.ImplementationAttemptModel')
     @patch('task.pipeline_drivers.UnifiedConfigRegistry')
     def test_no_alternatives_returns_empty(self, MockRegistry, MockAttemptModel, MockDriverFactory):
         """无可用替代实现方返回空列表"""
@@ -324,7 +324,7 @@ class TestCreateBeforeFinishSteps(unittest.TestCase):
         self.assertEqual(result, [])
 
     @patch('task.pipeline_drivers.VideoDriverFactory')
-    @patch('task.pipeline_drivers.ImplementationAttemptModel')
+    @patch('model.implementation_attempts.ImplementationAttemptModel')
     @patch('task.pipeline_drivers.UnifiedConfigRegistry')
     @patch('task.pipeline_drivers.PipelineStepModel')
     def test_creates_retry_steps_for_alternatives(
