@@ -1383,6 +1383,11 @@ const AdminApp = {
             }
             const el = this.$refs[refName];
             if (!el) return null;
+            const cached = this.dashboard.modelAnalysis.charts[key];
+            if (cached && cached.getDom() !== el) {
+                cached.dispose();
+                this.dashboard.modelAnalysis.charts[key] = null;
+            }
             if (!this.dashboard.modelAnalysis.charts[key]) {
                 const chart = window.echarts.init(el);
                 this.dashboard.modelAnalysis.charts[key] = Vue.markRaw ? Vue.markRaw(chart) : chart;
