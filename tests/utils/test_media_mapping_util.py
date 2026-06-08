@@ -16,6 +16,7 @@ _saved_modules = {
     'config.config_util': sys.modules.get('config.config_util'),
     'config.media_file_policy': sys.modules.get('config.media_file_policy'),
     'model.media_file_mapping': sys.modules.get('model.media_file_mapping'),
+    'model.character': sys.modules.get('model.character'),
     'utils.cdn_util': sys.modules.get('utils.cdn_util'),
     'utils.mime_type': sys.modules.get('utils.mime_type'),
 }
@@ -25,6 +26,7 @@ sys.modules['model.database'] = MagicMock()
 sys.modules['config.config_util'] = MagicMock()
 sys.modules['config.media_file_policy'] = MagicMock()
 sys.modules['model.media_file_mapping'] = MagicMock()
+sys.modules['model.character'] = MagicMock()
 sys.modules['utils.cdn_util'] = MagicMock()
 sys.modules['utils.mime_type'] = MagicMock()
 
@@ -102,7 +104,7 @@ class TestExtractLocalPathFromUrl(unittest.TestCase):
 class TestEnsureEntityImageMapping(unittest.TestCase):
     """测试 ensure_entity_image_mapping()"""
 
-    @patch('utils.media_mapping_util.get_config')
+    @patch('config.config_util.get_config')
     def test_cdn_disabled_returns_none(self, mock_get_config):
         """CDN 未启用时返回 None"""
         mock_get_config.return_value = {'server': {'auto_upload_to_cdn': False}}
@@ -113,7 +115,7 @@ class TestEnsureEntityImageMapping(unittest.TestCase):
         )
         self.assertIsNone(result)
 
-    @patch('utils.media_mapping_util.get_config')
+    @patch('config.config_util.get_config')
     def test_external_url_returns_none(self, mock_get_config):
         """外部 URL（无法提取本地路径）返回 None"""
         mock_get_config.return_value = {'server': {'auto_upload_to_cdn': True}}
@@ -124,10 +126,10 @@ class TestEnsureEntityImageMapping(unittest.TestCase):
         )
         self.assertIsNone(result)
 
-    @patch('utils.media_mapping_util.CDNUtil')
-    @patch('utils.media_mapping_util.get_mime_type_from_extension', return_value='image/png')
-    @patch('utils.media_mapping_util.MediaFileMappingModel')
-    @patch('utils.media_mapping_util.get_config')
+    @patch('utils.cdn_util.CDNUtil')
+    @patch('utils.mime_type.get_mime_type_from_extension', return_value='image/png')
+    @patch('model.media_file_mapping.MediaFileMappingModel')
+    @patch('config.config_util.get_config')
     def test_same_path_skips(self, mock_get_config, MockMapping, mock_mime, MockCDN):
         """已有 mapping 且 local_path 相同时跳过，返回已有 ID"""
         mock_get_config.return_value = {'server': {'auto_upload_to_cdn': True}}
@@ -145,11 +147,11 @@ class TestEnsureEntityImageMapping(unittest.TestCase):
         self.assertEqual(result, 42)
         MockMapping.create.assert_not_called()
 
-    @patch('utils.media_mapping_util.CDNUtil')
-    @patch('utils.media_mapping_util.get_mime_type_from_extension', return_value='image/png')
-    @patch('utils.media_mapping_util.MediaFileMappingModel')
-    @patch('utils.media_mapping_util.MediaFilePolicy', NEVER_EXPIRE='never_expire')
-    @patch('utils.media_mapping_util.get_config')
+    @patch('utils.cdn_util.CDNUtil')
+    @patch('utils.mime_type.get_mime_type_from_extension', return_value='image/png')
+    @patch('model.media_file_mapping.MediaFileMappingModel')
+    @patch('config.media_file_policy.MediaFilePolicy', NEVER_EXPIRE='never_expire')
+    @patch('config.config_util.get_config')
     def test_different_path_deletes_old_creates_new(
         self, mock_get_config, MockPolicy, MockMapping, mock_mime, MockCDN
     ):
@@ -172,11 +174,11 @@ class TestEnsureEntityImageMapping(unittest.TestCase):
         MockMapping.create.assert_called_once()
         MockCDN.trigger_cdn_upload.assert_called_once()
 
-    @patch('utils.media_mapping_util.CDNUtil')
-    @patch('utils.media_mapping_util.get_mime_type_from_extension', return_value='image/png')
-    @patch('utils.media_mapping_util.MediaFileMappingModel')
-    @patch('utils.media_mapping_util.MediaFilePolicy', NEVER_EXPIRE='never_expire')
-    @patch('utils.media_mapping_util.get_config')
+    @patch('utils.cdn_util.CDNUtil')
+    @patch('utils.mime_type.get_mime_type_from_extension', return_value='image/png')
+    @patch('model.media_file_mapping.MediaFileMappingModel')
+    @patch('config.media_file_policy.MediaFilePolicy', NEVER_EXPIRE='never_expire')
+    @patch('config.config_util.get_config')
     def test_no_existing_mapping_creates_new(
         self, mock_get_config, MockPolicy, MockMapping, mock_mime, MockCDN
     ):
@@ -193,11 +195,11 @@ class TestEnsureEntityImageMapping(unittest.TestCase):
         self.assertEqual(result, 55)
         MockMapping.delete_by_local_path.assert_not_called()
 
-    @patch('utils.media_mapping_util.CDNUtil')
-    @patch('utils.media_mapping_util.get_mime_type_from_extension', return_value='image/png')
-    @patch('utils.media_mapping_util.MediaFileMappingModel')
-    @patch('utils.media_mapping_util.MediaFilePolicy', NEVER_EXPIRE='never_expire')
-    @patch('utils.media_mapping_util.get_config')
+    @patch('utils.cdn_util.CDNUtil')
+    @patch('utils.mime_type.get_mime_type_from_extension', return_value='image/png')
+    @patch('model.media_file_mapping.MediaFileMappingModel')
+    @patch('config.media_file_policy.MediaFilePolicy', NEVER_EXPIRE='never_expire')
+    @patch('config.config_util.get_config')
     def test_user_id_none(self, mock_get_config, MockPolicy, MockMapping, mock_mime, MockCDN):
         """user_id 为 None 时 uid 设为 None"""
         mock_get_config.return_value = {'server': {'auto_upload_to_cdn': True}}
@@ -217,7 +219,7 @@ class TestEnsureEntityImageMapping(unittest.TestCase):
 class TestEnsureCharacterImageMapping(unittest.TestCase):
     """测试 ensure_character_image_mapping()"""
 
-    @patch('utils.media_mapping_util.CharacterModel')
+    @patch('model.character.CharacterModel')
     def test_invalid_world_id_returns_none(self, MockCharModel):
         """无效 world_id 返回 None"""
         result = ensure_character_image_mapping(
@@ -227,7 +229,7 @@ class TestEnsureCharacterImageMapping(unittest.TestCase):
         self.assertIsNone(result)
         MockCharModel.get_by_name.assert_not_called()
 
-    @patch('utils.media_mapping_util.CharacterModel')
+    @patch('model.character.CharacterModel')
     def test_character_not_found_returns_none(self, MockCharModel):
         """角色不存在返回 None"""
         MockCharModel.get_by_name.return_value = None
@@ -239,7 +241,7 @@ class TestEnsureCharacterImageMapping(unittest.TestCase):
         self.assertIsNone(result)
 
     @patch('utils.media_mapping_util.ensure_entity_image_mapping')
-    @patch('utils.media_mapping_util.CharacterModel')
+    @patch('model.character.CharacterModel')
     def test_character_found_delegates_to_entity(self, MockCharModel, mock_ensure):
         """角色存在时委托给 ensure_entity_image_mapping"""
         char = MagicMock()
