@@ -300,7 +300,7 @@ class TestCreateBeforeFinishSteps(unittest.TestCase):
         )
         self.assertEqual(result, [])
 
-    @patch('task.pipeline_drivers.VideoDriverFactory')
+    @patch('task.visual_drivers.driver_factory.VideoDriverFactory')
     @patch('model.implementation_attempts.ImplementationAttemptModel')
     @patch('task.pipeline_drivers.UnifiedConfigRegistry')
     def test_no_alternatives_returns_empty(self, MockRegistry, MockAttemptModel, MockDriverFactory):
@@ -323,7 +323,7 @@ class TestCreateBeforeFinishSteps(unittest.TestCase):
             )
         self.assertEqual(result, [])
 
-    @patch('task.pipeline_drivers.VideoDriverFactory')
+    @patch('task.visual_drivers.driver_factory.VideoDriverFactory')
     @patch('model.implementation_attempts.ImplementationAttemptModel')
     @patch('task.pipeline_drivers.UnifiedConfigRegistry')
     @patch('task.pipeline_drivers.PipelineStepModel')
