@@ -300,10 +300,9 @@ class TestCreateBeforeFinishSteps(unittest.TestCase):
         )
         self.assertEqual(result, [])
 
-    @patch('task.visual_drivers.driver_factory.VideoDriverFactory')
     @patch('model.implementation_attempts.ImplementationAttemptModel')
     @patch('task.pipeline_drivers.UnifiedConfigRegistry')
-    def test_no_alternatives_returns_empty(self, MockRegistry, MockAttemptModel, MockDriverFactory):
+    def test_no_alternatives_returns_empty(self, MockRegistry, MockAttemptModel):
         """无可用替代实现方返回空列表"""
         mock_config = MagicMock()
         mock_config._get_implementations_info.return_value = [
@@ -315,7 +314,6 @@ class TestCreateBeforeFinishSteps(unittest.TestCase):
         # 所有实现方都已尝试过
         MockAttemptModel.get_attempted_implementations.return_value = {1, 2}
 
-        from config.unified_config import get_implementation_name
         with patch('task.pipeline_drivers.get_implementation_name', return_value='impl_a'):
             result = PipelineDriverFactory.create_before_finish_steps(
                 ai_tool_id=1, ai_tool_type=1,
@@ -323,12 +321,11 @@ class TestCreateBeforeFinishSteps(unittest.TestCase):
             )
         self.assertEqual(result, [])
 
-    @patch('task.visual_drivers.driver_factory.VideoDriverFactory')
     @patch('model.implementation_attempts.ImplementationAttemptModel')
     @patch('task.pipeline_drivers.UnifiedConfigRegistry')
     @patch('task.pipeline_drivers.PipelineStepModel')
     def test_creates_retry_steps_for_alternatives(
-        self, MockStepModel, MockRegistry, MockAttemptModel, MockDriverFactory
+        self, MockStepModel, MockRegistry, MockAttemptModel
     ):
         """为可用替代方创建重试步骤"""
         mock_config = MagicMock()
@@ -343,15 +340,20 @@ class TestCreateBeforeFinishSteps(unittest.TestCase):
 
         # impl_b 的驱动可用
         MockRegistry.get_implementation.return_value = MagicMock(is_enabled=MagicMock(return_value=True))
-        MockDriverFactory.create_driver_by_implementation.return_value = MagicMock()
+        mock_vdf = MagicMock()
+        mock_vdf.create_driver_by_implementation.return_value = MagicMock()
 
         MockStepModel.create.return_value = 42
 
-        with patch('task.pipeline_drivers.get_implementation_name', side_effect=lambda x: 'impl_a' if x == 1 else 'impl_b'):
-            with patch('task.pipeline_drivers.get_implementation_id', return_value=2):
-                result = PipelineDriverFactory.create_before_finish_steps(
-                    ai_tool_id=1, ai_tool_type=1,
-                    failed_implementation=1, failure_reason='error'
-                )
+        # 通过 sys.modules 注入 mock，避免触发 VideoDriverFactory 真实 import chain
+        mock_visual = MagicMock()
+        mock_visual.VideoDriverFactory = mock_vdf
+        with patch.dict('sys.modules', {'task.visual_drivers': mock_visual}):
+            with patch('task.pipeline_drivers.get_implementation_name', side_effect=lambda x: 'impl_a' if x == 1 else 'impl_b'):
+                with patch('task.pipeline_drivers.get_implementation_id', return_value=2):
+                    result = PipelineDriverFactory.create_before_finish_steps(
+                        ai_tool_id=1, ai_tool_type=1,
+                        failed_implementation=1, failure_reason='error'
+                    )
         # 应创建了至少一个重试步骤
         self.assertGreater(len(result), 0)
