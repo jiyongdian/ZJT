@@ -4,6 +4,8 @@
 - 2026年6月9日：新增角色数据库匹配功能
 - 2026年6月9日：修复前端未使用 db_character_info 的问题
 - 2026年6月9日：修复角色名称不一致问题（LLM名称 vs 数据库名称）
+- 2026年6月9日：优化分镜节点角色显示，将标签改为提示词区域的图片形式
+- 2026年6月9日：新增在线缩略图服务，优化角色头像加载性能
 
 ## 问题背景
 
@@ -368,6 +370,250 @@ LLM 解析
 返回: [{ id: "char_001", name: "阿方索戴维斯_AlphonsoDavies", llm_name: "布冯", character_db_id: 4649 }]
 ```
 
+## 分镜节点角色显示优化
+
+### UI 变化
+
+**旧布局**：角色以文本标签形式显示在左侧"基础信息"区域的"场景/道具/角色"引用区
+
+**新布局**：角色以 inline 图片形式嵌入提示词文本中，将【【角色名】】替换为角色头像标签
+
+```
+┌─────────────────────────────────────────┐
+│ 2 提示词编辑                             │
+│ ┌─────────────────────────────────────┐ │
+│ │ 图片提示词                           │ │
+│ │ ┌─────────────────────────────────┐ │ │
+│ │ │ 中景：┌🧑┐深陷沙发，左手持爆米花 │ │ │
+│ │ │ 桶，右手拿披萨...               │ │ │
+│ │ └─────────────────────────────────┘ │ │
+│ ├─────────────────────────────────────┤ │
+│ │ 视频提示词                           │ │
+│ │ ┌─────────────────────────────────┐ │ │
+│ │ │ ┌🧑┐瘫在沙发上，电视光映在脸上  │ │ │
+│ │ └─────────────────────────────────┘ │ │
+│ └─────────────────────────────────────┘ │
+└─────────────────────────────────────────┘
+
+其中 🧑 表示内联角色头像标签（圆形小头像 + 角色名）
+```
+
+### 实现细节
+
+**1. 移除角色标签行**
+
+从基础信息区域的角色行（`shot-ref-row`）被移除
+
+**2. 替换 textarea 为 div**
+
+将 readonly textarea 替换为 div 容器，用于渲染带内联角色标签的提示词：
+```html
+<div class="shot-prompt-display shot-frame-image-prompt-display"></div>
+<div class="shot-prompt-display shot-frame-video-prompt-display"></div>
+```
+
+**3. 新增 renderPromptWithInlineChars() 函数**
+
+将提示词文本中的【【角色名】】替换为内联角色头像标签：
+
+```javascript
+function renderPromptWithInlineChars(displayEl, promptText) {
+  const pattern = /【【([^】]+)】】/g;
+  let lastIndex = 0;
+  let match;
+
+  while((match = pattern.exec(promptText)) !== null) {
+    // 添加匹配前的文本
+    if(match.index > lastIndex) {
+      displayEl.appendChild(document.createTextNode(promptText.substring(lastIndex, match.index)));
+    }
+
+    const charName = match[1].trim();
+    const wc = worldChars.find(c => c.name === charName);
+    const imgUrl = selectedUrl || wc.reference_image;
+
+    // 创建内联角色标签
+    const chip = document.createElement('span');
+    chip.className = 'shot-inline-char-chip';
+
+    const avatar = document.createElement('img');
+    avatar.className = 'shot-inline-char-avatar';
+    avatar.src = imgUrl;
+    chip.appendChild(avatar);
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'shot-inline-char-name';
+    nameSpan.textContent = charName;
+    chip.appendChild(nameSpan);
+
+    // 点击打开图片选择器
+    chip.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showCharImageSelector(wc, charName);
+    });
+
+    displayEl.appendChild(chip);
+    lastIndex = match.index + match[0].length;
+  }
+
+  // 添加剩余文本
+  if(lastIndex < promptText.length) {
+    displayEl.appendChild(document.createTextNode(promptText.substring(lastIndex)));
+  }
+}
+```
+
+**4. CSS 样式**
+
+```css
+/* 内联角色标签 */
+.shot-inline-char-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px 1px 1px;
+  background: #ede9fe;
+  border: 1px solid #ddd6fe;
+  border-radius: 12px;
+  cursor: pointer;
+  vertical-align: middle;
+  margin: 0 2px;
+}
+
+/* 内联角色头像 */
+.shot-inline-char-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* 内联角色名称 */
+.shot-inline-char-name {
+  font-size: 11px;
+  color: #5b21b6;
+  white-space: nowrap;
+}
+```
+
+### 交互行为
+
+1. **点击提示词区域**：打开提示词编辑模态框
+2. **点击角色头像标签**：打开图片选择下拉框（复用 `showCharImageSelector`）
+3. **选择图片后**：更新 `selectedCharRefImages`，刷新提示词显示，头像右上角显示 ✓ 标记
+4. **无参考图时**：显示默认用户图标（👤）
+
+### 数据流
+
+```
+提示词文本："中景：【【阿方索戴维斯_AlphonsoDavies】】深陷沙发..."
+    ↓
+renderPromptWithInlineChars()
+    ↓
+解析【【角色名】】模式
+    ↓
+与 state.worldCharacters 匹配获取头像
+    ↓
+渲染为：中景：<span class="shot-inline-char-chip">🧑 阿方索戴维斯</span>深陷沙发...
+    ↓
+点击头像标签 → showCharImageSelector() → 选择图片
+    ↓
+更新 selectedCharRefImages → 刷新提示词显示
+```
+
+## 在线缩略图服务
+
+### API 接口
+
+```
+GET /api/thumbnail?url={图片URL}&size={尺寸}
+```
+
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `url` | 原始图片 URL（必填） | - |
+| `size` | 缩略图尺寸（px） | 200 |
+
+### 缓存策略
+
+- **缓存目录**：`upload/cache/thumbnail/`
+- **文件命名**：`{size}_{URL的MD5哈希前12位}.jpg`
+- **缓存时间**：1 年（Cache-Control: immutable）
+
+### 多进程安全
+
+使用原子写入避免多进程冲突：
+
+```python
+def _generate_thumbnail_safe(source_path, thumb_path, size):
+    # 1. 检查是否已存在
+    if os.path.exists(thumb_path):
+        return
+
+    # 2. 写入临时文件（唯一名称）
+    tmp_path = f"{thumb_path}.tmp.{os.getpid()}.{int(time.time())}"
+    img.thumbnail((size, size), Image.LANCZOS)
+    img.save(tmp_path, 'JPEG', quality=75)
+
+    # 3. 原子重命名
+    os.rename(tmp_path, thumb_path)
+```
+
+**安全保障**：
+- 进程崩溃：临时文件残留，不影响下次请求
+- 多进程同时写：各自写各自的临时文件，`os.rename` 是原子的
+- 临时文件清理：超过 5 分钟的临时文件自动清理
+
+### 前端调用
+
+```javascript
+// 获取缩略图URL
+function getThumbnailUrl(imageUrl, size) {
+    size = size || 40;
+    if (!imageUrl) return '';
+    if (imageUrl.startsWith('data:') || imageUrl.startsWith('blob:')) return imageUrl;
+    return '/api/thumbnail?url=' + encodeURIComponent(imageUrl) + '&size=' + size;
+}
+
+// 使用示例：角色头像
+avatar.src = getThumbnailUrl(imgUrl, 40);
+```
+
+### 性能优化
+
+- 内联角色头像使用 40px 缩略图（原图可能几MB）
+- 下拉选择器中的图片使用 40px 缩略图
+- 添加 `loading="lazy"` 延迟加载
+
+## 不存在角色的处理
+
+### 问题背景
+LLM 生成的剧本中可能包含数据库中不存在的角色名称（如 `【【意大利教练】】`、`【【意大利球员】】`）。如果将这些不存在的角色也渲染成带图标的标签样式，会误导用户以为这些角色已被识别和匹配。
+
+### 解决方案
+在 `renderPromptWithInlineChars` 函数中增加判断：
+- **存在的角色**（`worldChars` 中有匹配）→ 渲染为带头像的标签，支持点击选择图片
+- **不存在的角色** → 直接显示纯文本 `【【角色名】】`，不渲染为标签样式
+
+### 实现代码
+```javascript
+const wc = worldChars.find(c => c.name === charName);
+
+// 如果角色不存在于数据库中，直接显示纯文本
+if(!wc) {
+  const textNode = document.createTextNode(match[0]);
+  displayEl.appendChild(textNode);
+  lastIndex = match.index + match[0].length;
+  continue;
+}
+```
+
+### 视觉效果对比
+| 场景 | 之前 | 之后 |
+|------|------|------|
+| 存在的角色 | 🖼️ 角色名（带头像标签） | 🖼️ 角色名（带头像标签） |
+| 不存在的角色 | 👤 角色名（带默认图标） | 【【角色名】】（纯文本） |
+
 ## 注意事项
 
 1. **角色名称格式**：系统现在会自动将 LLM 生成的名称替换为数据库中的实际名称
@@ -375,3 +621,4 @@ LLM 解析
 3. **匹配精度**：匹配基于 LLM 的判断，可能存在误匹配，建议在前端提供手动修正功能
 4. **性能考虑**：最多加载 50 个数据库角色，如果角色数量更多，可能需要分页加载
 5. **名称备份**：LLM 生成的名称保存在 `llm_name` 字段中，便于调试和回溯
+6. **不存在的角色**：数据库中不存在的角色显示为纯文本 `【【角色名】】`，不会渲染成带图标的标签，避免误导用户

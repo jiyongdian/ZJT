@@ -675,6 +675,134 @@ async def proxy_image(request: Request, url: str = Query(..., description="Image
         raise HTTPException(status_code=500, detail=f"Image proxy failed: {str(e)}")
 
 
+@app.get("/api/thumbnail")
+async def get_thumbnail(
+    request: Request,
+    url: str = Query(..., description="原始图片URL"),
+    size: int = Query(200, ge=10, le=1000, description="缩略图尺寸（最大宽/高，单位px）")
+):
+    """
+    获取图片缩略图
+    - 本地图片：直接读取并缩放
+    - 结果缓存到 upload/cache/thumbnail/
+    - 使用原子写入避免多进程冲突
+    """
+    import hashlib
+
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
+
+    # 计算缓存路径
+    url_hash = hashlib.md5(url.encode()).hexdigest()[:12]
+    thumb_filename = f"{size}_{url_hash}.jpg"
+    thumb_dir = os.path.join(os.path.dirname(__file__), "upload", "cache", "thumbnail")
+    os.makedirs(thumb_dir, exist_ok=True)
+    thumb_path = os.path.join(thumb_dir, thumb_filename)
+
+    # 检查缓存
+    if os.path.exists(thumb_path):
+        return FileResponse(
+            thumb_path,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=31536000, immutable"}
+        )
+
+    # 解析源文件路径
+    source_path = None
+    base_dir = os.path.dirname(__file__)
+
+    # 处理相对路径（如 /upload/character/pic/123/avatar.png）
+    if url.startswith('/upload/'):
+        local_path = os.path.join(base_dir, url.lstrip('/'))
+        if os.path.exists(local_path):
+            source_path = local_path
+    elif url.startswith('upload/'):
+        local_path = os.path.join(base_dir, url)
+        if os.path.exists(local_path):
+            source_path = local_path
+    else:
+        # 处理完整URL（同源）
+        parsed = urlparse(url)
+        if parsed.path.startswith('/upload/'):
+            local_path = os.path.join(base_dir, parsed.path.lstrip('/'))
+            if os.path.exists(local_path):
+                source_path = local_path
+
+    if not source_path:
+        raise HTTPException(status_code=404, detail="Source image not found")
+
+    # 生成缩略图（原子写入）
+    try:
+        await asyncio.to_thread(_generate_thumbnail_safe, source_path, str(thumb_path), size)
+    except Exception as e:
+        logger.error(f"Failed to generate thumbnail: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate thumbnail")
+
+    # 返回缩略图
+    if os.path.exists(thumb_path):
+        return FileResponse(
+            thumb_path,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=31536000, immutable"}
+        )
+    else:
+        raise HTTPException(status_code=500, detail="Thumbnail generation failed")
+
+
+def _generate_thumbnail_safe(source_path: str, thumb_path: str, size: int):
+    """
+    安全的缩略图生成（无锁，原子写入）
+    - 先写临时文件，再原子重命名
+    - 进程崩溃不会阻塞后续请求
+    """
+    from PIL import Image
+
+    thumb_dir = os.path.dirname(thumb_path)
+    os.makedirs(thumb_dir, exist_ok=True)
+
+    # 检查是否已存在
+    if os.path.exists(thumb_path):
+        return
+
+    # 写入临时文件（唯一名称，避免多进程冲突）
+    tmp_path = f"{thumb_path}.tmp.{os.getpid()}.{int(time.time())}"
+    try:
+        img = Image.open(source_path)
+        if img.mode in ('RGBA', 'P'):
+            img = img.convert('RGB')
+        img.thumbnail((size, size), Image.LANCZOS)
+        img.save(tmp_path, 'JPEG', quality=75)
+
+        # 原子重命名（如果目标已存在，说明其他进程已生成成功）
+        os.rename(tmp_path, thumb_path)
+    except FileExistsError:
+        # 其他进程已生成成功，删除自己的临时文件
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except:
+                pass
+    except Exception:
+        # 生成失败，清理临时文件
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except:
+                pass
+        raise
+    finally:
+        # 清理超过 5 分钟的残留临时文件
+        try:
+            current_time = time.time()
+            for f in os.listdir(thumb_dir):
+                if '.tmp.' in f and f.startswith(os.path.basename(thumb_path)):
+                    fpath = os.path.join(thumb_dir, f)
+                    if current_time - os.path.getmtime(fpath) > 300:
+                        os.remove(fpath)
+        except:
+            pass
+
+
 def _save_uploaded_image(upload_file: UploadFile) -> str:
     """
     Save uploaded image to upload/temp/date directory and return the file URL

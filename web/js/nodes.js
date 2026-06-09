@@ -9258,10 +9258,6 @@
                     <span class="shot-ref-label" data-i18n="shot_frame_prop_label">${window.t ? window.t('shot_frame_prop_label') : '道具'}</span>
                     <div class="shot-ref-tags shot-ref-prop-tags"></div>
                   </div>
-                  <div class="shot-ref-row">
-                    <span class="shot-ref-label" data-i18n="shot_frame_character_label">${window.t ? window.t('shot_frame_character_label') : '角色'}</span>
-                    <div class="shot-ref-tags shot-ref-char-tags"></div>
-                  </div>
                 </div>
               </div>
               <div class="field field-always-visible">
@@ -9294,14 +9290,14 @@
                   <div class="label" style="margin: 0;" data-i18n="shot_frame_image_prompt_label">${window.t ? window.t('shot_frame_image_prompt_label') : '图片提示词'}</div>
                   <span style="font-size: 10px; color: #9ca3af;" data-i18n="shot_frame_image_prompt_hint">${window.t ? window.t('shot_frame_image_prompt_hint') : '点击编辑 | 按 / 选择角色'}</span>
                 </div>
-                <textarea class="shot-frame-image-prompt" rows="3" readonly style="width: 100%; flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; resize: none; cursor: pointer; background: #fafafa; line-height: 1.4;">${escapeHtml(node.data.imagePrompt)}</textarea>
+                <div class="shot-prompt-display shot-frame-image-prompt-display" style="width: 100%; flex: 1; min-height: 60px; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; cursor: pointer; background: #fafafa; line-height: 1.6; overflow-y: auto; word-break: break-all;"></div>
               </div>
               <div class="field field-always-visible" style="flex: 1; display: flex; flex-direction: column;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                   <div class="label" style="margin: 0;" data-i18n="shot_frame_video_prompt_label">${window.t ? window.t('shot_frame_video_prompt_label') : '视频提示词'}</div>
                   <button class="mini-btn secondary reduce-violation-btn" type="button" style="font-size: 11px; padding: 4px 8px;" data-i18n="shot_frame_video_generation_failed_btn">${window.t ? window.t('shot_frame_video_generation_failed_btn') : '视频生成失败，请点此按钮'}</button>
                 </div>
-                <textarea class="shot-frame-video-prompt" rows="3" readonly style="width: 100%; flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; resize: none; cursor: pointer; background: #fafafa; line-height: 1.4;">${escapeHtml(node.data.videoPromptText || node.data.videoPrompt)}</textarea>
+                <div class="shot-prompt-display shot-frame-video-prompt-display" style="width: 100%; flex: 1; min-height: 60px; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; cursor: pointer; background: #fafafa; line-height: 1.6; overflow-y: auto; word-break: break-all;"></div>
               </div>
             </div>
             <!-- 第3列: 模型与生成 -->
@@ -9386,8 +9382,10 @@
 
       const headerEl = el.querySelector('.node-header');
       const deleteBtn = el.querySelector('.icon-btn');
-      const imagePromptEl = el.querySelector('.shot-frame-image-prompt');
-      const videoPromptEl = el.querySelector('.shot-frame-video-prompt');
+      const imagePromptDisplay = el.querySelector('.shot-frame-image-prompt-display');
+      const videoPromptDisplay = el.querySelector('.shot-frame-video-prompt-display');
+      const imagePromptEl = imagePromptDisplay;
+      const videoPromptEl = videoPromptDisplay;
       const generateBtn = el.querySelector('.shot-frame-generate-btn');
       const generateDialogueBtn = el.querySelector('.shot-frame-generate-dialogue-btn');
       const imageEl = el.querySelector('.shot-frame-image');
@@ -9416,7 +9414,6 @@
       const refSectionEl = el.querySelector('.shot-ref-section');
       const sceneTagsEl = el.querySelector('.shot-ref-scene-tags');
       const propTagsEl = el.querySelector('.shot-ref-prop-tags');
-      const charTagsEl = el.querySelector('.shot-ref-tags.shot-ref-char-tags');
 
       // 动态填充分镜模型选项
       if(modelEl) {
@@ -9992,84 +9989,111 @@
         setTimeout(() => document.addEventListener('click', closeHandler, true), 0);
       }
 
-      // 渲染角色标签（只读，自动从提示词匹配，仅显示 state.worldCharacters 中存在的角色）
-      function renderCharTags() {
-        charTagsEl.innerHTML = '';
-        const chars = node.data.refCharacters || [];
-        // 过滤：只保留在 state.worldCharacters 中真正存在的角色
+      // 获取缩略图URL
+      function getThumbnailUrl(imageUrl, size) {
+        size = size || 40;
+        if(!imageUrl) return '';
+        if(imageUrl.startsWith('data:') || imageUrl.startsWith('blob:')) return imageUrl;
+        return '/api/thumbnail?url=' + encodeURIComponent(imageUrl) + '&size=' + size;
+      }
+
+      // 渲染提示词（将【【角色名】】替换为内联角色图片）
+      function renderPromptWithInlineChars(displayEl, promptText) {
+        if(!displayEl) return;
+        displayEl.innerHTML = '';
+
         const worldChars = state.worldCharacters || [];
-        const validChars = chars.filter(name => worldChars.some(wc => wc.name === name));
-        if(validChars.length === 0) {
-          const empty = document.createElement('span');
-          empty.className = 'shot-ref-tag empty';
-          empty.textContent = '无（在提示词中用【【角色名】】引用）';
-          charTagsEl.appendChild(empty);
-        } else {
-          validChars.forEach(name => {
-            const wc = worldChars.find(c => c.name === name);
-            const hasImage = wc && wc.reference_image;
-            const hasMultiImages = wc && wc.reference_images && Array.isArray(wc.reference_images) && wc.reference_images.length > 0;
-            const selectedUrl = (node.data.selectedCharRefImages && node.data.selectedCharRefImages[name]);
-            const tag = document.createElement('span');
-            tag.className = 'shot-ref-tag character';
-            if(!hasImage && !hasMultiImages) {
-              tag.style.cssText = 'border-color: #ef4444; color: #ef4444; background: #fef2f2;';
-              tag.title = `${name}（该角色没有参考图片）`;
-              tag.textContent = name + ' ⚠';
-            } else {
-              tag.title = name + (selectedUrl ? '（已选特定图片）' : '（使用主图）');
-              tag.textContent = selectedUrl ? name + ' ✓' : name;
-              // 如果有多张参考图，显示选择按钮
-              if(hasMultiImages || (wc.reference_images && wc.reference_images.length > 0) || (wc.reference_image)) {
-                const selBtn = document.createElement('button');
-                selBtn.className = 'char-ref-img-btn';
-                selBtn.type = 'button';
-                selBtn.title = '选择参考图';
-                selBtn.textContent = '📷';
-                selBtn.style.cssText = 'background: none; border: none; cursor: pointer; font-size: 10px; padding: 0 2px; vertical-align: middle;';
-                selBtn.addEventListener('click', (e) => {
-                  e.stopPropagation();
-                  showCharImageSelector(wc, name);
-                });
-                tag.appendChild(selBtn);
-              }
-            }
-            charTagsEl.appendChild(tag);
-          });
-          // 角色标签末尾添加编辑提示词按钮
-          if(validChars.length > 0) {
-            const editBtn = document.createElement('button');
-            editBtn.className = 'char-ref-edit-btn';
-            editBtn.type = 'button';
-            editBtn.title = '编辑提示词';
-            editBtn.textContent = '✏️';
-            editBtn.style.cssText = 'background: none; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; font-size: 11px; padding: 1px 6px; vertical-align: middle; margin-left: 4px;';
-            editBtn.addEventListener('click', (e) => {
-              e.stopPropagation();
-              const mode = node.data.videoMode || 'first_last_frame';
-              if(mode === 'multi_reference') {
-                showPromptExpandModal(videoPromptEl, '视频提示词', (newValue) => {
-                  node.data.videoPromptText = newValue;
-                  updateShotReferences();
-                }, { enableCharacterDropdown: true, nodeId: id, dropdownKey: 'videoprompt' });
-              } else {
-                showPromptExpandModal(imagePromptEl, '图片提示词', (newValue) => {
-                  node.data.imagePrompt = newValue;
-                  updateShotReferences();
-                }, { enableCharacterDropdown: true, nodeId: id });
-              }
-            });
-            charTagsEl.appendChild(editBtn);
+        const pattern = /【【([^】]+)】】/g;
+        let lastIndex = 0;
+        let match;
+
+        while((match = pattern.exec(promptText)) !== null) {
+          // 添加匹配前的文本
+          if(match.index > lastIndex) {
+            const textNode = document.createTextNode(promptText.substring(lastIndex, match.index));
+            displayEl.appendChild(textNode);
           }
+
+          const charName = match[1].trim();
+          const wc = worldChars.find(c => c.name === charName);
+
+          // 如果角色不存在于数据库中，直接显示纯文本
+          if(!wc) {
+            const textNode = document.createTextNode(match[0]);
+            displayEl.appendChild(textNode);
+            lastIndex = match.index + match[0].length;
+            continue;
+          }
+
+          const selectedUrl = (node.data.selectedCharRefImages && node.data.selectedCharRefImages[charName]);
+          const imgUrl = selectedUrl || wc.reference_image;
+          const hasImage = wc.reference_image || (wc.reference_images && wc.reference_images.length > 0);
+
+          // 创建内联角色标签（只有存在的角色才渲染为标签）
+          const chip = document.createElement('span');
+          chip.className = 'shot-inline-char-chip' + (hasImage ? '' : ' no-image');
+          chip.title = charName + (selectedUrl ? '（已选特定图片）' : hasImage ? '（使用主图）' : '（无参考图）');
+
+          if(imgUrl) {
+            const avatar = document.createElement('img');
+            avatar.className = 'shot-inline-char-avatar';
+            avatar.src = getThumbnailUrl(imgUrl, 40);
+            avatar.alt = charName;
+            avatar.loading = 'lazy';
+            chip.appendChild(avatar);
+
+            if(selectedUrl) {
+              const check = document.createElement('span');
+              check.className = 'shot-inline-char-check';
+              check.textContent = '✓';
+              chip.appendChild(check);
+            }
+          } else {
+            const avatar = document.createElement('span');
+            avatar.className = 'shot-inline-char-avatar no-image';
+            avatar.textContent = '👤';
+            chip.appendChild(avatar);
+          }
+
+          const nameSpan = document.createElement('span');
+          nameSpan.className = 'shot-inline-char-name';
+          nameSpan.textContent = charName;
+          chip.appendChild(nameSpan);
+
+          // 点击打开图片选择器
+          chip.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showCharImageSelector(wc, charName, chip);
+          });
+
+          displayEl.appendChild(chip);
+          lastIndex = match.index + match[0].length;
+        }
+
+        // 添加剩余文本
+        if(lastIndex < promptText.length) {
+          const textNode = document.createTextNode(promptText.substring(lastIndex));
+          displayEl.appendChild(textNode);
+        }
+
+        // 如果没有内容，显示占位文本
+        if(displayEl.childNodes.length === 0) {
+          displayEl.innerHTML = '<span style="color: #9ca3af;">点击编辑提示词...</span>';
         }
       }
 
+      // 渲染角色图片（更新提示词显示）
+      function renderCharImages() {
+        renderPromptWithInlineChars(imagePromptDisplay, node.data.imagePrompt || '');
+        renderPromptWithInlineChars(videoPromptDisplay, node.data.videoPromptText || node.data.videoPrompt || '');
+      }
+
       // 显示角色参考图选择下拉
-      function showCharImageSelector(wc, charName) {
+      function showCharImageSelector(wc, charName, anchorEl) {
         closeRefDropdowns();
         const dropdown = document.createElement('div');
         dropdown.className = 'shot-ref-dropdown char-img-dropdown';
-        dropdown.style.cssText = 'min-width: 200px; max-height: 280px; overflow-y: auto;';
+        dropdown.style.cssText = 'min-width: 200px; max-height: 280px; overflow-y: auto; position: fixed; z-index: 10000;';
 
         // 构建图片选项列表：主图 + reference_images
         const options = [];
@@ -10100,13 +10124,13 @@
             if(!currentSelected || currentSelected === mainOpt.url) {
               mainItem.classList.add('selected');
             }
-            mainItem.innerHTML = `<img src="${mainOpt.url}" style="width:16px;height:16px;object-fit:cover;border-radius:2px;margin-right:6px;vertical-align:middle;">主图（默认）`;
+            mainItem.innerHTML = `<img src="${getThumbnailUrl(mainOpt.url, 40)}" style="width:16px;height:16px;object-fit:cover;border-radius:2px;margin-right:6px;vertical-align:middle;">主图（默认）`;
             mainItem.addEventListener('click', (e) => {
               e.stopPropagation();
               if(!node.data.selectedCharRefImages) node.data.selectedCharRefImages = {};
               delete node.data.selectedCharRefImages[charName];
               if(node.data.selectedCharRefImageLabels) delete node.data.selectedCharRefImageLabels[charName];
-              renderCharTags();
+              renderCharImages();
               closeRefDropdowns();
               safeAutoSave()
             });
@@ -10119,14 +10143,14 @@
             if(currentSelected === opt.url) {
               item.classList.add('selected');
             }
-            item.innerHTML = `<img src="${opt.url}" style="width:16px;height:16px;object-fit:cover;border-radius:2px;margin-right:6px;vertical-align:middle;">${opt.label}`;
+            item.innerHTML = `<img src="${getThumbnailUrl(opt.url, 40)}" style="width:16px;height:16px;object-fit:cover;border-radius:2px;margin-right:6px;vertical-align:middle;">${opt.label}`;
             item.addEventListener('click', (e) => {
               e.stopPropagation();
               if(!node.data.selectedCharRefImages) node.data.selectedCharRefImages = {};
               if(!node.data.selectedCharRefImageLabels) node.data.selectedCharRefImageLabels = {};
               node.data.selectedCharRefImages[charName] = opt.url;
               node.data.selectedCharRefImageLabels[charName] = opt.label;
-              renderCharTags();
+              renderCharImages();
               closeRefDropdowns();
               safeAutoSave()
             });
@@ -10134,9 +10158,16 @@
           });
         }
 
-        refSectionEl.appendChild(dropdown);
+        // 定位下拉框到锚点元素下方
+        document.body.appendChild(dropdown);
+        if(anchorEl) {
+          const rect = anchorEl.getBoundingClientRect();
+          dropdown.style.left = rect.left + 'px';
+          dropdown.style.top = (rect.bottom + 4) + 'px';
+        }
+
         const closeHandler = (e) => {
-          if(!dropdown.contains(e.target) && !e.target.classList.contains('char-ref-img-btn')) {
+          if(!dropdown.contains(e.target)) {
             dropdown.remove();
             document.removeEventListener('click', closeHandler, true);
           }
@@ -10159,7 +10190,7 @@
         }
         renderSceneTags();
         renderPropTags();
-        renderCharTags();
+        renderCharImages();
       }
 
       // 暴露更新引用的方法供外部调用
@@ -10596,19 +10627,27 @@
         initNodeDrag(id, e.clientX, e.clientY);
       });
 
-      // 点击图片提示词textarea直接打开放大编辑窗口
-      imagePromptEl.addEventListener('click', (e) => {
+      // 点击图片提示词区域打开放大编辑窗口
+      imagePromptDisplay.addEventListener('click', (e) => {
+        // 如果点击的是角色标签，不打开编辑窗口
+        if(e.target.closest('.shot-inline-char-chip')) return;
         e.stopPropagation();
-        showPromptExpandModal(imagePromptEl, '图片提示词', (newValue) => {
+        // 创建一个模拟textarea的对象，提供value属性
+        const mockTextarea = { value: node.data.imagePrompt || '' };
+        showPromptExpandModal(mockTextarea, '图片提示词', (newValue) => {
           node.data.imagePrompt = newValue;
           updateShotReferences();
         }, { enableCharacterDropdown: true, nodeId: id });
       });
 
-      // 点击视频提示词textarea直接打开放大编辑窗口
-      videoPromptEl.addEventListener('click', (e) => {
+      // 点击视频提示词区域打开放大编辑窗口
+      videoPromptDisplay.addEventListener('click', (e) => {
+        // 如果点击的是角色标签，不打开编辑窗口
+        if(e.target.closest('.shot-inline-char-chip')) return;
         e.stopPropagation();
-        showPromptExpandModal(videoPromptEl, '视频提示词', (newValue) => {
+        // 创建一个模拟textarea的对象，提供value属性
+        const mockTextarea = { value: node.data.videoPromptText || node.data.videoPrompt || '' };
+        showPromptExpandModal(mockTextarea, '视频提示词', (newValue) => {
           node.data.videoPromptText = newValue;
           updateShotReferences();
         }, { enableCharacterDropdown: true, nodeId: id, dropdownKey: 'videoprompt' });
@@ -10635,7 +10674,7 @@
         reduceViolationBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
           
-          const currentPrompt = videoPromptEl.value.trim();
+          const currentPrompt = (node.data.videoPromptText || node.data.videoPrompt || '').trim();
           if(!currentPrompt){
             showToast('视频提示词为空', 'warning');
             return;
@@ -10656,8 +10695,8 @@
             const result = await response.json();
             
             if(result.code === 0 && result.data && result.data.prompt){
-              videoPromptEl.value = result.data.prompt;
               node.data.videoPromptText = result.data.prompt;
+              updateShotReferences();
               showToast('提示词已改写', 'success');
             } else {
               throw new Error(result.message || '改写失败');
@@ -10713,7 +10752,8 @@
             x: dialogueGroupX,
             y: dialogueGroupY,
             dialogueData: JSON.parse(JSON.stringify(node.data.shotJson.dialogue)),
-            shotNumber: node.data.shotJson.shot_number
+            shotNumber: node.data.shotJson.shot_number,
+            checkCollision: true
           });
           
           // 连接分镜节点到对话组节点

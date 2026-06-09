@@ -2559,6 +2559,81 @@ textarea:focus{ border-color: var(--primary); }
   font-weight: 600;
 }
 
+/* ============ 分镜节点提示词显示区域 ============ */
+.shot-prompt-display {
+  line-height: 1.8;
+  word-break: break-all;
+}
+
+/* 内联角色标签 */
+.shot-inline-char-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px 1px 1px;
+  background: #ede9fe;
+  border: 1px solid #ddd6fe;
+  border-radius: 12px;
+  cursor: pointer;
+  vertical-align: middle;
+  margin: 0 2px;
+  transition: all 0.15s ease;
+  position: relative;
+}
+.shot-inline-char-chip:hover {
+  background: #ddd6fe;
+  transform: scale(1.05);
+}
+.shot-inline-char-chip.no-image {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+/* 内联角色头像 */
+.shot-inline-char-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.shot-inline-char-avatar.no-image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fee2e2;
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* 内联角色名称 */
+.shot-inline-char-name {
+  font-size: 11px;
+  color: #5b21b6;
+  white-space: nowrap;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 内联选中标记 */
+.shot-inline-char-check {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #10b981;
+  color: white;
+  font-size: 8px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid white;
+  line-height: 1;
+}
+
 /* ============ 分镜组宫格预览 ============ */
 .shot-grid-preview-container {
   display: grid;

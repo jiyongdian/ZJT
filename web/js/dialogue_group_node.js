@@ -15,6 +15,16 @@
       .replace(/'/g, '&#039;');
   }
 
+  // 截断过长的角色名称，超过 maxLen 只显示首尾
+  function truncateName(name, maxLen) {
+    maxLen = maxLen || 10;
+    if (!name) return '';
+    if (name.length <= maxLen) return name;
+    var headLen = Math.ceil(maxLen * 0.4);
+    var tailLen = Math.floor(maxLen * 0.3);
+    return name.substring(0, headLen) + '...' + name.substring(name.length - tailLen);
+  }
+
   var DIALOGUE_GROUP_PORTS = [
     { direction: 'input', titleI18nKey: 'dialogue_input_port_title', acceptType: 'shot_frame', connectionType: 'connections' },
     { direction: 'input', cssClass: 'video-input-port', titleI18nKey: 'dialogue_video_input_port_title' },
@@ -56,7 +66,7 @@
             dialogueItemsHtml +=
               '<div class="dialogue-item" data-index="' + di + '" style="margin-bottom: 12px; padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">' +
                 '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">' +
-                  '<div style="font-weight: 600; color: #374151;">' + escapeHtml(characterName) + '</div>' +
+                  '<div style="font-weight: 600; color: #374151; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + escapeHtml(characterName) + '">' + escapeHtml(truncateName(characterName)) + '</div>' +
                   '<button class="mini-btn dialogue-generate-btn" data-index="' + di + '" type="button" style="font-size: 11px; padding: 4px 8px;" data-i18n="dialogue_generate_btn">' + (window.t ? window.t('dialogue_generate_btn') : '生成音频') + '</button>' +
                 '</div>' +
                 '<div style="color: #6b7280; font-size: 13px; margin-bottom: 8px;">"' + escapeHtml(text) + '"</div>' +
@@ -464,7 +474,7 @@
 
             html += '<div class="dialogue-item" data-index="' + dli + '" style="margin-bottom: 12px; padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">' +
               '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">' +
-                '<div style="font-weight: 600; color: #374151;">' + escapeHtml(characterName) + '</div>' +
+                '<div style="font-weight: 600; color: #374151; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + escapeHtml(characterName) + '">' + escapeHtml(truncateName(characterName)) + '</div>' +
                 '<div style="display: flex; gap: 4px;">' +
                   '<button class="mini-btn dialogue-edit-btn" data-index="' + dli + '" type="button" style="font-size: 11px; padding: 4px 8px;" title="' + (window.t ? window.t('dialogue_edit_btn') : '编辑') + '" data-i18n="dialogue_edit_btn">' + (window.t ? window.t('dialogue_edit_btn') : '编辑') + '</button>' +
                   '<button class="mini-btn dialogue-delete-btn" data-index="' + dli + '" type="button" style="font-size: 11px; padding: 4px 8px; background: #ef4444; color: white;" title="' + (window.t ? window.t('dialogue_delete_btn') : '删除') + '" data-i18n="dialogue_delete_btn">' + (window.t ? window.t('dialogue_delete_btn') : '删除') + '</button>' +
@@ -879,11 +889,22 @@
                 resultDiv.style.display = 'block';
 
                 statusEl.textContent = window.t ? window.t('tts_generate_success') : '生成成功！';
+                statusEl.style.color = '#16a34a';
                 showToast(window.t ? window.t('tts_generate_success') : '语音生成成功', 'success');
+
+                // 3秒后淡出隐藏状态提示
+                setTimeout(function() {
+                  statusEl.style.transition = 'opacity 0.5s ease';
+                  statusEl.style.opacity = '0';
+                  setTimeout(function() {
+                    statusEl.style.display = 'none';
+                    statusEl.style.opacity = '';
+                    statusEl.style.transition = '';
+                  }, 500);
+                }, 3000);
 
                 safeAutoSave();
               }
-              statusEl.style.color = '#16a34a';
               setBtnReady(generateBtn, window.t ? window.t('dialogue_generate_btn') : '生成音频');
             },
             onFailed: function(payload) {
@@ -1026,6 +1047,8 @@
 
         // 暴露渲染参考音频列表的方法
         node.renderRefAudiosList = renderRefAudiosList;
+        // 暴露更新对话列表的方法（用于数据恢复时重建DOM）
+        node.updateDialogueList = updateDialogueList;
       }
     }, opts);
   }
@@ -1033,6 +1056,11 @@
   var createDialogueGroupNodeWithData = createNodeWithDataFactory(
     createDialogueGroupNode,
     function(el, node, nodeData) {
+      // 先用已恢复的数据重新渲染对话列表（onCreated时dialogues为空，DOM中无对话条目）
+      if (node.updateDialogueList && node.data.dialogues && node.data.dialogues.length > 0) {
+        node.updateDialogueList();
+      }
+
       // 恢复对话数据到DOM
       var emoControlSelect = el.querySelector('.dialogue-emo-control-select');
       var emoRefAudioField = el.querySelector('.dialogue-emo-ref-audio-field');
