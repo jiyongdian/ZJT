@@ -567,11 +567,11 @@ const AdminApp = {
                     loading: false
                 },
                 modelAnalysis: {
-                    days: 1,
+                    days: 7,
                     startDate: '',
                     endDate: '',
                     selectedTypes: [],
-                    chartMode: 'both',
+                    chartMode: 'rate',
                     loading: false,
                     models: [],
                     daily: [],
@@ -1191,6 +1191,7 @@ const AdminApp = {
         // 加载模型分析数据
         async loadModelAnalysis() {
             this.dashboard.modelAnalysis.loading = true;
+            let shouldRenderCharts = false;
             try {
                 const params = { days: this.dashboard.modelAnalysis.days };
                 if (this.dashboard.modelAnalysis.startDate) {
@@ -1214,13 +1215,18 @@ const AdminApp = {
                     const selectedTypes = (this.dashboard.modelAnalysis.selectedTypes || [])
                         .filter(type => availableTypes.includes(type));
                     this.dashboard.modelAnalysis.selectedTypes = selectedTypes.length ? selectedTypes : availableTypes;
-                    this.$nextTick(() => this.renderModelAnalysisCharts());
+                    shouldRenderCharts = true;
                 }
             } catch (error) {
                 console.error('Load model analysis failed:', error);
                 this.showToast(this.t('toast_load_model_failed'), 'error');
             } finally {
                 this.dashboard.modelAnalysis.loading = false;
+            }
+
+            // 在 loading 设为 false 之后渲染图表，使用 setTimeout 确保 v-else-if 的 DOM 已完全就绪
+            if (shouldRenderCharts) {
+                setTimeout(() => this.renderModelAnalysisCharts(), 100);
             }
         },
 
@@ -1406,9 +1412,13 @@ const AdminApp = {
             const mode = this.dashboard.modelAnalysis.chartMode;
             const series = [];
 
+            console.log('[TrendChart] mode:', mode, 'models:', models.length, 'daily:', daily.length);
+
             models.forEach((model, index) => {
                 const color = this.getModelColor(index);
                 if (mode === 'rate' || mode === 'both') {
+                    const rateData = daily.map(day => this.getDailyModelValue(day, model.type, 'success_rate'));
+                    console.log('[TrendChart] Rate series for', model.name, ':', rateData);
                     series.push({
                         name: `${model.name} ${this.t('model_chart_mode_rate')}`,
                         type: 'line',
@@ -1417,10 +1427,12 @@ const AdminApp = {
                         symbolSize: 7,
                         lineStyle: { width: 3, color },
                         itemStyle: { color },
-                        data: daily.map(day => this.getDailyModelValue(day, model.type, 'success_rate'))
+                        data: rateData
                     });
                 }
                 if (mode === 'count' || mode === 'both') {
+                    const countData = daily.map(day => this.getDailyModelValue(day, model.type, 'total'));
+                    console.log('[TrendChart] Count series for', model.name, ':', countData);
                     series.push({
                         name: `${model.name} ${this.t('model_chart_mode_count')}`,
                         type: 'line',
@@ -1429,10 +1441,12 @@ const AdminApp = {
                         symbolSize: 6,
                         lineStyle: { width: 2, type: 'dashed', color },
                         itemStyle: { color },
-                        data: daily.map(day => this.getDailyModelValue(day, model.type, 'total'))
+                        data: countData
                     });
                 }
             });
+
+            console.log('[TrendChart] Total series count:', series.length);
 
             chart.setOption({
                 ...this.getModelChartBaseOption(),
