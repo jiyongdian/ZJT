@@ -4841,6 +4841,43 @@
       return id;
     }
 
+    // ─── 注册 image_to_video 输入端口（供连接系统自动发现）───
+    if (typeof registerInputPorts === 'function') {
+      registerInputPorts('image_to_video', [
+        // 首帧端口（接受图片节点连接）
+        PORT_PRESETS.IMAGE_INPUT({
+          guard: function(n) { return !n.data.startFile; }
+        }),
+        // 尾帧端口
+        {
+          selector: '.end-image-port',
+          portType: 'end',
+          accepts: ['image'],
+          connectionType: 'imageConnections',
+          guard: function(n) { return !n.data.endFile; }
+        },
+        // 参考图端口（多参考模式，允许多连接）
+        {
+          selector: '.ref-image-input-port',
+          portType: 'ref-image',
+          accepts: ['image'],
+          connectionType: 'imageConnections',
+          allowMultiple: true,
+          guard: function(n) {
+            if (n.data.imageMode !== 'multi_reference') return false;
+            if (window.TaskConfig && window.TaskConfig.isLoaded()) {
+              var modelConfigs = window.TaskConfig.getModelConfigs();
+              var maxCount = modelConfigs[n.data.videoModel] && modelConfigs[n.data.videoModel].max_multi_ref_images || 5;
+              return (n.data.referenceUrls || []).length < maxCount;
+            }
+            return true;
+          }
+        },
+        // 音频端口（接受音频节点连接）
+        PORT_PRESETS.AUDIO_INPUT()
+      ]);
+    }
+
     function createImageNode(opts){
       const id = state.nextNodeId++;
       const viewportPos = getViewportNodePosition();
@@ -6081,8 +6118,8 @@
             return;
           }
 
-          // 按指定顺序排序：qwen3.5 > qwen3.6 > flash-3.0 > flash-3.5 > gemini-3-flash > gemini-3.1-flash-lite > 其他
-          const sortOrder = ['qwen3.5', 'qwen3.6', 'flash-3.0', 'flash-3.5', 'flash', 'gemini-3-flash', 'gemini-3.1-flash-lite'];
+          // 按指定顺序排序：deepseek-v4 > qwen3.5 > qwen3.6 > flash-3.0 > flash-3.5 > flash > gemini-3-flash > gemini-3.1-flash-lite > 其他
+          const sortOrder = ['deepseek-v4', 'qwen3.5', 'qwen3.6', 'flash-3.0', 'flash-3.5', 'flash', 'gemini-3-flash', 'gemini-3.1-flash-lite'];
           const sortedModels = [...data.models].sort((a, b) => {
             const nameA = (a.model_name || a.name || '').toLowerCase();
             const nameB = (b.model_name || b.name || '').toLowerCase();
@@ -6163,7 +6200,7 @@
           splitModelSelect.appendChild(optGroup);
         });
 
-        // 恢复已保存的拆分模型选择，若无保存值则选中第一个
+        // 恢复已保存的拆分模型选择，若无保存值则按优先级选择默认模型
         const savedSplitModel = node.data.splitModel;
         let restored = false;
         if(savedSplitModel) {
@@ -6176,12 +6213,60 @@
             restored = true;
           }
         }
-        if(!restored && firstEnabled) {
-          firstEnabled.selected = true;
-          node.data.splitModel = firstEnabled.value;
-          node.data.splitModelId = firstEnabled.dataset.modelId || '';
-          node.data.splitModelVendorId = firstEnabled.dataset.vendorId || '';
-          node.data.splitModelVendorName = firstEnabled.dataset.vendorName || '';
+        if(!restored) {
+          // 优先级：deepseek供应商的deepseek-v4-flash → zjt_api供应商的qwen3.5-plus → 第一个启用的模型
+          const allOptions = splitModelSelect.querySelectorAll('option');
+          let defaultOption = null;
+
+          // 第一轮：优先查找 deepseek 供应商下的 deepseek-v4-flash
+          for (let i = 0; i < allOptions.length; i++) {
+            const opt = allOptions[i];
+            if (!opt.disabled && opt.value && opt.value.includes('deepseek-v4-flash')
+                && opt.dataset.vendorName === 'deepseek') {
+              defaultOption = opt;
+              console.log('[剧本节点-拆分模型] 选择默认模型: deepseek-v4-flash (deepseek)');
+              break;
+            }
+          }
+
+          // 第二轮：查找 zjt_api 供应商下的 qwen3.5-plus
+          if (!defaultOption) {
+            for (let i = 0; i < allOptions.length; i++) {
+              const opt = allOptions[i];
+              if (!opt.disabled && opt.value && opt.value.includes('qwen3.5-plus')
+                  && opt.dataset.vendorName === 'zjt_api') {
+                defaultOption = opt;
+                console.log('[剧本节点-拆分模型] 选择默认模型: qwen3.5-plus (zjt_api)');
+                break;
+              }
+            }
+          }
+
+          // 第三轮：查找其他供应商的 qwen3.5-plus
+          if (!defaultOption) {
+            for (let i = 0; i < allOptions.length; i++) {
+              const opt = allOptions[i];
+              if (!opt.disabled && opt.value && opt.value.includes('qwen3.5-plus')) {
+                defaultOption = opt;
+                console.log(`[剧本节点-拆分模型] 未找到 zjt_api 的 qwen3.5-plus，选择其他供应商: ${opt.dataset.vendorName}`);
+                break;
+              }
+            }
+          }
+
+          // 最终回退：使用第一个启用的模型
+          if (!defaultOption && firstEnabled) {
+            defaultOption = firstEnabled;
+            console.log(`[剧本节点-拆分模型] 未找到推荐模型，选择第一个启用的模型: ${firstEnabled.value}`);
+          }
+
+          if (defaultOption) {
+            defaultOption.selected = true;
+            node.data.splitModel = defaultOption.value;
+            node.data.splitModelId = defaultOption.dataset.modelId || '';
+            node.data.splitModelVendorId = defaultOption.dataset.vendorId || '';
+            node.data.splitModelVendorName = defaultOption.dataset.vendorName || '';
+          }
         }
       }
 

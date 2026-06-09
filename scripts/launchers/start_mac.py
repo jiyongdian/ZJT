@@ -783,9 +783,17 @@ def start_app_service():
         # 设置环境变量
         subprocess_env = os.environ.copy()
         subprocess_env['PYTHONUTF8'] = '1'
-        # 设置 uv 镜像源，加速大陆地区下载
-        subprocess_env['UV_PYTHON_INSTALL_MIRROR'] = 'https://ghfast.top/https://github.com/indygreg/python-build-standalone/releases/download'
-        subprocess_env['UV_INDEX_URL'] = 'https://mirrors.aliyun.com/pypi/simple/'
+        # 根据网络环境检测结果设置镜像源
+        mirror_mode = os.environ.get('COMFYUI_MIRROR_MODE', 'domestic')
+        if mirror_mode in ('overseas', 'manual'):
+            # 翻墙/手动模式：使用官方源，不设置 UV_PYTHON_INSTALL_MIRROR（使用直连）
+            subprocess_env['UV_INDEX_URL'] = 'https://pypi.org/simple/'
+            if 'UV_PYTHON_INSTALL_MIRROR' in subprocess_env:
+                del subprocess_env['UV_PYTHON_INSTALL_MIRROR']
+        else:
+            # 国内模式：使用国内镜像加速
+            subprocess_env['UV_PYTHON_INSTALL_MIRROR'] = 'https://ghfast.top/https://github.com/indygreg/python-build-standalone/releases/download'
+            subprocess_env['UV_INDEX_URL'] = 'https://mirrors.aliyun.com/pypi/simple/'
 
         app_process = subprocess.Popen(
             cmd,
