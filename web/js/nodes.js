@@ -6368,6 +6368,32 @@
             languageCustomEl.value = node.data.language;
           }
         }
+
+        // 监听右上角语言切换，联动更新剧本输出语言
+        if(window.ZJTi18n) {
+          window.ZJTi18n.on('locale-changed', ({ locale }) => {
+            // 根据界面语言自动设置剧本输出语言
+            const localeToLanguage = {
+              'en': 'English',
+              'zh-CN': ''
+            };
+            const newLanguage = localeToLanguage[locale];
+            if(newLanguage !== undefined) {
+              // 更新节点数据
+              node.data.language = newLanguage;
+              // 更新下拉框显示
+              const presetValues = ['', 'English', 'Deutsch', 'Français', 'Русский'];
+              if(presetValues.includes(newLanguage)) {
+                languageSelectEl.value = newLanguage;
+                languageCustomEl.style.display = 'none';
+              } else {
+                languageSelectEl.value = '__custom__';
+                languageCustomEl.style.display = 'block';
+                languageCustomEl.value = newLanguage;
+              }
+            }
+          });
+        }
       }
 
       // 宫格模型选择监听
@@ -9584,12 +9610,52 @@
         return names;
       }
 
-      // 初始匹配角色（根据当前模式选择提示词源）
-      const initMode = node.data.videoMode || 'first_last_frame';
-      const initPromptSource = initMode === 'multi_reference'
-        ? (node.data.videoPromptText || node.data.videoPrompt || '')
-        : (node.data.imagePrompt || '');
-      node.data.refCharacters = extractCharacterNames(initPromptSource);
+      // 优先使用后端返回的 db_character_info 匹配角色
+      function getCharactersFromDbInfo() {
+        const shotJson = node.data.shotJson || {};
+        const dbCharInfo = shotJson.db_character_info;
+        if(!dbCharInfo || !Array.isArray(dbCharInfo) || dbCharInfo.length === 0) {
+          return null;
+        }
+
+        const worldChars = state.worldCharacters || [];
+        const matchedNames = [];
+
+        dbCharInfo.forEach(info => {
+          if(info.db_character_id && info.db_character_name) {
+            // 后端已匹配到数据库角色，使用 db_character_name
+            if(!matchedNames.includes(info.db_character_name)) {
+              matchedNames.push(info.db_character_name);
+            }
+          } else if(info.character_id) {
+            // 后端未匹配到，尝试从 scriptData.characters 中查找名称
+            const scriptData = node.data.shotJson?.scriptData || {};
+            const characters = scriptData.characters || [];
+            const charObj = characters.find(c => c.id === info.character_id);
+            if(charObj && charObj.name) {
+              // 检查该名称是否在 worldCharacters 中存在
+              const existsInWorld = worldChars.some(wc => wc.name === charObj.name);
+              if(existsInWorld && !matchedNames.includes(charObj.name)) {
+                matchedNames.push(charObj.name);
+              }
+            }
+          }
+        });
+
+        return matchedNames.length > 0 ? matchedNames : null;
+      }
+
+      // 初始匹配角色：优先使用 db_character_info，否则从提示词提取
+      const dbMatchedChars = getCharactersFromDbInfo();
+      if(dbMatchedChars) {
+        node.data.refCharacters = dbMatchedChars;
+      } else {
+        const initMode = node.data.videoMode || 'first_last_frame';
+        const initPromptSource = initMode === 'multi_reference'
+          ? (node.data.videoPromptText || node.data.videoPrompt || '')
+          : (node.data.imagePrompt || '');
+        node.data.refCharacters = extractCharacterNames(initPromptSource);
+      }
 
       // 获取所有可用场景列表（从 state.worldLocations 获取）
       function getAvailableLocations() {
@@ -9995,12 +10061,17 @@
 
       // 触发全部引用匹配并渲染
       function updateShotReferences() {
-        // 重新匹配角色（参考模式从视频提示词提取，首帧模式从图片提示词提取）
-        const mode = node.data.videoMode || 'first_last_frame';
-        const promptSource = mode === 'multi_reference'
-          ? (node.data.videoPromptText || node.data.videoPrompt || '')
-          : (node.data.imagePrompt || '');
-        node.data.refCharacters = extractCharacterNames(promptSource);
+        // 重新匹配角色：优先使用 db_character_info，否则从提示词提取
+        const dbMatchedChars = getCharactersFromDbInfo();
+        if(dbMatchedChars) {
+          node.data.refCharacters = dbMatchedChars;
+        } else {
+          const mode = node.data.videoMode || 'first_last_frame';
+          const promptSource = mode === 'multi_reference'
+            ? (node.data.videoPromptText || node.data.videoPrompt || '')
+            : (node.data.imagePrompt || '');
+          node.data.refCharacters = extractCharacterNames(promptSource);
+        }
         renderSceneTags();
         renderPropTags();
         renderCharTags();

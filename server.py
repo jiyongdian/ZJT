@@ -5568,6 +5568,40 @@ def _match_location_to_db(location_id: str, locations: list, user_id: int) -> tu
     return find_matching_db_location(current_loc)
 
 
+def _match_character_to_db(character_id: str, characters: list) -> tuple[Optional[int], Optional[str], Optional[str]]:
+    """
+    匹配角色到数据库
+
+    Args:
+        character_id: 角色ID (如 "char_001")
+        characters: 大模型返回的characters数组
+
+    Returns:
+        (db_character_id, reference_image, character_name) 元组，未匹配则返回 (None, None, None)
+    """
+    # 构建character字典以便快速查找
+    char_map = {c['id']: c for c in characters}
+
+    # 查找当前character
+    current_char = char_map.get(character_id)
+    if not current_char:
+        return (None, None, None)
+
+    # 检查character_db_id
+    db_id = current_char.get('character_db_id')
+    if db_id is not None:
+        # 验证该角色是否存在于数据库中
+        try:
+            from model.character import CharacterModel
+            db_character = CharacterModel.get_by_id(db_id)
+            if db_character:
+                return (db_id, db_character.reference_image, db_character.name)
+        except Exception as e:
+            logger.warning(f"Failed to get character {db_id}: {e}")
+
+    return (None, None, None)
+
+
 @app.post('/api/parse-script')
 async def parse_script(
     request: Request,
@@ -5672,8 +5706,24 @@ async def parse_script(
         
         # 为每个shot添加db_location_id、db_location_pic和location_name字段
         locations = parsed_data.get('locations', [])
+        characters = parsed_data.get('characters', [])
         shot_groups = parsed_data.get('shot_groups', [])
-        
+
+        # 将LLM生成的角色名称替换为数据库中的实际名称
+        for char in characters:
+            db_id = char.get('character_db_id')
+            if db_id is not None:
+                try:
+                    from model.character import CharacterModel
+                    db_character = CharacterModel.get_by_id(db_id)
+                    if db_character:
+                        # 保存LLM生成的名称作为备用
+                        char['llm_name'] = char.get('name')
+                        # 替换为数据库中的实际名称
+                        char['name'] = db_character.name
+                except Exception as e:
+                    logger.warning(f"Failed to get character name for {db_id}: {e}")
+
         for group in shot_groups:
             shots = group.get('shots', [])
             for shot in shots:
@@ -5687,7 +5737,20 @@ async def parse_script(
                     shot['db_location_id'] = None
                     shot['db_location_pic'] = None
                     shot['location_name'] = None
-        
+
+                # 为每个shot中的characters_present添加db_character信息
+                characters_present = shot.get('characters_present', [])
+                db_character_info = []
+                for char_id in characters_present:
+                    db_char_id, db_char_pic, db_char_name = _match_character_to_db(char_id, characters)
+                    db_character_info.append({
+                        'character_id': char_id,
+                        'db_character_id': db_char_id,
+                        'db_character_pic': db_char_pic,
+                        'db_character_name': db_char_name
+                    })
+                shot['db_character_info'] = db_character_info
+
         return JSONResponse({
             "code": 0,
             "message": "解析成功",
