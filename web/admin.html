@@ -13,6 +13,7 @@
     <script src="/i18n/i18n-switcher.js?v=__VERSION__"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/l10n/zh.js"></script>
 </head>
@@ -179,8 +180,93 @@
                         <p>{{ t('loading') }}</p>
                     </div>
 
-                    <div v-else-if="dashboard.modelAnalysis.models.length" class="table-container" style="padding: 0;">
-                        <table class="admin-table model-analysis-table">
+                    <div v-else-if="dashboard.modelAnalysis.models.length" class="model-analysis-content">
+                        <div class="model-analysis-stats">
+                            <div class="model-stat-card total">
+                                <div class="model-stat-label">{{ t('model_chart_total_calls') }}</div>
+                                <div class="model-stat-value">{{ getModelAnalysisSummary().total }}</div>
+                            </div>
+                            <div class="model-stat-card success">
+                                <div class="model-stat-label">{{ t('model_chart_success_calls') }}</div>
+                                <div class="model-stat-value">{{ getModelAnalysisSummary().success }}</div>
+                            </div>
+                            <div class="model-stat-card failed">
+                                <div class="model-stat-label">{{ t('model_chart_failed_calls') }}</div>
+                                <div class="model-stat-value">{{ getModelAnalysisSummary().fail }}</div>
+                            </div>
+                            <div class="model-stat-card rate">
+                                <div class="model-stat-label">{{ t('model_chart_avg_rate') }}</div>
+                                <div class="model-stat-value">{{ getModelAnalysisSummary().successRate.toFixed(1) }}%</div>
+                            </div>
+                        </div>
+
+                        <div class="model-analysis-filters">
+                            <div class="model-filter-group">
+                                <span class="model-filter-label">{{ t('model_date_range') }}</span>
+                                <div class="model-date-inputs">
+                                    <input type="date"
+                                           class="model-date-input"
+                                           v-model="dashboard.modelAnalysis.startDate"
+                                           :aria-label="t('model_start_date')"
+                                           @change="handleModelAnalysisDateChange">
+                                    <span class="model-date-separator">-</span>
+                                    <input type="date"
+                                           class="model-date-input"
+                                           v-model="dashboard.modelAnalysis.endDate"
+                                           :aria-label="t('model_end_date')"
+                                           @change="handleModelAnalysisDateChange">
+                                </div>
+                            </div>
+                            <div class="model-filter-group grow">
+                                <div class="model-filter-head">
+                                    <span class="model-filter-label">{{ t('model_select') }}</span>
+                                    <button class="text-link-btn" @click="selectAllModelAnalysisTypes">{{ t('model_select_all') }}</button>
+                                    <button class="text-link-btn" @click="clearModelAnalysisTypes">{{ t('model_clear') }}</button>
+                                </div>
+                                <div class="model-selector-chips">
+                                    <button v-for="(model, index) in sortedModelAnalysisModels()"
+                                            :key="'model-chip-' + model.type"
+                                            type="button"
+                                            class="model-selector-chip"
+                                            :class="{ active: isModelAnalysisTypeSelected(model.type) }"
+                                            :style="{ '--chip-color': getModelColor(index) }"
+                                            @click="toggleModelAnalysisType(model.type)">
+                                        <span class="chip-dot"></span>
+                                        {{ model.name }}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="model-chart-grid">
+                            <div class="model-chart-card full">
+                                <div class="model-chart-head">
+                                    <div class="model-chart-title">{{ t('model_chart_trend') }}</div>
+                                    <div class="chart-mode-tabs">
+                                        <button :class="{ active: dashboard.modelAnalysis.chartMode === 'both' }"
+                                                @click="setModelAnalysisChartMode('both')">{{ t('model_chart_mode_both') }}</button>
+                                        <button :class="{ active: dashboard.modelAnalysis.chartMode === 'rate' }"
+                                                @click="setModelAnalysisChartMode('rate')">{{ t('model_chart_mode_rate') }}</button>
+                                        <button :class="{ active: dashboard.modelAnalysis.chartMode === 'count' }"
+                                                @click="setModelAnalysisChartMode('count')">{{ t('model_chart_mode_count') }}</button>
+                                    </div>
+                                </div>
+                                <div ref="modelTrendChart" class="model-echart model-echart-large"></div>
+                            </div>
+
+                            <div class="model-chart-card full">
+                                <div class="model-chart-title">{{ t('model_chart_stacked_volume') }}</div>
+                                <div ref="modelStackedChart" class="model-echart"></div>
+                            </div>
+
+                            <div class="model-chart-card full">
+                                <div class="model-chart-title">{{ t('model_chart_rose_volume') }}</div>
+                                <div ref="modelRoseChart" class="model-echart"></div>
+                            </div>
+                        </div>
+
+                        <div class="table-container" style="padding: 0;">
+                            <table class="admin-table model-analysis-table">
                             <thead>
                                 <tr>
                                     <th>{{ t('model_col_model') }}</th>
@@ -230,7 +316,8 @@
                                     </template>
                                 </template>
                             </tbody>
-                        </table>
+                            </table>
+                        </div>
                     </div>
 
                     <div v-else class="empty-state" style="padding: 30px; text-align: center; color: #94a3b8;">
@@ -276,8 +363,7 @@
                         <thead>
                             <tr>
                                 <th>{{ t('col_id') }}</th>
-                                <th>{{ t('col_phone') }}</th>
-                                <th>{{ t('col_email') }}</th>
+                                <th>{{ t('col_account') }}</th>
                                 <th>{{ t('col_role') }}</th>
                                 <th>{{ t('col_power') }}</th>
                                 <th>{{ t('col_status') }}</th>
@@ -287,29 +373,30 @@
                         </thead>
                         <tbody>
                             <tr v-if="users.list.length === 0">
-                                <td colspan="8" style="text-align: center; color: #64748b;">{{ t('no_data') }}</td>
+                                <td colspan="7" style="text-align: center; color: #64748b;">{{ t('no_data') }}</td>
                             </tr>
                             <tr v-for="user in users.list" :key="user.user_id">
                                 <td>{{ user.user_id }}</td>
-                                <td>
-                                    <span class="sensitive-cell">
-                                        <span>{{ visibleFields['phone_' + user.user_id] ? (user.phone || '-') : formatPhone(user.phone) }}</span>
+                                <td class="account-cell">
+                                    <span v-if="user.phone" class="sensitive-cell">
+                                        <span class="account-type">{{ t('col_phone') }}</span>
+                                        <span>{{ visibleFields['phone_' + user.user_id] ? user.phone : formatPhone(user.phone) }}</span>
                                         <button class="eye-toggle" @click="toggleFieldVisibility('phone_' + user.user_id)"
                                                 :title="visibleFields['phone_' + user.user_id] ? t('btn_hide') : t('btn_show')">
                                             <svg v-if="!visibleFields['phone_' + user.user_id]" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                                             <svg v-else xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                                         </button>
                                     </span>
-                                </td>
-                                <td>
-                                    <span class="sensitive-cell">
-                                        <span>{{ visibleFields['email_' + user.user_id] ? (user.email || '-') : formatEmail(user.email) }}</span>
-                                        <button v-if="user.email" class="eye-toggle" @click="toggleFieldVisibility('email_' + user.user_id)"
+                                    <span v-else-if="user.email" class="sensitive-cell">
+                                        <span class="account-type">{{ t('col_email') }}</span>
+                                        <span>{{ visibleFields['email_' + user.user_id] ? user.email : formatEmail(user.email) }}</span>
+                                        <button class="eye-toggle" @click="toggleFieldVisibility('email_' + user.user_id)"
                                                 :title="visibleFields['email_' + user.user_id] ? t('btn_hide') : t('btn_show')">
                                             <svg v-if="!visibleFields['email_' + user.user_id]" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                                             <svg v-else xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                                         </button>
                                     </span>
+                                    <span v-else>-</span>
                                 </td>
                                 <td>
                                     <span class="status-badge" :class="{ admin: user.role === 'admin' }">
@@ -322,7 +409,9 @@
                                         {{ user.status === 1 ? t('status_normal') : user.status === 2 ? t('status_pending') : t('status_disabled') }}
                                     </span>
                                 </td>
-                                <td>{{ formatDate(user.created_at) }}</td>
+                                <td>
+                                    <span :title="formatDate(user.created_at)">{{ formatDateOnly(user.created_at) }}</span>
+                                </td>
                                 <td>
                                     <button class="action-btn primary" @click="viewUserDetail(user.user_id)">{{ t('btn_view_detail') }}</button>
                                     <button class="action-btn success" @click="openPowerModal(user)">{{ t('btn_adjust_power') }}</button>
@@ -335,11 +424,12 @@
                                     </button>
                                     <button
                                         v-if="!isCommunityEdition"
-                                        class="action-btn"
+                                        class="action-btn zjt-token-btn"
                                         :class="user.zjt_token_enabled ? 'warning' : 'default'"
                                         @click="toggleZjtToken(user)"
+                                        :title="user.zjt_token_enabled ? t('btn_zjt_token_on') : t('btn_zjt_token_off')"
                                     >
-                                        {{ user.zjt_token_enabled ? t('btn_zjt_token_on') : t('btn_zjt_token_off') }}
+                                        {{ t('btn_zjt_token_short') }}
                                     </button>
                                     <button
                                         v-if="!isCommunityEdition && user.zjt_token_enabled"
@@ -354,13 +444,6 @@
                                         @click="updateUserStatus(user.user_id, user.status)"
                                     >
                                         {{ user.status === 1 ? t('btn_disable') : t('btn_enable') }}
-                                    </button>
-                                    <button
-                                        class="action-btn primary"
-                                        @click="updateUserRole(user.user_id, user.role)"
-                                        v-if="user.role !== 'admin'"
-                                    >
-                                        {{ t('btn_set_admin') }}
                                     </button>
                                 </td>
                             </tr>
@@ -1094,7 +1177,18 @@
                         </div>
                         <div class="form-group">
                             <label>{{ t('modal_role') }}</label>
-                            <input type="text" :value="userDetailModal.user.role === 'admin' ? t('user_role_admin') : t('user_role_user')" disabled>
+                            <div class="role-config-row">
+                                <span class="status-badge" :class="{ admin: userDetailModal.user.role === 'admin' }">
+                                    {{ userDetailModal.user.role === 'admin' ? t('user_role_admin') : t('user_role_user') }}
+                                </span>
+                                <button
+                                    class="action-btn"
+                                    :class="userDetailModal.user.role === 'admin' ? 'warning' : 'primary'"
+                                    @click="updateUserRole(userDetailModal.user.user_id, userDetailModal.user.role)"
+                                >
+                                    {{ userDetailModal.user.role === 'admin' ? t('btn_set_user') : t('btn_set_admin') }}
+                                </button>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label>{{ t('modal_user_status') }}</label>

@@ -6,6 +6,8 @@ from pydantic import BaseModel
 from typing import Optional, List, Union
 import logging
 import httpx
+import asyncio
+from datetime import datetime
 
 from model.users import UsersModel, User
 from model.user_tokens import UserTokensModel
@@ -118,6 +120,8 @@ async def admin_monthly_active_users(
 @router.get("/dashboard/model-analysis")
 async def admin_model_analysis(
     days: int = Query(1, ge=1, le=30),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
     auth_token: str = Header(None, alias="Authorization")
 ):
     """
@@ -127,7 +131,25 @@ async def admin_model_analysis(
     await require_admin(auth_token)
 
     try:
-        raw_stats = ImplementationAttemptModel.get_stats(days=days)
+        parsed_start = datetime.strptime(start_date, "%Y-%m-%d").date() if start_date else None
+        parsed_end = datetime.strptime(end_date, "%Y-%m-%d").date() if end_date else None
+        if parsed_start and parsed_end and parsed_start > parsed_end:
+            raise HTTPException(status_code=400, detail="start_date must be earlier than or equal to end_date")
+
+        raw_stats, raw_daily_stats = await asyncio.gather(
+            asyncio.to_thread(
+                ImplementationAttemptModel.get_stats,
+                days=days,
+                start_date=start_date,
+                end_date=end_date
+            ),
+            asyncio.to_thread(
+                ImplementationAttemptModel.get_daily_stats,
+                days=days,
+                start_date=start_date,
+                end_date=end_date
+            )
+        )
 
         # 获取类型ID -> 名称映射
         type_name_map = UnifiedConfigRegistry.get_name_map()
@@ -179,13 +201,64 @@ async def admin_model_analysis(
                 'providers': providers
             })
 
+        daily_groups = {}
+        for row in raw_daily_stats:
+            stat_date = row['date']
+            if stat_date not in daily_groups:
+                daily_groups[stat_date] = {
+                    'date': stat_date,
+                    'total': 0,
+                    'success': 0,
+                    'fail': 0,
+                    'models': {}
+                }
+
+            day_group = daily_groups[stat_date]
+            day_group['total'] += row['total_count']
+            day_group['success'] += row['success_count']
+            day_group['fail'] += row['fail_count']
+
+            task_type = row['type']
+            if task_type not in day_group['models']:
+                day_group['models'][task_type] = {
+                    'type': task_type,
+                    'name': type_name_map.get(task_type, f'未知类型({task_type})'),
+                    'total': 0,
+                    'success': 0,
+                    'fail': 0
+                }
+            model_group = day_group['models'][task_type]
+            model_group['total'] += row['total_count']
+            model_group['success'] += row['success_count']
+            model_group['fail'] += row['fail_count']
+
+        daily = []
+        for day_group in sorted(daily_groups.values(), key=lambda x: x['date']):
+            day_total = day_group['total']
+            day_group['success_rate'] = round((day_group['success'] / day_total * 100) if day_total > 0 else 0.0, 2)
+            day_group['models'] = [
+                {
+                    **model_group,
+                    'success_rate': round((model_group['success'] / model_group['total'] * 100) if model_group['total'] > 0 else 0.0, 2)
+                }
+                for model_group in sorted(day_group['models'].values(), key=lambda x: -x['total'])
+            ]
+            daily.append(day_group)
+
         return {
             "code": 0,
             "data": {
                 "days": days,
-                "models": models
+                "start_date": start_date,
+                "end_date": end_date,
+                "models": models,
+                "daily": daily
             }
         }
+    except HTTPException:
+        raise
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format, expected YYYY-MM-DD")
     except Exception as e:
         logger.error(f"Failed to get model analysis: {e}")
         raise HTTPException(status_code=500, detail=str(e))
