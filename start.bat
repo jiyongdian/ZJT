@@ -60,14 +60,43 @@ if not exist "!UV_CMD!" (
     echo [OK] uv found
 )
 
-REM === 预下载 Python，支持多镜像自动回退（每个镜像 180 秒超时） ===
+REM === 网络环境检测（仅在 auto 模式下执行，PowerShell 3秒超时测试国内镜像可达性） ===
+if not "%UV_MIRROR%"=="auto" goto :mirror_manual_detect
+echo [1.1/4] Detecting network environment...
+set "COMFYUI_MIRROR_MODE=domestic"
+powershell -NoProfile -Command "if((Test-NetConnection -ComputerName ghfast.top -Port 443 -InformationLevel Quiet -WarningAction SilentlyContinue) -and $?) { exit 0 } else { exit 1 }" >nul 2>&1
+if errorlevel 1 goto :mirror_overseas
+echo   [INFO] Domestic network detected, using China mirrors
+set "UV_MIRROR=ghfast"
+set "UV_PIP_MIRROR=aliyun"
+set "COMFYUI_MIRROR_MODE=domestic"
+set "UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/"
+goto :mirror_detect_done
+
+:mirror_overseas
+echo   [INFO] Overseas network detected, using direct mirrors
+set "UV_MIRROR=direct"
+set "UV_PIP_MIRROR=official"
+set "COMFYUI_MIRROR_MODE=overseas"
+set "UV_INDEX_URL=https://pypi.org/simple/"
+goto :mirror_detect_done
+
+:mirror_manual_detect
+echo [1.1/4] Using manually configured mirror: %UV_MIRROR%
+set "COMFYUI_MIRROR_MODE=manual"
+
+:mirror_detect_done
+echo.
+
+REM === 预下载 Python，支持多镜像自动回退（每个镜像 60 秒超时） ===
 echo [1.2/4] Ensuring Python 3.10 is available...
 set "PYTHON_READY=0"
 set "MIRROR_IDX=0"
 set "AUTO_RETRY=1"
 set "SUCCESS_FLAG=%TEMP%\comfyui_python_ok.flag"
 
-if not "%UV_MIRROR%"=="auto" (
+REM 根据网络检测结果或用户手动配置设置镜像索引
+if not "!UV_MIRROR!"=="auto" (
     if "%UV_MIRROR%"=="ghfast" set "MIRROR_IDX=0"
     if "%UV_MIRROR%"=="ghproxy" set "MIRROR_IDX=1"
     if "%UV_MIRROR%"=="direct" set "MIRROR_IDX=2"
@@ -84,7 +113,7 @@ if "!MIRROR_IDX!"=="2" set "MIRROR_URL="
 if "!MIRROR_IDX!"=="3" goto :mirror_all_failed
 
 del "!SUCCESS_FLAG!" 2>nul
-echo   Trying !MIRROR_NAME! mirror (180s timeout)...
+echo   Trying !MIRROR_NAME! mirror (60s timeout)...
 
 if not "!MIRROR_URL!"=="" goto :mirror_has_url
 start /B "" "!UV_CMD!" python install cpython-3.10-windows-x86_64-none >nul 2>&1
@@ -108,7 +137,7 @@ if errorlevel 1 (
 
 REM 进程还在运行，继续等待
 set /a "TIMEOUT_COUNT+=1"
-if !TIMEOUT_COUNT! GEQ 180 (
+if !TIMEOUT_COUNT! GEQ 60 (
     REM 超时，杀掉进程
     taskkill /F /IM uv.exe >nul 2>&1
     goto :mirror_check

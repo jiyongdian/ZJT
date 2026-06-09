@@ -1774,9 +1774,9 @@ async def ai_app_run_image(
         task_config = UnifiedConfigRegistry.get_by_id(task_id)
         if not task_config:
             raise HTTPException(status_code=400, detail=f"无效的 task_id: {task_id}")
-        # 验证任务分类是否正确
-        if task_config.category != TaskCategory.IMAGE_TO_VIDEO:
-            raise HTTPException(status_code=400, detail=f"task_id {task_id} 不是图生视频任务")
+        # 验证任务分类是否正确（支持图生视频和数字人）
+        if task_config.category not in [TaskCategory.IMAGE_TO_VIDEO, TaskCategory.DIGITAL_HUMAN]:
+            raise HTTPException(status_code=400, detail=f"task_id {task_id} 不是图生视频或数字人任务")
         
         image_to_video_type = task_id
 
@@ -4020,6 +4020,128 @@ async def digital_human_generate(
         logger.error(f"Digital human generation failed: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"数字人生成失败: {str(e)}")
+
+
+@app.post("/api/digital-human-v2")
+@require_permission("digital_human:create")
+async def digital_human_v2_generate(
+    request: Request,
+    image: UploadFile = File(..., description="Input image for digital human"),
+    text: str = Form(..., description="Text content for digital human to speak (max 1000 characters)"),
+    audio: UploadFile = File(..., description="Reference audio file"),
+    user_id: int = Form(None, description="User ID"),
+    auth_token: str = Form(None, description="Authentication token")
+):
+    """
+    Generate digital human video v2 (LTX2.3+Voice)
+    """
+    try:
+        # Validate text length
+        if len(text) > 1000:
+            raise HTTPException(
+                status_code=400,
+                detail="文本内容不能超过1000个字"
+            )
+
+        # Save uploaded image
+        image_url = await asyncio.to_thread(_save_uploaded_image, image)
+
+        # Save uploaded audio
+        audio_url = await asyncio.to_thread(_save_uploaded_image, audio)
+
+        # Task type for digital human v2
+        task_type = TaskTypeId.DIGITAL_HUMAN_LTX2_3_VOICE
+        task_config = TaskTypeRegistry.get(task_type)
+        computing_power = task_config.get_computing_power()
+
+        if CHECK_AUTH_TOKEN:
+            headers = {'Authorization': f'Bearer {auth_token}'}
+            # Check computing power
+            success, message, response_data = await async_make_perseids_request(
+                endpoint='user/check_computing_power',
+                method='GET',
+                headers=headers
+            )
+            if not success:
+                raise HTTPException(
+                    status_code=400,
+                    detail=message
+                )
+
+            user_computing_power = response_data.get('computing_power', 0)
+            user_id_from_token = response_data.get('user_id')
+            if user_computing_power < computing_power:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"您的算力不足，需要 {computing_power} 算力，当前仅有 {user_computing_power} 算力"
+                )
+            if user_id_from_token != user_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="用户ID不匹配"
+                )
+
+        # Generate unique transaction ID
+        transaction_id = str(uuid.uuid4())
+
+        # Deduct computing power
+        if CHECK_AUTH_TOKEN:
+            success, message, response_data = await async_make_perseids_request(
+                endpoint='user/calculate_computing_power',
+                method='POST',
+                headers=headers,
+                data={
+                    "computing_power": computing_power,
+                    "behavior": "deduct",
+                    "transaction_id": transaction_id
+                }
+            )
+            if not success:
+                logger.error(f"Computing power deduction failed: {message}")
+
+        # Create database record
+        if user_id:
+            try:
+                id = AIToolsModel.create(
+                    prompt=text,
+                    user_id=user_id,
+                    type=task_type,
+                    image_path=image_url,
+                    audio_path=audio_url,  # v2 uses audio_path field
+                    transaction_id=transaction_id,
+                    status=AI_TOOL_STATUS_PENDING
+                )
+                TasksModel.create(
+                    task_type=TASK_TYPE_GENERATE_VIDEO,
+                    task_id=id,
+                    status=TASK_STATUS_QUEUED
+                )
+                # 创建 param_prepare 流水线步骤
+                try:
+                    from task.pipeline_processor import PipelineProcessor
+                    PipelineProcessor.create_param_prepare_steps(id, task_type)
+                except Exception as e:
+                    logger.warning(f"Failed to create param_prepare steps for ai_tool {id}: {e}")
+
+                return JSONResponse({
+                    "success": True,
+                    "project_id": id,
+                    "status": "submitted",
+                    "image_url": image_url,
+                    "audio_url": audio_url
+                })
+            except Exception as db_error:
+                logger.error(f"Failed to create database record: {db_error}")
+                raise HTTPException(status_code=500, detail=f"数据库错误: {str(db_error)}")
+        else:
+            raise HTTPException(status_code=400, detail="用户ID不能为空")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Digital human v2 generation failed: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"数字人v2生成失败: {str(e)}")
 
 
 @app.post("/api/audio-generate")

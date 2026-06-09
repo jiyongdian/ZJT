@@ -867,6 +867,9 @@ class DriverImplementation:
     # Digital Human
     DIGITAL_HUMAN_RUNNINGHUB_V1 = 'digital_human_runninghub_v1'
 
+    # LTX2.3 With Voice
+    LTX2_3_WITH_VOICE_RUNNINGHUB_V1 = 'ltx2_3_with_voice_runninghub_v1'
+
     # Vidu
     VIDU_DEFAULT = 'vidu_default'
     VIDU_Q2 = 'vidu_q2'
@@ -930,6 +933,7 @@ class DriverImplementationId:
     LTX2_RUNNINGHUB_V1 = 11
     WAN22_RUNNINGHUB_V1 = 12
     DIGITAL_HUMAN_RUNNINGHUB_V1 = 13
+    LTX2_3_WITH_VOICE_RUNNINGHUB_V1 = 55
     VIDU_DEFAULT = 14
     VIDU_Q2 = 15
     SEEDREAM5_VOLCENGINE_V1 = 16
@@ -994,6 +998,7 @@ IMPLEMENTATION_TO_ID = {
     'ltx2_runninghub_v1': DriverImplementationId.LTX2_RUNNINGHUB_V1,
     'wan22_runninghub_v1': DriverImplementationId.WAN22_RUNNINGHUB_V1,
     'digital_human_runninghub_v1': DriverImplementationId.DIGITAL_HUMAN_RUNNINGHUB_V1,
+    'ltx2_3_with_voice_runninghub_v1': DriverImplementationId.LTX2_3_WITH_VOICE_RUNNINGHUB_V1,
     'vidu_default': DriverImplementationId.VIDU_DEFAULT,
     'vidu_q2': DriverImplementationId.VIDU_Q2,
     'seedream5_volcengine_v1': DriverImplementationId.SEEDREAM5_VOLCENGINE_V1,
@@ -1081,6 +1086,7 @@ class DriverKey:
 
     # 数字人
     DIGITAL_HUMAN = 'digital_human'
+    DIGITAL_HUMAN_LTX2_3_VOICE = 'digital_human_ltx2_3_voice'
 
     # Qwen Multi-Angle
     QWEN_MULTI_ANGLE_IMAGE_EDIT = 'qwen_multi_angle_image_edit'
@@ -1146,6 +1152,7 @@ class TaskTypeId:
         'CHARACTER_CARD': '创建角色卡',
         'AUDIO_GENERATE': '音频生成',
         'DIGITAL_HUMAN': '数字人生成',
+        'DIGITAL_HUMAN_LTX2_3_VOICE': '数字人LTX2.3 With Voice',
     }
     # 图片编辑
     GEMINI_2_5_FLASH_IMAGE = 1
@@ -1177,6 +1184,7 @@ class TaskTypeId:
     HAPPY_HORSE_REFERENCE_TO_VIDEO = 29
     HAPPY_HORSE_TEXT_TO_VIDEO = 30
 
+
     # 图片/视频 增强
     IMAGE_ENHANCE = 4
     VIDEO_ENHANCE = 5
@@ -1189,6 +1197,8 @@ class TaskTypeId:
 
     # 数字人
     DIGITAL_HUMAN = 13
+    DIGITAL_HUMAN_LTX2_3_VOICE = 32
+
 
 
 # ============ 所有任务配置（声明式定义）============
@@ -1723,6 +1733,19 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         default_ratio='9:16',
         sort_order=40,
     ),
+    UnifiedTaskConfig(
+        id=TaskTypeId.DIGITAL_HUMAN_LTX2_3_VOICE,
+        key='digital_human_ltx2_3_voice',
+        short_key='digital_human_ltx2_3_voice',
+        name='LTX2.3 数字人',
+        category=TaskCategory.DIGITAL_HUMAN,
+        provider=TaskProvider.RUNNINGHUB,
+        driver_name=DriverKey.DIGITAL_HUMAN_LTX2_3_VOICE,
+        implementation=DriverImplementation.LTX2_3_WITH_VOICE_RUNNINGHUB_V1,
+        supported_ratios=['9:16', '16:9', '1:1', '3:2', '2:3', '3:4', '4:3'],
+        default_ratio='9:16',
+        sort_order=41,
+    ),
 
     # ==================== 图片/视频增强 ====================
     UnifiedTaskConfig(
@@ -2225,6 +2248,16 @@ ALL_IMPLEMENTATIONS: List[ImplementationConfig] = [
         enabled=True,
         description='RunningHub 数字人接口',
         sort_order=7000.0,
+        required_config_keys=['runninghub.api_key']
+    ),
+    ImplementationConfig(
+        name='ltx2_3_with_voice_runninghub_v1',
+        display_name='RunningHub',
+        driver_class='Ltx23WithVoiceRunninghubV1Driver',
+        default_computing_power=12,
+        enabled=True,
+        description='RunningHub LTX2.3 With Voice 接口（数字人）',
+        sort_order=7001.0,
         required_config_keys=['runninghub.api_key']
     ),
 
