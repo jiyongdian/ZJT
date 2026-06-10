@@ -135,8 +135,8 @@ class Ltx23WithVoiceRunninghubV1Driver(BaseVideoDriver):
             self.logger.info(f"准备上传音频到 RunningHub: {audio_url}")
             result = await self._storage.upload_file("", audio_url)
             if result.success:
-                audio_url = result.url if result.url else result.key
-                self.logger.info(f"音频上传完成，使用 URL: {audio_url}")
+                audio_url = result.key if result.key else result.url
+                self.logger.info(f"音频上传完成，使用 fileName: {audio_url}")
             else:
                 self.logger.warning(f"音频上传失败: {result.error}")
 
@@ -155,7 +155,7 @@ class Ltx23WithVoiceRunninghubV1Driver(BaseVideoDriver):
                 self.logger.warning(f"图片上传失败: {result.error}")
 
         # Build node info list for digital human v2
-        # 图片和音频都使用完整 CDN URL
+        # 图片使用完整 CDN URL，音频使用 fileName（ComfyUI 节点本地路径）
         node_info_list = [
             {
                 "nodeId": "444",

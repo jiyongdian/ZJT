@@ -153,7 +153,8 @@
           state.imageConnections = state.imageConnections.filter(function(c) {
             return !(c.to === node.id && c.portType === 'start');
           });
-          if (typeof renderImageConnections === 'function') renderImageConnections();
+          if (typeof renderAllConnections === 'function') renderAllConnections();
+          safeAutoSave();
         });
 
         // 音频上传
@@ -181,7 +182,8 @@
           state.audioConnections = (state.audioConnections || []).filter(function(c) {
             return c.to !== node.id;
           });
-          if (typeof renderAudioConnections === 'function') renderAudioConnections();
+          if (typeof renderAllConnections === 'function') renderAllConnections();
+          safeAutoSave();
         });
 
         // === 暴露方法供连接线回调使用 ===

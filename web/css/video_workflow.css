@@ -3031,6 +3031,16 @@ textarea:focus{ border-color: var(--primary); }
   box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.3);
   transform: translateY(-50%) scale(1.3);
 }
+/* 音频节点的输入端口对齐到音频文件字段区域 */
+.node.audio-node .port.audio-input-port {
+  top: 80px;
+}
+.node.audio-node .port.audio-input-port:hover {
+  transform: translateY(-50%) scale(1.2);
+}
+.node.audio-node .port.audio-input-port.can-connect {
+  transform: translateY(-50%) scale(1.3);
+}
 .port.video-ref-input-port {
   left: -21px;
   top: 0;

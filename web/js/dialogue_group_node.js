@@ -732,7 +732,6 @@
             }
 
             var characterName = dialogue.character_name;
-            console.log('当前对话角色名称:', characterName);
 
             var form = new FormData();
             form.append('text', dialogue.text);
@@ -760,14 +759,12 @@
               }
 
               if (matchedRefAudio) {
-                console.log('从对话组参考音频中找到匹配:', matchedRefAudio);
                 var voiceUrl = proxyDownloadUrl(matchedRefAudio.url);
 
                 try {
                   var voiceResponse = await fetch(voiceUrl);
                   if (voiceResponse.ok) {
                     var voiceBlob = await voiceResponse.blob();
-                    console.log('对话组参考音频Blob大小:', voiceBlob.size, '类型:', voiceBlob.type);
                     form.append('ref_audio', voiceBlob, 'ref_audio.wav');
                     refAudioFound = true;
                   }
@@ -780,19 +777,15 @@
             // 如果对话组中没有找到，则从角色库中查找
             if (!refAudioFound) {
               var matchedCharacter = await fetchAndMatchCharacter(worldId, characterName);
-              console.log('匹配到的角色:', matchedCharacter);
 
               if (matchedCharacter && matchedCharacter.default_voice) {
-                console.log('角色参考音频URL:', matchedCharacter.default_voice);
                 var voiceUrl2 = proxyDownloadUrl(matchedCharacter.default_voice);
-                console.log('代理后的音频URL:', voiceUrl2);
 
                 var voiceResponse2 = await fetch(voiceUrl2);
                 if (!voiceResponse2.ok) {
                   throw new Error('获取参考音频失败: ' + voiceResponse2.status + ' ' + voiceResponse2.statusText);
                 }
                 var voiceBlob2 = await voiceResponse2.blob();
-                console.log('参考音频Blob大小:', voiceBlob2.size, '类型:', voiceBlob2.type);
 
                 form.append('ref_audio', voiceBlob2, 'ref_audio.wav');
                 refAudioFound = true;
@@ -841,20 +834,17 @@
               form.append('auth_token', authToken);
             }
 
-            console.log('发送音频生成请求...');
             var res = await fetch('/api/audio-generate', {
               method: 'POST',
               body: form
             });
 
-            console.log('音频生成响应状态:', res.status);
             if (!res.ok) {
               var errorText = await res.text();
               throw new Error('服务器错误 (' + res.status + '): ' + (errorText || '请求失败'));
             }
 
             var result = await res.json();
-            console.log('音频生成响应结果:', result);
 
             if (result.code !== 0 && result.code !== undefined) {
               throw new Error(result.message || result.msg || '音频生成请求失败');
@@ -887,6 +877,69 @@
                 var audio = resultDiv.querySelector('audio');
                 if (audio) audio.src = payload.result_url;
                 resultDiv.style.display = 'block';
+
+                // 创建或更新独立音频节点
+                try {
+                  var dialogue = node.data.dialogues[index];
+                  var characterName = dialogue ? (dialogue.character_name || '角色') : '音频';
+                  var audioName = characterName + ': ' + (dialogue ? dialogue.text.substring(0, 15) : '') + '...';
+                  var existingAudioNodeId = node.data.audioResults[index].audioNodeId;
+                  var existingAudioNode = existingAudioNodeId
+                    ? state.nodes.find(function(n) { return n.id === existingAudioNodeId; })
+                    : null;
+
+
+                  if (existingAudioNode) {
+                    // 更新已有音频节点的URL
+                    existingAudioNode.data.url = payload.result_url;
+                    existingAudioNode.data.name = audioName;
+                    var existingEl = canvasEl.querySelector('.node[data-node-id="' + existingAudioNode.id + '"]');
+                    if (existingEl) {
+                      var playerEl = existingEl.querySelector('.audio-node-player');
+                      var nameEl = existingEl.querySelector('.audio-node-name');
+                      var previewField = existingEl.querySelector('.audio-preview-field');
+                      var previewActionsField = existingEl.querySelector('.audio-preview-actions-field');
+                      if (playerEl) playerEl.src = typeof proxyDownloadUrl === 'function' ? proxyDownloadUrl(payload.result_url) : payload.result_url;
+                      if (nameEl) { nameEl.textContent = audioName; nameEl.title = audioName; }
+                      if (previewField) previewField.style.display = 'block';
+                      if (previewActionsField) previewActionsField.style.display = 'block';
+                    }
+                  } else {
+                    // 创建新的独立音频节点
+                    var newAudioId = createAudioNode({
+                      x: node.x + 420,
+                      y: node.y + index * 100,
+                      title: characterName + ' - 音频',
+                      data: {
+                        url: payload.result_url,
+                        name: audioName
+                      }
+                    });
+                    var newAudioNode = state.nodes.find(function(n) { return n.id === newAudioId; });
+                    if (newAudioNode) {
+                      newAudioNode.data.sourceNodeId = node.id;
+                      newAudioNode.data.dialogueIndex = index;
+                      // 显示"添加到时间轴"按钮
+                      var newEl = canvasEl.querySelector('.node[data-node-id="' + newAudioId + '"]');
+                      if (newEl) {
+                        var addTlBtn = newEl.querySelector('.audio-add-timeline-btn');
+                        if (addTlBtn) addTlBtn.style.display = 'inline-block';
+                      }
+                      // 添加音频连接线：对话组 → 新音频节点
+                      if (!state.audioConnections) state.audioConnections = [];
+                      state.audioConnections.push({
+                        id: state.nextAudioConnId++,
+                        from: node.id,
+                        to: newAudioId
+                      });
+                      if (typeof renderAudioConnections === 'function') renderAudioConnections();
+                      // 记录音频节点ID，便于后续更新
+                      node.data.audioResults[index].audioNodeId = newAudioId;
+                    }
+                  }
+                } catch (err) {
+                  console.error('[对话组] 创建独立音频节点失败:', err);
+                }
 
                 statusEl.textContent = window.t ? window.t('tts_generate_success') : '生成成功！';
                 statusEl.style.color = '#16a34a';
@@ -977,7 +1030,6 @@
 
           try {
             var cleanName = characterName.replace(/【/g, '').replace(/】/g, '');
-            console.log('清理后的角色名称:', cleanName);
 
             var authToken = getAuthToken();
             var userId = getUserId();
@@ -994,15 +1046,12 @@
             }
 
             var result = await response.json();
-            console.log('角色"' + cleanName + '"查询结果:', result);
 
             if (result.code === 0 && result.data && Array.isArray(result.data.data)) {
               var characters = result.data.data;
-              console.log('找到' + characters.length + '个匹配角色:', characters.map(function(c) { return c.name; }));
 
               if (characters.length > 0) {
                 var matchedChar = characters.find(function(c) { return c.name === cleanName; }) || characters[0];
-                console.log('最终匹配角色:', matchedChar.name, 'default_voice:', matchedChar.default_voice);
                 return matchedChar;
               }
             }
