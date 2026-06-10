@@ -294,7 +294,51 @@
               node.data.projectId = data.project_ids[0];
               statusEl.textContent = _t('dh_task_submitted', '任务已提交，正在生成视频...');
 
-              pollVideoStatus(node.id, node);
+              // === 创建关联视频节点 ===
+              // 断开之前的关联视频节点连接（支持重复生成）
+              if (node.data._linkedVideoNodeId) {
+                state.connections = state.connections.filter(function(c) {
+                  return !(c.from === node.id && c.to === node.data._linkedVideoNodeId);
+                });
+                delete node.data._linkedVideoNodeId;
+              }
+
+              var sourceEl = el;
+              var offsetX = (sourceEl ? sourceEl.offsetWidth : 300) + 60;
+              var newVideoId = createVideoNode({
+                x: node.x + offsetX,
+                y: node.y,
+                checkCollision: true
+              });
+
+              // 创建连接
+              var connId = state.nextConnId++;
+              state.connections.push({ id: connId, from: node.id, to: newVideoId });
+
+              // 绑定 project_id（蛇形命名），让后端 poll-status 能检测到
+              var newVideoNode = state.nodes.find(function(n) { return n.id === newVideoId; });
+              if (newVideoNode) {
+                newVideoNode.data.project_id = data.project_ids[0];
+              }
+
+              // 显示"生成中..."状态
+              var videoEl = canvasEl.querySelector('.node[data-node-id="' + newVideoId + '"]');
+              if (videoEl) {
+                var vStatusField = videoEl.querySelector('.video-status-field');
+                var vStatusEl = videoEl.querySelector('.video-status');
+                if (vStatusField && vStatusEl) {
+                  vStatusField.style.display = 'block';
+                  setStatusEl(vStatusEl, _t('dh_generating', '生成中...'));
+                }
+              }
+
+              renderAllConnections();
+              renderMinimap();
+              safeAutoSave();
+
+              node.data._linkedVideoNodeId = newVideoId;
+
+              pollVideoStatus(node.id, node, newVideoId);
             } else {
               throw new Error(data.detail || data.message || '提交任务失败');
             }
@@ -309,7 +353,7 @@
         });
 
         // 轮询视频状态
-        function pollVideoStatus(nodeId, node) {
+        function pollVideoStatus(nodeId, node, videoNodeId) {
           pollTaskStatus({
             statusUrl: '/api/video-status/' + node.data.projectId,
             onSuccess: function(payload) {
@@ -317,6 +361,16 @@
                 node.data.videoUrl = payload.result_url;
                 resultVideo.src = payload.result_url;
                 resultField.style.display = 'block';
+
+                // 更新关联的视频节点
+                if (videoNodeId) {
+                  var vn = state.nodes.find(function(n) { return n.id === videoNodeId; });
+                  if (vn) {
+                    vn.data.url = payload.result_url;
+                    vn.data.name = '数字人视频';
+                    updateNodePreview(vn, payload.result_url);
+                  }
+                }
               }
               node.data.status = 'SUCCESS';
               statusEl.style.color = '#16a34a';
@@ -331,6 +385,15 @@
               statusEl.textContent = _t('dh_generate_failed', '生成失败') + ': ' + (payload.reason || payload.message || '未知错误');
               setBtnReady(generateBtn, _t('dh_generate_btn', '生成视频'));
               showToast(_t('dh_generate_failed', '数字人视频生成失败'), 'error');
+
+              // 标记关联视频节点为失败
+              if (videoNodeId) {
+                var videoEl2 = canvasEl.querySelector('.node[data-node-id="' + videoNodeId + '"]');
+                if (videoEl2) {
+                  var vStatusEl2 = videoEl2.querySelector('.video-status');
+                  if (vStatusEl2) setStatusEl(vStatusEl2, _t('dh_generate_failed', '生成失败'), '#dc2626');
+                }
+              }
             },
             onTimeout: function() {
               node.data.status = 'TIMEOUT';

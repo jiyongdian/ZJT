@@ -415,6 +415,7 @@ class PMAgent(BaseAgent, AskUserMixin):
                 meta = result.pop("_verification_meta")
                 agent_name = self._get_agent_display_name()
                 self.add_to_history("verification", {
+                    "verification_id": meta.get("verification_id"),
                     "title": f"{agent_name} 向您提问",
                     "description": meta["question"],
                     "options": meta["options"]

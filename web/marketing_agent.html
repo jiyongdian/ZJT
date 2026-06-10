@@ -861,10 +861,10 @@
             const videoResults = ref([]);
 
             // 任务追踪与恢复机制
-            const sessionTaskRegistry = {};  // { [sessionId]: [{ type:'image'|'video', projectIds:[], msgUid:string }] }
             const sessionActiveTaskId = {};  // { [sessionId]: taskId } — 追踪每个 session 的活跃 Agent 任务
             let msgUidCounter = 0;
             let currentEventSource = null;
+            let loadingSessionId = null;  // 追踪哪个 session 触发了 loading，防止跨 session 竞态清除
             const activeIntervals = new Set();  // 追踪所有活跃的 setInterval ID
 
             function generateMsgUid() {
@@ -887,18 +887,6 @@
                 activeIntervals.clear();
             }
 
-            function registerTask(type, projectIds, msgUid) {
-                const sid = currentSessionId.value;
-                if (!sid) return;
-                if (!sessionTaskRegistry[sid]) sessionTaskRegistry[sid] = [];
-                sessionTaskRegistry[sid].push({ type, projectIds, msgUid });
-            }
-
-            function unregisterTask(msgUid) {
-                const sid = currentSessionId.value;
-                if (!sid || !sessionTaskRegistry[sid]) return;
-                sessionTaskRegistry[sid] = sessionTaskRegistry[sid].filter(t => t.msgUid !== msgUid);
-            }
 
             const selectedDuration = ref(5);
             const videoImageMode = ref('first_last_frame'); // 'first_last_frame' | 'multi_reference'
@@ -1913,8 +1901,8 @@
                     });
                     scrollToBottom();
 
-                    // 注册任务并开始轮询状态
-                    registerTask('image', imageProjectIds.value, msgUid);
+                    // 保存 pending task 标记到后端历史，并启动轮询
+                    await appendMessageToBackend('assistant', '__PENDING_TASK__:image_task_submitted:' + JSON.stringify(imageProjectIds.value));
                     startImageStatusCheck(msgUid);
 
                 } catch (e) {
@@ -1937,7 +1925,6 @@
                 const msgIdx = messages.value.findIndex(m => m._uid === msgUid);
                 if (msgIdx === -1) {
                     clearImageStatusCheck();
-                    unregisterTask(msgUid);
                     return;
                 }
 
@@ -1971,18 +1958,22 @@
                                 return `<div class="generated-image-wrapper" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${imgUrl}'"><img src="${imgUrl}" class="generated-image" alt="${window.t('generated_result_alt')}"></div>`;
                             }).join('');
                             const finalContent = window.t('image_generated') + '\n\n' + imageHtml;
-                            messages.value[msgIdx].content = finalContent;
-                            scrollToBottom();
-                            unregisterTask(msgUid);
+                            const currentMsgIdx = messages.value.findIndex(m => m._uid === msgUid);
+                            if (currentMsgIdx !== -1) {
+                                messages.value[currentMsgIdx].content = finalContent;
+                                scrollToBottom();
+                            }
                             await appendMessageToBackend('assistant', finalContent);
                             await cleanPendingTasksFromHistory();
                         } else if (anyFailed && !anyRunning) {
                             imageStatus.value = 'FAILED';
                             clearImageStatusCheck();
                             const finalContent = window.t('image_generation_failed');
-                            messages.value[msgIdx].content = finalContent;
-                            scrollToBottom();
-                            unregisterTask(msgUid);
+                            const currentMsgIdx = messages.value.findIndex(m => m._uid === msgUid);
+                            if (currentMsgIdx !== -1) {
+                                messages.value[currentMsgIdx].content = finalContent;
+                                scrollToBottom();
+                            }
                             await appendMessageToBackend('assistant', finalContent);
                             await cleanPendingTasksFromHistory();
                         }
@@ -2019,7 +2010,6 @@
                     timestamp: new Date().toISOString()
                 });
                 scrollToBottom();
-                registerTask('image', project_ids, msgUid);
                 pollAgentImageStatus(msgUid, project_ids);
             }
 
@@ -2028,7 +2018,6 @@
                     const msgIdx = messages.value.findIndex(m => m._uid === msgUid);
                     if (msgIdx === -1) {
                         trackedClearInterval(interval);
-                        unregisterTask(msgUid);
                         return;
                     }
 
@@ -2062,9 +2051,12 @@
                                 } else {
                                     finalContent = window.t('image_generation_failed');
                                 }
-                                messages.value[msgIdx].content = finalContent;
-                                scrollToBottom();
-                                unregisterTask(msgUid);
+
+                                const currentMsgIdx = messages.value.findIndex(m => m._uid === msgUid);
+                                if (currentMsgIdx !== -1) {
+                                    messages.value[currentMsgIdx].content = finalContent;
+                                    scrollToBottom();
+                                }
                                 await appendMessageToBackend('assistant', finalContent);
                                 await cleanPendingTasksFromHistory();
                             } else {
@@ -2092,7 +2084,6 @@
                     timestamp: new Date().toISOString()
                 });
                 scrollToBottom();
-                registerTask('video', project_ids, msgUid);
                 pollAgentVideoStatus(msgUid, project_ids);
             }
 
@@ -2102,7 +2093,6 @@
                     const msgIdx = messages.value.findIndex(m => m._uid === msgUid);
                     if (msgIdx === -1) {
                         trackedClearInterval(interval);
-                        unregisterTask(msgUid);
                         return;
                     }
 
@@ -2136,9 +2126,12 @@
                                 } else {
                                     finalContent = window.t('video_generation_failed');
                                 }
-                                messages.value[msgIdx].content = finalContent;
-                                scrollToBottom();
-                                unregisterTask(msgUid);
+                                // await 后重新查找 msgIdx，防止会话切换导致索引失效
+                                const currentMsgIdx = messages.value.findIndex(m => m._uid === msgUid);
+                                if (currentMsgIdx !== -1) {
+                                    messages.value[currentMsgIdx].content = finalContent;
+                                    scrollToBottom();
+                                }
                                 await appendMessageToBackend('assistant', finalContent);
                                 await cleanPendingTasksFromHistory();
                             } else {
@@ -2279,8 +2272,8 @@
                     });
                     scrollToBottom();
 
-                    // 注册任务并开始轮询状态
-                    registerTask('video', videoProjectIds.value, msgUid);
+                    // 保存 pending task 标记到后端历史，并启动轮询
+                    await appendMessageToBackend('assistant', '__PENDING_TASK__:video_task_submitted:' + JSON.stringify(videoProjectIds.value));
                     startVideoStatusCheck(msgUid);
 
                 } catch (e) {
@@ -2320,7 +2313,6 @@
                 const msgIdx = messages.value.findIndex(m => m._uid === msgUid);
                 if (msgIdx === -1) {
                     clearVideoStatusCheck();
-                    unregisterTask(msgUid);
                     return;
                 }
 
@@ -2353,18 +2345,24 @@
                                 return `<video src="${vidUrl}" controls style="max-width:100%;max-height:400px;border-radius:8px;margin:8px 0;"></video>`;
                             }).join('');
                             const finalContent = window.t('video_generated') + '\n\n' + videoHtml;
-                            messages.value[msgIdx].content = finalContent;
-                            scrollToBottom();
-                            unregisterTask(msgUid);
+
+                            const currentMsgIdx = messages.value.findIndex(m => m._uid === msgUid);
+                            if (currentMsgIdx !== -1) {
+                                messages.value[currentMsgIdx].content = finalContent;
+                                scrollToBottom();
+                            }
                             await appendMessageToBackend('assistant', finalContent);
                             await cleanPendingTasksFromHistory();
                         } else if (anyFailed && !anyRunning) {
                             videoStatus.value = 'FAILED';
                             clearVideoStatusCheck();
                             const finalContent = window.t('video_generation_failed');
-                            messages.value[msgIdx].content = finalContent;
-                            scrollToBottom();
-                            unregisterTask(msgUid);
+
+                            const currentMsgIdx = messages.value.findIndex(m => m._uid === msgUid);
+                            if (currentMsgIdx !== -1) {
+                                messages.value[currentMsgIdx].content = finalContent;
+                                scrollToBottom();
+                            }
                             await appendMessageToBackend('assistant', finalContent);
                             await cleanPendingTasksFromHistory();
                         }
@@ -2398,6 +2396,8 @@
             async function sendMessageToApi(text) {
                 isLoading.value = true;
                 const sessionId = currentSessionId.value;
+                loadingSessionId = sessionId;
+                console.log('[Loading] sendMessageToApi 设置 loading=true, sessionId=', sessionId);
                 const isAgentMode = selectedType.value === 'agent';
 
                 try {
@@ -2527,6 +2527,7 @@
 
                     const taskId = taskData.task_id;
                     sessionActiveTaskId[sessionId] = taskId;  // 记录活跃任务，支持切换回来后恢复
+                    console.log('[Loading] 记录活跃任务 sessionActiveTaskId[', sessionId, ']=', taskId);
 
                     // 更新会话 title（首条消息摘要）
                     updateSessionTitle(text);
@@ -2568,7 +2569,15 @@
                         timestamp: new Date().toISOString()
                     });
                 } finally {
-                    isLoading.value = false;
+                    // 仅当本次发送的会话仍然活跃时才清除 loading（防止跨会话竞态清除）
+                    console.log('[Loading] sendMessageToApi finally, sessionId=', sessionId, ', loadingSessionId=', loadingSessionId, ', currentSession=', currentSessionId.value);
+                    if (loadingSessionId === sessionId) {
+                        console.log('[Loading] sendMessageToApi finally 清除 loading=true→false');
+                        isLoading.value = false;
+                        loadingSessionId = null;
+                    } else {
+                        console.log('[Loading] sendMessageToApi finally 跳过清除（归属不匹配）');
+                    }
                     scrollToBottom();
                 }
             }
@@ -2662,6 +2671,7 @@
                                 }
                                 reject(new Error(data.error || data.message || 'Stream error'));
                             } else if (data.type === 'done') {
+                                console.log('[Loading] handleStream 收到 done 事件, 流结束, 清理 sessionActiveTaskId[', currentSessionId.value, ']');
                                 eventSource.close();
                                 if (currentEventSource === eventSource) currentEventSource = null;
                                 delete sessionActiveTaskId[currentSessionId.value];
@@ -2690,6 +2700,7 @@
                     };
 
                     eventSource.onerror = (e) => {
+                        console.log('[Loading] handleStream onerror, hasReceivedData=', hasReceivedData);
                         eventSource.close();
                         if (currentEventSource === eventSource) currentEventSource = null;
                         pendingVerificationId.value = null;
@@ -2745,6 +2756,17 @@
                         currentActiveTaskId
                     });
                     return;
+                }
+
+                // 去重：防止 SSE 重连重放已处理的验证事件导致重复显示
+                if (verification.verification_id) {
+                    const alreadyExists = messages.value.some(m =>
+                        m.verificationId === verification.verification_id
+                    );
+                    if (alreadyExists) {
+                        console.log('[Verification] 跳过重复的验证事件:', verification.verification_id);
+                        return;
+                    }
                 }
 
                 pendingVerificationId.value = verification.verification_id;
@@ -2906,7 +2928,7 @@
                             timestamp: h.timestamp,
                             isVerification: true,
                             verificationOptions: vData.options || [],
-                            verificationId: null
+                            verificationId: vData.verification_id || null
                         };
                     }
                     return { role: 'ai', content: typeof h.content === 'string' ? h.content : JSON.stringify(h.content), timestamp: h.timestamp };
@@ -3047,51 +3069,6 @@
                 return type === 'image' ? window.t('image_generation_failed') : window.t('video_generation_failed');
             }
 
-            // 恢复会话内的活跃任务（会话内切换恢复）
-            async function resumeSessionTasks(sessionId) {
-                const tasks = sessionTaskRegistry[sessionId];
-                if (!tasks || tasks.length === 0) return;
-
-                const remaining = [];
-                for (const task of tasks) {
-                    try {
-                        const params = authToken.value ? { auth_token: authToken.value } : {};
-                        const res = await axios.get(`/api/get-status/${task.projectIds.join(',')}`, { params });
-
-                        if (res.data.tasks) {
-                            const allDone = res.data.tasks.every(t => t.status === 'SUCCESS' || t.status === 'FAILED');
-                            if (allDone) {
-                                const content = buildResultContent(task.type, res.data.tasks);
-                                messages.value.push({
-                                    _uid: task.msgUid,
-                                    role: 'ai',
-                                    content: content,
-                                    timestamp: new Date().toISOString()
-                                });
-                                await appendMessageToBackend('assistant', content);
-                                await cleanPendingTasksFromHistory();
-                            } else {
-                                messages.value.push({
-                                    _uid: task.msgUid,
-                                    role: 'ai',
-                                    content: window.t('generating_placeholder'),
-                                    timestamp: new Date().toISOString()
-                                });
-                                if (task.type === 'image') pollAgentImageStatus(task.msgUid, task.projectIds);
-                                else pollAgentVideoStatus(task.msgUid, task.projectIds);
-                                remaining.push(task);
-                            }
-                        } else {
-                            remaining.push(task);
-                        }
-                    } catch (e) {
-                        console.error('恢复任务状态失败:', e);
-                        remaining.push(task);
-                    }
-                }
-                sessionTaskRegistry[sessionId] = remaining;
-            }
-
             // 恢复页面刷新后的待处理任务（从历史中的 __PENDING_TASK__ 标记恢复）
             async function recoverPendingTasks() {
                 const pendingMsgs = messages.value.filter(m => m._isPendingTask);
@@ -3115,7 +3092,6 @@
                             msg.role = 'ai';
                             msg.content = window.t('generating_placeholder');
                             msg._isPendingTask = false;
-                            registerTask(msg._taskType, msg._projectIds, msg._uid);
                             if (msg._taskType === 'image') pollAgentImageStatus(msg._uid, msg._projectIds);
                             else pollAgentVideoStatus(msg._uid, msg._projectIds);
                         }
@@ -3152,7 +3128,9 @@
                 uploadedImageFile.value = null;
                 uploadedImageServerUrl.value = '';
                 // 重置 UI 状态
+                console.log('[Loading] selectSession 重置 loading=false, 清除 loadingSessionId, 新 session=', sessionId);
                 isLoading.value = false;
+                loadingSessionId = null;  // 清除 loading 归属，防止旧会话的 finally 误清除新会话的 loading
                 showContinue.value = false;
                 // 重置任务状态
                 imageProjectIds.value = [];
@@ -3167,22 +3145,8 @@
                 const history = await loadSessionHistory(sessionId);
                 messages.value = history.filter(filterHistoryMessage).map(parseHistoryMessage);
 
-                // 恢复活跃任务（先从历史标记恢复，再从内存注册表恢复，避免重复）
+                // 恢复活跃任务（从历史中的 __PENDING_TASK__ 标记恢复）
                 await recoverPendingTasks();
-
-                // 从 registry 中移除已被 recoverPendingTasks 处理的任务
-                const recoveredIds = new Set(
-                    messages.value
-                        .filter(m => m._projectIds && !m._isPendingTask)
-                        .flatMap(m => m._projectIds)
-                );
-                if (sessionTaskRegistry[sessionId]) {
-                    sessionTaskRegistry[sessionId] = sessionTaskRegistry[sessionId].filter(t =>
-                        !t.projectIds.some(id => recoveredIds.has(id))
-                    );
-                }
-
-                await resumeSessionTasks(sessionId);
 
                 // 恢复活跃 Agent 任务流（AI 正在回复时切换对话的场景）
                 const activeTaskId = sessionActiveTaskId[sessionId];
@@ -3192,9 +3156,20 @@
                         const statusData = await statusRes.json();
                         const taskStatus = statusData.success && statusData.task ? statusData.task.status : null;
                         if (taskStatus === 'running' || taskStatus === 'pending' || taskStatus === 'waiting_human') {
-                            // 任务仍在运行，后台重连 SSE 流，不阻塞切换操作
-                            handleStream(activeTaskId).catch(e => {
-                                console.error('恢复活跃任务流失败:', e);
+                            // 任务仍在运行，恢复 loading 状态并后台重连 SSE 流
+                            isLoading.value = true;
+                            loadingSessionId = sessionId;
+                            handleStream(activeTaskId).then(() => {
+                                // 流正常结束（done），清除 loading
+                                if (loadingSessionId === sessionId) {
+                                    isLoading.value = false;
+                                    loadingSessionId = null;
+                                }
+                            }).catch(e => {
+                                if (loadingSessionId === sessionId) {
+                                    isLoading.value = false;
+                                    loadingSessionId = null;
+                                }
                             });
                         } else {
                             // 任务已完成或不存在，清理
@@ -3449,9 +3424,20 @@
                             const taskStatus = taskData.task.status;
                             if (taskStatus === 'running' || taskStatus === 'pending' || taskStatus === 'waiting_human') {
                                 sessionActiveTaskId[currentSessionId.value] = taskData.task.task_id;
-                                // 不 await，让流在后台运行，不阻塞页面
-                                handleStream(taskData.task.task_id).catch(e => {
+                                // 恢复 loading 状态，让流在后台运行，不阻塞页面
+                                isLoading.value = true;
+                                loadingSessionId = currentSessionId.value;
+                                handleStream(taskData.task.task_id).then(() => {
+                                    if (loadingSessionId === currentSessionId.value) {
+                                        isLoading.value = false;
+                                        loadingSessionId = null;
+                                    }
+                                }).catch(e => {
                                     console.error('恢复活跃任务流失败:', e);
+                                    if (loadingSessionId === currentSessionId.value) {
+                                        isLoading.value = false;
+                                        loadingSessionId = null;
+                                    }
                                 });
                             }
                         }

@@ -390,6 +390,7 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                 meta = result.pop("_verification_meta")
                 agent_name = self._get_agent_display_name()
                 self.add_to_history("verification", {
+                    "verification_id": meta.get("verification_id"),
                     "title": f"{agent_name} 向您提问",
                     "description": meta["question"],
                     "options": meta["options"]
@@ -673,7 +674,7 @@ class ExpertAgent(BaseAgent, AskUserMixin):
             return True, f"连续{self.max_consecutive_errors}次工具调用返回错误"
 
         if state.total_errors >= self.max_total_errors:
-            return True, f"累计工具调用失败{self.total_errors}次"
+            return True, f"累计工具调用失败{state.total_errors}次"
 
         return False, ""
 

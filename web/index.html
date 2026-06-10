@@ -4129,19 +4129,19 @@
         const config = this.modelConfigs[this.videoModel];
         if (!config || !config.durations) {
           return [
-            { value: 5, label: `5${this.$t('duration_seconds') || '秒'}` },
-            { value: 10, label: `10${this.$t('duration_seconds') || '秒'}` }
+            { value: 5, label: this.$t('duration_seconds', { dur: 5 }) || '5秒' },
+            { value: 10, label: this.$t('duration_seconds', { dur: 10 }) || '10秒' }
           ];
         }
         // LTX2 特殊标签
         const ltx2Labels = {
-          5: `5${this.$t('duration_seconds') || '秒'} (121${this.$t('images') || '帧'})`,
-          8: `8${this.$t('duration_seconds') || '秒'} (201${this.$t('images') || '帧'})`,
-          10: `10${this.$t('duration_seconds') || '秒'} (241${this.$t('images') || '帧'})`
+          5: `${this.$t('duration_seconds', { dur: 5 }) || '5秒'} (121${this.$t('images') || '帧'})`,
+          8: `${this.$t('duration_seconds', { dur: 8 }) || '8秒'} (201${this.$t('images') || '帧'})`,
+          10: `${this.$t('duration_seconds', { dur: 10 }) || '10秒'} (241${this.$t('images') || '帧'})`
         };
         return config.durations.map(duration => ({
           value: duration,
-          label: this.videoModel === 'ltx2' ? (ltx2Labels[duration] || `${duration}${this.$t('duration_seconds') || '秒'}`) : `${duration}${this.$t('duration_seconds') || '秒'}`
+          label: this.videoModel === 'ltx2' ? (ltx2Labels[duration] || this.$t('duration_seconds', { dur: duration }) || `${duration}秒`) : (this.$t('duration_seconds', { dur: duration }) || `${duration}秒`)
         }));
       },
       countOptions() {
@@ -5265,6 +5265,16 @@
                     </template>
                   </div>
                 </div>
+                <div v-if="item.video_path" style="margin-top: 12px; padding: 12px; background: #0f1620; border-radius: 8px; border: 1px solid var(--border);">
+                  <div style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">{{ $t('reference_video_label') || '参考视频' }}:</div>
+                  <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <template v-for="(video, vidx) in item.video_path.split(',')" :key="vidx">
+                      <div v-if="video">
+                        <a :href="'/video-viewer.html?url=' + encodeURIComponent(video.trim())" target="_blank" class="btn secondary" style="font-size: 12px; padding: 4px 12px; text-decoration: none;">{{ $t('view_original') || '查看原视频' }}</a>
+                      </div>
+                    </template>
+                  </div>
+                </div>
                 <div v-if="item.result_url" style="margin-top: 8px;">
                   <a :href="item.result_url" target="_blank" class="btn secondary" style="display: inline-block; text-decoration: none;">{{ $t('view_result') }}</a>
                   <button v-if="item.status == 2 && item.type == 3" class="btn" @click="enhanceVideo(item, item.id)" :disabled="enhancingVideos[item.id]" style="margin-left: 8px;">{{ enhancingVideos[item.id] ? ($t('enhanced_button') || '已修复') : ($t('generate_hd_video') || '生成高清视频') }}</button>
@@ -6011,6 +6021,16 @@
                   <span>{{ $t('mode_switch') }}: {{ getModelLabel(item.ratio) }}</span>
                   <span>{{ $t('duration_label') }}: {{ getDurationText(item) }}</span>
                   <span>{{ $t('create_time') }}: {{ item.create_time ? new Date(item.create_time).toLocaleString('zh-CN') : $t('unknown') }}</span>
+                </div>
+                <div v-if="item.video_path" style="margin-top: 12px; padding: 12px; background: #0f1620; border-radius: 8px; border: 1px solid var(--border);">
+                  <div style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">{{ $t('reference_video_label') || '参考视频' }}:</div>
+                  <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <template v-for="(video, vidx) in item.video_path.split(',')" :key="vidx">
+                      <div v-if="video">
+                        <a :href="'/video-viewer.html?url=' + encodeURIComponent(video.trim())" target="_blank" class="btn secondary" style="font-size: 12px; padding: 4px 12px; text-decoration: none;">{{ $t('view_original') || '查看原视频' }}</a>
+                      </div>
+                    </template>
+                  </div>
                 </div>
                 <div v-if="item.result_url" style="margin-top: 8px;">
                   <button class="btn secondary" @click="downloadHistoryResult(item)" style="display: inline-block; margin-right: 8px;">{{ $t('view_result') }}</button>
@@ -6902,6 +6922,16 @@
               <span>模式: {{ getModelLabel(item) }}</span>
               <span>时长: {{ getDurationText(item) }}</span>
               <span>创建时间: {{ item.create_time ? new Date(item.create_time).toLocaleString('zh-CN') : '未知' }}</span>
+            </div>
+            <div v-if="item.video_path" style="margin-top: 12px; padding: 12px; background: #0f1620; border-radius: 8px; border: 1px solid var(--border);">
+              <div style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">{{ $t('reference_video_label') || '参考视频' }}:</div>
+              <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                <template v-for="(video, vidx) in item.video_path.split(',')" :key="vidx">
+                  <div v-if="video">
+                    <a :href="'/video-viewer.html?url=' + encodeURIComponent(video.trim())" target="_blank" class="btn secondary" style="font-size: 12px; padding: 4px 12px; text-decoration: none;">{{ $t('view_original') || '查看原视频' }}</a>
+                  </div>
+                </template>
+              </div>
             </div>
             <div v-if="item.result_url" style="margin-top: 8px;">
               <a :href="item.result_url" target="_blank" class="btn secondary" style="display: inline-block; text-decoration: none;">查看结果</a>

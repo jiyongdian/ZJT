@@ -3136,107 +3136,12 @@ async def get_ai_tools_history(
     type: Optional[int] = Query(None, description="Tool type filter (1-图片编辑, 2-AI视频生成, 3-图片生成视频)"),
     types: Optional[str] = Query(None, description="Multiple tool types filter, comma-separated (e.g., '3,10,11,12')"),
     has_image_path: Optional[bool] = Query(None, description="Filter by image_path presence: true=图片编辑, false=文生图"),
-    auth_token: Optional[str] = Query(None, description="Auth token for computing power refund")
 ):
     """
     获取用户的 AI 工具历史记录
-    在查询前会先检查并更新所有正在处理的任务状态
-    如果任务失败，会自动补回算力
+    任务状态由后台 scheduler (visual_task.py / runninghub_async_task.py) 定时更新
     """
     try:
-        # First, check and update processing tasks
-        processing_tasks = AIToolsModel.list_processing_by_user(user_id)
-        
-        if processing_tasks:
-            updated_count = 0
-            total_refund_power = 0  # 累计需要补回的算力
-            
-            # Check each task's status
-            for task in processing_tasks:
-                if not task.project_id:
-                    continue
-                    
-                try:
-                    if task.type in [4,5,6]:
-                        # Use RunningHub client for upscale tasks
-                        client = RunningHubClient()
-                        status = await asyncio.to_thread(client.check_status, task.project_id)
-                        
-                        if status == TaskStatus.SUCCESS:
-                            # Get results
-                            results = await asyncio.to_thread(client.get_outputs, task.project_id)
-                            
-                            if results:
-                                result_url = results[0].file_url
-                                AIToolsModel.update_by_project_id(
-                                    project_id=task.project_id,
-                                    result_url=result_url,
-                                    status=AI_TOOL_STATUS_COMPLETED
-                                )
-                                updated_count += 1
-                                logger.info(f"Upscale task {task.project_id} completed successfully")
-                        elif status == TaskStatus.FAILED:
-                            AIToolsModel.update_by_project_id(
-                                project_id=task.project_id,
-                                status=AI_TOOL_STATUS_FAILED,
-                                message="高清放大失败"
-                            )
-                            updated_count += 1
-                            # 累计需要补回的算力
-                            task_config = TaskTypeRegistry.get(task.type)
-                            context = build_context_from_task_record(task)
-                            computing_power = task_config.get_computing_power(context=context) if task_config else 0
-                            total_refund_power += computing_power
-                            logger.info(f"Upscale task {task.project_id} failed, will refund {computing_power} computing power")
-                    
-                except Exception as task_error:
-                    logger.error(f"Failed to check status for task {task.project_id}: {task_error}")
-                    continue
-            
-            logger.info(f"Checked {len(processing_tasks)} processing tasks, updated {updated_count}")
-            
-            # 如果有需要补回的算力，统一进行补回
-            if total_refund_power > 0 and CHECK_AUTH_TOKEN:
-                try:
-                    if not auth_token:
-                        logger.warning(f"Need to refund {total_refund_power} computing power for user {user_id}, but auth_token is not provided")
-                    else:
-                        # 生成交易ID
-                        transaction_id = str(uuid.uuid4())
-                        headers = {'Authorization': f'Bearer {auth_token}'}
-                        #发起请求，获取用户ID
-                        success, message, response_data = await async_make_perseids_request(
-                            endpoint='user/get_user_id_by_auth_token',
-                            method='POST',
-                            headers=headers
-                        )
-                        if not success:
-                            raise HTTPException(status_code=400, detail=message)
-                        user_id_from_token = response_data.get('user_id')
-                        if user_id != user_id_from_token:
-                            raise HTTPException(status_code=400, detail="用户ID不匹配")
-                        # 发起请求，增加算力（补回）
-                        success, message, response_data = await async_make_perseids_request(
-                            endpoint='user/calculate_computing_power',
-                            method='POST',
-                            headers=headers,
-                            data={
-                                "computing_power": total_refund_power,
-                                "behavior": "increase",
-                                "transaction_id": transaction_id
-                            }
-                        )
-                        
-                        if success:
-                            logger.info(f"Successfully refunded {total_refund_power} computing power for user {user_id}, transaction_id: {transaction_id}")
-                        else:
-                            logger.error(f"Failed to refund computing power for user {user_id}: {message}")
-                    
-                except Exception as refund_error:
-                    logger.error(f"Failed to refund computing power: {refund_error}")
-                    logger.error(traceback.format_exc())
-        
-        # 查询历史记录
         # Parse types parameter if provided
         type_list_param = None
         if types:

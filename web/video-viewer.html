@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>视频查看</title>
+  <link rel="stylesheet" href="/css/index.css">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #0b1220;
+      color: #e2e8f0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .video-container {
+      width: 100%;
+      max-width: 960px;
+      padding: 20px;
+    }
+    .video-title {
+      font-size: 18px;
+      margin-bottom: 16px;
+      color: var(--primary, #3b82f6);
+    }
+    .video-info {
+      font-size: 13px;
+      color: var(--muted, #64748b);
+      margin-bottom: 12px;
+      word-break: break-all;
+    }
+    video {
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid var(--border, #1a2d40);
+    }
+    .error {
+      color: #ef4444;
+      text-align: center;
+      padding: 40px;
+    }
+  </style>
+</head>
+<body>
+  <div class="video-container" id="app">
+    <div v-if="error" class="error">{{ error }}</div>
+    <template v-else>
+      <div class="video-title">视频预览</div>
+      <div class="video-info">{{ videoUrl }}</div>
+      <video :src="videoUrl" controls preload="none"></video>
+    </template>
+  </div>
+
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script>
+    const { createApp } = Vue;
+
+    createApp({
+      data() {
+        return {
+          videoUrl: '',
+          error: ''
+        };
+      },
+      mounted() {
+        const params = new URLSearchParams(window.location.search);
+        const url = params.get('url');
+        if (!url) {
+          this.error = '缺少视频 URL 参数';
+          return;
+        }
+        this.videoUrl = decodeURIComponent(url);
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
