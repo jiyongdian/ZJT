@@ -52,9 +52,10 @@ for _key, _orig in _saved_modules.items():
     else:
         sys.modules.pop(_key, None)
 
-# 清除被 reload 过的模块缓存，它们在 mock 环境下导入，需强制重新导入
-for _mod in _reloaded_modules:
-    sys.modules.pop(_mod, None)
+# 注意：不再从 sys.modules 中移除 reload 过的模块。
+# 如果移除，@patch 装饰器会重新导入并创建新的模块对象，
+# 但测试代码引用的是旧模块对象中的类，导致 patch 无法生效。
+# 保留这些模块以确保 @patch 能正确 patch 到代码实际使用的模块。
 
 
 class TestPipelineDriverFactoryCreateDriver(unittest.TestCase):
