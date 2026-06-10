@@ -1,0 +1,33 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const html = fs.readFileSync(
+  path.join(__dirname, '../../web/marketing_agent.html'),
+  'utf8'
+);
+
+const videoBranchStarts = [...html.matchAll(/if \(file\.type\.startsWith\('video\/'\)\) \{/g)]
+  .map(match => match.index);
+assert.notEqual(videoBranchStarts.length, 0, 'video upload branch should exist');
+
+videoBranchStarts.forEach((videoBranchStart, index) => {
+  const audioBranchStart = html.indexOf("if (file.type.startsWith('audio/')) {", videoBranchStart);
+  assert.notEqual(audioBranchStart, -1, `audio upload branch should follow video branch ${index + 1}`);
+
+  const videoBranch = html.slice(videoBranchStart, audioBranchStart);
+
+  assert.equal(
+    videoBranch.includes('hasUploadedImage.value = true'),
+    false,
+    `uploading a video must not mark image state as uploaded in branch ${index + 1}`
+  );
+
+  assert.equal(
+    videoBranch.includes('processVideoFile(file, fileDuration);'),
+    true,
+    `video upload branch ${index + 1} should still process the selected video file`
+  );
+});
+
+console.log('marketing_agent video upload state tests passed');

@@ -609,6 +609,28 @@ body {
   max-width: 90%;
 }
 
+.agent-preference-details {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.agent-preference-details summary {
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-muted);
+}
+
+.agent-preference-list {
+  margin-top: 6px;
+}
+
+.agent-preference-item + .agent-preference-item {
+  margin-top: 4px;
+}
+
 .message-time {
   font-size: 11px;
   color: var(--text-muted);

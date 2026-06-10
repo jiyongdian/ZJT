@@ -54,6 +54,8 @@ from script_writer_core.chat_session import ChatSession
 from script_writer_core.file_manager import FileManager
 from script_writer_core.skill_loader import SkillLoader
 from utils.file_storage import get_file_storage
+from utils.conversation_history import append_message_if_not_duplicate
+from utils.sse import format_sse_event, parse_last_event_id
 from utils.video_compressor import get_video_info, needs_compression
 logger = logging.getLogger(__name__)
 
@@ -1124,7 +1126,13 @@ async def append_session_message(request: Request, session_id: str, message_requ
             'timestamp': datetime.now().isoformat()
         }
         
-        current_history.append(new_message)
+        appended = append_message_if_not_duplicate(current_history, new_message)
+        if not appended:
+            return JSONResponse({
+                'success': True,
+                'message': '重复消息已跳过',
+                'skipped': True
+            })
         
         ChatSessionsModel.update_conversation_history(
             session_id=session_id,
@@ -2583,10 +2591,12 @@ async def stream_task_messages(request: Request, task_id: str):
             logger.info(f"[SSE-STREAM] Starting SSE stream for task {task_id}")
             heartbeat_counter = 0
             message_count = 0
-            last_message_id = 0  # 用于追踪已读取的消息
+            last_message_id = parse_last_event_id(
+                request.headers.get("last-event-id") or request.query_params.get("last_id")
+            )  # 用于追踪已读取的消息
 
             # 立即发送连接确认消息
-            yield f"data: {json.dumps({'type': 'connected', 'task_id': task_id}, ensure_ascii=False)}\n\n"
+            yield format_sse_event({'type': 'connected', 'task_id': task_id})
 
             while True:
                 messages_to_send = []
@@ -2611,7 +2621,7 @@ async def stream_task_messages(request: Request, task_id: str):
                     if msg.get('content'):
                         logger.info(f"[SSE-STREAM] Message content preview: {str(msg.get('content'))[:100]}...")
 
-                    yield f"data: {json.dumps(msg, ensure_ascii=False)}\n\n"
+                    yield format_sse_event(msg, event_id=msg.get('id'))
 
                     # 如果是完成或错误消息，结束流
                     if msg_type in ['done', 'error']:
@@ -2626,7 +2636,7 @@ async def stream_task_messages(request: Request, task_id: str):
 
                     # 每9秒发送心跳
                     if heartbeat_counter >= 3:
-                        yield f"data: {json.dumps({'type': 'heartbeat', 'timestamp': datetime.now().isoformat()}, ensure_ascii=False)}\n\n"
+                        yield format_sse_event({'type': 'heartbeat', 'timestamp': datetime.now().isoformat()})
                         heartbeat_counter = 0
 
                     # 检查任务状态（从数据库）
@@ -2634,7 +2644,7 @@ async def stream_task_messages(request: Request, task_id: str):
                         db_task = await asyncio.to_thread(AgentTasksModel.get_by_task_id, task_id)
                         if db_task and db_task.status in ['completed', 'failed', 'cancelled']:
                             logger.info(f"[SSE-STREAM] Task status changed to {db_task.status}, ending stream")
-                            yield f"data: {json.dumps({'type': 'done', 'status': db_task.status}, ensure_ascii=False)}\n\n"
+                            yield format_sse_event({'type': 'done', 'status': db_task.status})
                             return
                     except Exception as e:
                         logger.error(f"[SSE-STREAM] Failed to check task status: {e}")

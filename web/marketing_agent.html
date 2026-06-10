@@ -11,6 +11,7 @@
     <script src="/js/marked.min.js"></script>
     <script src="/js/task_config.js"></script>
     <script src="/js/video_compressor.js"></script>
+    <script src="/js/agent_message_dedupe.js"></script>
     <link rel="stylesheet" href="/css/github.min.css">
     <!-- i18n 支持 -->
     <script src="/i18n/i18n-core.js?v=__VERSION__"></script>
@@ -864,6 +865,7 @@
             const sessionActiveTaskId = {};  // { [sessionId]: taskId } — 追踪每个 session 的活跃 Agent 任务
             let msgUidCounter = 0;
             let currentEventSource = null;
+            const processedSseMessageIds = new Set();
             let loadingSessionId = null;  // 追踪哪个 session 触发了 loading，防止跨 session 竞态清除
             const activeIntervals = new Set();  // 追踪所有活跃的 setInterval ID
 
@@ -1816,7 +1818,7 @@
                     content: userContent,
                     timestamp: new Date().toISOString()
                 });
-                if (currentSessionId.value) {
+                if (currentSessionId.value && (window.AgentMessageDedupe?.shouldPersistUserMessage(selectedType.value) ?? true)) {
                     appendMessageToBackend('user', userContent);
                 }
                 inputText.value = '';
@@ -2613,9 +2615,18 @@
                     eventSource.onmessage = (event) => {
                         try {
                             const data = JSON.parse(event.data);
+                            if (data.id && processedSseMessageIds.has(data.id)) {
+                                console.log('[SSE] 跳过重复消息:', data.id, data.type);
+                                return;
+                            }
+                            if (data.id) processedSseMessageIds.add(data.id);
 
                             if (data.type === 'message') {
                                 hasReceivedData = true;
+                                if (window.AgentMessageDedupe?.hasDisplayedAssistantMessage(messages.value, data.content, msgUid)) {
+                                    console.log('[SSE] 跳过历史中已展示的消息:', data.id);
+                                    return;
+                                }
                                 fullContent += data.content || '';
                                 const uid = ensurePlaceholder();
                                 const idx = findMsgByIdx(uid);
@@ -2682,10 +2693,7 @@
                                 showContinue.value = true;
                                 // 刷新算力显示
                                 loadComputingPower();
-                                // AI 文本回复立即保存到后端（图片/视频结果由轮询回调保存）
-                                if (fullContent && currentSessionId.value) {
-                                    appendMessageToBackend('assistant', fullContent);
-                                }
+                                // Agent 文本回复由任务完成回调保存 PM 历史，避免前端再次追加造成重复历史记录。
                                 resolve();
                             }
                         } catch (e) {
@@ -2970,6 +2978,9 @@
                         const displayUrl = originalUrlMap[imgUrl] || imgUrl;
                         finalContent += `\n\n<img src="${displayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${displayUrl}'" alt="${window.t('reference_image_alt')}">`;
                     }
+                    if (h.role === 'user' && window.AgentMessageDedupe?.formatAgentUserMessageForDisplay) {
+                        finalContent = window.AgentMessageDedupe.formatAgentUserMessageForDisplay(finalContent);
+                    }
                     return {
                         role: h.role === 'assistant' ? 'ai' : h.role,
                         content: finalContent,
@@ -2989,6 +3000,9 @@
                         renderedContent += `\n\n<img src="${displayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${displayUrl}'" alt="${window.t('reference_image_alt')}">`;
                     }
                     renderedContent = renderedContent.replace(/\n{3,}/g, '\n\n').trim();
+                }
+                if (h.role === 'user' && window.AgentMessageDedupe?.formatAgentUserMessageForDisplay) {
+                    renderedContent = window.AgentMessageDedupe.formatAgentUserMessageForDisplay(renderedContent);
                 }
                 return {
                     _uid: generateMsgUid(),
@@ -3928,7 +3942,6 @@
                             return;
                         }
                         processVideoFile(file, fileDuration);
-                        hasUploadedImage.value = true;
                     })();
                     if (fileInputRef.value) fileInputRef.value.value = '';
                     return;
@@ -4927,7 +4940,6 @@
                             return;
                         }
                         processVideoFile(file, fileDuration);
-                        hasUploadedImage.value = true;
                     })();
                     return;
                 }

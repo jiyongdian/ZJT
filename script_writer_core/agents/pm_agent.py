@@ -600,20 +600,10 @@ class PMAgent(BaseAgent, AskUserMixin):
                 "timestamp": datetime.now().isoformat()
             })
 
-            # 发送 expert 的完整响应内容到前端
-            expert_response = result.get('result', '')
-            if expert_response:
-                self.task_manager.push_message(task.task_id, 'message', {
-                    'role': 'assistant',
-                    'content': expert_response
-                })
-            else:
-                # 如果没有响应内容，发送摘要
-                message_content = f"专家 {skill_name} 执行完成"
-                self.task_manager.push_message(task.task_id, 'message', {
-                    'role': 'assistant',
-                    'content': message_content
-                })
+            # Expert result is returned to the PM as a tool result and saved in
+            # conversation history. Do not push it directly to the frontend here,
+            # otherwise the PM's following assistant response can display the
+            # same content a second time.
         else:
             self.total_failures += 1
             self.consecutive_failures += 1
