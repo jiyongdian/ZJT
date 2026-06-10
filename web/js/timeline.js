@@ -264,6 +264,29 @@
           }
         }
       }
+
+      // 如果是音频节点（来自对话组生成的独立音频节点）
+      if (node.type === 'audio') {
+        // 优先通过 sourceNodeId 找到父对话组节点
+        let dialogueGroupNode = null;
+        if (node.data.sourceNodeId) {
+          dialogueGroupNode = state.nodes.find(n => n.id === node.data.sourceNodeId);
+        }
+        // 如果 sourceNodeId 不存在，尝试通过音频连接线查找父对话组
+        if (!dialogueGroupNode) {
+          const audioConn = (state.audioConnections || []).find(c => c.to === nodeId);
+          if (audioConn) {
+            const parentNode = state.nodes.find(n => n.id === audioConn.from);
+            if (parentNode && parentNode.type === 'dialogue_group') {
+              dialogueGroupNode = parentNode;
+            }
+          }
+        }
+        // 找到对话组后，递归查找其对应的分镜柱子
+        if (dialogueGroupNode && dialogueGroupNode.type === 'dialogue_group') {
+          return getPillarForNode(dialogueGroupNode.id);
+        }
+      }
       
       if (scriptId && shotNumber) {
         const pillarId = `${scriptId}_${shotNumber}`;

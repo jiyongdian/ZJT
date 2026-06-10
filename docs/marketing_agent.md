@@ -161,6 +161,17 @@ Agent 模式下发送消息的完整流程：
 | `error` | 关闭 SSE，显示错误消息 |
 | `done` | 关闭 SSE，显示"继续"按钮，刷新算力余额 |
 
+#### 去重与续传
+
+- `/api/task/{task_id}/stream` 会为数据库中的任务消息输出 SSE `id`，取值为 `agent_task_messages.id`。
+- 浏览器原生重连时，后端会读取 `Last-Event-ID`；手动恢复连接时也可通过 `last_id` 查询参数指定已处理的最后一条消息。
+- 前端维护已处理的 SSE 消息 id 集合，重复 id 会被跳过，避免重连重放时把同一条完整 `message` 再次拼接到 AI 气泡中。
+- 当页面或会话切换后恢复活跃 Agent 任务时，前端还会对比当前历史中已展示的 assistant 内容；如果恢复流重放了同样的完整 `message`，会跳过该消息，避免“历史气泡 + 恢复流气泡”重复显示。
+- Agent SSE 文本回复的持久化以任务完成回调中的 `session_storage.save_session()` 为准；前端收到 `done` 后不再调用 `/session/{session_id}/message` 追加同一段 assistant 文本，避免“后端保存 + 前端追加”产生相邻重复历史。
+- Agent 模式下用户消息的持久化以后端增强版为准：前端发送时只在当前页面即时展示用户气泡，不再调用 `/session/{session_id}/message` 保存展示版；任务完成后 PM Agent 保存包含媒体 URL 标签和用户偏好的增强版 user 消息。历史加载时前端会把 `[用户图片偏好]`、`[用户视频偏好]` 折叠为“查看发送偏好”，避免同一用户输入以 UI 展示版和 LLM 增强版各保存一次。
+- `/session/{session_id}/message` 也会跳过与最后一条历史记录 role 和 content 都相同的消息，作为其他追加路径的兜底保护。
+- `call_agent` 成功返回的专家结果只作为工具结果进入 PM 上下文，不在 `_handle_agent_call()` 阶段直接推送前端；由 PM 后续 assistant 回复统一展示，避免“图片内容分析”等专家结果出现两次。
+
 #### 任务状态轮询
 
 Agent 提交图片/视频生成任务后，前端通过 `setInterval` 轮询 `GET /api/get-status/{project_ids}`：
@@ -247,6 +258,7 @@ Agent 提交图片/视频生成任务后，前端通过 `setInterval` 轮询 `GE
 #### Agent 视频模式
 
 支持上传参考图（首尾帧/全能参考）、参考视频和参考音频。图片上传到 `/api/upload-agent-image`，通过 `image_urls` 字段传给后端。
+纯视频参考文件上传到 `/api/upload-agent-video`，只进入 `video_urls` 流程，不会设置图片上传状态，也不会触发图片 HTTP URL 等待。
 
 #### 图片/视频模式
 

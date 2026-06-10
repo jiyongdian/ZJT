@@ -106,6 +106,10 @@ class MarketingPMAgent(PMAgent):
         # 营销智能体直接使用 base_prompt，不加载默认的剧本架构师提示词
         base_prompt = self._custom_base_prompt
 
+        # 追加通用约束（确保所有 PM Agent 都有此约束）
+        if "ask_user" not in base_prompt:
+            base_prompt += "\n\n**重要约束**：向用户提问时必须使用 ask_user 工具，禁止以纯文本方式提问（纯文本提问用户无法收到交互弹框）"
+
         # 营销智能体通常 skill_names=[]，所以不会追加额外技能内容
         # 但保留这个逻辑以支持未来可能的扩展
         skill_prompts = []

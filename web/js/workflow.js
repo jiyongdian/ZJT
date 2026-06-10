@@ -1077,7 +1077,15 @@
         }
 
         if(data.audioConnections && Array.isArray(data.audioConnections)){
-          state.audioConnections = data.audioConnections;
+          // 迁移旧连接方向：旧格式 from=audio → to=dialogue_group，修正为 from=dialogue_group → to=audio
+          state.audioConnections = data.audioConnections.map(function(conn) {
+            var fromNode = state.nodes.find(function(n) { return n.id === conn.from; });
+            var toNode = state.nodes.find(function(n) { return n.id === conn.to; });
+            if (fromNode && fromNode.type === 'audio' && toNode && toNode.type === 'dialogue_group') {
+              return { id: conn.id, from: conn.to, to: conn.from };
+            }
+            return conn;
+          });
         }
         
         // 恢复时间轴
@@ -2060,7 +2068,7 @@
       const savedNextNodeId = state.nextNodeId;
       state.nextNodeId = nodeData.id;
 
-      createAudioNode({ x: nodeData.x, y: nodeData.y });
+      createAudioNode({ x: nodeData.x, y: nodeData.y, title: nodeData.title });
 
       state.nextNodeId = Math.max(savedNextNodeId, nodeData.id + 1);
 
@@ -2068,13 +2076,22 @@
       if(node && nodeData.data){
         node.data.url = nodeData.data.url || '';
         node.data.name = nodeData.data.name || '';
+        // 恢复对话组溯源字段
+        if(nodeData.data.sourceNodeId !== undefined){
+          node.data.sourceNodeId = nodeData.data.sourceNodeId;
+        }
+        if(nodeData.data.dialogueIndex !== undefined){
+          node.data.dialogueIndex = nodeData.data.dialogueIndex;
+        }
         // 如果有URL，显示预览
         if(node.data.url){
           const el = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
           if(el){
             const previewField = el.querySelector('.audio-preview-field');
+            const previewActionsField = el.querySelector('.audio-preview-actions-field');
             const audioPlayer = el.querySelector('.audio-node-player');
             const nameEl = el.querySelector('.audio-node-name');
+            const addTimelineBtn = el.querySelector('.audio-add-timeline-btn');
             if(previewField && audioPlayer){
               audioPlayer.src = proxyDownloadUrl(node.data.url);
               if(nameEl){
@@ -2083,6 +2100,11 @@
                 nameEl.title = node.data.name || '';
               }
               previewField.style.display = 'block';
+              if(previewActionsField) previewActionsField.style.display = 'block';
+            }
+            // 显示"添加到时间轴"按钮（当音频来自对话组时）
+            if(addTimelineBtn && node.data.sourceNodeId !== undefined){
+              addTimelineBtn.style.display = 'inline-block';
             }
           }
         }

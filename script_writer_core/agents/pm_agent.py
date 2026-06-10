@@ -144,6 +144,7 @@ class PMAgent(BaseAgent, AskUserMixin):
 - 任务必须串行执行，一次只能调用一个专家
 - 连续失败3次或累计失败7次时必须停止并报告
 - 绝不直接生成剧本内容，必须通过 call_agent 调用专家
+- 向用户提问时必须使用 ask_user 工具，禁止以纯文本方式提问（纯文本提问用户无法收到交互弹框）
 """
         
         # 加载所有技能内容
@@ -414,6 +415,7 @@ class PMAgent(BaseAgent, AskUserMixin):
                 meta = result.pop("_verification_meta")
                 agent_name = self._get_agent_display_name()
                 self.add_to_history("verification", {
+                    "verification_id": meta.get("verification_id"),
                     "title": f"{agent_name} 向您提问",
                     "description": meta["question"],
                     "options": meta["options"]
@@ -598,20 +600,10 @@ class PMAgent(BaseAgent, AskUserMixin):
                 "timestamp": datetime.now().isoformat()
             })
 
-            # 发送 expert 的完整响应内容到前端
-            expert_response = result.get('result', '')
-            if expert_response:
-                self.task_manager.push_message(task.task_id, 'message', {
-                    'role': 'assistant',
-                    'content': expert_response
-                })
-            else:
-                # 如果没有响应内容，发送摘要
-                message_content = f"专家 {skill_name} 执行完成"
-                self.task_manager.push_message(task.task_id, 'message', {
-                    'role': 'assistant',
-                    'content': message_content
-                })
+            # Expert result is returned to the PM as a tool result and saved in
+            # conversation history. Do not push it directly to the frontend here,
+            # otherwise the PM's following assistant response can display the
+            # same content a second time.
         else:
             self.total_failures += 1
             self.consecutive_failures += 1

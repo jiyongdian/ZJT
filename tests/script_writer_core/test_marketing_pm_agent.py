@@ -120,7 +120,12 @@ class TestBuildSystemPrompt(unittest.TestCase):
         """空 skill_names 直接返回 base_prompt"""
         agent = self._create_agent(base_prompt="my marketing prompt")
         result = agent._build_system_prompt([])
-        self.assertEqual(result, "my marketing prompt")
+        expected = (
+            "my marketing prompt\n\n"
+            "**重要约束**：向用户提问时必须使用 ask_user 工具，"
+            "禁止以纯文本方式提问（纯文本提问用户无法收到交互弹框）"
+        )
+        self.assertEqual(result, expected)
 
     def test_skill_loading_success(self):
         """成功加载 skill 时追加到 prompt"""
@@ -142,7 +147,12 @@ class TestBuildSystemPrompt(unittest.TestCase):
         agent.skill_loader = mock_skill_loader
 
         result = agent._build_system_prompt(["bad-skill"])
-        self.assertEqual(result, "base")
+        expected = (
+            "base\n\n"
+            "**重要约束**：向用户提问时必须使用 ask_user 工具，"
+            "禁止以纯文本方式提问（纯文本提问用户无法收到交互弹框）"
+        )
+        self.assertEqual(result, expected)
 
 
 class TestBuildContextForExpert(unittest.TestCase):

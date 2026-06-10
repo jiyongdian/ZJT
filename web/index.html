@@ -966,9 +966,10 @@
     name: 'DigitalHuman',
     data() {
       return {
+        version: 'v2',
         imageFile: null,
         audioFile: null,
-        text: '',
+        text: '角色面向镜头深情的说话，固定镜头。',
         aspectRatio: '9:16',
         loading: false,
         error: '',
@@ -982,12 +983,11 @@
         historyLoading: false,
         historyPage: 1,
         historyTotal: 0,
-        modelConfigs: {}  // 从后端获取的模型配置
+        modelConfigs: {}
       }
     },
     mounted() {
       this.authToken = localStorage.getItem('auth_token') || '';
-      // 获取模型配置
       this.fetchModelConfigs();
     },
     computed: {
@@ -1002,8 +1002,14 @@
         if (this.status === 'FAILED') return this.$t('error');
         return '';
       },
+      configKey() {
+        return this.version === 'v1' ? 'digital_human' : 'digital_human_ltx2_3_voice';
+      },
+      historyType() {
+        return this.version === 'v1' ? 13 : 32;
+      },
       aspectRatioOptions() {
-        const config = this.modelConfigs['digital_human'];
+        const config = this.modelConfigs[this.configKey];
         if (!config || !config.ratios) {
           return [
             { value: '9:16', label: '9:16 (竖屏)' },
@@ -1034,13 +1040,29 @@
         try {
           await TaskConfig.load();
           this.modelConfigs = TaskConfig.getModelConfigs();
-          // 设置初始默认值
-          const config = this.modelConfigs['digital_human'];
+          const config = this.modelConfigs[this.configKey];
           if (config && config.default_ratio) {
             this.aspectRatio = config.default_ratio;
           }
         } catch (err) {
           console.error('获取模型配置失败:', err);
+        }
+      },
+
+      switchVersion(v) {
+        if (this.loading) return;
+        this.version = v;
+        this.imageFile = null;
+        this.audioFile = null;
+        this.text = v === 'v2' ? '角色面向镜头深情的说话，固定镜头。' : '';
+        this.error = '';
+        this.results = [];
+        this.projectId = '';
+        this.status = '';
+        this.clearStatusCheck();
+        const config = this.modelConfigs[this.configKey];
+        if (config && config.default_ratio) {
+          this.aspectRatio = config.default_ratio;
         }
       },
 
@@ -1050,66 +1072,70 @@
       onAudioFile(e) {
         this.audioFile = e.target.files[0] || null;
       },
-      
+
       async submit() {
         if (!this.canSubmit) return;
-        
+
         const userId = localStorage.getItem('user_id');
         if (!userId) {
           this.error = '请先登录后再使用数字人生成功能';
           return;
         }
-        
+
         this.loading = true;
         this.error = '';
         this.results = [];
         this.projectId = '';
         this.status = '';
         this.clearStatusCheck();
-        
+
         try {
           const form = new FormData();
           form.append('image', this.imageFile);
           form.append('audio', this.audioFile);
           form.append('text', this.text);
-          form.append('aspect_ratio', this.aspectRatio);
           form.append('user_id', userId);
-          
+
+          // v1 需要比例参数
+          if (this.version === 'v1') {
+            form.append('aspect_ratio', this.aspectRatio);
+          }
+
           if (this.authToken) {
             form.append('auth_token', this.authToken);
           }
-          
-          const res = await axios.post('/api/digital-human', form, {
+
+          const api = this.version === 'v1' ? '/api/digital-human' : '/api/digital-human-v2';
+          const res = await axios.post(api, form, {
             headers: { 'Content-Type': 'multipart/form-data' },
           });
-          
+
           this.projectId = res.data.project_id || '';
           this.status = res.data.status || 'submitted';
-          
+
           this.startStatusCheck();
-          
+
         } catch (err) {
           console.error(err);
           this.error = err?.response?.data?.detail || err?.message || '请求失败';
           this.loading = false;
         }
       },
-      
+
       async checkStatus() {
         if (!this.projectId) return;
-        
+
         try {
           const authToken = localStorage.getItem('auth_token');
           const params = authToken ? { auth_token: authToken } : {};
           const res = await axios.get(`/api/get-status/${this.projectId}`, { params });
           const responseData = res?.data;
-          
+
           if (!responseData) {
             console.error('Invalid status response:', responseData);
             return;
           }
-          
-          // Parse response: {tasks: [{project_id, status, results, reason}]}
+
           let payload;
           if (responseData.tasks && responseData.tasks.length > 0) {
             payload = responseData.tasks[0];
@@ -1117,14 +1143,14 @@
             console.error('Invalid status response format:', responseData);
             return;
           }
-          
+
           if (!payload || typeof payload.status === 'undefined') {
             console.error('Invalid task payload:', payload);
             return;
           }
-          
+
           this.status = payload.status;
-          
+
           if (payload.status === 'SUCCESS') {
             this.results = payload.results || [];
             this.loading = false;
@@ -1138,31 +1164,31 @@
           console.error('Status check error:', err);
         }
       },
-      
+
       startStatusCheck() {
         this.statusInterval = setInterval(() => {
           this.checkStatus();
         }, 10000);
       },
-      
+
       clearStatusCheck() {
         if (this.statusInterval) {
           clearInterval(this.statusInterval);
           this.statusInterval = null;
         }
       },
-      
+
       downloadVideo(url, index) {
         if (this.$root.isWechatBrowser()) {
           this.$root.showWechatGuideModal = true;
           return;
         }
-        
+
         const now = new Date();
-        const dateStr = now.getFullYear().toString() + 
-                       (now.getMonth() + 1).toString().padStart(2, '0') + 
+        const dateStr = now.getFullYear().toString() +
+                       (now.getMonth() + 1).toString().padStart(2, '0') +
                        now.getDate().toString().padStart(2, '0');
-        const timeStr = now.getHours().toString().padStart(2, '0') + 
+        const timeStr = now.getHours().toString().padStart(2, '0') +
                        now.getMinutes().toString().padStart(2, '0');
         const filename = `digital_human_${dateStr}_${timeStr}_${index + 1}.mp4`;
         const downloadUrl = buildDownloadUrl(url, filename);
@@ -1174,28 +1200,28 @@
           this.historyPage = 1;
           this.historyList = [];
         }
-        
+
         const userId = localStorage.getItem('user_id');
         if (!userId) {
           this.error = '请先登录';
           this.showHistory = true;
           return;
         }
-        
+
         this.historyLoading = true;
         try {
           const authToken = localStorage.getItem('auth_token');
-          
+
           const res = await axios.get('/api/ai-tools/history', {
             params: {
               user_id: parseInt(userId, 10),
               page: this.historyPage,
               page_size: 20,
-              type: 13,
+              type: this.historyType,
               auth_token: authToken || undefined
             }
           });
-          
+
           if (res.data.success) {
             const payload = res.data.data || {};
             const newItems = payload.data || payload.items || [];
@@ -1211,26 +1237,26 @@
           this.historyLoading = false;
         }
       },
-      
+
       handleHistoryScroll(e) {
         const { scrollTop, scrollHeight, clientHeight } = e.target;
         if (scrollHeight - scrollTop - clientHeight < 50 && !this.historyLoading) {
           this.loadMoreHistory();
         }
       },
-      
+
       async loadMoreHistory() {
         if (this.historyList.length >= this.historyTotal) return;
         this.historyPage++;
         await this.fetchHistory(false);
       },
-      
+
       closeHistory() {
         this.showHistory = false;
         this.historyPage = 1;
         this.historyList = [];
       },
-      
+
       getHistoryStatusText(status) {
         const statusMap = {
           0: '未处理',
@@ -1252,23 +1278,23 @@
         };
         return colorMap[status] || '#888';
       },
-      
+
       downloadHistoryVideo(item, index) {
         if (!item || !item.result_url) {
           alert('下载链接不可用');
           return;
         }
-        
+
         if (this.$root.isWechatBrowser()) {
           this.$root.showWechatGuideModal = true;
           return;
         }
-        
+
         const now = new Date();
-        const dateStr = now.getFullYear().toString() + 
-                       (now.getMonth() + 1).toString().padStart(2, '0') + 
+        const dateStr = now.getFullYear().toString() +
+                       (now.getMonth() + 1).toString().padStart(2, '0') +
                        now.getDate().toString().padStart(2, '0');
-        const timeStr = now.getHours().toString().padStart(2, '0') + 
+        const timeStr = now.getHours().toString().padStart(2, '0') +
                        now.getMinutes().toString().padStart(2, '0');
         const filename = `digital_human_history_${dateStr}_${timeStr}_${index + 1}.mp4`;
         const downloadUrl = buildDownloadUrl(item.result_url, filename);
@@ -1281,14 +1307,33 @@
     template: `
       <div class="form">
         <div class="field">
+          <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+            <button
+              :class="['btn', version === 'v1' ? '' : 'secondary']"
+              style="flex: 1; padding: 8px 12px; font-size: 13px;"
+              @click="switchVersion('v1')"
+              :disabled="loading">
+              wan2.2 数字人
+            </button>
+            <button
+              :class="['btn', version === 'v2' ? '' : 'secondary']"
+              style="flex: 1; padding: 8px 12px; font-size: 13px;"
+              @click="switchVersion('v2')"
+              :disabled="loading">
+              LTX2.3 数字人
+            </button>
+          </div>
+        </div>
+
+        <div class="field">
           <label class="label">{{ $t('digital_human_image') }} <span style="color: red;">*</span></label>
           <input class="input" type="file" accept="image/*" @change="onImageFile" :disabled="loading" />
           <div class="muted" style="margin-top: 4px;">{{ $t('digital_human_image_tip') }}</div>
         </div>
 
         <div class="field">
-          <label class="label">{{ $t('speech_text') }} <span style="color: red;">*</span></label>
-          <textarea class="input" v-model="text" :placeholder="$t('max_characters')" rows="5" :disabled="loading"></textarea>
+          <label class="label">{{ version === 'v2' ? $t('prompt_text') : $t('speech_text') }} <span style="color: red;">*</span></label>
+          <textarea class="input" v-model="text" :placeholder="version === 'v2' ? $t('prompt_placeholder') : $t('max_characters')" rows="5" :disabled="loading"></textarea>
           <div class="muted" style="margin-top: 4px;">
             {{ $t('current_characters') }}: {{ text.length }}/1000
             <span v-if="text.length > 1000" style="color: var(--danger); margin-left: 8px;">{{ $t('text_exceeded') }}</span>
@@ -1296,12 +1341,12 @@
         </div>
 
         <div class="field">
-          <label class="label">{{ $t('reference_audio') }} <span style="color: red;">*</span></label>
+          <label class="label">{{ version === 'v2' ? $t('speaking_audio') : $t('reference_audio') }} <span style="color: red;">*</span></label>
           <input class="input" type="file" accept="audio/*" @change="onAudioFile" :disabled="loading" />
-          <div class="muted" style="margin-top: 4px;">{{ $t('audio_cloning_tip') }}</div>
+          <div class="muted" style="margin-top: 4px;">{{ version === 'v2' ? $t('speaking_audio_tip') : $t('audio_cloning_tip') }}</div>
         </div>
 
-        <div class="field">
+        <div v-if="version === 'v1'" class="field">
           <label class="label">{{ $t('video_ratio') }}</label>
           <select class="input" v-model="aspectRatio" :disabled="loading">
             <option v-for="opt in aspectRatioOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
@@ -4084,19 +4129,19 @@
         const config = this.modelConfigs[this.videoModel];
         if (!config || !config.durations) {
           return [
-            { value: 5, label: `5${this.$t('duration_seconds') || '秒'}` },
-            { value: 10, label: `10${this.$t('duration_seconds') || '秒'}` }
+            { value: 5, label: this.$t('duration_seconds', { dur: 5 }) || '5秒' },
+            { value: 10, label: this.$t('duration_seconds', { dur: 10 }) || '10秒' }
           ];
         }
         // LTX2 特殊标签
         const ltx2Labels = {
-          5: `5${this.$t('duration_seconds') || '秒'} (121${this.$t('images') || '帧'})`,
-          8: `8${this.$t('duration_seconds') || '秒'} (201${this.$t('images') || '帧'})`,
-          10: `10${this.$t('duration_seconds') || '秒'} (241${this.$t('images') || '帧'})`
+          5: `${this.$t('duration_seconds', { dur: 5 }) || '5秒'} (121${this.$t('images') || '帧'})`,
+          8: `${this.$t('duration_seconds', { dur: 8 }) || '8秒'} (201${this.$t('images') || '帧'})`,
+          10: `${this.$t('duration_seconds', { dur: 10 }) || '10秒'} (241${this.$t('images') || '帧'})`
         };
         return config.durations.map(duration => ({
           value: duration,
-          label: this.videoModel === 'ltx2' ? (ltx2Labels[duration] || `${duration}${this.$t('duration_seconds') || '秒'}`) : `${duration}${this.$t('duration_seconds') || '秒'}`
+          label: this.videoModel === 'ltx2' ? (ltx2Labels[duration] || this.$t('duration_seconds', { dur: duration }) || `${duration}秒`) : (this.$t('duration_seconds', { dur: duration }) || `${duration}秒`)
         }));
       },
       countOptions() {
@@ -5220,6 +5265,16 @@
                     </template>
                   </div>
                 </div>
+                <div v-if="item.video_path" style="margin-top: 12px; padding: 12px; background: #0f1620; border-radius: 8px; border: 1px solid var(--border);">
+                  <div style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">{{ $t('reference_video_label') || '参考视频' }}:</div>
+                  <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <template v-for="(video, vidx) in item.video_path.split(',')" :key="vidx">
+                      <div v-if="video">
+                        <a :href="'/video-viewer.html?url=' + encodeURIComponent(video.trim())" target="_blank" class="btn secondary" style="font-size: 12px; padding: 4px 12px; text-decoration: none;">{{ $t('view_original') || '查看原视频' }}</a>
+                      </div>
+                    </template>
+                  </div>
+                </div>
                 <div v-if="item.result_url" style="margin-top: 8px;">
                   <a :href="item.result_url" target="_blank" class="btn secondary" style="display: inline-block; text-decoration: none;">{{ $t('view_result') }}</a>
                   <button v-if="item.status == 2 && item.type == 3" class="btn" @click="enhanceVideo(item, item.id)" :disabled="enhancingVideos[item.id]" style="margin-left: 8px;">{{ enhancingVideos[item.id] ? ($t('enhanced_button') || '已修复') : ($t('generate_hd_video') || '生成高清视频') }}</button>
@@ -5966,6 +6021,16 @@
                   <span>{{ $t('mode_switch') }}: {{ getModelLabel(item.ratio) }}</span>
                   <span>{{ $t('duration_label') }}: {{ getDurationText(item) }}</span>
                   <span>{{ $t('create_time') }}: {{ item.create_time ? new Date(item.create_time).toLocaleString('zh-CN') : $t('unknown') }}</span>
+                </div>
+                <div v-if="item.video_path" style="margin-top: 12px; padding: 12px; background: #0f1620; border-radius: 8px; border: 1px solid var(--border);">
+                  <div style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">{{ $t('reference_video_label') || '参考视频' }}:</div>
+                  <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <template v-for="(video, vidx) in item.video_path.split(',')" :key="vidx">
+                      <div v-if="video">
+                        <a :href="'/video-viewer.html?url=' + encodeURIComponent(video.trim())" target="_blank" class="btn secondary" style="font-size: 12px; padding: 4px 12px; text-decoration: none;">{{ $t('view_original') || '查看原视频' }}</a>
+                      </div>
+                    </template>
+                  </div>
                 </div>
                 <div v-if="item.result_url" style="margin-top: 8px;">
                   <button class="btn secondary" @click="downloadHistoryResult(item)" style="display: inline-block; margin-right: 8px;">{{ $t('view_result') }}</button>
@@ -6857,6 +6922,16 @@
               <span>模式: {{ getModelLabel(item) }}</span>
               <span>时长: {{ getDurationText(item) }}</span>
               <span>创建时间: {{ item.create_time ? new Date(item.create_time).toLocaleString('zh-CN') : '未知' }}</span>
+            </div>
+            <div v-if="item.video_path" style="margin-top: 12px; padding: 12px; background: #0f1620; border-radius: 8px; border: 1px solid var(--border);">
+              <div style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">{{ $t('reference_video_label') || '参考视频' }}:</div>
+              <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                <template v-for="(video, vidx) in item.video_path.split(',')" :key="vidx">
+                  <div v-if="video">
+                    <a :href="'/video-viewer.html?url=' + encodeURIComponent(video.trim())" target="_blank" class="btn secondary" style="font-size: 12px; padding: 4px 12px; text-decoration: none;">{{ $t('view_original') || '查看原视频' }}</a>
+                  </div>
+                </template>
+              </div>
             </div>
             <div v-if="item.result_url" style="margin-top: 8px;">
               <a :href="item.result_url" target="_blank" class="btn secondary" style="display: inline-block; text-decoration: none;">查看结果</a>

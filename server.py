@@ -675,6 +675,134 @@ async def proxy_image(request: Request, url: str = Query(..., description="Image
         raise HTTPException(status_code=500, detail=f"Image proxy failed: {str(e)}")
 
 
+@app.get("/api/thumbnail")
+async def get_thumbnail(
+    request: Request,
+    url: str = Query(..., description="原始图片URL"),
+    size: int = Query(200, ge=10, le=1000, description="缩略图尺寸（最大宽/高，单位px）")
+):
+    """
+    获取图片缩略图
+    - 本地图片：直接读取并缩放
+    - 结果缓存到 upload/cache/thumbnail/
+    - 使用原子写入避免多进程冲突
+    """
+    import hashlib
+
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
+
+    # 计算缓存路径
+    url_hash = hashlib.md5(url.encode()).hexdigest()[:12]
+    thumb_filename = f"{size}_{url_hash}.jpg"
+    thumb_dir = os.path.join(os.path.dirname(__file__), "upload", "cache", "thumbnail")
+    os.makedirs(thumb_dir, exist_ok=True)
+    thumb_path = os.path.join(thumb_dir, thumb_filename)
+
+    # 检查缓存
+    if os.path.exists(thumb_path):
+        return FileResponse(
+            thumb_path,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=31536000, immutable"}
+        )
+
+    # 解析源文件路径
+    source_path = None
+    base_dir = os.path.dirname(__file__)
+
+    # 处理相对路径（如 /upload/character/pic/123/avatar.png）
+    if url.startswith('/upload/'):
+        local_path = os.path.join(base_dir, url.lstrip('/'))
+        if os.path.exists(local_path):
+            source_path = local_path
+    elif url.startswith('upload/'):
+        local_path = os.path.join(base_dir, url)
+        if os.path.exists(local_path):
+            source_path = local_path
+    else:
+        # 处理完整URL（同源）
+        parsed = urlparse(url)
+        if parsed.path.startswith('/upload/'):
+            local_path = os.path.join(base_dir, parsed.path.lstrip('/'))
+            if os.path.exists(local_path):
+                source_path = local_path
+
+    if not source_path:
+        raise HTTPException(status_code=404, detail="Source image not found")
+
+    # 生成缩略图（原子写入）
+    try:
+        await asyncio.to_thread(_generate_thumbnail_safe, source_path, str(thumb_path), size)
+    except Exception as e:
+        logger.error(f"Failed to generate thumbnail: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate thumbnail")
+
+    # 返回缩略图
+    if os.path.exists(thumb_path):
+        return FileResponse(
+            thumb_path,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=31536000, immutable"}
+        )
+    else:
+        raise HTTPException(status_code=500, detail="Thumbnail generation failed")
+
+
+def _generate_thumbnail_safe(source_path: str, thumb_path: str, size: int):
+    """
+    安全的缩略图生成（无锁，原子写入）
+    - 先写临时文件，再原子重命名
+    - 进程崩溃不会阻塞后续请求
+    """
+    from PIL import Image
+
+    thumb_dir = os.path.dirname(thumb_path)
+    os.makedirs(thumb_dir, exist_ok=True)
+
+    # 检查是否已存在
+    if os.path.exists(thumb_path):
+        return
+
+    # 写入临时文件（唯一名称，避免多进程冲突）
+    tmp_path = f"{thumb_path}.tmp.{os.getpid()}.{int(time.time())}"
+    try:
+        img = Image.open(source_path)
+        if img.mode in ('RGBA', 'P'):
+            img = img.convert('RGB')
+        img.thumbnail((size, size), Image.LANCZOS)
+        img.save(tmp_path, 'JPEG', quality=75)
+
+        # 原子重命名（如果目标已存在，说明其他进程已生成成功）
+        os.rename(tmp_path, thumb_path)
+    except FileExistsError:
+        # 其他进程已生成成功，删除自己的临时文件
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except:
+                pass
+    except Exception:
+        # 生成失败，清理临时文件
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except:
+                pass
+        raise
+    finally:
+        # 清理超过 5 分钟的残留临时文件
+        try:
+            current_time = time.time()
+            for f in os.listdir(thumb_dir):
+                if '.tmp.' in f and f.startswith(os.path.basename(thumb_path)):
+                    fpath = os.path.join(thumb_dir, f)
+                    if current_time - os.path.getmtime(fpath) > 300:
+                        os.remove(fpath)
+        except:
+            pass
+
+
 def _save_uploaded_image(upload_file: UploadFile) -> str:
     """
     Save uploaded image to upload/temp/date directory and return the file URL
@@ -1774,9 +1902,9 @@ async def ai_app_run_image(
         task_config = UnifiedConfigRegistry.get_by_id(task_id)
         if not task_config:
             raise HTTPException(status_code=400, detail=f"无效的 task_id: {task_id}")
-        # 验证任务分类是否正确
-        if task_config.category != TaskCategory.IMAGE_TO_VIDEO:
-            raise HTTPException(status_code=400, detail=f"task_id {task_id} 不是图生视频任务")
+        # 验证任务分类是否正确（支持图生视频和数字人）
+        if task_config.category not in [TaskCategory.IMAGE_TO_VIDEO, TaskCategory.DIGITAL_HUMAN]:
+            raise HTTPException(status_code=400, detail=f"task_id {task_id} 不是图生视频或数字人任务")
         
         image_to_video_type = task_id
 
@@ -3008,107 +3136,12 @@ async def get_ai_tools_history(
     type: Optional[int] = Query(None, description="Tool type filter (1-图片编辑, 2-AI视频生成, 3-图片生成视频)"),
     types: Optional[str] = Query(None, description="Multiple tool types filter, comma-separated (e.g., '3,10,11,12')"),
     has_image_path: Optional[bool] = Query(None, description="Filter by image_path presence: true=图片编辑, false=文生图"),
-    auth_token: Optional[str] = Query(None, description="Auth token for computing power refund")
 ):
     """
     获取用户的 AI 工具历史记录
-    在查询前会先检查并更新所有正在处理的任务状态
-    如果任务失败，会自动补回算力
+    任务状态由后台 scheduler (visual_task.py / runninghub_async_task.py) 定时更新
     """
     try:
-        # First, check and update processing tasks
-        processing_tasks = AIToolsModel.list_processing_by_user(user_id)
-        
-        if processing_tasks:
-            updated_count = 0
-            total_refund_power = 0  # 累计需要补回的算力
-            
-            # Check each task's status
-            for task in processing_tasks:
-                if not task.project_id:
-                    continue
-                    
-                try:
-                    if task.type in [4,5,6]:
-                        # Use RunningHub client for upscale tasks
-                        client = RunningHubClient()
-                        status = await asyncio.to_thread(client.check_status, task.project_id)
-                        
-                        if status == TaskStatus.SUCCESS:
-                            # Get results
-                            results = await asyncio.to_thread(client.get_outputs, task.project_id)
-                            
-                            if results:
-                                result_url = results[0].file_url
-                                AIToolsModel.update_by_project_id(
-                                    project_id=task.project_id,
-                                    result_url=result_url,
-                                    status=AI_TOOL_STATUS_COMPLETED
-                                )
-                                updated_count += 1
-                                logger.info(f"Upscale task {task.project_id} completed successfully")
-                        elif status == TaskStatus.FAILED:
-                            AIToolsModel.update_by_project_id(
-                                project_id=task.project_id,
-                                status=AI_TOOL_STATUS_FAILED,
-                                message="高清放大失败"
-                            )
-                            updated_count += 1
-                            # 累计需要补回的算力
-                            task_config = TaskTypeRegistry.get(task.type)
-                            context = build_context_from_task_record(task)
-                            computing_power = task_config.get_computing_power(context=context) if task_config else 0
-                            total_refund_power += computing_power
-                            logger.info(f"Upscale task {task.project_id} failed, will refund {computing_power} computing power")
-                    
-                except Exception as task_error:
-                    logger.error(f"Failed to check status for task {task.project_id}: {task_error}")
-                    continue
-            
-            logger.info(f"Checked {len(processing_tasks)} processing tasks, updated {updated_count}")
-            
-            # 如果有需要补回的算力，统一进行补回
-            if total_refund_power > 0 and CHECK_AUTH_TOKEN:
-                try:
-                    if not auth_token:
-                        logger.warning(f"Need to refund {total_refund_power} computing power for user {user_id}, but auth_token is not provided")
-                    else:
-                        # 生成交易ID
-                        transaction_id = str(uuid.uuid4())
-                        headers = {'Authorization': f'Bearer {auth_token}'}
-                        #发起请求，获取用户ID
-                        success, message, response_data = await async_make_perseids_request(
-                            endpoint='user/get_user_id_by_auth_token',
-                            method='POST',
-                            headers=headers
-                        )
-                        if not success:
-                            raise HTTPException(status_code=400, detail=message)
-                        user_id_from_token = response_data.get('user_id')
-                        if user_id != user_id_from_token:
-                            raise HTTPException(status_code=400, detail="用户ID不匹配")
-                        # 发起请求，增加算力（补回）
-                        success, message, response_data = await async_make_perseids_request(
-                            endpoint='user/calculate_computing_power',
-                            method='POST',
-                            headers=headers,
-                            data={
-                                "computing_power": total_refund_power,
-                                "behavior": "increase",
-                                "transaction_id": transaction_id
-                            }
-                        )
-                        
-                        if success:
-                            logger.info(f"Successfully refunded {total_refund_power} computing power for user {user_id}, transaction_id: {transaction_id}")
-                        else:
-                            logger.error(f"Failed to refund computing power for user {user_id}: {message}")
-                    
-                except Exception as refund_error:
-                    logger.error(f"Failed to refund computing power: {refund_error}")
-                    logger.error(traceback.format_exc())
-        
-        # 查询历史记录
         # Parse types parameter if provided
         type_list_param = None
         if types:
@@ -4020,6 +4053,128 @@ async def digital_human_generate(
         logger.error(f"Digital human generation failed: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"数字人生成失败: {str(e)}")
+
+
+@app.post("/api/digital-human-v2")
+@require_permission("digital_human:create")
+async def digital_human_v2_generate(
+    request: Request,
+    image: UploadFile = File(..., description="Input image for digital human"),
+    text: str = Form(..., description="Text content for digital human to speak (max 1000 characters)"),
+    audio: UploadFile = File(..., description="Reference audio file"),
+    user_id: int = Form(None, description="User ID"),
+    auth_token: str = Form(None, description="Authentication token")
+):
+    """
+    Generate digital human video v2 (LTX2.3+Voice)
+    """
+    try:
+        # Validate text length
+        if len(text) > 1000:
+            raise HTTPException(
+                status_code=400,
+                detail="文本内容不能超过1000个字"
+            )
+
+        # Save uploaded image
+        image_url = await asyncio.to_thread(_save_uploaded_image, image)
+
+        # Save uploaded audio
+        audio_url = await asyncio.to_thread(_save_uploaded_image, audio)
+
+        # Task type for digital human v2
+        task_type = TaskTypeId.DIGITAL_HUMAN_LTX2_3_VOICE
+        task_config = TaskTypeRegistry.get(task_type)
+        computing_power = task_config.get_computing_power()
+
+        if CHECK_AUTH_TOKEN:
+            headers = {'Authorization': f'Bearer {auth_token}'}
+            # Check computing power
+            success, message, response_data = await async_make_perseids_request(
+                endpoint='user/check_computing_power',
+                method='GET',
+                headers=headers
+            )
+            if not success:
+                raise HTTPException(
+                    status_code=400,
+                    detail=message
+                )
+
+            user_computing_power = response_data.get('computing_power', 0)
+            user_id_from_token = response_data.get('user_id')
+            if user_computing_power < computing_power:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"您的算力不足，需要 {computing_power} 算力，当前仅有 {user_computing_power} 算力"
+                )
+            if user_id_from_token != user_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="用户ID不匹配"
+                )
+
+        # Generate unique transaction ID
+        transaction_id = str(uuid.uuid4())
+
+        # Deduct computing power
+        if CHECK_AUTH_TOKEN:
+            success, message, response_data = await async_make_perseids_request(
+                endpoint='user/calculate_computing_power',
+                method='POST',
+                headers=headers,
+                data={
+                    "computing_power": computing_power,
+                    "behavior": "deduct",
+                    "transaction_id": transaction_id
+                }
+            )
+            if not success:
+                logger.error(f"Computing power deduction failed: {message}")
+
+        # Create database record
+        if user_id:
+            try:
+                id = AIToolsModel.create(
+                    prompt=text,
+                    user_id=user_id,
+                    type=task_type,
+                    image_path=image_url,
+                    audio_path=audio_url,  # v2 uses audio_path field
+                    transaction_id=transaction_id,
+                    status=AI_TOOL_STATUS_PENDING
+                )
+                TasksModel.create(
+                    task_type=TASK_TYPE_GENERATE_VIDEO,
+                    task_id=id,
+                    status=TASK_STATUS_QUEUED
+                )
+                # 创建 param_prepare 流水线步骤
+                try:
+                    from task.pipeline_processor import PipelineProcessor
+                    PipelineProcessor.create_param_prepare_steps(id, task_type)
+                except Exception as e:
+                    logger.warning(f"Failed to create param_prepare steps for ai_tool {id}: {e}")
+
+                return JSONResponse({
+                    "success": True,
+                    "project_id": id,
+                    "status": "submitted",
+                    "image_url": image_url,
+                    "audio_url": audio_url
+                })
+            except Exception as db_error:
+                logger.error(f"Failed to create database record: {db_error}")
+                raise HTTPException(status_code=500, detail=f"数据库错误: {str(db_error)}")
+        else:
+            raise HTTPException(status_code=400, detail="用户ID不能为空")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Digital human v2 generation failed: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"数字人v2生成失败: {str(e)}")
 
 
 @app.post("/api/audio-generate")
@@ -5568,6 +5723,40 @@ def _match_location_to_db(location_id: str, locations: list, user_id: int) -> tu
     return find_matching_db_location(current_loc)
 
 
+def _match_character_to_db(character_id: str, characters: list) -> tuple[Optional[int], Optional[str], Optional[str]]:
+    """
+    匹配角色到数据库
+
+    Args:
+        character_id: 角色ID (如 "char_001")
+        characters: 大模型返回的characters数组
+
+    Returns:
+        (db_character_id, reference_image, character_name) 元组，未匹配则返回 (None, None, None)
+    """
+    # 构建character字典以便快速查找
+    char_map = {c['id']: c for c in characters}
+
+    # 查找当前character
+    current_char = char_map.get(character_id)
+    if not current_char:
+        return (None, None, None)
+
+    # 检查character_db_id
+    db_id = current_char.get('character_db_id')
+    if db_id is not None:
+        # 验证该角色是否存在于数据库中
+        try:
+            from model.character import CharacterModel
+            db_character = CharacterModel.get_by_id(db_id)
+            if db_character:
+                return (db_id, db_character.reference_image, db_character.name)
+        except Exception as e:
+            logger.warning(f"Failed to get character {db_id}: {e}")
+
+    return (None, None, None)
+
+
 @app.post('/api/parse-script')
 async def parse_script(
     request: Request,
@@ -5672,8 +5861,24 @@ async def parse_script(
         
         # 为每个shot添加db_location_id、db_location_pic和location_name字段
         locations = parsed_data.get('locations', [])
+        characters = parsed_data.get('characters', [])
         shot_groups = parsed_data.get('shot_groups', [])
-        
+
+        # 将LLM生成的角色名称替换为数据库中的实际名称
+        for char in characters:
+            db_id = char.get('character_db_id')
+            if db_id is not None:
+                try:
+                    from model.character import CharacterModel
+                    db_character = CharacterModel.get_by_id(db_id)
+                    if db_character:
+                        # 保存LLM生成的名称作为备用
+                        char['llm_name'] = char.get('name')
+                        # 替换为数据库中的实际名称
+                        char['name'] = db_character.name
+                except Exception as e:
+                    logger.warning(f"Failed to get character name for {db_id}: {e}")
+
         for group in shot_groups:
             shots = group.get('shots', [])
             for shot in shots:
@@ -5687,7 +5892,20 @@ async def parse_script(
                     shot['db_location_id'] = None
                     shot['db_location_pic'] = None
                     shot['location_name'] = None
-        
+
+                # 为每个shot中的characters_present添加db_character信息
+                characters_present = shot.get('characters_present', [])
+                db_character_info = []
+                for char_id in characters_present:
+                    db_char_id, db_char_pic, db_char_name = _match_character_to_db(char_id, characters)
+                    db_character_info.append({
+                        'character_id': char_id,
+                        'db_character_id': db_char_id,
+                        'db_character_pic': db_char_pic,
+                        'db_character_name': db_char_name
+                    })
+                shot['db_character_info'] = db_character_info
+
         return JSONResponse({
             "code": 0,
             "message": "解析成功",
