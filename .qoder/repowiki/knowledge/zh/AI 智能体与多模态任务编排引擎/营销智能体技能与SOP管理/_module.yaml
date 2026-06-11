@@ -1,0 +1,14 @@
+schema_version: 1
+module_path: ai_engine/agent_skills
+title: 营销智能体技能与SOP管理
+scope:
+    - agents/
+source_files: []
+depends_on: []
+related_to:
+    - path: ai_engine/script_writer
+    - path: config_management
+    - path: ai_engine/script_writer/session_infrastructure
+    - path: documentation
+    - path: ai_engine/task_drivers
+    - path: backend_api

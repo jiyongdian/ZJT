@@ -1,0 +1,18 @@
+schema_version: 1
+module_path: ai_engine/task_drivers
+title: AI任务执行与驱动编排引擎
+scope:
+    - task/
+source_files: []
+depends_on: []
+related_to:
+    - path: config_management
+    - path: ai_engine/llm_clients
+    - path: ai_engine/script_writer
+    - path: test_suite
+    - path: jianying_integration
+    - path: frontend_web
+    - path: documentation
+    - path: ai_engine/agent_skills
+    - path: backend_api/business_api
+    - path: ai_engine/script_writer/session_infrastructure

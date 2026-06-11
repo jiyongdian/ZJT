@@ -1,0 +1,15 @@
+schema_version: 1
+module_path: backend_api/business_api/user_management
+title: 用户偏好与签到业务服务
+scope:
+    - api/user.py
+    - services/checkin_service.py
+    - services/edition_auth_service.py
+source_files: []
+depends_on: []
+related_to:
+    - path: backend_api/shared_models
+    - path: backend_api/core_auth
+    - path: config_management
+    - path: frontend_web
+    - path: documentation

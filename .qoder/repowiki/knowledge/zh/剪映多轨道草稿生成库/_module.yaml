@@ -1,0 +1,17 @@
+schema_version: 1
+module_path: jianying_integration
+title: 剪映多轨道草稿生成库
+scope:
+    - jianying/
+source_files: []
+depends_on: []
+related_to:
+    - path: frontend_web
+    - path: ai_engine
+    - path: infrastructure
+    - path: backend_api
+    - path: documentation
+    - path: ai_engine/task_drivers
+    - path: ai_engine/task_drivers/task_execution
+    - path: test_suite
+    - path: config_management

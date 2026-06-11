@@ -1,0 +1,19 @@
+schema_version: 1
+module_path: frontend_web
+title: 可视化工作流编排引擎
+scope:
+    - web/
+source_files: []
+depends_on: []
+related_to:
+    - path: backend_api
+    - path: jianying_integration
+    - path: ai_engine
+    - path: test_suite
+    - path: documentation
+    - path: config_management
+    - path: backend_api/business_api/user_management
+    - path: ai_engine/task_drivers
+    - path: infrastructure
+    - path: ai_engine/script_writer
+    - path: backend_api/core_auth

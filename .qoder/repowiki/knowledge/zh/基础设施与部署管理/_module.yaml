@@ -1,0 +1,19 @@
+schema_version: 1
+module_path: infrastructure
+title: 基础设施与部署管理
+scope:
+    - docker/
+    - alembic/
+    - scripts/
+source_files: []
+depends_on: []
+related_to:
+    - path: backend_api
+    - path: documentation
+    - path: config_management
+    - path: jianying_integration
+    - path: test_suite
+    - path: backend_api/shared_models
+    - path: backend_api/core_auth
+    - path: ai_engine
+    - path: frontend_web
