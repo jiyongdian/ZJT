@@ -170,7 +170,7 @@ Agent 模式下发送消息的完整流程：
 - Agent SSE 文本回复的持久化以任务完成回调中的 `session_storage.save_session()` 为准；前端收到 `done` 后不再调用 `/session/{session_id}/message` 追加同一段 assistant 文本，避免“后端保存 + 前端追加”产生相邻重复历史。
 - Agent 模式下用户消息的持久化以后端增强版为准：前端发送时只在当前页面即时展示用户气泡，不再调用 `/session/{session_id}/message` 保存展示版；任务完成后 PM Agent 保存包含媒体 URL 标签和用户偏好的增强版 user 消息。历史加载时前端会把 `[用户图片偏好]`、`[用户视频偏好]` 折叠为“查看发送偏好”，避免同一用户输入以 UI 展示版和 LLM 增强版各保存一次。
 - `/session/{session_id}/message` 也会跳过与最后一条历史记录 role 和 content 都相同的消息，作为其他追加路径的兜底保护。
-- `call_agent` 成功返回的专家结果只作为工具结果进入 PM 上下文，不在 `_handle_agent_call()` 阶段直接推送前端；由 PM 后续 assistant 回复统一展示，避免“图片内容分析”等专家结果出现两次。
+- `call_agent` 成功返回的专家结果会在 `_handle_agent_call()` 阶段作为 SSE `message` 推送给前端，确保“图片内容分析”等专家输出立即可见；结果仍会进入 PM 上下文和会话历史，若 PM 后续 assistant 回复复述同一段内容，前端会通过内容去重跳过重复气泡。
 
 #### 任务状态轮询
 
@@ -258,6 +258,8 @@ Agent 提交图片/视频生成任务后，前端通过 `setInterval` 轮询 `GE
 #### Agent 视频模式
 
 支持上传参考图（首尾帧/全能参考）、参考视频和参考音频。图片上传到 `/api/upload-agent-image`，通过 `image_urls` 字段传给后端。
+Agent 视频模式下，主图和后续参考图都会等待上传完成并转换为 HTTP URL；发送给后端时按输入区显示顺序去重收集到 `image_urls`，避免 blob 预览地址或未上传完成的参考图遗漏。
+当前页面即时渲染的用户气泡统一通过 `collectCurrentMessageMedia()` 收集媒体，再由 `buildUserMessageContent()` 渲染；图片、视频、音频模式和 Agent 模式不再分别拼接预览 HTML。Agent 发送给后端的 `image_urls`、`video_urls`、`audio_urls` 也复用同一媒体集合，确保即时显示、请求 payload 和后端保存的增强版用户消息尽量一致。
 纯视频参考文件上传到 `/api/upload-agent-video`，只进入 `video_urls` 流程，不会设置图片上传状态，也不会触发图片 HTTP URL 等待。
 
 #### 图片/视频模式

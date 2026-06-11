@@ -31,7 +31,7 @@ def _create_pm_agent(task_manager):
     )
 
 
-def test_handle_agent_call_does_not_push_expert_text_as_frontend_message():
+def test_handle_agent_call_pushes_expert_text_once_for_frontend_visibility():
     task_manager = MagicMock()
     agent = _create_pm_agent(task_manager)
     task = AgentTask(
@@ -65,5 +65,7 @@ def test_handle_agent_call_does_not_push_expert_text_as_frontend_message():
     assert result["success"] is True
     pushed_types = [call.args[1] for call in task_manager.push_message.call_args_list]
     assert "progress" in pushed_types
-    assert "message" not in pushed_types
+    assert pushed_types.count("message") == 1
+    message_calls = [call for call in task_manager.push_message.call_args_list if call.args[1] == "message"]
+    assert message_calls[0].args[2]["content"].startswith("### 图片内容分析")
     assert agent.completed_tasks[0]["result"]["result"].startswith("### 图片内容分析")

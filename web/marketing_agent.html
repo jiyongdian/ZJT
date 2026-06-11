@@ -240,7 +240,7 @@
                         @drop.prevent="handleDrop"
                     >
                         <div class="marketing-input-upload">
-                            <input type="file" ref="fileInputRef" style="display: none;" accept="image/*,video/*,audio/*" @change="handleFileChange">
+                            <input type="file" ref="fileInputRef" style="display: none;" accept=".jpg,.jpeg,.png,.gif,.webp,video/*,audio/*" @change="handleFileChange">
                             <button class="marketing-upload-btn" :title="hasUploadedImage ? $t('replace_image') : $t('upload_reference')" @click="triggerUpload">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M12 5v14M5 12h14"/>
@@ -612,7 +612,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <input type="file" ref="referenceInputRef" style="display: none;" accept="image/*" multiple @change="handleReferenceFileChange">
+                            <input type="file" ref="referenceInputRef" style="display: none;" accept=".jpg,.jpeg,.png,.gif,.webp" multiple @change="handleReferenceFileChange">
                             <!-- @主体按钮（全能参考模式下可用） -->
                             <button class="marketing-bar-btn" :style="showAddSubject ? '' : 'color: #ccc; cursor: not-allowed;'" :title="showAddSubject ? $t('add_subject_tip') : $t('mode_not_supported')" @mousedown.prevent @click="showAddSubject && triggerMention()">
                                 <span :style="showAddSubject ? 'color: #00a8e6; font-weight: 600;' : 'color: #ccc; font-weight: 600;'">@</span>
@@ -897,8 +897,9 @@
             const referenceImageFiles = ref([]);
             const referenceInputRef = ref(null);
 
-            // 统一媒体管理（用于 @ 引用系统）
-            const mediaItems = ref([]);  // { id, displayName, type, fileUrl, thumbnailUrl, originalFile, uploading }
+            // 统一媒体管理（唯一数据源）
+            // { id, displayName, type, previewUrl, serverUrl, fileUrl, thumbnailUrl, originalFile, uploading, uploadFailed, compressing, duration, role }
+            const mediaItems = ref([]);
             const mediaCounters = ref({ image: 0, video: 0, audio: 0 });
 
             // @ 引用下拉框状态
@@ -1227,12 +1228,10 @@
 
             const hasPendingAgentImages = Vue.computed(() => {
                 if (selectedType.value !== 'agent') return false;
-                if (mediaType.value !== 'video') {
-                    const pendingImages = agentImageFiles.value.some(img => img.uploading || img.uploadFailed || !img.serverUrl);
-                    const pendingVideos = agentVideoFiles.value.some(v => v.uploading || v.compressing || v.uploadFailed || !v.serverUrl);
-                    return pendingImages || pendingVideos;
-                }
-                return hasUploadedImage.value && uploadedImageFile.value && !uploadedImageServerUrl.value && !uploadedImageUrl.value?.startsWith('http');
+                // 从 mediaItems 检查是否有待处理的媒体
+                const pendingImages = mediaItems.value.some(m => m.type === 'image' && (m.uploading || m.uploadFailed || !m.serverUrl));
+                const pendingVideos = mediaItems.value.some(m => m.type === 'video' && (m.uploading || m.compressing || m.uploadFailed || !m.serverUrl));
+                return pendingImages || pendingVideos;
             });
 
             // ===== 图片 URL 校验与等待公共函数 =====
@@ -1243,18 +1242,26 @@
             function getCurrentImageServerUrl() {
                 const candidates = [
                     uploadedImageServerUrl.value,
-                    agentImageFiles.value.length > 0 ? agentImageFiles.value[0].serverUrl : null,
+                    uploadedImageUrl.value
+                ];
+                return candidates.find(isHttpUrl) || null;
+            }
+
+            function getUploadedImageServerUrl() {
+                const candidates = [
+                    uploadedImageServerUrl.value,
                     uploadedImageUrl.value
                 ];
                 return candidates.find(isHttpUrl) || null;
             }
 
             /**
-             * 等待 Agent 多图全部上传完成（uploading → false）
+             * 等待图片全部上传完成（uploading → false）
              * 返回 true=全部完成 / false=超时
              */
             async function waitForAgentImagesUploaded(timeoutMs = 10000) {
-                if (agentImageFiles.value.every(img => !img.uploading)) return true;
+                const allImagesReady = () => mediaItems.value.filter(m => m.type === 'image').every(m => !m.uploading);
+                if (allImagesReady()) return true;
                 return new Promise(resolve => {
                     let resolved = false;
                     let unwatch = null;
@@ -1268,10 +1275,7 @@
                         resolve(result);
                     };
 
-                    unwatch = Vue.watch(
-                        () => agentImageFiles.value.every(img => !img.uploading),
-                        (ready) => { if (ready) done(true); }
-                    );
+                    unwatch = Vue.watch(allImagesReady, (ready) => { if (ready) done(true); });
                     timer = setTimeout(() => done(false), timeoutMs);
                 });
             }
@@ -1303,6 +1307,72 @@
                     );
                     timer = setTimeout(() => done(null), timeoutMs);
                 });
+            }
+
+            async function waitForUploadedImageServerUrl(timeoutMs = 10000) {
+                const url = getUploadedImageServerUrl();
+                if (url) return url;
+
+                return new Promise(resolve => {
+                    let resolved = false;
+                    let unwatch = null;
+                    let timer = null;
+
+                    const done = (result) => {
+                        if (resolved) return;
+                        resolved = true;
+                        if (unwatch) unwatch();
+                        if (timer) clearTimeout(timer);
+                        resolve(result);
+                    };
+
+                    unwatch = Vue.watch(
+                        () => getUploadedImageServerUrl(),
+                        (url) => { if (url) done(url); }
+                    );
+                    timer = setTimeout(() => done(null), timeoutMs);
+                });
+            }
+
+            function collectCurrentMessageMedia() {
+                // 直接从 mediaItems 收集（统一数据源）
+                return mediaItems.value
+                    .filter(m => m.serverUrl || m.previewUrl)
+                    .map(m => ({ type: m.type, url: m.serverUrl || m.previewUrl, thumbnailUrl: m.thumbnailUrl }));
+            }
+
+            function getMediaPreviewLabel(type, count) {
+                if (type === 'image') return t('image_label', { num: count });
+                if (type === 'video') return t('video_label', { num: count });
+                if (type === 'audio') return `${t('audio_tag')} ${count}`;
+                return '';
+            }
+
+            function renderMediaPreview(media, counters) {
+                counters[media.type] = (counters[media.type] || 0) + 1;
+                const label = getMediaPreviewLabel(media.type, counters[media.type]);
+                if (media.type === 'image') {
+                    const displayUrl = media.thumbnailUrl || media.url;  // 显示用缩略图
+                    const fullUrl = media.url;  // 点击查看原图
+                    return `${label} <img src="${displayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${fullUrl}'" alt="${label}">`;
+                }
+                if (media.type === 'video') {
+                    return `${label} <video src="${media.url}" style="max-height:160px;border-radius:8px;" controls muted></video>`;
+                }
+                if (media.type === 'audio') {
+                    return `${label} <audio src="${media.url}" controls style="width:100%;max-height:40px;border-radius:8px;"></audio>`;
+                }
+                return '';
+            }
+
+            function buildUserMessageContent(text) {
+                const parts = [text];
+                const counters = {};
+                collectCurrentMessageMedia().forEach(media => {
+                    const preview = renderMediaPreview(media, counters);
+                    if (preview) parts.push(preview);
+                });
+                return parts.join('\n\n');
             }
 
             const filteredMentionItems = Vue.computed(() => {
@@ -1644,57 +1714,43 @@
 
                 // ===== 发送前：统一等待图片/视频上传完成 =====
                 if (selectedType.value === 'agent') {
-                    // 统一等待 agentImageFiles 中的图片上传完成（不区分 mediaType）
-                    const failedImages = agentImageFiles.value.filter(img => img.uploadFailed);
+                    // 检查图片上传状态（从 mediaItems）
+                    const imageItems = mediaItems.value.filter(m => m.type === 'image');
+                    const failedImages = imageItems.filter(m => m.uploadFailed);
                     if (failedImages.length > 0) {
                         showError(window.t('upload_failed_delete'));
                         return;
                     }
-                    if (agentImageFiles.value.some(img => img.uploading)) {
+                    if (imageItems.some(m => m.uploading)) {
                         const ok = await waitForAgentImagesUploaded(10000);
                         if (!ok) {
                             showError(window.t('upload_timeout_retry'));
                             return;
                         }
                     }
-                    const invalidAfterWait = agentImageFiles.value.filter(img => img.uploadFailed || !img.serverUrl);
-                    if (invalidAfterWait.length > 0) {
+                    const invalidImagesAfterWait = mediaItems.value.filter(m => m.type === 'image' && (m.uploadFailed || !m.serverUrl));
+                    if (invalidImagesAfterWait.length > 0) {
                         showError(t('upload_failed_delete'));
                         return;
                     }
-                    // 统一等待 agentVideoFiles 中的视频上传完成（不区分 mediaType）
-                    const failedVideos = agentVideoFiles.value.filter(v => v.uploadFailed);
+                    // 检查视频上传状态（从 mediaItems）
+                    const videoItems = mediaItems.value.filter(m => m.type === 'video');
+                    const failedVideos = videoItems.filter(m => m.uploadFailed);
                     if (failedVideos.length > 0) {
                         showError(t('video_upload_failed_delete'));
                         return;
                     }
-                    if (agentVideoFiles.value.some(v => v.uploading || v.compressing)) {
+                    if (videoItems.some(m => m.uploading || m.compressing)) {
                         const ok = await waitForAgentVideosUploaded(60000);
                         if (!ok) {
                             showError(t('video_processing_timeout'));
                             return;
                         }
                     }
-                    const invalidVideosAfterWait = agentVideoFiles.value.filter(v => v.uploadFailed || !v.serverUrl);
+                    const invalidVideosAfterWait = mediaItems.value.filter(m => m.type === 'video' && (m.uploadFailed || !m.serverUrl));
                     if (invalidVideosAfterWait.length > 0) {
                         showError(t('video_upload_failed_delete'));
                         return;
-                    }
-                    // Agent 视频模式下，如果是旧的单图上传方式，等待服务器 URL 就绪
-                    if (mediaType.value === 'video' && agentImageFiles.value.length === 0) {
-                        const existingServerUrl = getCurrentImageServerUrl();
-                        if (hasUploadedImage.value && uploadedImageFile.value && !existingServerUrl) {
-                            const failedImage = agentImageFiles.value.some(img => img.uploadFailed);
-                            if (failedImage) {
-                                showError(window.t('upload_failed_delete'));
-                                return;
-                            }
-                            const serverUrl = await waitForImageServerUrl(10000);
-                            if (!serverUrl) {
-                                showError(window.t('upload_timeout'));
-                                return;
-                            }
-                        }
                     }
                 }
 
@@ -1713,10 +1769,7 @@
 
                 if (isImageMode) {
                     // 构建用户消息内容（含缩略图）
-                    let userContent = text;
-                    if (hasUploadedImage.value && uploadedImageUrl.value) {
-                        userContent += `\n\n<img src="${uploadedImageUrl.value}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${uploadedImageUrl.value}'" alt="${window.t('reference_image_alt')}">`;
-                    }
+                    const userContent = buildUserMessageContent(text);
                     messages.value.push({
                         role: 'user',
                         content: userContent,
@@ -1735,23 +1788,7 @@
 
                 if (isVideoMode) {
                     // 构建用户消息内容（含缩略图）
-                    let userContent = text;
-                    if (hasUploadedImage.value && uploadedImageUrl.value) {
-                        userContent += `\n\n<img src="${uploadedImageUrl.value}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${uploadedImageUrl.value}'" alt="${window.t('reference_image_alt')}">`;
-                    }
-                    referenceImageFiles.value.forEach(ref => {
-                        if (ref.url) {
-                            userContent += `\n\n<img src="${ref.url}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${ref.url}'" alt="${t('reference_image_alt')}">`;
-                        }
-                    });
-                    // 展示 mediaItems 中的视频和音频引用
-                    mediaItems.value.forEach(m => {
-                        if (m.type === 'video' && m.fileUrl) {
-                            userContent += `\n\n${t('video_tag')} ${m.displayName} <video src="${m.fileUrl}" style="max-height:160px;border-radius:8px;" controls muted></video>`;
-                        } else if (m.type === 'audio' && m.fileUrl) {
-                            userContent += `\n\n${t('audio_tag')} ${m.displayName} <audio src="${m.fileUrl}" controls style="width:100%;max-height:40px;border-radius:8px;"></audio>`;
-                        }
-                    });
+                    const userContent = buildUserMessageContent(text);
                     messages.value.push({
                         role: 'user',
                         content: userContent,
@@ -1776,43 +1813,7 @@
                 }
 
                 // 添加用户消息（含图片缩略图）
-                let userContent = text;
-                const isAgentChatPreview = selectedType.value === 'agent';
-                // 图片显示（独立判断）
-                if (isAgentChatPreview && agentImageFiles.value.length > 0) {
-                    // Agent 模式：从 agentImageFiles 显示多图预览
-                    agentImageFiles.value.forEach((img, i) => {
-                        const displayUrl = img.serverUrl;
-                        userContent += `\n\n${t('image_label', {num: i + 1})} <img src="${displayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${displayUrl}'" alt="${t('image_label', {num: i + 1})}">`;
-                    });
-                } else if (isAgentChatPreview && mediaType.value === 'video' && hasUploadedImage.value) {
-                    // Agent 视频模式参考图预览（单图上传方式），优先使用服务器 URL
-                    const videoDisplayUrl = getCurrentImageServerUrl();
-                    if (videoDisplayUrl) {
-                        userContent += `\n\n<img src="${videoDisplayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${videoDisplayUrl}'" alt="${window.t('reference_image_alt')}">`;
-                    }
-                } else if (hasUploadedImage.value && uploadedImageUrl.value) {
-                    userContent += `\n\n<img src="${uploadedImageUrl.value}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${uploadedImageUrl.value}'" alt="${t('reference_image_alt')}">`;
-                }
-                // 视频显示（独立判断）
-                if (isAgentChatPreview && agentVideoFiles.value.length > 0) {
-                    agentVideoFiles.value.forEach((vid, i) => {
-                        const displayUrl = vid.serverUrl;
-                        userContent += `\n\n${t('video_label', {num: i + 1})} <video src="${displayUrl}" style="max-height:160px;border-radius:8px;" controls muted></video>`;
-                    });
-                }
-                // Agent 模式下，展示 mediaItems 中的视频和音频引用（去重）
-                if (selectedType.value === 'video' || isAgentChatPreview) {
-                    const shownVideoUrls = agentVideoFiles.value.map(v => v.serverUrl).filter(Boolean);
-                    mediaItems.value.forEach(m => {
-                        if (m.type === 'video' && m.fileUrl) {
-                            if (shownVideoUrls.includes(m.fileUrl)) return;
-                            userContent += `\n\n${t('video_tag')} ${m.displayName} <video src="${m.fileUrl}" style="max-height:160px;border-radius:8px;" controls muted></video>`;
-                        } else if (m.type === 'audio' && m.fileUrl) {
-                            userContent += `\n\n${t('audio_tag')} ${m.displayName} <audio src="${m.fileUrl}" controls style="width:100%;max-height:40px;border-radius:8px;"></audio>`;
-                        }
-                    });
-                }
+                const userContent = buildUserMessageContent(text);
                 messages.value.push({
                     role: 'user',
                     content: userContent,
@@ -2288,23 +2289,7 @@
                 } finally {
                     isLoading.value = false;
                     // 清理已发送的媒体文件
-                    agentVideoFiles.value.forEach(vid => {
-                        if (vid.previewUrl && vid.previewUrl.startsWith('blob:')) URL.revokeObjectURL(vid.previewUrl);
-                    });
-                    agentAudioFiles.value.forEach(aud => {
-                        if (aud.previewUrl && aud.previewUrl.startsWith('blob:')) URL.revokeObjectURL(aud.previewUrl);
-                    });
-                    agentImageFiles.value.forEach(img => {
-                        if (img.previewUrl && img.previewUrl.startsWith('blob:')) URL.revokeObjectURL(img.previewUrl);
-                    });
-                    agentVideoFiles.value = [];
-                    agentAudioFiles.value = [];
-                    agentImageFiles.value = [];
-                    mediaItems.value = [];
-                    hasUploadedImage.value = false;
-                    uploadedImageUrl.value = '';
-                    uploadedImageFile.value = null;
-                    uploadedImageServerUrl.value = '';
+                    clearAllMedia();
                     scrollToBottom();
                 }
             }
@@ -2401,33 +2386,36 @@
                 loadingSessionId = sessionId;
                 console.log('[Loading] sendMessageToApi 设置 loading=true, sessionId=', sessionId);
                 const isAgentMode = selectedType.value === 'agent';
+                const currentMessageMedia = isAgentMode ? collectCurrentMessageMedia() : [];
 
                 try {
                     // 收集图片 URL（统一使用 HTTP URL）
                     const imageUrls = [];
-                    if (isAgentMode && agentImageFiles.value.length > 0) {
-                        // Agent 模式：统一从 agentImageFiles 收集图片
+                    const addImageUrl = (url) => {
+                        if (isHttpUrl(url) && !imageUrls.includes(url)) imageUrls.push(url);
+                    };
+                    if (isAgentMode) {
                         const invalidImages = agentImageFiles.value.filter(img => !isHttpUrl(img.serverUrl));
                         if (invalidImages.length > 0) {
                             showError(window.t('upload_not_ready'));
                             isLoading.value = false;
                             return;
                         }
-                        agentImageFiles.value.forEach(img => {
-                            imageUrls.push(img.serverUrl);
+                        currentMessageMedia.forEach(media => {
+                            if (media.type === 'image') addImageUrl(media.url);
                         });
                         console.log('[Agent] 发送图片 URL:', imageUrls.length, '张', imageUrls);
                     } else if (hasUploadedImage.value) {
                         // 非 Agent 模式 或 Agent 模式无 agentImageFiles 时的回退逻辑
                         const serverUrl = uploadedImageServerUrl.value;
                         if (isHttpUrl(serverUrl)) {
-                            imageUrls.push(serverUrl);
+                            addImageUrl(serverUrl);
                         } else if (isHttpUrl(uploadedImageUrl.value)) {
-                            imageUrls.push(uploadedImageUrl.value);
+                            addImageUrl(uploadedImageUrl.value);
                         } else {
                             const serverUrl = await waitForImageServerUrl(10000);
                             if (serverUrl) {
-                                imageUrls.push(serverUrl);
+                                addImageUrl(serverUrl);
                             } else {
                                 showError(window.t('upload_timeout'));
                                 isLoading.value = false;
@@ -2443,27 +2431,26 @@
                     const videoUrls = [];
                     const audioUrls = [];
                     if (isAgentMode) {
-                        // Agent 模式：优先从 agentVideoFiles 收集，再从 mediaItems 补充
-                        if (agentVideoFiles.value.length > 0) {
-                            const invalidVideos = agentVideoFiles.value.filter(v => !isHttpUrl(v.serverUrl));
+                        // 检查视频是否都已上传完成（从 mediaItems）
+                        const videoItems = mediaItems.value.filter(m => m.type === 'video');
+                        if (videoItems.length > 0) {
+                            const invalidVideos = videoItems.filter(v => !isHttpUrl(v.serverUrl));
                             if (invalidVideos.length > 0) {
                                 showError(t('video_not_ready'));
                                 isLoading.value = false;
                                 return;
                             }
-                            agentVideoFiles.value.forEach(v => {
-                                videoUrls.push(v.serverUrl);
-                            });
-                            console.log('[Agent] 发送视频 URL:', videoUrls.length, '个', videoUrls);
                         }
-                        // 从 mediaItems 补充视频和音频 URL（视频子模式下的上传来源）
-                        mediaItems.value.forEach(m => {
-                            if (m.type === 'video' && m.fileUrl && isHttpUrl(m.fileUrl) && !videoUrls.includes(m.fileUrl)) {
-                                videoUrls.push(m.fileUrl);
-                            } else if (m.type === 'audio' && m.fileUrl && isHttpUrl(m.fileUrl)) {
-                                audioUrls.push(m.fileUrl);
+                        currentMessageMedia.forEach(media => {
+                            if (media.type === 'video' && isHttpUrl(media.url) && !videoUrls.includes(media.url)) {
+                                videoUrls.push(media.url);
+                            } else if (media.type === 'audio' && isHttpUrl(media.url) && !audioUrls.includes(media.url)) {
+                                audioUrls.push(media.url);
                             }
                         });
+                        if (videoUrls.length > 0) {
+                            console.log('[Agent] 发送视频 URL:', videoUrls.length, '个', videoUrls);
+                        }
                         if (audioUrls.length > 0) {
                             console.log('[Agent] 发送音频 URL:', audioUrls.length, '个', audioUrls);
                         }
@@ -2536,24 +2523,13 @@
 
                     // 任务创建成功后立即清理媒体预览（不等待流式响应结束）
                     if (isAgentMode) {
-                        agentImageFiles.value.forEach(img => {
-                            if (img.previewUrl && img.previewUrl.startsWith('blob:')) URL.revokeObjectURL(img.previewUrl);
+                        // 清理所有媒体的 blob URL
+                        mediaItems.value.forEach(m => {
+                            if (m.previewUrl && m.previewUrl.startsWith('blob:')) URL.revokeObjectURL(m.previewUrl);
                         });
-                        agentVideoFiles.value.forEach(vid => {
-                            if (vid.previewUrl && vid.previewUrl.startsWith('blob:')) URL.revokeObjectURL(vid.previewUrl);
-                        });
-                        agentAudioFiles.value.forEach(aud => {
-                            if (aud.previewUrl && aud.previewUrl.startsWith('blob:')) URL.revokeObjectURL(aud.previewUrl);
-                        });
-                        agentImageFiles.value = [];
-                        agentVideoFiles.value = [];
-                        agentAudioFiles.value = [];
-                        mediaItems.value = [];
-                        hasUploadedImage.value = false;
-                        uploadedImageUrl.value = '';
-                        uploadedImageFile.value = null;
+                        // 清空媒体列表
+                        clearAllMedia();
                     }
-                    uploadedImageServerUrl.value = '';
 
                     // 2. 接收流式响应
                     await handleStream(taskId);
@@ -2871,16 +2847,7 @@
                 autoResize();
                 scrollToBottom();
                 // 清空所有媒体状态
-                mediaItems.value = [];
-                mediaCounters.value = { image: 0, video: 0, audio: 0 };
-                agentImageFiles.value = [];
-                agentVideoFiles.value = [];
-                agentAudioFiles.value = [];
-                referenceImageFiles.value = [];
-                hasUploadedImage.value = false;
-                uploadedImageUrl.value = '';
-                uploadedImageFile.value = null;
-                uploadedImageServerUrl.value = '';
+                clearAllMedia();
                 if (fileInputRef.value) fileInputRef.value.value = '';
                 if (referenceInputRef.value) referenceInputRef.value.value = '';
                 // 创建后端新会话
@@ -3131,16 +3098,7 @@
 
                 currentSessionId.value = sessionId;
                 // 完全重置所有媒体状态
-                mediaItems.value = [];
-                mediaCounters.value = { image: 0, video: 0, audio: 0 };
-                agentImageFiles.value = [];
-                agentVideoFiles.value = [];
-                agentAudioFiles.value = [];
-                referenceImageFiles.value = [];
-                hasUploadedImage.value = false;
-                uploadedImageUrl.value = '';
-                uploadedImageFile.value = null;
-                uploadedImageServerUrl.value = '';
+                clearAllMedia();
                 // 重置 UI 状态
                 console.log('[Loading] selectSession 重置 loading=false, 清除 loadingSessionId, 新 session=', sessionId);
                 isLoading.value = false;
@@ -3782,7 +3740,14 @@
                     if (imageFiles.length > 0 && remainingImageSlots <= 0) {
                         showError(t('max_images', {max: AGENT_IMAGE_MAX_COUNT}));
                     }
+                    const ALLOWED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
                     const validImageFiles = imageFiles.slice(0, Math.max(0, remainingImageSlots)).filter(file => {
+                        // 格式校验
+                        const ext = '.' + (file.name.split('.').pop() || '').toLowerCase();
+                        if (!ALLOWED_IMAGE_EXTENSIONS.includes(ext)) {
+                            showError(window.t('unsupported_image_format', { name: file.name, formats: 'JPG, PNG, GIF, WebP' }));
+                            return false;
+                        }
                         if (file.size > maxImageSizeMB.value * 1024 * 1024) {
                             showError(window.t('file_too_large', { name: file.name, size: maxImageSizeMB.value }));
                             return false;
@@ -3794,10 +3759,7 @@
                     }
                     validImageFiles.forEach(file => {
                         const previewUrl = URL.createObjectURL(file);
-                        const imgItem = { file, previewUrl, serverUrl: null, uploading: true, uploadFailed: false };
-                        agentImageFiles.value.push(imgItem);
-                        addMediaItem(file, 'image', previewUrl, { uploading: true, agentImageItem: imgItem });
-                        uploadAgentImage(file, imgItem);
+                        queueAgentImageUpload(file, previewUrl);
                     });
                     if (validImageFiles.length > 0) {
                         const last = agentImageFiles.value[agentImageFiles.value.length - 1];
@@ -3980,6 +3942,14 @@
                     return;
                 }
                 // 以下为图片处理逻辑
+                // 前端预检查文件格式
+                const ALLOWED_IMAGE_EXTENSIONS_SINGLE = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+                const imgExt = '.' + (file.name.split('.').pop() || '').toLowerCase();
+                if (!ALLOWED_IMAGE_EXTENSIONS_SINGLE.includes(imgExt)) {
+                    showError(window.t('unsupported_image_format', { name: file.name, formats: 'JPG, PNG, GIF, WebP' }));
+                    if (fileInputRef.value) fileInputRef.value.value = '';
+                    return;
+                }
                 // 前端预检查文件大小
                 if (file.size > maxImageSizeMB.value * 1024 * 1024) {
                     showError(window.t('image_size_limit', { size: maxImageSizeMB.value }));
@@ -4005,11 +3975,15 @@
                         return;
                     }
                     const refUrl = URL.createObjectURL(file);
+                    const imgItem = selectedType.value === 'agent'
+                        ? queueAgentImageUpload(file, refUrl)
+                        : null;
                     referenceImageFiles.value.push({
                         file: file,
-                        url: refUrl
+                        url: refUrl,
+                        agentImageItem: imgItem
                     });
-                    addMediaItem(file, 'image', refUrl);
+                    if (!imgItem) addMediaItem(file, 'image', refUrl);
                     if (fileInputRef.value) fileInputRef.value.value = '';
                     return;
                 }
@@ -4020,12 +3994,16 @@
                         return;
                     }
                     const refUrl = URL.createObjectURL(file);
+                    const imgItem = selectedType.value === 'agent'
+                        ? queueAgentImageUpload(file, refUrl)
+                        : null;
                     referenceImageFiles.value.push({
                         file: file,
-                        url: refUrl
+                        url: refUrl,
+                        agentImageItem: imgItem
                     });
                     // 同步到 mediaItems
-                    addMediaItem(file, 'image', refUrl);
+                    if (!imgItem) addMediaItem(file, 'image', refUrl);
                     return;
                 }
                 // 保存原始 File 对象并生成本地预览 URL
@@ -4064,7 +4042,7 @@
                         if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
                         removeMediaItemByFileUrl(previewUrl);
                         clearSingleImageState(previewUrl);
-                        showError(window.t('upload_failed_retry'));
+                        showError(data.error || window.t('upload_failed_retry'));
                     }
                 }).catch(err => {
                     console.error('图片上传异常:', err);
@@ -4089,10 +4067,11 @@
                     const data = await resp.json();
                     if (data.success && data.url) {
                         imgItem.serverUrl = data.url;
+                        imgItem.thumbnailUrl = data.thumbnail_url || data.url;
                         imgItem.uploading = false;
                         imgItem.uploadFailed = false;
-                        syncMediaItemUploadState(imgItem, data.url, false, false);
-                        console.log('[Agent] 图片上传成功:', data.url);
+                        syncMediaItemUploadState(imgItem, data.url, data.thumbnail_url, false, false);
+                        console.log('[Agent] 图片上传成功:', data.url, '缩略图:', data.thumbnail_url);
                     } else {
                         imgItem.uploading = false;
                         console.error('[Agent] 图片上传失败:', data.error);
@@ -4102,7 +4081,7 @@
                         const mediaItem = mediaItems.value.find(m => m.agentImageItem === imgItem || m.fileUrl === imgItem.previewUrl);
                         if (mediaItem) removeMediaItem(mediaItem.id);
                         updateAgentImageState();
-                        showError(window.t('upload_failed_retry'));
+                        showError(data.error || window.t('upload_failed_retry'));
                     }
                 } catch (err) {
                     imgItem.uploading = false;
@@ -4117,12 +4096,23 @@
                 }
             }
 
-            function syncMediaItemUploadState(imgItem, serverUrl, uploading, uploadFailed) {
-                const item = mediaItems.value.find(m => m.agentImageItem === imgItem || m.fileUrl === imgItem.previewUrl);
+            function queueAgentImageUpload(file, previewUrl) {
+                const imgItem = { file, previewUrl, serverUrl: null, uploading: true, uploadFailed: false };
+                agentImageFiles.value.push(imgItem);
+                addMediaItem(file, 'image', previewUrl, { uploading: true, agentImageItem: imgItem });
+                uploadAgentImage(file, imgItem);
+                return imgItem;
+            }
+
+            function syncMediaItemUploadState(imgItem, serverUrl, thumbnailUrl, uploading, uploadFailed) {
+                const item = mediaItems.value.find(m => m.agentImageItem === imgItem || m.previewUrl === imgItem.previewUrl || m.fileUrl === imgItem.previewUrl);
                 if (!item) return;
                 if (serverUrl) {
-                    item.fileUrl = serverUrl;
-                    item.thumbnailUrl = serverUrl;
+                    item.serverUrl = serverUrl;  // 原图 URL
+                    item.fileUrl = serverUrl;    // 向后兼容
+                    item.thumbnailUrl = thumbnailUrl || serverUrl;  // 缩略图 URL
+                    const ref = referenceImageFiles.value.find(ref => ref.agentImageItem === imgItem || ref.url === imgItem.previewUrl);
+                    if (ref) ref.url = serverUrl;
                 }
                 item.uploading = uploading;
                 item.uploadFailed = uploadFailed;
@@ -4386,11 +4376,12 @@
 
             // 等待所有视频上传完成
             async function waitForAgentVideosUploaded(timeoutMs) {
-                if (agentVideoFiles.value.every(v => !v.uploading && !v.compressing)) return true;
+                const allVideosReady = () => mediaItems.value.filter(m => m.type === 'video').every(v => !v.uploading && !v.compressing);
+                if (allVideosReady()) return true;
                 return new Promise(resolve => {
                     const startTime = Date.now();
                     const check = setInterval(() => {
-                        if (agentVideoFiles.value.every(v => !v.uploading && !v.compressing)) {
+                        if (allVideosReady()) {
                             clearInterval(check);
                             resolve(true);
                         } else if (Date.now() - startTime > timeoutMs) {
@@ -4417,7 +4408,9 @@
             }
 
             function updateAgentImageState() {
-                if (agentImageFiles.value.length > 0) {
+                if (selectedType.value === 'agent' && mediaType.value === 'video') {
+                    hasUploadedImage.value = !!(uploadedImageFile.value || getUploadedImageServerUrl());
+                } else if (agentImageFiles.value.length > 0) {
                     const last = agentImageFiles.value[agentImageFiles.value.length - 1];
                     uploadedImageUrl.value = last.previewUrl;
                     uploadedImageFile.value = last.file;
@@ -4444,16 +4437,7 @@
                 }
                 agentImageFiles.value.splice(index, 1);
                 // 如果还有图片，更新主图状态为最后一张
-                if (agentImageFiles.value.length > 0) {
-                    const last = agentImageFiles.value[agentImageFiles.value.length - 1];
-                    uploadedImageUrl.value = last.previewUrl;
-                    uploadedImageFile.value = last.file;
-                    hasUploadedImage.value = true;
-                } else {
-                    hasUploadedImage.value = false;
-                    uploadedImageUrl.value = '';
-                    uploadedImageFile.value = null;
-                }
+                updateAgentImageState();
             }
 
             function clearUploadedImage() {
@@ -4512,14 +4496,27 @@
                     if (referenceInputRef.value) referenceInputRef.value.value = '';
                     return;
                 }
-                const toAdd = files.slice(0, remaining).filter(f => f.type.startsWith('image/'));
+                const ALLOWED_IMAGE_EXTENSIONS_REF = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+                const toAdd = files.slice(0, remaining).filter(f => {
+                    if (!f.type.startsWith('image/')) return false;
+                    const ext = '.' + (f.name.split('.').pop() || '').toLowerCase();
+                    if (!ALLOWED_IMAGE_EXTENSIONS_REF.includes(ext)) {
+                        showError(window.t('unsupported_image_format', { name: f.name, formats: 'JPG, PNG, GIF, WebP' }));
+                        return false;
+                    }
+                    return true;
+                });
                 toAdd.forEach(file => {
                     const refUrl = URL.createObjectURL(file);
+                    const imgItem = selectedType.value === 'agent'
+                        ? queueAgentImageUpload(file, refUrl)
+                        : null;
                     referenceImageFiles.value.push({
                         file: file,
-                        url: refUrl
+                        url: refUrl,
+                        agentImageItem: imgItem
                     });
-                    addMediaItem(file, 'image', refUrl);
+                    if (!imgItem) addMediaItem(file, 'image', refUrl);
                 });
                 if (referenceInputRef.value) referenceInputRef.value.value = '';
             }
@@ -4562,20 +4559,50 @@
                 const existingCount = mediaItems.value.filter(m => m.type === type).length;
                 const displayName = `${typeLabel}${existingCount + 1}`;
                 const id = `${type[0]}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-                mediaItems.value.push({
+                const item = {
                     id,
                     displayName,
                     type,
-                    fileUrl: previewUrl,
+                    previewUrl: previewUrl,           // blob: URL（本地预览）
+                    serverUrl: options.serverUrl || null,  // HTTP URL（上传后）
+                    fileUrl: previewUrl,              // 向后兼容，优先使用 serverUrl
                     thumbnailUrl: type === 'image' ? previewUrl : (options.thumbnailUrl || null),
                     originalFile: file,
                     uploading: !!options.uploading,
                     uploadFailed: !!options.uploadFailed,
+                    // 视频特有字段
+                    compressing: !!options.compressing,
+                    compressProgress: options.compressProgress || 0,
+                    duration: options.duration || 0,
+                    // 图片角色（首尾帧模式）
+                    role: options.role || null,
+                    // 向后兼容（后续删除）
                     agentImageItem: options.agentImageItem || null,
                     agentVideoItem: options.agentVideoItem || null,
                     agentAudioItem: options.agentAudioItem || null
-                });
+                };
+                mediaItems.value.push(item);
                 mediaItems.value = [...mediaItems.value];
+                return item;
+            }
+
+            // 统一清理所有媒体
+            function clearAllMedia() {
+                // 清理 blob URL
+                mediaItems.value.forEach(m => {
+                    if (m.previewUrl && m.previewUrl.startsWith('blob:')) URL.revokeObjectURL(m.previewUrl);
+                });
+                // 清空所有媒体相关状态
+                mediaItems.value = [];
+                mediaCounters.value = { image: 0, video: 0, audio: 0 };
+                agentImageFiles.value = [];
+                agentVideoFiles.value = [];
+                agentAudioFiles.value = [];
+                referenceImageFiles.value = [];
+                hasUploadedImage.value = false;
+                uploadedImageUrl.value = '';
+                uploadedImageFile.value = null;
+                uploadedImageServerUrl.value = '';
             }
 
             function removeMediaItem(id) {
@@ -4591,16 +4618,7 @@
                         }
                         agentImageFiles.value.splice(idx, 1);
                         // 更新主图状态
-                        if (agentImageFiles.value.length > 0) {
-                            const last = agentImageFiles.value[agentImageFiles.value.length - 1];
-                            uploadedImageUrl.value = last.previewUrl;
-                            uploadedImageFile.value = last.file;
-                            hasUploadedImage.value = true;
-                        } else {
-                            hasUploadedImage.value = false;
-                            uploadedImageUrl.value = '';
-                            uploadedImageFile.value = null;
-                        }
+                        updateAgentImageState();
                     }
                     // 同步清理 referenceImageFiles 中匹配的项（首尾帧/全能参考模式）
                     const refIdx = referenceImageFiles.value.findIndex(ref => ref.url === removed.fileUrl);
@@ -4786,7 +4804,14 @@
                     if (imageFiles.length > 0 && remainingImageSlots <= 0) {
                         showError(window.t('max_images', { max: AGENT_IMAGE_MAX_COUNT }));
                     }
+                    const ALLOWED_IMAGE_EXTENSIONS_DND = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
                     const validImageFiles = imageFiles.slice(0, Math.max(0, remainingImageSlots)).filter(file => {
+                        // 格式校验
+                        const ext = '.' + (file.name.split('.').pop() || '').toLowerCase();
+                        if (!ALLOWED_IMAGE_EXTENSIONS_DND.includes(ext)) {
+                            showError(window.t('unsupported_image_format', { name: file.name, formats: 'JPG, PNG, GIF, WebP' }));
+                            return false;
+                        }
                         if (file.size > maxImageSizeMB.value * 1024 * 1024) {
                             showError(window.t('file_too_large', { name: file.name, size: maxImageSizeMB.value }));
                             return false;
@@ -4798,10 +4823,7 @@
                     }
                     validImageFiles.forEach(file => {
                         const previewUrl = URL.createObjectURL(file);
-                        const imgItem = { file, previewUrl, serverUrl: null, uploading: true, uploadFailed: false };
-                        agentImageFiles.value.push(imgItem);
-                        addMediaItem(file, 'image', previewUrl, { uploading: true, agentImageItem: imgItem });
-                        uploadAgentImage(file, imgItem);
+                        queueAgentImageUpload(file, previewUrl);
                     });
                     if (validImageFiles.length > 0) {
                         const last = agentImageFiles.value[agentImageFiles.value.length - 1];
@@ -4993,11 +5015,15 @@
                         return;
                     }
                     const refUrl = URL.createObjectURL(file);
+                    const imgItem = selectedType.value === 'agent'
+                        ? queueAgentImageUpload(file, refUrl)
+                        : null;
                     referenceImageFiles.value.push({
                         file: file,
-                        url: refUrl
+                        url: refUrl,
+                        agentImageItem: imgItem
                     });
-                    addMediaItem(file, 'image', refUrl);
+                    if (!imgItem) addMediaItem(file, 'image', refUrl);
                     return;
                 }
                 // 视频+全能参考模式下，已有主图时添加为参考图
@@ -5007,11 +5033,15 @@
                         return;
                     }
                     const refUrl = URL.createObjectURL(file);
+                    const imgItem = selectedType.value === 'agent'
+                        ? queueAgentImageUpload(file, refUrl)
+                        : null;
                     referenceImageFiles.value.push({
                         file: file,
-                        url: refUrl
+                        url: refUrl,
+                        agentImageItem: imgItem
                     });
-                    addMediaItem(file, 'image', refUrl);
+                    if (!imgItem) addMediaItem(file, 'image', refUrl);
                     return;
                 }
                 const previewUrl = URL.createObjectURL(file);
@@ -5047,7 +5077,7 @@
                         if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
                         removeMediaItemByFileUrl(previewUrl);
                         clearSingleImageState(previewUrl);
-                        showError(window.t('upload_failed_retry'));
+                        showError(data.error || window.t('upload_failed_retry'));
                     }
                 }).catch(err => {
                     console.error('图片上传异常:', err);

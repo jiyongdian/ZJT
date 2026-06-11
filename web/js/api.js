@@ -281,7 +281,7 @@
      * 统一轮询任务状态
      * @param {Object} opts
      * @param {string} opts.statusUrl - 状态查询URL（不含auth参数）
-     * @param {number} [opts.maxAttempts=60] - 最大轮询次数
+     * @param {number} [opts.maxAttempts=120] - 最大轮询次数
      * @param {number} [opts.interval=10000] - 轮询间隔(ms)
      * @param {function} opts.onSuccess - 成功回调(payload)
      * @param {function} opts.onFailed - 失败回调(payload)
@@ -289,7 +289,7 @@
      * @param {function} [opts.onPending] - 进行中回调(payload)，返回true可停止轮询
      */
     function pollTaskStatus(opts) {
-      var maxAttempts = opts.maxAttempts || 60;
+      var maxAttempts = opts.maxAttempts || 120;
       var interval = opts.interval || 10000;
       var attempts = 0;
 
