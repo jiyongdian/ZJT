@@ -5016,6 +5016,30 @@ async def poll_workflow_node_status(
                 characters = char_result.get('data', [])
             except Exception as e:
                 logger.error(f"Failed to query characters for world {world_id}: {e}")
+
+            # 自愈：对数据库中缺少 reference_images 的角色，从 JSON 文件补齐并回写数据库
+            try:
+                from script_writer_core.mcp_tool import get_file_manager
+                file_manager = get_file_manager()
+                for char_data in characters:
+                    ref_imgs = char_data.get('reference_images')
+                    db_count = len(ref_imgs) if isinstance(ref_imgs, list) else 0
+                    if db_count <= 1:
+                        json_data = file_manager.get_character_json(
+                            char_data['name'], str(user_id), str(world_id)
+                        )
+                        if json_data and json_data.get('reference_images'):
+                            file_ref_images = json_data['reference_images']
+                            if isinstance(file_ref_images, list) and len(file_ref_images) > db_count:
+                                char_data['reference_images'] = file_ref_images
+                                # 回写数据库，后续轮询不再需要读文件
+                                try:
+                                    CharacterModel.update(char_data['id'], reference_images=file_ref_images)
+                                    logger.info(f"自愈同步角色 {char_data['name']} 的 reference_images 到数据库 ({db_count}->{len(file_ref_images)})")
+                                except Exception as db_err:
+                                    logger.warning(f"回写角色 {char_data['name']} reference_images 到数据库失败: {db_err}")
+            except Exception as sync_err:
+                logger.warning(f"同步角色 reference_images 失败(非阻塞): {sync_err}")
             
             try:
                 props_result = PropsModel.list_by_world(world_id=world_id, page=1, page_size=200)
