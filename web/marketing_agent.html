@@ -4030,6 +4030,7 @@
                         uploadedImageServerUrl.value = data.url;
                         const item = mediaItems.value.find(m => m.fileUrl === previewUrl);
                         if (item) {
+                            item.serverUrl = data.url;
                             item.fileUrl = data.url;
                             item.thumbnailUrl = data.url;
                             item.uploading = false;
@@ -4329,6 +4330,7 @@
                         // 更新 mediaItem 状态
                         const mediaItem = mediaItems.value.find(m => m.agentVideoItem === vidItem || m.fileUrl === vidItem.previewUrl);
                         if (mediaItem) {
+                            mediaItem.serverUrl = data.url;
                             mediaItem.fileUrl = data.url;
                             mediaItem.uploading = false;
                             mediaItem.uploadFailed = false;
@@ -5065,6 +5067,7 @@
                         uploadedImageServerUrl.value = data.url;
                         const item = mediaItems.value.find(m => m.fileUrl === previewUrl);
                         if (item) {
+                            item.serverUrl = data.url;
                             item.fileUrl = data.url;
                             item.thumbnailUrl = data.url;
                             item.uploading = false;
