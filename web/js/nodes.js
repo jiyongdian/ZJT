@@ -9151,6 +9151,10 @@
       }
     }
 
+    // 角色图片选择下拉的全局追踪（跨节点共享，确保同时只有一个实例）
+    let _activeCharImgDropdown = null;
+    let _activeCharImgCloseHandler = null;
+
     // 分镜图节点
     function createShotFrameNode(opts){
       const id = state.nextNodeId++;
@@ -10115,10 +10119,32 @@
 
       // 显示角色参考图选择下拉
       function showCharImageSelector(wc, charName, anchorEl) {
+        // 清理上一次的 char-img-dropdown（挂在 document.body 上，closeRefDropdowns 无法清理）
+        if(_activeCharImgDropdown) {
+          _activeCharImgDropdown.remove();
+          _activeCharImgDropdown = null;
+        }
+        if(_activeCharImgCloseHandler) {
+          document.removeEventListener('click', _activeCharImgCloseHandler, true);
+          _activeCharImgCloseHandler = null;
+        }
         closeRefDropdowns();
+
+        console.log('[charImgSelector] charName:', charName, 'reference_image:', wc.reference_image, 'reference_images:', wc.reference_images);
+
         const dropdown = document.createElement('div');
         dropdown.className = 'shot-ref-dropdown char-img-dropdown';
         dropdown.style.cssText = 'min-width: 200px; max-height: 280px; overflow-y: auto; position: fixed; z-index: 10000;';
+
+        // 关闭并清理 dropdown 的辅助函数
+        function closeCharImgDropdown() {
+          dropdown.remove();
+          if(_activeCharImgCloseHandler) {
+            document.removeEventListener('click', _activeCharImgCloseHandler, true);
+          }
+          _activeCharImgDropdown = null;
+          _activeCharImgCloseHandler = null;
+        }
 
         // 构建图片选项列表：主图 + reference_images
         const options = [];
@@ -10132,6 +10158,8 @@
             }
           });
         }
+
+        console.log('[charImgSelector] options:', options.length, options.map(o => o.label));
 
         if(options.length === 0) {
           const noImg = document.createElement('div');
@@ -10155,8 +10183,8 @@
               if(!node.data.selectedCharRefImages) node.data.selectedCharRefImages = {};
               delete node.data.selectedCharRefImages[charName];
               if(node.data.selectedCharRefImageLabels) delete node.data.selectedCharRefImageLabels[charName];
+              closeCharImgDropdown();
               renderCharImages();
-              closeRefDropdowns();
               safeAutoSave()
             });
             dropdown.appendChild(mainItem);
@@ -10175,8 +10203,8 @@
               if(!node.data.selectedCharRefImageLabels) node.data.selectedCharRefImageLabels = {};
               node.data.selectedCharRefImages[charName] = opt.url;
               node.data.selectedCharRefImageLabels[charName] = opt.label;
+              closeCharImgDropdown();
               renderCharImages();
-              closeRefDropdowns();
               safeAutoSave()
             });
             dropdown.appendChild(item);
@@ -10191,12 +10219,14 @@
           dropdown.style.top = (rect.bottom + 4) + 'px';
         }
 
+        // 注册全局引用和关闭监听
+        _activeCharImgDropdown = dropdown;
         const closeHandler = (e) => {
           if(!dropdown.contains(e.target)) {
-            dropdown.remove();
-            document.removeEventListener('click', closeHandler, true);
+            closeCharImgDropdown();
           }
         };
+        _activeCharImgCloseHandler = closeHandler;
         setTimeout(() => document.addEventListener('click', closeHandler, true), 0);
       }
 

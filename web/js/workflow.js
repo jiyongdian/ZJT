@@ -293,7 +293,7 @@
     // 轮询视频状态
     function pollVideoStatus(projectIds, onProgress, onComplete, onError, onTaskUpdate){
       let pollCount = 0;
-      const maxPolls = 60; // 最多轮询60次（10分钟）
+      const maxPolls = 120; // 最多轮询120次（20分钟）
       
       const poll = async () => {
         pollCount++;
@@ -314,7 +314,7 @@
             if(pollCount < maxPolls){
               setTimeout(poll, 10000);
             } else {
-              onError('生成超时，请稍后查看结果');
+              onError('等待超时，但视频仍在生成中。你可以通过刷新页面后查看是否生成成功。');
             }
           }
         } catch(e){

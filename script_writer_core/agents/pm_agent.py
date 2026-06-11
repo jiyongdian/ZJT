@@ -17,6 +17,12 @@ import json
 logger = logging.getLogger(__name__)
 
 
+def _get_session_storage():
+    """延迟导入 session_storage 以避免循环导入"""
+    from api.script_writer import session_storage
+    return session_storage
+
+
 class PMAgent(BaseAgent, AskUserMixin):
     """项目经理智能体 - 负责任务拆分、派发、验证、协调"""
     
@@ -600,10 +606,20 @@ class PMAgent(BaseAgent, AskUserMixin):
                 "timestamp": datetime.now().isoformat()
             })
 
-            # Expert result is returned to the PM as a tool result and saved in
-            # conversation history. Do not push it directly to the frontend here,
-            # otherwise the PM's following assistant response can display the
-            # same content a second time.
+            # Expert output must be visible immediately. The frontend keeps a
+            # content-based dedupe guard, so a later PM response with identical
+            # text will not render as a second bubble.
+            expert_response = result.get('result', '')
+            if expert_response:
+                self.task_manager.push_message(task.task_id, 'message', {
+                    'role': 'assistant',
+                    'content': expert_response
+                })
+            else:
+                self.task_manager.push_message(task.task_id, 'message', {
+                    'role': 'assistant',
+                    'content': f"专家 {skill_name} 执行完成"
+                })
         else:
             self.total_failures += 1
             self.consecutive_failures += 1
@@ -650,6 +666,11 @@ class PMAgent(BaseAgent, AskUserMixin):
                     conversation_history=history,
                     update_tokens=False
                 )
+                # 使缓存失效，确保下次加载时从数据库读取最新数据
+                try:
+                    _get_session_storage().invalidate_cache(session_id)
+                except Exception as cache_err:
+                    logger.warning(f"{self.agent_id}: 清除会话缓存失败: {cache_err}")
         except Exception as e:
             logger.warning(f"{self.agent_id}: 保存 pending task 标记到对话历史失败: {e}")
 

@@ -327,6 +327,17 @@ def _handle_task_success(task: Any, comfyui_task_data: Dict):
                         update_success = result.get('success', False)
                         if update_success:
                             logger.info(f"已追加角色 {char_name} 的变体图 [{variant_label}]: {local_image_url}")
+                            # 同步更新数据库中的 reference_images，确保前端通过 API 能获取到变体图
+                            try:
+                                from model.character import CharacterModel
+                                db_char = CharacterModel.get_by_name(int(task.world_id), char_name)
+                                if db_char:
+                                    CharacterModel.update(db_char.id, reference_images=existing_variants)
+                                    logger.info(f"已同步角色 {char_name} 的变体图到数据库 (id={db_char.id})")
+                                else:
+                                    logger.warning(f"数据库中未找到角色 {char_name} (world_id={task.world_id})，跳过同步")
+                            except Exception as db_err:
+                                logger.warning(f"同步角色 {char_name} 变体图到数据库失败(非阻塞): {db_err}")
                     else:
                         logger.warning(f"角色 {char_name} 不存在，无法更新变体图")
         except Exception as e:

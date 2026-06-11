@@ -398,7 +398,7 @@
             onTimeout: function() {
               node.data.status = 'TIMEOUT';
               statusEl.style.color = '#dc2626';
-              statusEl.textContent = _t('dh_generate_timeout', '生成超时');
+              statusEl.textContent = _t('dh_generate_timeout_hint', '等待超时，但视频仍在生成中。你可以通过刷新页面后查看是否生成成功。');
               setBtnReady(generateBtn, _t('dh_generate_btn', '生成视频'));
             }
           });

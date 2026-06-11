@@ -113,7 +113,7 @@ class HappyHorseDashscopeV1Driver(BaseVideoDriver):
         支持: resolution (720P/1080P), watermark (true/false), seed (int), prompt_extend (bool)
         """
         params = {
-            "resolution": "1080P",  # 默认值
+            "resolution": "720P",  # 默认值
             "watermark": False,      # 默认添加水印
             "prompt_extend": True,  # 默认开启 prompt 扩展
         }

@@ -1170,7 +1170,7 @@ async def clean_pending_tasks(request: Request, session_id: str):
 
         history = session_entity.conversation_history or []
         cleaned = [msg for msg in history
-                   if not (msg.get('content', '').startswith('__PENDING_TASK__'))]
+                   if not (isinstance(msg.get('content'), str) and msg['content'].startswith('__PENDING_TASK__'))]
         removed_count = len(history) - len(cleaned)
 
         if removed_count > 0:
@@ -3665,11 +3665,32 @@ async def upload_agent_image(
         server_host = get_config()["server"]["host"]
         url = f"{server_host.rstrip('/')}/{upload_dir.replace(os.sep, '/')}/{filename}"
 
+        # 生成缩略图
+        thumbnail_url = None
+        try:
+            thumb_dir = os.path.join(full_upload_dir, 'thumb')
+            os.makedirs(thumb_dir, exist_ok=True)
+            thumb_filename = f"thumb_{filename.rsplit('.', 1)[0]}.jpg"
+            thumb_path = os.path.join(thumb_dir, thumb_filename)
+
+            from PIL import Image
+            with Image.open(file_path) as img:
+                img.thumbnail((200, 200), Image.LANCZOS)
+                if img.mode in ("RGBA", "P"):
+                    img = img.convert("RGB")
+                img.save(thumb_path, "JPEG", quality=75)
+
+            thumbnail_url = f"{server_host.rstrip('/')}/{upload_dir.replace(os.sep, '/')}/thumb/{thumb_filename}"
+            logger.info(f'Agent 图片缩略图生成成功: {thumbnail_url}')
+        except Exception as thumb_err:
+            logger.warning(f'生成缩略图失败，使用原图: {thumb_err}')
+
         logger.info(f'Agent 图片上传成功: {url}')
 
         return JSONResponse({
             'success': True,
-            'url': url
+            'url': url,
+            'thumbnail_url': thumbnail_url or url
         })
 
     except Exception as e:
