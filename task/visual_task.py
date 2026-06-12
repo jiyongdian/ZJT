@@ -2,6 +2,7 @@
 Video generation task processing
 """
 import logging
+import json
 from datetime import datetime, timedelta
 import uuid
 from perseids_server.client import make_perseids_request
@@ -69,6 +70,22 @@ def _get_task_expire_days():
 def _is_expire_check_enabled():
     """动态获取是否启用过期检查"""
     return get_dynamic_config_value("task_queue", "enable_expire_check", default=True)
+
+
+def _normalize_failure_reason(reason):
+    """将外部驱动返回的失败原因转换成可写入数据库的字符串。"""
+    if reason is None:
+        return "任务失败"
+    if isinstance(reason, str):
+        return reason
+    if isinstance(reason, dict):
+        message = reason.get("message")
+        if isinstance(message, str) and message:
+            return message
+    try:
+        return json.dumps(reason, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return str(reason)
 
 if _is_test_mode_enabled():
     logger.info("=" * 60)
@@ -712,6 +729,8 @@ def _handle_task_failure(task_id, ai_tool_type, reason, user_id, project_id=None
         bool: True if handled successfully
     """
     # 尝试企业版重试处理器（before_finish 切换备用实现方）
+    reason = _normalize_failure_reason(reason)
+
     if _enterprise_failure_handler:
         try:
             result = _enterprise_failure_handler(task_id, ai_tool_type, reason, user_id, project_id=project_id)
