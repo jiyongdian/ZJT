@@ -803,6 +803,7 @@ class TaskCreateRequest(BaseModel):
     image_urls: Optional[List[str]] = None
     video_urls: Optional[List[str]] = None
     audio_urls: Optional[List[str]] = None
+    thumbnail_urls: Optional[List[str]] = None
     image_preferences: Optional[Dict[str, Any]] = None
     video_preferences: Optional[Dict[str, Any]] = None
     language: Optional[str] = None
@@ -2527,6 +2528,7 @@ async def create_agent_task(request: Request, session_id: str, task_request: Tas
             image_urls=task_request.image_urls,
             video_urls=task_request.video_urls,
             audio_urls=task_request.audio_urls,
+            thumbnail_urls=task_request.thumbnail_urls,
             language=task_language
         )
         
@@ -3785,12 +3787,15 @@ async def upload_agent_video(
             url = f"{server_host.rstrip('/')}/{upload_dir.replace(os.sep, '/')}/{filename}"
         else:
             # 生产环境：上传到七牛云 CDN，返回 CDN URL
+            # CDN key 包含 session_id，便于按会话清理
             try:
                 storage = get_file_storage(get_config())
-                storage_key = storage.generate_key_with_datetime(f"marketing_video_{filename}")
+                storage_key = f"marketing/{session_id}/video/{filename}"
                 upload_result = await storage.upload_file(storage_key, file_path)
                 if upload_result.success:
-                    url = storage.get_download_url(upload_result.key)
+                    # 签名 URL 有效期 30 天，与会话生命周期一致
+                    cdn_url_expires = 30 * 24 * 3600  # 30天
+                    url = storage.get_download_url(upload_result.key, expires=cdn_url_expires)
                 else:
                     # CDN 上传失败，降级返回本地 URL
                     logger.warning(f'视频 CDN 上传失败({upload_result.error})，降级返回本地 URL')

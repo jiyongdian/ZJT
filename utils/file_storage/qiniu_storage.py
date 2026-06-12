@@ -262,6 +262,51 @@ class QiniuFileStorage(BaseFileStorage):
         key = key.lstrip("/")
         return f"http://{domain}/{key}"
 
+    def _sync_list_by_prefix(self, prefix: str, limit: int = 1000) -> list:
+        """同步列出指定前缀下的所有文件 key"""
+        try:
+            bucket_manager = qiniu.BucketManager(self._auth)
+            keys = []
+            marker = None
+            while True:
+                ret, eof, info = bucket_manager.list(
+                    self.bucket_name, prefix=prefix, marker=marker, limit=min(limit - len(keys), 1000)
+                )
+                if ret is None:
+                    logger.error(f"[七牛云] 列出文件失败: prefix={prefix}, info={info}")
+                    break
+                items = ret.get('items', [])
+                for item in items:
+                    keys.append(item['key'])
+                if len(keys) >= limit or eof:
+                    break
+                marker = ret.get('marker')
+                if not marker:
+                    break
+            return keys
+        except Exception as e:
+            logger.error(f"[七牛云] 列出文件异常: prefix={prefix}, error={e}")
+            return []
+
+    async def list_by_prefix(self, prefix: str, limit: int = 1000) -> list:
+        """
+        异步列出指定前缀下的所有文件 key
+
+        Args:
+            prefix: key 前缀（如 "marketing/session_123/"）
+            limit: 最大返回数量
+
+        Returns:
+            list: 文件 key 列表
+        """
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            self._executor,
+            self._sync_list_by_prefix,
+            prefix,
+            limit
+        )
+
     def _sync_delete(self, key: str) -> bool:
         """同步删除文件"""
         try:

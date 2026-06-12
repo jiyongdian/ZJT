@@ -157,6 +157,7 @@ class AgentTask:
     image_urls: Optional[List[str]] = None
     video_urls: Optional[List[str]] = None
     audio_urls: Optional[List[str]] = None
+    thumbnail_urls: Optional[List[str]] = None
     language: str = "zh-CN"
     status: TaskStatus = TaskStatus.PENDING
     created_at: datetime = field(default_factory=datetime.now)
@@ -218,6 +219,7 @@ class TaskManager:
         image_urls: Optional[List[str]] = None,
         video_urls: Optional[List[str]] = None,
         audio_urls: Optional[List[str]] = None,
+        thumbnail_urls: Optional[List[str]] = None,
         language: str = "zh-CN",
     ) -> str:
         """创建新任务，返回 task_id"""
@@ -254,6 +256,7 @@ class TaskManager:
             image_urls=image_urls,
             video_urls=video_urls,
             audio_urls=audio_urls,
+            thumbnail_urls=thumbnail_urls,
             language=language,
         )
         logger.info(f"AgentTask created, task.language='{task.language}'")

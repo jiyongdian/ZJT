@@ -192,7 +192,10 @@ class PMAgent(BaseAgent, AskUserMixin):
             combined_parts = []
             if task.image_urls:
                 for i, image_url in enumerate(task.image_urls):
-                    combined_parts.append(f"[图片{i + 1}]（URL: {image_url}）")
+                    thumb = ""
+                    if task.thumbnail_urls and i < len(task.thumbnail_urls) and task.thumbnail_urls[i]:
+                        thumb = f" thumb: {task.thumbnail_urls[i]}"
+                    combined_parts.append(f"[图片{i + 1}]（URL: {image_url}{thumb}）")
             if task.video_urls:
                 for i, video_url in enumerate(task.video_urls):
                     combined_parts.append(f"[视频{i + 1}]（URL: {video_url}）")
