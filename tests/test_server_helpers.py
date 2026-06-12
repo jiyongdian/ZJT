@@ -2,34 +2,11 @@
 server.py 辅助函数单元测试
 
 测试 server.py 中的纯逻辑辅助函数。
-所有外部依赖均使用 mock。
 """
-import os
-import sys
+import hashlib
+import re
 import unittest
 from unittest.mock import patch, MagicMock
-
-# Mock 外部依赖（import 前置）
-_saved_modules = {
-    'config.config_util': sys.modules.get('config.config_util'),
-    'config.constant': sys.modules.get('config.constant'),
-    'config.unified_config': sys.modules.get('config.unified_config'),
-    'model': sys.modules.get('model'),
-    'utils.cdn_util': sys.modules.get('utils.cdn_util'),
-    'utils.project_path': sys.modules.get('utils.project_path'),
-}
-
-sys.modules['config.config_util'] = MagicMock()
-sys.modules['config.constant'] = MagicMock()
-sys.modules['config.unified_config'] = MagicMock()
-sys.modules['model'] = MagicMock()
-sys.modules['utils.cdn_util'] = MagicMock()
-sys.modules['utils.project_path'] = MagicMock()
-
-# 由于 server.py 在导入时会执行很多初始化代码，
-# 我们只测试可以从模块中提取的纯函数
-
-import importlib
 
 
 class TestCheckResourcePermission(unittest.TestCase):
