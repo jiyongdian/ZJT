@@ -1484,23 +1484,30 @@
                     return `__LINK_PH_${linkPlaceholders.length - 1}__`;
                 });
 
-                // 步骤3：将裸图片 URL 转换为 Markdown 图片格式
+                // 步骤3：将裸视频 URL 转换为 <video> 标签（路径含视频扩展名，可带查询参数）
+                const videoUrlPattern = /(https?:\/\/[^\s<>"'\]]+?\.(?:mp4|webm|mov|avi|mkv))(\?[^\s<>"'\]]*)?(?=[\s\n\]|,)]|$)/gi;
+                text = text.replace(videoUrlPattern, (match, base, query) => {
+                    const fullUrl = query ? base + query : base;
+                    return `\n<video src="${fullUrl}" style="max-height:160px;border-radius:8px;" controls preload="metadata"></video>\n`;
+                });
+
+                // 步骤4：将裸图片 URL 转换为 Markdown 图片格式
                 // 图片扩展名结尾，后面不允许紧跟非空白字符（防止吞入中文）
                 const imageUrlPattern = /(https?:\/\/[^\s<>"'\]]+?\.(?:png|jpg|jpeg|gif|webp|svg|bmp|ico))(?=[\s\n\]|,)]|$)/gi;
                 text = text.replace(imageUrlPattern, (url) => {
                     return `\n![${window.t('image_alt')}](${url})\n`;
                 });
 
-                // 步骤4：处理普通 URL 边界 —— URL 后紧跟中文等非空白字符时插入空格
+                // 步骤5：处理普通 URL 边界 —— URL 后紧跟中文等非空白字符时插入空格
                 // 防止 marked.js 将中文字符错误包含进 URL
                 text = text.replace(/(https?:\/\/[^\s<>"'\]]+)([^\x00-\x7F\s])/g, '$1 $2');
 
-                // 步骤5：恢复链接占位符
+                // 步骤6：恢复链接占位符
                 text = text.replace(/__LINK_PH_(\d+)__/g, (match, idx) => {
                     return linkPlaceholders[parseInt(idx)];
                 });
 
-                // 步骤6：恢复图片占位符
+                // 步骤7：恢复图片占位符
                 text = text.replace(/__IMG_PH_(\d+)__/g, (match, idx) => {
                     return imgPlaceholders[parseInt(idx)];
                 });
@@ -2391,6 +2398,7 @@
                 try {
                     // 收集图片 URL（统一使用 HTTP URL）
                     const imageUrls = [];
+                    const thumbnailUrls = [];
                     const addImageUrl = (url) => {
                         if (isHttpUrl(url) && !imageUrls.includes(url)) imageUrls.push(url);
                     };
@@ -2402,7 +2410,10 @@
                             return;
                         }
                         currentMessageMedia.forEach(media => {
-                            if (media.type === 'image') addImageUrl(media.url);
+                            if (media.type === 'image') {
+                                addImageUrl(media.url);
+                                thumbnailUrls.push(media.thumbnailUrl || media.url);
+                            }
                         });
                         console.log('[Agent] 发送图片 URL:', imageUrls.length, '张', imageUrls);
                     } else if (hasUploadedImage.value) {
@@ -2484,6 +2495,7 @@
                             image_urls: validImageUrls.length > 0 ? validImageUrls : undefined,
                             video_urls: validVideoUrls.length > 0 ? validVideoUrls : undefined,
                             audio_urls: validAudioUrls.length > 0 ? validAudioUrls : undefined,
+                            thumbnail_urls: thumbnailUrls.length > 0 ? thumbnailUrls : undefined,
                             model: selectedLLMModel.value ? selectedLLMModel.value.name : '',
                             model_id: selectedLLMModel.value ? selectedLLMModel.value.id : undefined,
                             vendor_id: selectedLLMModel.value ? (selectedLLMModel.value.vendor_id || 1) : 1,
@@ -2926,24 +2938,47 @@
                     let finalContent = textParts.join('\n') || '';
                     // 提取 [图片N]（URL:http://...）中的原始 HTTP URL，建立 base64 → HTTP URL 映射
                     const originalUrlMap = {};
+                    const thumbnailMap = {};
                     let match;
-                    const urlTagRegex = /\[图片(\d+)]（URL:\s*([^\s）]+)\s*）/g;
+                    const urlTagRegex = /\[图片(\d+)]（URL:\s*([^\s）]+)(?:\s+thumb:\s*([^\s）]+))?\s*）/g;
                     while ((match = urlTagRegex.exec(finalContent)) !== null) {
                         const idx = parseInt(match[1]) - 1;
                         if (idx >= 0 && idx < images.length && images[idx].startsWith('data:')) {
                             originalUrlMap[images[idx]] = match[2];
+                        }
+                        if (match[3]) {
+                            thumbnailMap[idx] = match[3];
                         }
                     }
                     // 清除给 LLM 用的图片引用元数据标签（图片已通过 <img> 标签展示，避免重复）
                     finalContent = finalContent.replace(/\[图片\d+]（URL:[\s\S]*?）\n?/g, '');
                     // 清除文本中残留的 HTML img 标签（双保险）
                     finalContent = finalContent.replace(/<img\s[^>]*>/gi, '');
+
+                    // 提取视频标签 → <video>
+                    const vidTagRegex = /\[视频\d+]（URL:\s*([^\s）]+)\s*）/g;
+                    const vidMatches = [...finalContent.matchAll(vidTagRegex)];
+                    finalContent = finalContent.replace(/\[视频\d+]（URL:[\s\S]*?）\n?/g, '');
+                    for (const vm of vidMatches) {
+                        finalContent += `\n\n<video src="${vm[1]}" style="max-height:160px;border-radius:8px;" controls preload="metadata"></video>`;
+                    }
+
+                    // 提取音频标签 → <audio>
+                    const audTagRegex = /\[音频\d+]（URL:\s*([^\s）]+)\s*）/g;
+                    const audMatches = [...finalContent.matchAll(audTagRegex)];
+                    finalContent = finalContent.replace(/\[音频\d+]（URL:[\s\S]*?）\n?/g, '');
+                    for (const am of audMatches) {
+                        finalContent += `\n\n<audio src="${am[1]}" controls preload="metadata" style="width:100%;max-height:40px;border-radius:8px;"></audio>`;
+                    }
+
                     // 清除多余空行
                     finalContent = finalContent.replace(/\n{3,}/g, '\n\n').trim();
-                    for (const imgUrl of images) {
+                    for (let imgIdx = 0; imgIdx < images.length; imgIdx++) {
+                        const imgUrl = images[imgIdx];
                         // 优先使用原始 HTTP URL，避免传递 base64 data URL
-                        const displayUrl = originalUrlMap[imgUrl] || imgUrl;
-                        finalContent += `\n\n<img src="${displayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${displayUrl}'" alt="${window.t('reference_image_alt')}">`;
+                        const fullUrl = originalUrlMap[imgUrl] || imgUrl;
+                        const displayUrl = thumbnailMap[imgIdx] || fullUrl;
+                        finalContent += `\n\n<img src="${displayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${fullUrl}'" alt="${window.t('reference_image_alt')}">`;
                     }
                     if (h.role === 'user' && window.AgentMessageDedupe?.formatAgentUserMessageForDisplay) {
                         finalContent = window.AgentMessageDedupe.formatAgentUserMessageForDisplay(finalContent);
@@ -2954,20 +2989,45 @@
                         timestamp: h.timestamp
                     };
                 }
-                // 处理纯文本消息中的图片标签（[图片N]（URL: http://...）格式）
+                // 处理纯文本消息中的媒体标签（[图片N]、[视频N]、[音频N]（URL: http://...）格式）
                 const textContent = typeof h.content === 'string' ? h.content : (h.content?.text || JSON.stringify(h.content));
-                const imageUrlRegex = /\[图片\d+]（URL:\s*([^\s）]+)\s*）/g;
                 let renderedContent = textContent;
+
+                // 图片标签 → <img>（支持可选的 thumb 缩略图字段）
+                const imageUrlRegex = /\[图片\d+]（URL:\s*([^\s）]+)(?:\s+thumb:\s*([^\s）]+))?\s*）/g;
                 const imageUrlMatches = [...textContent.matchAll(imageUrlRegex)];
                 if (imageUrlMatches.length > 0) {
-                    // 移除图片标签文本，替换为 <img> 标签
                     renderedContent = renderedContent.replace(/\[图片\d+]（URL:[\s\S]*?）\n?/g, '');
                     for (const m of imageUrlMatches) {
-                        const displayUrl = m[1];
-                        renderedContent += `\n\n<img src="${displayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${displayUrl}'" alt="${window.t('reference_image_alt')}">`;
+                        const fullUrl = m[1];
+                        const thumbUrl = m[2] || fullUrl;
+                        renderedContent += `\n\n<img src="${thumbUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${fullUrl}'" alt="${window.t('reference_image_alt')}">`;
                     }
-                    renderedContent = renderedContent.replace(/\n{3,}/g, '\n\n').trim();
                 }
+
+                // 视频标签 → <video>（默认不自动播放，显示控件和封面帧）
+                const videoUrlRegex = /\[视频\d+]（URL:\s*([^\s）]+)\s*）/g;
+                const videoUrlMatches = [...textContent.matchAll(videoUrlRegex)];
+                if (videoUrlMatches.length > 0) {
+                    renderedContent = renderedContent.replace(/\[视频\d+]（URL:[\s\S]*?）\n?/g, '');
+                    for (const m of videoUrlMatches) {
+                        const videoUrl = m[1];
+                        renderedContent += `\n\n<video src="${videoUrl}" style="max-height:160px;border-radius:8px;" controls preload="metadata"></video>`;
+                    }
+                }
+
+                // 音频标签 → <audio>
+                const audioUrlRegex = /\[音频\d+]（URL:\s*([^\s）]+)\s*）/g;
+                const audioUrlMatches = [...textContent.matchAll(audioUrlRegex)];
+                if (audioUrlMatches.length > 0) {
+                    renderedContent = renderedContent.replace(/\[音频\d+]（URL:[\s\S]*?）\n?/g, '');
+                    for (const m of audioUrlMatches) {
+                        const audioUrl = m[1];
+                        renderedContent += `\n\n<audio src="${audioUrl}" controls preload="metadata" style="width:100%;max-height:40px;border-radius:8px;"></audio>`;
+                    }
+                }
+
+                renderedContent = renderedContent.replace(/\n{3,}/g, '\n\n').trim();
                 if (h.role === 'user' && window.AgentMessageDedupe?.formatAgentUserMessageForDisplay) {
                     renderedContent = window.AgentMessageDedupe.formatAgentUserMessageForDisplay(renderedContent);
                 }
@@ -4032,12 +4092,12 @@
                         if (item) {
                             item.serverUrl = data.url;
                             item.fileUrl = data.url;
-                            item.thumbnailUrl = data.url;
+                            item.thumbnailUrl = data.thumbnail_url || data.url;
                             item.uploading = false;
                             item.uploadFailed = false;
                             mediaItems.value = [...mediaItems.value];
                         }
-                        console.log('图片上传成功:', data.url);
+                        console.log('图片上传成功:', data.url, '缩略图:', data.thumbnail_url);
                     } else {
                         console.error('图片上传失败:', data.error);
                         if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
@@ -5069,12 +5129,12 @@
                         if (item) {
                             item.serverUrl = data.url;
                             item.fileUrl = data.url;
-                            item.thumbnailUrl = data.url;
+                            item.thumbnailUrl = data.thumbnail_url || data.url;
                             item.uploading = false;
                             item.uploadFailed = false;
                             mediaItems.value = [...mediaItems.value];
                         }
-                        console.log('图片上传成功:', data.url);
+                        console.log('图片上传成功:', data.url, '缩略图:', data.thumbnail_url);
                     } else {
                         console.error('图片上传失败:', data.error);
                         if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);

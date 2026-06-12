@@ -413,20 +413,36 @@ class ChatSessionsModel:
             raise
 
     @staticmethod
-    def soft_delete(session_id: str) -> int:
+    def soft_delete(session_id: str, session_type: Optional[int] = None) -> int:
         """
         Soft delete session (set is_active = 0)
 
         Args:
             session_id: Session identifier
+            session_type: Session type (if known, avoids extra query for cleanup)
 
         Returns:
             Number of affected rows
         """
+        # 如果未传 session_type，先查询以判断是否需要清理文件
+        if session_type is None:
+            try:
+                check_sql = "SELECT session_type FROM chat_sessions WHERE session_id = %s AND is_active = 1"
+                result = execute_query(check_sql, (session_id,), fetch_one=True)
+                if result:
+                    session_type = result.get('session_type')
+            except Exception:
+                pass
+
         sql = "UPDATE chat_sessions SET is_active = 0, updated_at = NOW() WHERE session_id = %s"
 
         try:
             affected_rows = execute_update(sql, (session_id,))
+
+            # 营销智能体 session 需要清理关联文件
+            if affected_rows > 0 and session_type == 2:
+                ChatSessionsModel._cleanup_marketing_files([session_id])
+
             return affected_rows
         except Exception as e:
             logger.error(f"Failed to delete session {session_id}: {e}")
@@ -513,9 +529,9 @@ class ChatSessionsModel:
             affected_rows = execute_update(sql, (before_date,))
             logger.info(f"[DB] Deleted {affected_rows} expired sessions")
 
-            # 清理营销 session 对应的图片目录
+            # 清理营销 session 对应的本地文件和 CDN 文件
             if session_ids_to_cleanup:
-                ChatSessionsModel._cleanup_marketing_images(session_ids_to_cleanup)
+                ChatSessionsModel._cleanup_marketing_files(session_ids_to_cleanup)
 
             return affected_rows
         except Exception as e:
@@ -523,32 +539,92 @@ class ChatSessionsModel:
             raise
 
     @staticmethod
-    def _cleanup_marketing_images(session_ids: List[str]):
+    def _cleanup_marketing_files(session_ids: List[str]):
         """
-        清理营销 session 对应的图片目录
+        清理营销 session 对应的本地文件目录和 CDN 文件
+
+        清理范围:
+        - 本地: upload/marketing/pic/{session_id}/
+        - 本地: upload/marketing/video/{session_id}/
+        - 本地: upload/marketing/audio/{session_id}/
+        - CDN: marketing/{session_id}/ 前缀下的所有文件
 
         Args:
-            session_ids: 需要清理图片的 session_id 列表
+            session_ids: 需要清理的 session_id 列表
         """
         import os
         import shutil
+        import asyncio
 
         app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        base_dir = os.path.join(app_dir, 'upload', 'marketing', 'pic')
+        marketing_base = os.path.join(app_dir, 'upload', 'marketing')
+        sub_dirs = ['pic', 'video', 'audio']
 
-        cleaned = 0
+        # 1. 清理本地文件目录
+        local_cleaned = 0
         for sid in session_ids:
-            session_pic_dir = os.path.join(base_dir, sid)
-            if os.path.isdir(session_pic_dir):
-                try:
-                    shutil.rmtree(session_pic_dir)
-                    cleaned += 1
-                    logger.info(f"[DB] Cleaned up marketing images for session {sid}")
-                except Exception as e:
-                    logger.error(f"[DB] Failed to clean up marketing images for session {sid}: {e}")
+            for sub in sub_dirs:
+                session_dir = os.path.join(marketing_base, sub, sid)
+                if os.path.isdir(session_dir):
+                    try:
+                        shutil.rmtree(session_dir)
+                        local_cleaned += 1
+                        logger.info(f"[Cleanup] 已清理本地目录: {sub}/{sid}")
+                    except Exception as e:
+                        logger.error(f"[Cleanup] 清理本地目录失败: {sub}/{sid}, error={e}")
 
-        if cleaned > 0:
-            logger.info(f"[DB] Cleaned up marketing image directories for {cleaned} sessions")
+        if local_cleaned > 0:
+            logger.info(f"[Cleanup] 共清理 {local_cleaned} 个本地目录")
+
+        # 2. 清理 CDN 文件（异步操作，在新事件循环或已有循环中执行）
+        ChatSessionsModel._cleanup_cdn_files(session_ids)
+
+    @staticmethod
+    def _cleanup_cdn_files(session_ids: List[str]):
+        """
+        清理 CDN 上 marketing/{session_id}/ 前缀下的所有文件
+
+        Args:
+            session_ids: 需要清理 CDN 文件的 session_id 列表
+        """
+        import asyncio
+
+        async def _do_cleanup():
+            try:
+                from config.config_util import get_config, get_dynamic_config_value
+                is_local = get_dynamic_config_value('server', 'is_local', default=False)
+                if is_local:
+                    return
+
+                from utils.file_storage.factory import get_file_storage
+                storage = get_file_storage(get_config())
+
+                total_deleted = 0
+                for sid in session_ids:
+                    cdn_prefix = f"marketing/{sid}/"
+                    try:
+                        deleted = await storage.delete_by_prefix(cdn_prefix)
+                        if deleted > 0:
+                            total_deleted += deleted
+                            logger.info(f"[Cleanup] 已清理 CDN 文件: prefix={cdn_prefix}, count={deleted}")
+                    except Exception as e:
+                        logger.error(f"[Cleanup] 清理 CDN 文件失败: prefix={cdn_prefix}, error={e}")
+
+                if total_deleted > 0:
+                    logger.info(f"[Cleanup] 共清理 {total_deleted} 个 CDN 文件")
+            except Exception as e:
+                logger.error(f"[Cleanup] CDN 清理总体异常: {e}")
+
+        try:
+            loop = asyncio.get_running_loop()
+            # 已在异步上下文中，创建任务
+            loop.create_task(_do_cleanup())
+        except RuntimeError:
+            # 不在异步上下文中（如定时任务线程），创建新事件循环执行
+            try:
+                asyncio.run(_do_cleanup())
+            except Exception as e:
+                logger.error(f"[Cleanup] 无法执行 CDN 清理: {e}")
 
     @staticmethod
     def count_active_sessions() -> int:
