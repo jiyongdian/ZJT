@@ -588,13 +588,19 @@ class ChatSessionsModel:
             session_ids: 需要清理 CDN 文件的 session_id 列表
         """
         import asyncio
+        from config.config_util import get_dynamic_config_value
+
+        # 提前判断：未开启 CDN 或无七牛云配置时直接跳过
+        auto_upload = get_dynamic_config_value('server', 'auto_upload_to_cdn', default=False)
+        if not auto_upload:
+            return
+        access_key = get_dynamic_config_value('file_storage', 'qiniu_long_term', 'access_key')
+        if not access_key:
+            return
 
         async def _do_cleanup():
             try:
-                from config.config_util import get_config, get_dynamic_config_value
-                is_local = get_dynamic_config_value('server', 'is_local', default=False)
-                if is_local:
-                    return
+                from config.config_util import get_config
 
                 from utils.file_storage.factory import get_file_storage
                 storage = get_file_storage(get_config())
