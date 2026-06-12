@@ -16,6 +16,8 @@ from unittest.mock import patch, MagicMock
 # Mock 外部依赖（必须在 import driver 之前）
 sys.modules['utils.sentry_util'] = MagicMock()
 sys.modules['utils.image_upload_utils'] = MagicMock()
+# ensure_public_urls() 调用 upload_local_images_to_cdn_sync，配置为直接返回输入URL
+sys.modules['utils.image_upload_utils'].upload_local_images_to_cdn_sync = lambda urls, config=None: urls
 
 
 def _create_veo3_driver(token='test_duomi_token'):
@@ -284,7 +286,8 @@ class TestVeo3BuildCreateRequest(unittest.TestCase):
             ratio='16:9',
             image_path='http://example.com/first.jpg,http://example.com/last.jpg'
         )
-        with patch.object(self.driver, 'get_all_images_by_mode') as mock_get:
+        with patch.object(self.driver, 'get_all_images_by_mode') as mock_get, \
+             patch.object(self.driver, 'ensure_public_urls', side_effect=lambda urls: urls):
             mock_get.return_value = {
                 'mode': 'first_last_frame',
                 'first_frame': 'http://example.com/first.jpg',
@@ -308,7 +311,8 @@ class TestVeo3BuildCreateRequest(unittest.TestCase):
                 'http://example.com/ref3.jpg'
             ]
         )
-        with patch.object(self.driver, 'get_all_images_by_mode') as mock_get:
+        with patch.object(self.driver, 'get_all_images_by_mode') as mock_get, \
+             patch.object(self.driver, 'ensure_public_urls', side_effect=lambda urls: urls):
             mock_get.return_value = {
                 'mode': 'multi_reference',
                 'first_frame': None,
@@ -329,7 +333,8 @@ class TestVeo3BuildCreateRequest(unittest.TestCase):
         reference_images = [f'http://example.com/ref{i}.jpg' for i in range(1, 6)]
         tool = _make_ai_tool(reference_images=reference_images)
 
-        with patch.object(self.driver, 'get_all_images_by_mode') as mock_get:
+        with patch.object(self.driver, 'get_all_images_by_mode') as mock_get, \
+             patch.object(self.driver, 'ensure_public_urls', side_effect=lambda urls: urls):
             mock_get.return_value = {
                 'mode': 'multi_reference',
                 'first_frame': None,

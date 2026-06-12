@@ -72,13 +72,20 @@ class ChatSession:
         else:  # 剧本智能体（默认）
             logger.info(f"[ChatSession] 初始化剧本智能体 session {session_id}")
 
+            # 为剧本智能体初始化 SOP 加载器，将工作流拆分为按需加载的 SOP
+            from agents.skill_loader import SopLoader
+            sop_loader = SopLoader(os.path.join(PROJECT_ROOT, 'script_writer_core', 'skills', 'script-orchestrator', 'sops'))
+
+            # 加载 SKILL.md 内容，替换 {{SOP_INDEX}} 为自动扫描的 SOP 索引表
+            script_skill_loader = SkillLoader(user_id=int(user_id) if user_id else None)
+            raw_skill_prompt = script_skill_loader.get_skill_prompt('script-orchestrator')
+            pm_base_prompt = sop_loader.load_skill_with_index(raw_skill_prompt) if raw_skill_prompt else None
+
             marketing_skill_loader = None
-            sop_loader = None
             pm_model = model if model else pm_config.get("model", "gemini/gemini-3-pro-preview")
-            pm_allowed_tools = pm_config.get("allowed_tools", ["skill", "ask_user"])
-            pm_skill_names = None  # 使用 agents_config 中的默认值
-            pm_base_prompt = None  # 使用 PMAgent 默认的剧本架构师提示词
-            skip_env_context = False
+            pm_allowed_tools = pm_config.get("allowed_tools", ["call_agent", "ask_user", "load_sop"])
+            pm_skill_names = []  # 提示词已通过 base_prompt 注入（含 SOP 索引），不再由 PMAgent 重复加载
+            skip_env_context = True
 
         logger.info(f"[ChatSession] PM Agent 将使用模型: {pm_model}")
 

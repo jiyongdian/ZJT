@@ -10,7 +10,8 @@ import urllib.parse
 import httpx
 from datetime import datetime
 from typing import Dict, Any
-from model import GridImageTasksModel, GridImageTaskStatus
+from model import GridImageTasksModel, GridImageTaskStatus, AIToolsModel
+from config.constant import AI_TOOL_STATUS_WAITING_BEFORE_FINISH
 from script_writer_core.image_grid_splitter import ImageGridSplitter
 from config.config_util import get_config
 from utils.network_utils import is_local_file_path
@@ -53,6 +54,9 @@ def _download_and_store_image(file_url: str, item_type: int, comfyui_base_url: s
     elif item_type == 6:  # prop_grid (道具四宫格)
         upload_dir = 'upload/props/temp'
         local_url_path = 'upload/props/temp'
+    elif item_type == 7:  # character_variant (角色变体图)
+        upload_dir = 'upload/character/pic'
+        local_url_path = 'upload/character/pic'
     else:
         raise Exception(f'无效的item_type: {item_type}')
     
@@ -303,6 +307,39 @@ def _handle_task_success(task: Any, comfyui_task_data: Dict):
                             if result.get('success', False):
                                 logger.info(f"已更新道具 {name} 的参考图")
                         update_success = True
+                elif task.item_type == 7:  # character_variant (角色变体图)
+                    # item_name 格式为 "角色名|变体标签"
+                    parts = task.item_name.split('|', 1)
+                    char_name = parts[0]
+                    variant_label = parts[1] if len(parts) > 1 else '变体'
+                    # 读取角色当前数据
+                    file_manager = mcp_tool.get_file_manager()
+                    char_data = file_manager.get_character_json(char_name, task.user_id, task.world_id)
+                    if char_data:
+                        existing_variants = char_data.get('reference_images', [])
+                        new_variant = {'id': str(uuid.uuid4()), 'label': variant_label, 'url': local_image_url}
+                        # 移除同标签的旧条目（如果有）
+                        existing_variants = [v for v in existing_variants if v.get('label') != variant_label]
+                        existing_variants.append(new_variant)
+                        # 更新角色的 reference_images
+                        result = mcp_tool.update_character_json(task.user_id, task.world_id, task.auth_token,
+                                                                 char_name, reference_images=existing_variants)
+                        update_success = result.get('success', False)
+                        if update_success:
+                            logger.info(f"已追加角色 {char_name} 的变体图 [{variant_label}]: {local_image_url}")
+                            # 同步更新数据库中的 reference_images，确保前端通过 API 能获取到变体图
+                            try:
+                                from model.character import CharacterModel
+                                db_char = CharacterModel.get_by_name(int(task.world_id), char_name)
+                                if db_char:
+                                    CharacterModel.update(db_char.id, reference_images=existing_variants)
+                                    logger.info(f"已同步角色 {char_name} 的变体图到数据库 (id={db_char.id})")
+                                else:
+                                    logger.warning(f"数据库中未找到角色 {char_name} (world_id={task.world_id})，跳过同步")
+                            except Exception as db_err:
+                                logger.warning(f"同步角色 {char_name} 变体图到数据库失败(非阻塞): {db_err}")
+                    else:
+                        logger.warning(f"角色 {char_name} 不存在，无法更新变体图")
         except Exception as e:
             logger.error(f"更新item失败: {str(e)}")
             update_success = False
@@ -394,6 +431,16 @@ def process_grid_image_tasks(app=None):
                     # 图片生成失败
                     failure_reason = comfyui_task.get('reason', '生成失败')
                     logger.error(f"ComfyUI任务失败: {task.task_key}, 原因: {failure_reason}")
+
+                    # 检查 ai_tools 是否已被 pipeline 重试接管（visual_task.py 的 enterprise retry）
+                    # 两个调度器同时轮询同一任务，避免竞争
+                    try:
+                        ai_tool_record = AIToolsModel.get_by_id(int(task.project_id))
+                        if ai_tool_record and ai_tool_record.status == AI_TOOL_STATUS_WAITING_BEFORE_FINISH:
+                            logger.info(f"任务 {task.task_key} 已被 pipeline 重试接管，跳过")
+                            continue
+                    except Exception:
+                        pass
                     
                     # 检查是否可以自动重试
                     max_retries = getattr(task, 'max_retries', 0) or 0

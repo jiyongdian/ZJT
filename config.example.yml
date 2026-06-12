@@ -13,7 +13,7 @@ runninghub:
 # Server configuration
 server:
   host: "http://localhost:9003"
-  is_local: true  # 是否为本地环境，如果是本地环境，进行图片生成以及视频生成时，将参考图片上传到图床中。
+  is_local: true  # 是否为本地环境（控制剪映导出等本地特有行为）。视频/图片生成驱动会自动将参考图上传到CDN图床，不受此配置影响。
   https_host: "https://localhost:12443"
   port: 9003                # 如需自定义端口可保留
   https_port: 5174

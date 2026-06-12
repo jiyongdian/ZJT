@@ -9,6 +9,7 @@ Pipeline 编排器
 4. 将步骤结果应用回 ai_tool
 """
 import logging
+from datetime import datetime
 from typing import List, Optional, Dict, Any
 import pymysql
 
@@ -245,9 +246,27 @@ class PipelineProcessor:
         waiting_steps = PipelineStepModel.get_all_waiting_steps(limit=50)
         if waiting_steps:
             logger.info(f"Dispatching {len(waiting_steps)} waiting pipeline steps")
+            dispatched_before_finish = set()  # (ai_tool_id, stage) 去重
             for step in waiting_steps:
                 try:
-                    await PipelineProcessor.dispatch_step(step)
+                    key = (step.ai_tool_id, step.stage)
+                    # before_finish 阶段：同一 ai_tool 只分发一个步骤，避免并发覆盖
+                    if step.stage == PipelineStage.BEFORE_FINISH:
+                        if key in dispatched_before_finish:
+                            continue
+                        dispatched_before_finish.add(key)
+
+                    success = await PipelineProcessor.dispatch_step(step)
+
+                    # 如果 before_finish 步骤已同步完成，将同组其余步骤标记为 skipped
+                    if success and step.stage == PipelineStage.BEFORE_FINISH:
+                        remaining = PipelineStepModel.get_pending_steps(step.ai_tool_id, step.stage)
+                        for r in remaining:
+                            PipelineStepModel.update_status(
+                                r.id, PipelineStepStatus.COMPLETED,
+                                result_data={'skipped': True, 'reason': 'earlier_retry_succeeded'}
+                            )
+                        logger.info(f"Skipped {len(remaining)} remaining before_finish steps for ai_tool {step.ai_tool_id}")
                 except Exception as e:
                     logger.error(f"Error dispatching step {step.id}: {e}", exc_info=True)
 
@@ -390,5 +409,21 @@ class PipelineProcessor:
                 logger.info(f"ai_tool {ai_tool_id} param_prepare all completed, status -> PENDING")
             elif failed:
                 # 有失败：标记 ai_tool 失败
-                AIToolsModel.update(ai_tool_id, status=AI_TOOL_STATUS_FAILED)
+                AIToolsModel.update(ai_tool_id, status=AI_TOOL_STATUS_FAILED, completed_time=datetime.now())
                 logger.warning(f"ai_tool {ai_tool_id} param_prepare has {len(failed)} failed steps, status -> FAILED")
+
+        elif stage == PipelineStage.BEFORE_FINISH:
+            from model import AIToolsModel, TasksModel
+            from config.constant import AI_TOOL_STATUS_PENDING, AI_TOOL_STATUS_FAILED, TASK_STATUS_QUEUED, TASK_STATUS_FAILED
+
+            if len(completed) == total:
+                # 全部完成：确保 tasks.status 同步（安全兜底）
+                ai_tool = AIToolsModel.get_by_id(ai_tool_id)
+                if ai_tool and ai_tool.status == AI_TOOL_STATUS_PENDING:
+                    TasksModel.update_by_task_id(ai_tool_id, status=TASK_STATUS_QUEUED)
+                    logger.info(f"ai_tool {ai_tool_id} before_finish all completed, tasks -> QUEUED")
+            elif failed:
+                # 所有重试耗尽 → 最终失败
+                AIToolsModel.update(ai_tool_id, status=AI_TOOL_STATUS_FAILED, completed_time=datetime.now())
+                TasksModel.update_by_task_id(ai_tool_id, status=TASK_STATUS_FAILED)
+                logger.warning(f"ai_tool {ai_tool_id} before_finish all failed, status -> FAILED")

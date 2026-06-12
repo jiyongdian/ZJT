@@ -14,6 +14,8 @@ from unittest.mock import patch, MagicMock
 # Mock 外部依赖（必须在 import driver 之前）
 sys.modules['utils.sentry_util'] = MagicMock()
 sys.modules['utils.image_upload_utils'] = MagicMock()
+# ensure_public_urls() 调用 upload_local_images_to_cdn_sync，配置为直接返回输入URL
+sys.modules['utils.image_upload_utils'].upload_local_images_to_cdn_sync = lambda urls, config=None: urls
 
 
 def _create_common_driver(site_id='site_1', api_key='test_api_key', base_url='https://yunwu.ai'):
@@ -187,7 +189,8 @@ class TestBuildCreateRequest(unittest.TestCase):
     def test_basic_request_structure(self):
         """基本请求结构验证"""
         tool = _make_ai_tool()
-        result = self.driver.build_create_request(tool)
+        with patch.object(self.driver, 'ensure_public_urls', side_effect=lambda urls: urls):
+            result = self.driver.build_create_request(tool)
 
         # 验证 URL
         self.assertIn('/v1/video/create', result['url'])
@@ -217,7 +220,8 @@ class TestBuildCreateRequest(unittest.TestCase):
         tool = _make_ai_tool(
             image_path='http://example.com/first.jpg,http://example.com/last.jpg'
         )
-        result = self.driver.build_create_request(tool)
+        with patch.object(self.driver, 'ensure_public_urls', side_effect=lambda urls: urls):
+            result = self.driver.build_create_request(tool)
 
         self.assertEqual(result['json']['images'], [
             'http://example.com/first.jpg',
@@ -235,7 +239,8 @@ class TestBuildCreateRequest(unittest.TestCase):
                 'http://example.com/ref3.jpg'
             ]
         )
-        result = self.driver.build_create_request(tool)
+        with patch.object(self.driver, 'ensure_public_urls', side_effect=lambda urls: urls):
+            result = self.driver.build_create_request(tool)
 
         self.assertEqual(result['json']['images'], [
             'http://example.com/ref1.jpg',
@@ -258,7 +263,8 @@ class TestBuildCreateRequest(unittest.TestCase):
                 'http://example.com/ref5.jpg'
             ]
         )
-        result = self.driver.build_create_request(tool)
+        with patch.object(self.driver, 'ensure_public_urls', side_effect=lambda urls: urls):
+            result = self.driver.build_create_request(tool)
 
         self.assertEqual(len(result['json']['images']), 3)
         self.assertEqual(result['json']['images'][0], 'http://example.com/ref1.jpg')

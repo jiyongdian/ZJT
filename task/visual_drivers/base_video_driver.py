@@ -48,11 +48,15 @@ api_logger = _setup_api_logger()
 class BaseVideoDriver(ABC):
     """
     视频生成驱动抽象基类
-    
+
     所有视频生成驱动必须继承此类并实现以下方法：
     - submit_task: 提交任务到外部API
     - check_status: 检查任务状态
     """
+
+    # 智能体提示 - 告知 Agent 该实现方的限制和注意事项
+    # 子类按需覆盖，为空则不提示
+    agent_hint: str = ""
     
     def __init__(self, driver_name: str, driver_type: int):
         """
@@ -550,6 +554,32 @@ class BaseVideoDriver(ABC):
             Optional[str]: 视频文件路径或URL，未设置时返回 None
         """
         return ai_tool.video_path if hasattr(ai_tool, 'video_path') else None
+
+    def ensure_public_urls(self, urls: List[str]) -> List[str]:
+        """
+        确保图片/媒体URL可被外部API访问，统一上传到CDN图床
+        
+        无论是本地环境还是服务器环境，都上传到CDN以确保外部API可访问。
+        upload_local_images_to_cdn_sync 内部已处理：
+        - 外网URL直接返回不再上传
+        - 本地文件路径会上传到CDN
+        - 局域网URL会下载后上传
+        
+        Args:
+            urls: 图片/媒体路径列表
+            
+        Returns:
+            List[str]: CDN链接列表
+        """
+        if not urls:
+            return urls
+        
+        from utils.image_upload_utils import upload_local_images_to_cdn_sync
+        
+        self.logger.info(f"准备上传媒体到CDN图床: {urls}")
+        cdn_urls = upload_local_images_to_cdn_sync(urls, self._config)
+        self.logger.info(f"CDN上传完成: {cdn_urls}")
+        return cdn_urls if cdn_urls else urls
 
     def __str__(self):
         return f"{self.__class__.__name__}(driver_name={self.driver_name}, driver_type={self.driver_type})"

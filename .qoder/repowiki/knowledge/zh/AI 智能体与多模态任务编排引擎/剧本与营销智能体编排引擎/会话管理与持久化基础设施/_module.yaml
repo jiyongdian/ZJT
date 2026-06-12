@@ -1,0 +1,13 @@
+schema_version: 1
+module_path: ai_engine/script_writer/session_infrastructure
+title: 会话管理与持久化基础设施
+scope:
+    - script_writer_core/
+source_files: []
+depends_on: []
+related_to:
+    - path: backend_api/shared_models
+    - path: ai_engine/agent_skills
+    - path: ai_engine/llm_clients
+    - path: config_management
+    - path: ai_engine/task_drivers

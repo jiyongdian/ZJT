@@ -3,6 +3,124 @@
 // 封装所有节点的公共创建、事件绑定、端口生成逻辑
 // ============================
 
+// ─── 输入端口注册表 ───────────────────────────────
+// 全局注册表：nodeType → inputPortConfig[]
+// 供 events.js 的连接系统自动发现所有可连接端口，无需硬编码节点类型
+var _inputPortRegistry = {};
+window._inputPortRegistry = _inputPortRegistry;
+
+/**
+ * 注册节点类型的输入端口配置
+ * @param {string} nodeType - 节点类型标识
+ * @param {Array} ports - 输入端口配置数组，每项包含:
+ *   @param {string} ports[].selector   - 端口CSS选择器（用于DOM查找）
+ *   @param {string} ports[].portType   - 端口类型标识（如 'start', 'end', 'audio'）
+ *   @param {string[]} ports[].accepts  - 可接受的源节点类型数组（如 ['image']）
+ *   @param {string} [ports[].connectionType] - 使用的连接数组名（默认 'imageConnections'）
+ *   @param {Function} [ports[].guard]  - 判断端口当前是否可连接的函数(node) => bool
+ *   @param {Function} [ports[].onConnect] - 连接成功后的回调(fromNode, targetNode)
+ */
+function registerInputPorts(nodeType, ports) {
+  _inputPortRegistry[nodeType] = ports;
+}
+
+/**
+ * 查询节点类型已注册的输入端口
+ * @param {string} nodeType - 节点类型标识
+ * @returns {Array} 端口配置数组，未注册则返回空数组
+ */
+function getInputPorts(nodeType) {
+  return _inputPortRegistry[nodeType] || [];
+}
+
+// ─── 端口预设工厂 ────────────────────────────────
+// 常用端口类型的快捷配置，新节点一行声明即可复用
+window.PORT_PRESETS = {
+  /**
+   * 图片输入端口预设（接受 image 类型节点连接）
+   * @param {Object} overrides - 覆盖默认配置（selector, guard, onConnect 等）
+   */
+  IMAGE_INPUT: function(overrides) {
+    var base = {
+      selector: '.start-image-port',
+      portType: 'start',
+      accepts: ['image'],
+      connectionType: 'imageConnections'
+    };
+    return Object.assign(base, overrides || {});
+  },
+
+  /**
+   * 音频输入端口预设（接受 text_to_speech / audio 类型节点连接）
+   * @param {Object} overrides - 覆盖默认配置
+   */
+  AUDIO_INPUT: function(overrides) {
+    var base = {
+      selector: '.audio-input-port',
+      portType: 'audio',
+      accepts: ['text_to_speech', 'audio'],
+      connectionType: 'audioConnections'
+    };
+    return Object.assign(base, overrides || {});
+  }
+};
+
+// ─── 通用端口查找函数 ────────────────────────────
+// 供 events.js 的 mousemove（高亮）和 mouseup（连接）共同使用
+// 通过注册表自动发现所有可连接端口，新节点类型无需修改 events.js
+
+/**
+ * 在画布所有节点中，查找距离鼠标最近的、可接受指定源节点类型的输入端口
+ * 替代原先 findNearestI2VPort 中硬编码的节点类型循环
+ *
+ * @param {number} mouseX - 鼠标在画布坐标系中的 X
+ * @param {number} mouseY - 鼠标在画布坐标系中的 Y
+ * @param {string} fromType - 源节点类型（如 'image', 'audio'）
+ * @param {number} [proximity=50] - 最大吸附距离（像素）
+ * @returns {{nodeId: number, portType: string, portCfg: Object, node: Object, x: number, y: number}|null}
+ */
+function findNearestConnectablePort(mouseX, mouseY, fromType, proximity) {
+  proximity = proximity || 50;
+  var best = null;
+  var bestDist = proximity;
+
+  for (var i = 0; i < state.nodes.length; i++) {
+    var node = state.nodes[i];
+    var inputPorts = getInputPorts(node.type);
+    if (inputPorts.length === 0) continue;
+
+    var toEl = canvasEl.querySelector('.node[data-node-id="' + node.id + '"]');
+    if (!toEl) continue;
+
+    for (var j = 0; j < inputPorts.length; j++) {
+      var portCfg = inputPorts[j];
+
+      // 检查端口是否接受该源节点类型
+      if (portCfg.accepts.indexOf(fromType) === -1) continue;
+
+      // 检查 guard（端口是否当前可用，如未被占用）
+      if (portCfg.guard && !portCfg.guard(node)) continue;
+
+      var portEl = toEl.querySelector(portCfg.selector);
+      if (!portEl || portEl.classList.contains('disabled')) continue;
+
+      var result = getPortDistance(portEl, mouseX, mouseY);
+      if (result.dist < bestDist) {
+        bestDist = result.dist;
+        best = {
+          nodeId: node.id,
+          portType: portCfg.portType,
+          portCfg: portCfg,
+          node: node,
+          x: result.x,
+          y: result.y
+        };
+      }
+    }
+  }
+  return best;
+}
+
 /**
  * 扫描节点DOM的i18n属性
  */

@@ -1,0 +1,17 @@
+schema_version: 1
+module_path: backend_api/core_auth
+title: 认证与算力管理服务
+scope:
+    - perseids_server/
+source_files: []
+depends_on: []
+related_to:
+    - path: backend_api/shared_models
+    - path: config_management
+    - path: test_suite
+    - path: backend_api/business_api/user_management
+    - path: backend_api/business_api
+    - path: infrastructure
+    - path: documentation
+    - path: ai_engine
+    - path: frontend_web

@@ -20,10 +20,13 @@ class ItemType:
     LOCATION_GRID = 5   # 场景四宫格
     PROP_GRID = 6       # 道具四宫格
 
+    # 变体类型 (7) = 角色造型变体图
+    CHARACTER_VARIANT = 7  # 角色变体图（写入 reference_images 数组）
+
     # 类型列表
-    SINGLE_TYPES = [1, 2, 3]
+    SINGLE_TYPES = [1, 2, 3, 7]
     GRID_TYPES = [4, 5, 6]
-    ALL_TYPES = [0, 1, 2, 3, 4, 5, 6]
+    ALL_TYPES = [0, 1, 2, 3, 4, 5, 6, 7]
 
     # 完整映射表
     MAP = {
@@ -37,6 +40,8 @@ class ItemType:
         4: {'name': 'character_grid', 'name_cn': '角色四宫格', 'is_grid': True, 'base_type': 1},
         5: {'name': 'location_grid', 'name_cn': '场景四宫格', 'is_grid': True, 'base_type': 2},
         6: {'name': 'prop_grid', 'name_cn': '道具四宫格', 'is_grid': True, 'base_type': 3},
+        # 变体
+        7: {'name': 'character_variant', 'name_cn': '角色变体图', 'is_grid': False, 'base_type': 1},
     }
 
     # 宫格专用映射

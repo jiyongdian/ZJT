@@ -174,6 +174,7 @@ class GeminiClient(BaseLLMClient):
             "contents": [],
             "generationConfig": {}
         }
+        system_texts = []
 
         if tools:
             gemini_tools = []
@@ -194,9 +195,27 @@ class GeminiClient(BaseLLMClient):
             role = msg.get("role")
 
             if role == "system":
-                gemini_data["systemInstruction"] = {
-                    "parts": [{"text": msg["content"]}]
-                }
+                content = msg.get("content", "")
+                if isinstance(content, str):
+                    text = content
+                elif isinstance(content, list):
+                    text_parts = []
+                    for part in content:
+                        if isinstance(part, dict):
+                            if part.get("type") == "text":
+                                text_parts.append(str(part.get("text", "")))
+                            elif "text" in part:
+                                text_parts.append(str(part.get("text", "")))
+                            else:
+                                text_parts.append(json.dumps(part, ensure_ascii=False))
+                        else:
+                            text_parts.append(str(part))
+                    text = "\n".join(part for part in text_parts if part)
+                else:
+                    text = json.dumps(content, ensure_ascii=False)
+
+                if text:
+                    system_texts.append(text)
             elif role == "user":
                 parts = []
                 if isinstance(msg["content"], list):
@@ -306,6 +325,19 @@ class GeminiClient(BaseLLMClient):
                         "role": "function",
                         "parts": [func_response_part]
                     })
+
+        if system_texts:
+            system_instruction = {
+                "parts": [{"text": "\n\n".join(system_texts)}]
+            }
+            ordered_data = {
+                "systemInstruction": system_instruction,
+                "contents": gemini_data.get("contents", [])
+            }
+            for key, value in gemini_data.items():
+                if key not in ordered_data:
+                    ordered_data[key] = value
+            gemini_data = ordered_data
 
         return gemini_data
 

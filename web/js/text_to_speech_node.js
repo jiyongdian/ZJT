@@ -259,7 +259,7 @@
             },
             onTimeout: function() {
               statusEl.style.color = '#dc2626';
-              statusEl.textContent = window.t ? window.t('tts_generate_timeout') : '生成超时';
+              statusEl.textContent = window.t ? window.t('tts_generate_timeout_hint') : '等待超时，但音频仍在生成中。你可以通过刷新页面后查看是否生成成功。';
               setBtnReady(generateBtn, window.t ? window.t('tts_generate_btn') : '生成语音');
             }
           });

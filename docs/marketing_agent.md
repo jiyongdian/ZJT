@@ -161,6 +161,17 @@ Agent 模式下发送消息的完整流程：
 | `error` | 关闭 SSE，显示错误消息 |
 | `done` | 关闭 SSE，显示"继续"按钮，刷新算力余额 |
 
+#### 去重与续传
+
+- `/api/task/{task_id}/stream` 会为数据库中的任务消息输出 SSE `id`，取值为 `agent_task_messages.id`。
+- 浏览器原生重连时，后端会读取 `Last-Event-ID`；手动恢复连接时也可通过 `last_id` 查询参数指定已处理的最后一条消息。
+- 前端维护已处理的 SSE 消息 id 集合，重复 id 会被跳过，避免重连重放时把同一条完整 `message` 再次拼接到 AI 气泡中。
+- 当页面或会话切换后恢复活跃 Agent 任务时，前端还会对比当前历史中已展示的 assistant 内容；如果恢复流重放了同样的完整 `message`，会跳过该消息，避免“历史气泡 + 恢复流气泡”重复显示。
+- Agent SSE 文本回复的持久化以任务完成回调中的 `session_storage.save_session()` 为准；前端收到 `done` 后不再调用 `/session/{session_id}/message` 追加同一段 assistant 文本，避免“后端保存 + 前端追加”产生相邻重复历史。
+- Agent 模式下用户消息的持久化以后端增强版为准：前端发送时只在当前页面即时展示用户气泡，不再调用 `/session/{session_id}/message` 保存展示版；任务完成后 PM Agent 保存包含媒体 URL 标签和用户偏好的增强版 user 消息。历史加载时前端会把 `[用户图片偏好]`、`[用户视频偏好]` 折叠为“查看发送偏好”，避免同一用户输入以 UI 展示版和 LLM 增强版各保存一次。
+- `/session/{session_id}/message` 也会跳过与最后一条历史记录 role 和 content 都相同的消息，作为其他追加路径的兜底保护。
+- `call_agent` 成功返回的专家结果会在 `_handle_agent_call()` 阶段作为 SSE `message` 推送给前端，确保“图片内容分析”等专家输出立即可见；结果仍会进入 PM 上下文和会话历史，若 PM 后续 assistant 回复复述同一段内容，前端会通过内容去重跳过重复气泡。
+
 #### 任务状态轮询
 
 Agent 提交图片/视频生成任务后，前端通过 `setInterval` 轮询 `GET /api/get-status/{project_ids}`：
@@ -169,6 +180,12 @@ Agent 提交图片/视频生成任务后，前端通过 `setInterval` 轮询 `GE
 - 视频轮询间隔：10 秒
 - 任务完成后将结果（图片/视频 URL）渲染到消息气泡中
 - 使用 `sessionTaskRegistry` 注册表跟踪所有活跃任务，支持会话切换后恢复
+- `GET /api/get-status/{project_ids}` 对 CDN 结果采用 CDN 优先策略；如果生成任务已完成但 CDN 仍处于 pending，会先返回本地 `result_url` 作为 `file_url`，并附带 `cdn_status: "pending"`，避免聊天框一直显示生成中
+- 前端轮询统一识别 `SUCCESS`/`COMPLETED`/`DONE` 等完成状态，并从 task 本身和 `results[]` 中提取 `file_url`、`result_url`、`video_url`、`image_url`、`output_url`、`download_url` 等字段；同一路径的 CDN `file_url` 与本地 `result_url` 只展示一个，优先展示先返回的 CDN URL
+- 如果 `video_task_submitted` SSE 事件缺失，但专家工作总结中包含 `project_ids: [...]` 且文本语义为视频任务，前端会自动补启动视频轮询；加载历史会话时也会执行同样的兜底恢复
+- 如果 `image_task_submitted` SSE 事件缺失，但专家回复中包含 `project_ids: [...]` 或 `项目ID: 744` 这类图片任务标识，前端会自动补启动图片轮询；图片轮询会绑定触发时的会话，避免切换会话后把结果写入当前对话
+- Agent 视频轮询启动后会立即查询一次状态，已完成的视频任务可直接渲染结果，不必等待第一个 10 秒轮询周期
+- 视频兜底恢复按会话绑定轮询结果，异步返回时如果用户已切换到其他会话，不会把结果写入当前对话；历史加载时会过滤空 AI 气泡和重复的视频结果，避免切换会话后重复显示
 
 #### 任务恢复机制
 
@@ -247,6 +264,13 @@ Agent 提交图片/视频生成任务后，前端通过 `setInterval` 轮询 `GE
 #### Agent 视频模式
 
 支持上传参考图（首尾帧/全能参考）、参考视频和参考音频。图片上传到 `/api/upload-agent-image`，通过 `image_urls` 字段传给后端。
+Agent 视频模式下，主图和后续参考图都会等待上传完成并转换为 HTTP URL；发送给后端时按输入区显示顺序去重收集到 `image_urls`，避免 blob 预览地址或未上传完成的参考图遗漏。
+当前页面即时渲染的用户气泡统一通过 `collectCurrentMessageMedia()` 收集媒体，再由 `buildUserMessageContent()` 渲染；图片、视频、音频模式和 Agent 模式不再分别拼接预览 HTML。Agent 发送给后端的 `image_urls`、`video_urls`、`audio_urls` 也复用同一媒体集合，确保即时显示、请求 payload 和后端保存的增强版用户消息尽量一致。
+纯视频参考文件上传到 `/api/upload-agent-video`，只进入 `video_urls` 流程，不会设置图片上传状态，也不会触发图片 HTTP URL 等待。
+
+会话历史从 `chat_messages` 恢复时依赖媒体标签重新渲染图片、视频和音频。`/api/session/{session_id}/task` 写入用户消息时必须把上传接口返回的 URL 拼入 `[图片N]（URL: ... thumb: ...）`、`[视频N]（URL: ...）`、`[音频N]（URL: ...）` 标签后再落库；上传接口已经根据 `server.is_local` 决定返回本地 URL 还是 CDN URL，历史持久化层只保存返回值，不重新判断或改写 CDN。
+
+生成状态轮询和 Agent SSE 流使用连续失败保护。图片/视频状态轮询、Agent 图片/视频轮询，以及 SSE 连接错误/超时在同一任务上连续失败 3 次后，会停止对应定时器或断开流，并清理活跃任务归属，避免对话区持续追加“请求超时，请稍后重试”之类的错误气泡。
 
 #### 图片/视频模式
 

@@ -1,0 +1,19 @@
+schema_version: 1
+module_path: test_suite
+title: 自动化测试与质量保障体系
+scope:
+    - tests/
+    - auto_test/
+source_files: []
+depends_on: []
+related_to:
+    - path: backend_api
+    - path: frontend_web
+    - path: ai_engine
+    - path: backend_api/core_auth
+    - path: infrastructure
+    - path: config_management
+    - path: ai_engine/task_drivers
+    - path: documentation
+    - path: jianying_integration
+    - path: backend_api/shared_models

@@ -6,7 +6,6 @@ import traceback
 from .base_video_driver import BaseVideoDriver, ImageMode
 from config.config_util import get_config, get_dynamic_config_value
 from utils.sentry_util import SentryUtil, AlertLevel
-from utils.image_upload_utils import upload_local_images_to_cdn_sync
 
 
 class KlingDuomiV1Driver(BaseVideoDriver):
@@ -201,18 +200,15 @@ class KlingDuomiV1Driver(BaseVideoDriver):
         if not image_path:
             raise ValueError("Kling 任务需要至少1张图片")
 
-        # 处理图片路径 - 如果是本地环境，上传到图床
-        if self._is_local:
-            images_to_upload = [image_path]
-            if last_frame:
-                images_to_upload.append(last_frame)
-            self.logger.info(f"本地环境检测到图片路径，准备上传到图床: {images_to_upload}")
-            cdn_urls = upload_local_images_to_cdn_sync(images_to_upload, self._config)
-            self.logger.info(f"图片上传完成，CDN链接: {cdn_urls}")
-            if cdn_urls and cdn_urls[0]:
-                image_path = cdn_urls[0]
-                if last_frame and len(cdn_urls) > 1 and cdn_urls[1]:
-                    last_frame = cdn_urls[1]
+        # 上传图片到CDN图床，确保外部API可访问
+        images_to_upload = [image_path]
+        if last_frame:
+            images_to_upload.append(last_frame)
+        cdn_urls = self.ensure_public_urls(images_to_upload)
+        if cdn_urls and cdn_urls[0]:
+            image_path = cdn_urls[0]
+            if last_frame and len(cdn_urls) > 1 and cdn_urls[1]:
+                last_frame = cdn_urls[1]
 
         # 根据是否存在尾帧，动态选择模式
         mode = "pro" if last_frame else "std"

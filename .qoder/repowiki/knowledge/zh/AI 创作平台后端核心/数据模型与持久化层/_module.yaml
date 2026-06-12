@@ -1,0 +1,15 @@
+schema_version: 1
+module_path: backend_api/shared_models
+title: 数据模型与持久化层
+scope:
+    - model/
+source_files: []
+depends_on: []
+related_to:
+    - path: backend_api/core_auth
+    - path: backend_api/business_api/user_management
+    - path: ai_engine/script_writer/session_infrastructure
+    - path: infrastructure
+    - path: config_management
+    - path: documentation
+    - path: test_suite

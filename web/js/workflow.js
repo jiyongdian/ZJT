@@ -135,7 +135,15 @@
           // 配置加载完成后，更新所有图生视频节点和分镜节点的算力显示
           updateAllImageToVideoNodesPower();
           updateAllShotFrameNodesPower();
-          
+          // 刷新所有分镜组和分镜节点的视频模型选项，修复 TaskConfig 异步加载完成前
+          // 节点已创建导致使用 hardcoded fallback 值的时序竞争问题
+          if (typeof refreshShotGroupNodesModels === 'function') {
+            refreshShotGroupNodesModels();
+          }
+          if (typeof refreshShotFrameNodesModels === 'function') {
+            refreshShotFrameNodesModels();
+          }
+
           // 驱动状态仍从原接口获取（暂未迁移）
           const response = await fetch('/api/computing-power-config');
           if(response.ok){
@@ -285,7 +293,7 @@
     // 轮询视频状态
     function pollVideoStatus(projectIds, onProgress, onComplete, onError, onTaskUpdate){
       let pollCount = 0;
-      const maxPolls = 60; // 最多轮询60次（10分钟）
+      const maxPolls = 120; // 最多轮询120次（20分钟）
       
       const poll = async () => {
         pollCount++;
@@ -306,7 +314,7 @@
             if(pollCount < maxPolls){
               setTimeout(poll, 10000);
             } else {
-              onError('生成超时，请稍后查看结果');
+              onError('等待超时，但视频仍在生成中。你可以通过刷新页面后查看是否生成成功。');
             }
           }
         } catch(e){
@@ -801,9 +809,14 @@
           }
         }
 
-        // 刷新生视频模型
+        // 刷新生视频模型（根据当前视频生成模式过滤）
         if (videoModelEl && window.TaskConfig) {
-          const videoOptions = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+          const allVideoOptions = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+          const mode = node.data.videoGenMode || 'first_last_frame';
+          const videoOptions = allVideoOptions.filter(opt => {
+            const modes = opt.supportedImageModes || ['first_last_frame'];
+            return modes.includes(mode);
+          });
           if (videoOptions.length > 0) {
             videoModelEl.innerHTML = '';
             videoOptions.forEach(opt => {
@@ -861,9 +874,14 @@
           }
         }
 
-        // 刷新生视频模型
+        // 刷新生视频模型（根据当前视频模式过滤）
         if (videoModelEl) {
-          const videoOptions = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+          const allVideoOptions = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+          const mode = node.data.videoMode || 'first_last_frame';
+          const videoOptions = allVideoOptions.filter(opt => {
+            const modes = opt.supportedImageModes || ['first_last_frame'];
+            return modes.includes(mode);
+          });
           if (videoOptions.length > 0) {
             const currentVideoModel = node.data.videoModel;
             videoModelEl.innerHTML = '';
@@ -1059,7 +1077,15 @@
         }
 
         if(data.audioConnections && Array.isArray(data.audioConnections)){
-          state.audioConnections = data.audioConnections;
+          // 迁移旧连接方向：旧格式 from=audio → to=dialogue_group，修正为 from=dialogue_group → to=audio
+          state.audioConnections = data.audioConnections.map(function(conn) {
+            var fromNode = state.nodes.find(function(n) { return n.id === conn.from; });
+            var toNode = state.nodes.find(function(n) { return n.id === conn.to; });
+            if (fromNode && fromNode.type === 'audio' && toNode && toNode.type === 'dialogue_group') {
+              return { id: conn.id, from: conn.to, to: conn.from };
+            }
+            return conn;
+          });
         }
         
         // 恢复时间轴
@@ -2042,7 +2068,7 @@
       const savedNextNodeId = state.nextNodeId;
       state.nextNodeId = nodeData.id;
 
-      createAudioNode({ x: nodeData.x, y: nodeData.y });
+      createAudioNode({ x: nodeData.x, y: nodeData.y, title: nodeData.title });
 
       state.nextNodeId = Math.max(savedNextNodeId, nodeData.id + 1);
 
@@ -2050,13 +2076,22 @@
       if(node && nodeData.data){
         node.data.url = nodeData.data.url || '';
         node.data.name = nodeData.data.name || '';
+        // 恢复对话组溯源字段
+        if(nodeData.data.sourceNodeId !== undefined){
+          node.data.sourceNodeId = nodeData.data.sourceNodeId;
+        }
+        if(nodeData.data.dialogueIndex !== undefined){
+          node.data.dialogueIndex = nodeData.data.dialogueIndex;
+        }
         // 如果有URL，显示预览
         if(node.data.url){
           const el = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
           if(el){
             const previewField = el.querySelector('.audio-preview-field');
+            const previewActionsField = el.querySelector('.audio-preview-actions-field');
             const audioPlayer = el.querySelector('.audio-node-player');
             const nameEl = el.querySelector('.audio-node-name');
+            const addTimelineBtn = el.querySelector('.audio-add-timeline-btn');
             if(previewField && audioPlayer){
               audioPlayer.src = proxyDownloadUrl(node.data.url);
               if(nameEl){
@@ -2065,6 +2100,11 @@
                 nameEl.title = node.data.name || '';
               }
               previewField.style.display = 'block';
+              if(previewActionsField) previewActionsField.style.display = 'block';
+            }
+            // 显示"添加到时间轴"按钮（当音频来自对话组时）
+            if(addTimelineBtn && node.data.sourceNodeId !== undefined){
+              addTimelineBtn.style.display = 'inline-block';
             }
           }
         }

@@ -9,16 +9,21 @@ from unittest.mock import MagicMock
 
 # Mock config 模块（import 前置）
 _saved_config_util = sys.modules.get('config.config_util')
+_saved_project_path = sys.modules.get('utils.project_path')
 sys.modules['config.config_util'] = MagicMock()
 sys.modules['utils.project_path'] = MagicMock()
 
 from utils.video_compressor import needs_compression
 
-# 恢复 config.config_util，防止污染后续测试
+# 恢复 config.config_util 和 utils.project_path，防止污染后续测试
 if _saved_config_util is not None:
     sys.modules['config.config_util'] = _saved_config_util
 else:
     sys.modules.pop('config.config_util', None)
+if _saved_project_path is not None:
+    sys.modules['utils.project_path'] = _saved_project_path
+else:
+    sys.modules.pop('utils.project_path', None)
 
 
 class TestNeedsCompression(unittest.TestCase):

@@ -24,7 +24,7 @@ def upgrade() -> None:
     """Create agent_tasks and agent_task_messages tables"""
     # Create agent_tasks table
     op.execute("""
-        CREATE TABLE `agent_tasks` (
+        CREATE TABLE IF NOT EXISTS `agent_tasks` (
           `id` INT AUTO_INCREMENT PRIMARY KEY COMMENT 'Primary key',
           `task_id` VARCHAR(64) NOT NULL COMMENT 'UUID task identifier',
           `session_id` VARCHAR(64) NOT NULL COMMENT 'Associated session ID',
@@ -53,7 +53,7 @@ def upgrade() -> None:
 
     # Create agent_task_messages table
     op.execute("""
-        CREATE TABLE `agent_task_messages` (
+        CREATE TABLE IF NOT EXISTS `agent_task_messages` (
           `id` INT AUTO_INCREMENT PRIMARY KEY COMMENT 'Primary key, used for ordering',
           `task_id` VARCHAR(64) NOT NULL COMMENT 'Associated task ID',
           `message_type` VARCHAR(32) NOT NULL DEFAULT 'message' COMMENT 'Message type: message/progress/done/error/status/heartbeat/connected',

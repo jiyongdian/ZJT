@@ -6,6 +6,8 @@ from pydantic import BaseModel
 from typing import Optional, List, Union
 import logging
 import httpx
+import asyncio
+from datetime import datetime
 
 from model.users import UsersModel, User
 from model.user_tokens import UserTokensModel
@@ -13,6 +15,7 @@ from model.computing_power import ComputingPowerModel
 from model.computing_power_log import ComputingPowerLogModel
 from model.video_workflow import VideoWorkflowModel
 from model.ai_tools import AIToolsModel
+from model.implementation_attempts import ImplementationAttemptModel
 from config.unified_config import UnifiedConfigRegistry, IMPLEMENTATION_FROM_ID
 from model.system_config import SystemConfigModel
 from model.system_config_history import SystemConfigHistoryModel
@@ -117,6 +120,8 @@ async def admin_monthly_active_users(
 @router.get("/dashboard/model-analysis")
 async def admin_model_analysis(
     days: int = Query(1, ge=1, le=30),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
     auth_token: str = Header(None, alias="Authorization")
 ):
     """
@@ -126,7 +131,25 @@ async def admin_model_analysis(
     await require_admin(auth_token)
 
     try:
-        raw_stats = AIToolsModel.get_implementation_stats(days=days)
+        parsed_start = datetime.strptime(start_date, "%Y-%m-%d").date() if start_date else None
+        parsed_end = datetime.strptime(end_date, "%Y-%m-%d").date() if end_date else None
+        if parsed_start and parsed_end and parsed_start > parsed_end:
+            raise HTTPException(status_code=400, detail="start_date must be earlier than or equal to end_date")
+
+        raw_stats, raw_daily_stats = await asyncio.gather(
+            asyncio.to_thread(
+                ImplementationAttemptModel.get_stats,
+                days=days,
+                start_date=start_date,
+                end_date=end_date
+            ),
+            asyncio.to_thread(
+                ImplementationAttemptModel.get_daily_stats,
+                days=days,
+                start_date=start_date,
+                end_date=end_date
+            )
+        )
 
         # 获取类型ID -> 名称映射
         type_name_map = UnifiedConfigRegistry.get_name_map()
@@ -178,13 +201,64 @@ async def admin_model_analysis(
                 'providers': providers
             })
 
+        daily_groups = {}
+        for row in raw_daily_stats:
+            stat_date = row['date']
+            if stat_date not in daily_groups:
+                daily_groups[stat_date] = {
+                    'date': stat_date,
+                    'total': 0,
+                    'success': 0,
+                    'fail': 0,
+                    'models': {}
+                }
+
+            day_group = daily_groups[stat_date]
+            day_group['total'] += row['total_count']
+            day_group['success'] += row['success_count']
+            day_group['fail'] += row['fail_count']
+
+            task_type = row['type']
+            if task_type not in day_group['models']:
+                day_group['models'][task_type] = {
+                    'type': task_type,
+                    'name': type_name_map.get(task_type, f'未知类型({task_type})'),
+                    'total': 0,
+                    'success': 0,
+                    'fail': 0
+                }
+            model_group = day_group['models'][task_type]
+            model_group['total'] += row['total_count']
+            model_group['success'] += row['success_count']
+            model_group['fail'] += row['fail_count']
+
+        daily = []
+        for day_group in sorted(daily_groups.values(), key=lambda x: x['date']):
+            day_total = day_group['total']
+            day_group['success_rate'] = round((day_group['success'] / day_total * 100) if day_total > 0 else 0.0, 2)
+            day_group['models'] = [
+                {
+                    **model_group,
+                    'success_rate': round((model_group['success'] / model_group['total'] * 100) if model_group['total'] > 0 else 0.0, 2)
+                }
+                for model_group in sorted(day_group['models'].values(), key=lambda x: -x['total'])
+            ]
+            daily.append(day_group)
+
         return {
             "code": 0,
             "data": {
                 "days": days,
-                "models": models
+                "start_date": start_date,
+                "end_date": end_date,
+                "models": models,
+                "daily": daily
             }
         }
+    except HTTPException:
+        raise
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format, expected YYYY-MM-DD")
     except Exception as e:
         logger.error(f"Failed to get model analysis: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1501,7 +1575,7 @@ async def admin_get_implementation_configs(
                 impl_data = {
                     'name': impl_name,
                     'display_name': display_name if impl_config.site_number is not None else (db_config.get('display_name') if db_config else None) or display_name,  # 聚合站点始终使用系统配置名称，其他实现方优先使用数据库值
-                    'enabled': db_config.get('enabled') if db_config and db_config.get('enabled') is not None else impl_config.enabled,
+                    'enabled': bool(db_config.get('enabled')) if db_config and db_config.get('enabled') is not None else impl_config.enabled,
                     'sort_order': db_config.get('sort_order') if db_config else impl_config.sort_order,  # 优先使用数据库排序，否则使用配置文件默认值
                     'driver_key': db_config.get('driver_key') if db_config else impl_config.driver_class,  # 使用 driver_key 字段
                     # 优先使用任务配置中的 computing_power，其次使用实现方的默认算力
@@ -1559,9 +1633,18 @@ async def admin_get_implementation_configs(
             for driver_key, impls in sorted(driver_key_groups.items())
         ]
 
+        # 获取重试总开关状态
+        retry_global_enabled = True
+        try:
+            from config.config_util import get_dynamic_config_value
+            retry_global_enabled = get_dynamic_config_value("retry_settings", "global_enabled", default=False)
+        except Exception:
+            pass
+
         return {
             "code": 0,
-            "data": result
+            "data": result,
+            "retry_global_enabled": retry_global_enabled
         }
     except Exception as e:
         logger.error(f"Failed to get implementation configs: {e}")
@@ -1676,4 +1759,63 @@ async def admin_update_model_enabled(
         raise
     except Exception as e:
         logger.error(f"Failed to update model {model_id} enabled: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/constants")
+async def admin_get_constants(
+    auth_token: str = Header(None, alias="Authorization")
+):
+    """获取系统中所有常量/枚举定义，用于管理后台常量参考页面"""
+    await require_admin(auth_token)
+
+    try:
+        from config.constants_registry import build_constants_response
+        return {
+            "code": 0,
+            "data": build_constants_response()
+        }
+    except Exception as e:
+        logger.error(f"Failed to get constants: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class RetryGlobalEnabledRequest(BaseModel):
+    enabled: bool
+
+
+@router.put("/retry-global-enabled")
+async def admin_update_retry_global_enabled(
+    request: RetryGlobalEnabledRequest,
+    auth_token: str = Header(None, alias="Authorization")
+):
+    """
+    更新供应商自动切换总开关
+
+    企业版可用，社区版返回 403
+    """
+    from config.strategy.edition_strategy import IS_COMMUNITY_EDITION
+
+    await require_admin(auth_token)
+
+    if IS_COMMUNITY_EDITION:
+        raise HTTPException(status_code=403, detail="此功能仅商业版本可用，请购买商业版本后解锁该功能")
+
+    try:
+        from config.config_util import set_dynamic_config_value
+        set_dynamic_config_value(
+            "retry_settings", "global_enabled",
+            value=request.enabled,
+            value_type="bool",
+            description="供应商自动切换总开关"
+        )
+        logger.info(f"Retry global enabled set to {request.enabled}")
+
+        return {
+            "code": 0,
+            "message": f"供应商自动切换已{'开启' if request.enabled else '关闭'}",
+            "data": {"enabled": request.enabled}
+        }
+    except Exception as e:
+        logger.error(f"Failed to update retry global enabled: {e}")
         raise HTTPException(status_code=500, detail=str(e))

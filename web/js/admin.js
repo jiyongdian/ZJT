@@ -567,10 +567,20 @@ const AdminApp = {
                     loading: false
                 },
                 modelAnalysis: {
-                    days: 1,
+                    days: 7,
+                    startDate: '',
+                    endDate: '',
+                    selectedTypes: [],
+                    chartMode: 'rate',
                     loading: false,
                     models: [],
-                    expandedTypes: {}
+                    daily: [],
+                    expandedTypes: {},
+                    charts: {
+                        trend: null,
+                        stacked: null,
+                        rose: null
+                    }
                 }
             },
             
@@ -585,6 +595,9 @@ const AdminApp = {
                 statusFilter: '',
                 roleFilter: ''
             },
+
+            // 敏感字段可见性控制（手机号、邮箱的小眼睛切换）
+            visibleFields: {},
             
             // 算力调整弹窗
             powerModal: {
@@ -680,7 +693,8 @@ const AdminApp = {
                 groups: [],  // 分组数据
                 loading: false,
                 keyword: '',
-                updating: null  // 正在更新的实现方名称
+                updating: null,  // 正在更新的实现方名称
+                retryGlobalEnabled: false  // 供应商自动切换总开关
             },
 
             // 模型管理
@@ -741,7 +755,17 @@ const AdminApp = {
                 feature: '新功能',
                 security: '安全'
             },
-            notificationsPollTimer: null
+            notificationsPollTimer: null,
+
+            // 常量参考
+            constants: {
+                groups: [],
+                mappings: [],
+                loading: false,
+                searchKeyword: '',
+                groupFilter: '',
+                typeFilter: ''
+            }
         };
     },
     
@@ -776,6 +800,28 @@ const AdminApp = {
             }
 
             return groups;
+        },
+
+        filteredConstantsClasses() {
+            let allClasses = [];
+            for (const group of this.constants.groups) {
+                if (this.constants.groupFilter && group.group_id !== this.constants.groupFilter) continue;
+                for (const cls of group.classes) {
+                    if (this.constants.typeFilter) {
+                        const hasType = cls.members.some(m => m.type === this.constants.typeFilter);
+                        if (!hasType) continue;
+                    }
+                    if (this.constants.searchKeyword) {
+                        const kw = this.constants.searchKeyword.toLowerCase();
+                        const match = cls.class_name.toLowerCase().includes(kw)
+                            || cls.description.toLowerCase().includes(kw)
+                            || cls.members.some(m => m.name.toLowerCase().includes(kw) || String(m.value).toLowerCase().includes(kw) || (m.label && m.label.toLowerCase().includes(kw)));
+                        if (!match) continue;
+                    }
+                    allClasses.push(cls);
+                }
+            }
+            return allClasses;
         },
 
         minDate() {
@@ -905,10 +951,19 @@ const AdminApp = {
     
     mounted() {
         this.initI18n().then(() => {
+            this.initModelAnalysisDates();
+            window.addEventListener('resize', this.resizeModelAnalysisCharts);
             this.initAuth();
             this.fetchServerConfig();
             this.pollNotifications();
             this.notificationsPollTimer = setInterval(() => this.pollNotifications(), 30000);
+        });
+    },
+
+    unmounted() {
+        window.removeEventListener('resize', this.resizeModelAnalysisCharts);
+        Object.values(this.dashboard.modelAnalysis.charts || {}).forEach(chart => {
+            if (chart) chart.dispose();
         });
     },
 
@@ -1084,6 +1139,8 @@ const AdminApp = {
                 this.loadImplementations();
             } else if (page === 'models') {
                 this.loadModels();
+            } else if (page === 'constants') {
+                this.loadConstants();
             }
         },
         
@@ -1134,14 +1191,31 @@ const AdminApp = {
         // 加载模型分析数据
         async loadModelAnalysis() {
             this.dashboard.modelAnalysis.loading = true;
+            let shouldRenderCharts = false;
             try {
+                const params = { days: this.dashboard.modelAnalysis.days };
+                if (this.dashboard.modelAnalysis.startDate) {
+                    params.start_date = this.dashboard.modelAnalysis.startDate;
+                }
+                if (this.dashboard.modelAnalysis.endDate) {
+                    params.end_date = this.dashboard.modelAnalysis.endDate;
+                }
+
                 const response = await axios.get('/api/admin/dashboard/model-analysis', {
-                    params: { days: this.dashboard.modelAnalysis.days },
+                    params,
                     headers: { 'Authorization': `Bearer ${this.authToken}` }
                 });
 
                 if (response.data.code === 0) {
-                    this.dashboard.modelAnalysis.models = response.data.data.models;
+                    const models = response.data.data.models || [];
+                    this.dashboard.modelAnalysis.models = models;
+                    this.dashboard.modelAnalysis.daily = response.data.data.daily || [];
+
+                    const availableTypes = models.map(model => model.type);
+                    const selectedTypes = (this.dashboard.modelAnalysis.selectedTypes || [])
+                        .filter(type => availableTypes.includes(type));
+                    this.dashboard.modelAnalysis.selectedTypes = selectedTypes.length ? selectedTypes : availableTypes;
+                    shouldRenderCharts = true;
                 }
             } catch (error) {
                 console.error('Load model analysis failed:', error);
@@ -1149,13 +1223,85 @@ const AdminApp = {
             } finally {
                 this.dashboard.modelAnalysis.loading = false;
             }
+
+            // 在 loading 设为 false 之后渲染图表，使用 setTimeout 确保 v-else-if 的 DOM 已完全就绪
+            if (shouldRenderCharts) {
+                setTimeout(() => this.renderModelAnalysisCharts(), 100);
+            }
         },
 
         // 切换模型分析时间范围
         setModelAnalysisDays(days) {
             this.dashboard.modelAnalysis.days = days;
+            this.setModelAnalysisDateRangeFromDays(days);
+            this.dashboard.modelAnalysis.expandedTypes = {};
+            this.dashboard.modelAnalysis.daily = [];
+            this.loadModelAnalysis();
+        },
+
+        initModelAnalysisDates() {
+            this.setModelAnalysisDateRangeFromDays(this.dashboard.modelAnalysis.days || 1);
+        },
+
+        setModelAnalysisDateRangeFromDays(days) {
+            const end = new Date();
+            const start = new Date();
+            start.setDate(end.getDate() - Math.max(days - 1, 0));
+            this.dashboard.modelAnalysis.startDate = this.formatDateInput(start);
+            this.dashboard.modelAnalysis.endDate = this.formatDateInput(end);
+        },
+
+        formatDateInput(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        },
+
+        handleModelAnalysisDateChange() {
+            const { startDate, endDate } = this.dashboard.modelAnalysis;
+            if (startDate && endDate) {
+                const start = new Date(startDate);
+                const end = new Date(endDate);
+                if (start > end) {
+                    this.dashboard.modelAnalysis.endDate = startDate;
+                } else {
+                    const diffMs = end.getTime() - start.getTime();
+                    this.dashboard.modelAnalysis.days = Math.min(Math.floor(diffMs / 86400000) + 1, 30);
+                }
+            }
             this.dashboard.modelAnalysis.expandedTypes = {};
             this.loadModelAnalysis();
+        },
+
+        setModelAnalysisChartMode(mode) {
+            this.dashboard.modelAnalysis.chartMode = mode;
+            this.$nextTick(() => this.renderModelTrendChart());
+        },
+
+        selectAllModelAnalysisTypes() {
+            this.dashboard.modelAnalysis.selectedTypes = (this.dashboard.modelAnalysis.models || []).map(model => model.type);
+            this.$nextTick(() => this.renderModelAnalysisCharts());
+        },
+
+        clearModelAnalysisTypes() {
+            this.dashboard.modelAnalysis.selectedTypes = [];
+            this.$nextTick(() => this.renderModelAnalysisCharts());
+        },
+
+        toggleModelAnalysisType(type) {
+            const selected = new Set(this.dashboard.modelAnalysis.selectedTypes || []);
+            if (selected.has(type)) {
+                selected.delete(type);
+            } else {
+                selected.add(type);
+            }
+            this.dashboard.modelAnalysis.selectedTypes = Array.from(selected);
+            this.$nextTick(() => this.renderModelAnalysisCharts());
+        },
+
+        isModelAnalysisTypeSelected(type) {
+            return (this.dashboard.modelAnalysis.selectedTypes || []).includes(type);
         },
 
         // 展开/折叠模型供应商详情
@@ -1168,6 +1314,259 @@ const AdminApp = {
             if (rate >= 90) return 'rate-high';
             if (rate >= 70) return 'rate-medium';
             return 'rate-low';
+        },
+
+        getModelAnalysisSummary() {
+            const models = this.dashboard.modelAnalysis.models || [];
+            const total = models.reduce((sum, model) => sum + (model.total || 0), 0);
+            const success = models.reduce((sum, model) => sum + (model.success || 0), 0);
+            const fail = models.reduce((sum, model) => sum + (model.fail || 0), 0);
+            return {
+                total,
+                success,
+                fail,
+                successRate: total > 0 ? (success / total) * 100 : 0
+            };
+        },
+
+        sortedModelAnalysisModels() {
+            return [...(this.dashboard.modelAnalysis.models || [])]
+                .sort((a, b) => (b.total || 0) - (a.total || 0));
+        },
+
+        getDailyTrendItems() {
+            return this.dashboard.modelAnalysis.daily || [];
+        },
+
+        getSelectedModelAnalysisModels() {
+            const selected = new Set(this.dashboard.modelAnalysis.selectedTypes || []);
+            return this.sortedModelAnalysisModels().filter(model => selected.has(model.type));
+        },
+
+        getModelColor(index) {
+            const colors = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#14b8a6', '#e11d48', '#64748b'];
+            return colors[index % colors.length];
+        },
+
+        getDailyModelValue(day, type, field) {
+            const item = (day.models || []).find(model => model.type === type);
+            return item ? (item[field] || 0) : 0;
+        },
+
+        getModelChartBaseOption() {
+            return {
+                backgroundColor: 'transparent',
+                textStyle: {
+                    color: '#334155',
+                    fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: 'rgba(15, 23, 42, 0.92)',
+                    borderWidth: 0,
+                    textStyle: { color: '#fff' },
+                    axisPointer: { type: 'cross' }
+                },
+                legend: {
+                    type: 'scroll',
+                    top: 0,
+                    textStyle: { color: '#475569' }
+                },
+                grid: {
+                    left: 48,
+                    right: 58,
+                    top: 58,
+                    bottom: 36,
+                    containLabel: true
+                }
+            };
+        },
+
+        ensureModelChart(refName, key) {
+            if (!window.echarts) {
+                this.showToast(this.t('model_chart_dependency_missing'), 'error');
+                return null;
+            }
+            const el = this.$refs[refName];
+            if (!el) return null;
+            const cached = this.dashboard.modelAnalysis.charts[key];
+            if (cached && cached.getDom() !== el) {
+                cached.dispose();
+                this.dashboard.modelAnalysis.charts[key] = null;
+            }
+            if (!this.dashboard.modelAnalysis.charts[key]) {
+                const chart = window.echarts.init(el);
+                this.dashboard.modelAnalysis.charts[key] = Vue.markRaw ? Vue.markRaw(chart) : chart;
+            }
+            return this.dashboard.modelAnalysis.charts[key];
+        },
+
+        renderModelAnalysisCharts() {
+            if (!this.dashboard.modelAnalysis.models.length) return;
+            this.renderModelTrendChart();
+            this.renderModelStackedChart();
+            this.renderModelRoseChart();
+        },
+
+        renderModelTrendChart() {
+            const chart = this.ensureModelChart('modelTrendChart', 'trend');
+            if (!chart) return;
+            const daily = this.getDailyTrendItems();
+            const models = this.getSelectedModelAnalysisModels();
+            const dates = daily.map(day => day.date);
+            const mode = this.dashboard.modelAnalysis.chartMode;
+            const series = [];
+
+            console.log('[TrendChart] mode:', mode, 'models:', models.length, 'daily:', daily.length);
+
+            models.forEach((model, index) => {
+                const color = this.getModelColor(index);
+                if (mode === 'rate' || mode === 'both') {
+                    const rateData = daily.map(day => this.getDailyModelValue(day, model.type, 'success_rate'));
+                    console.log('[TrendChart] Rate series for', model.name, ':', rateData);
+                    series.push({
+                        name: `${model.name} ${this.t('model_chart_mode_rate')}`,
+                        type: 'line',
+                        smooth: true,
+                        yAxisIndex: 0,
+                        symbolSize: 7,
+                        lineStyle: { width: 3, color },
+                        itemStyle: { color },
+                        data: rateData
+                    });
+                }
+                if (mode === 'count' || mode === 'both') {
+                    const countData = daily.map(day => this.getDailyModelValue(day, model.type, 'total'));
+                    console.log('[TrendChart] Count series for', model.name, ':', countData);
+                    series.push({
+                        name: `${model.name} ${this.t('model_chart_mode_count')}`,
+                        type: 'line',
+                        smooth: true,
+                        yAxisIndex: 1,
+                        symbolSize: 6,
+                        lineStyle: { width: 2, type: 'dashed', color },
+                        itemStyle: { color },
+                        data: countData
+                    });
+                }
+            });
+
+            console.log('[TrendChart] Total series count:', series.length);
+
+            chart.setOption({
+                ...this.getModelChartBaseOption(),
+                xAxis: {
+                    type: 'category',
+                    data: dates,
+                    boundaryGap: false,
+                    axisLine: { lineStyle: { color: '#cbd5e1' } },
+                    axisLabel: { color: '#64748b' }
+                },
+                yAxis: [
+                    {
+                        type: 'value',
+                        name: this.t('model_chart_mode_rate'),
+                        min: 0,
+                        max: 100,
+                        axisLabel: { formatter: '{value}%' },
+                        splitLine: { lineStyle: { color: '#e2e8f0' } }
+                    },
+                    {
+                        type: 'value',
+                        name: this.t('model_chart_mode_count'),
+                        min: 0,
+                        axisLabel: { formatter: '{value}' },
+                        splitLine: { show: false }
+                    }
+                ],
+                series
+            }, true);
+        },
+
+        renderModelStackedChart() {
+            const chart = this.ensureModelChart('modelStackedChart', 'stacked');
+            if (!chart) return;
+            const daily = this.getDailyTrendItems();
+            const models = this.getSelectedModelAnalysisModels();
+            chart.setOption({
+                ...this.getModelChartBaseOption(),
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' },
+                    backgroundColor: 'rgba(15, 23, 42, 0.92)',
+                    borderWidth: 0,
+                    textStyle: { color: '#fff' }
+                },
+                xAxis: {
+                    type: 'category',
+                    data: daily.map(day => day.date),
+                    axisLine: { lineStyle: { color: '#cbd5e1' } },
+                    axisLabel: { color: '#64748b' }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: this.t('model_chart_mode_count'),
+                    splitLine: { lineStyle: { color: '#e2e8f0' } }
+                },
+                series: models.map((model, index) => ({
+                    name: model.name,
+                    type: 'bar',
+                    stack: 'models',
+                    barMaxWidth: 42,
+                    itemStyle: { color: this.getModelColor(index), borderRadius: [3, 3, 0, 0] },
+                    data: daily.map(day => this.getDailyModelValue(day, model.type, 'total'))
+                }))
+            }, true);
+        },
+
+        renderModelRoseChart() {
+            const chart = this.ensureModelChart('modelRoseChart', 'rose');
+            if (!chart) return;
+            const models = this.getSelectedModelAnalysisModels();
+            chart.setOption({
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'item',
+                    backgroundColor: 'rgba(15, 23, 42, 0.92)',
+                    borderWidth: 0,
+                    textStyle: { color: '#fff' }
+                },
+                legend: {
+                    type: 'scroll',
+                    orient: 'vertical',
+                    right: 10,
+                    top: 20,
+                    bottom: 20,
+                    textStyle: { color: '#475569' }
+                },
+                series: [{
+                    name: this.t('model_chart_rose_volume'),
+                    type: 'pie',
+                    roseType: 'radius',
+                    radius: ['24%', '72%'],
+                    center: ['42%', '52%'],
+                    label: {
+                        formatter: '{b}: {c}',
+                        color: '#334155'
+                    },
+                    itemStyle: {
+                        borderColor: '#fff',
+                        borderWidth: 2
+                    },
+                    data: models.map((model, index) => ({
+                        name: model.name,
+                        value: model.total || 0,
+                        itemStyle: { color: this.getModelColor(index) }
+                    }))
+                }]
+            }, true);
+        },
+
+        resizeModelAnalysisCharts() {
+            const charts = this.dashboard?.modelAnalysis?.charts || {};
+            Object.values(charts).forEach(chart => {
+                if (chart) chart.resize();
+            });
         },
 
         // 格式化耗时（毫秒 → 可读字符串）
@@ -1255,6 +1654,9 @@ const AdminApp = {
         closeUserDetailModal() {
             this.userDetailModal.show = false;
             this.userDetailModal.user = null;
+            // 清理详情弹窗的可见性状态
+            delete this.visibleFields['detail_phone'];
+            delete this.visibleFields['detail_email'];
         },
         
         // 更新用户状态
@@ -1310,7 +1712,7 @@ const AdminApp = {
         // 更新用户角色
         async updateUserRole(userId, currentRole) {
             const newRole = currentRole === 'admin' ? 'user' : 'admin';
-            const actionKey = newRole === 'admin' ? 'btn_set_admin' : 'btn_set_admin';
+            const actionKey = newRole === 'admin' ? 'btn_set_admin' : 'btn_set_user';
 
             if (!confirm(this.t('confirm_action', { action: this.t(actionKey) }))) {
                 return;
@@ -1324,7 +1726,10 @@ const AdminApp = {
 
                 if (response.data.code === 0) {
                     this.showToast(this.t('toast_adjust_success'), 'success');
-                    this.loadUsers();
+                    if (this.userDetailModal.user && this.userDetailModal.user.user_id === userId) {
+                        this.userDetailModal.user.role = newRole;
+                    }
+                    await this.loadUsers();
                 }
             } catch (error) {
                 console.error('Update user role failed:', error);
@@ -1561,11 +1966,37 @@ const AdminApp = {
                 minute: '2-digit'
             });
         },
+
+        formatDateOnly(dateStr) {
+            if (!dateStr) return '-';
+            const date = new Date(dateStr);
+            const locale = this.locale === 'en' ? 'en-US' : 'zh-CN';
+            return date.toLocaleDateString(locale, {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            });
+        },
         
         // 格式化手机号
         formatPhone(phone) {
             if (!phone || phone.length !== 11) return phone || '-';
             return phone.substring(0, 3) + '****' + phone.substring(7);
+        },
+
+        // 格式化邮箱（掩码处理）
+        formatEmail(email) {
+            if (!email) return '-';
+            const atIndex = email.indexOf('@');
+            if (atIndex <= 1) return email;
+            const prefix = email.substring(0, Math.min(2, atIndex));
+            const suffix = email.substring(atIndex);
+            return prefix + '***' + suffix;
+        },
+
+        // 切换敏感字段的可见性
+        toggleFieldVisibility(fieldKey) {
+            this.visibleFields[fieldKey] = !this.visibleFields[fieldKey];
         },
         
         // ==================== 配置管理方法 ====================
@@ -2313,6 +2744,30 @@ const AdminApp = {
             }
         },
 
+        // 加载常量参考
+        async loadConstants() {
+            if (this.constants.groups.length > 0) return; // 已加载过，不重复请求
+            this.constants.loading = true;
+            try {
+                const response = await axios.get('/api/admin/constants', {
+                    headers: { 'Authorization': `Bearer ${this.authToken}` }
+                });
+                if (response.data.code === 0) {
+                    this.constants.groups = response.data.data.groups || [];
+                    this.constants.mappings = response.data.data.mappings || [];
+                }
+            } catch (error) {
+                console.error('加载常量定义失败:', error);
+                if (error.response?.status === 401 || error.response?.status === 403) {
+                    this.handleAuthError(error.response.status);
+                } else {
+                    this.showToast(this.t('constants_load_failed'), 'error');
+                }
+            } finally {
+                this.constants.loading = false;
+            }
+        },
+
         // 切换模型启用/禁用状态
         async toggleModelEnabled(model) {
             const newEnabled = model.enabled ? 0 : 1;
@@ -2353,6 +2808,8 @@ const AdminApp = {
                     console.log('加载实现方数据:', response.data.data);
                     // 后端现在返回分组数据
                     this.implementations.groups = response.data.data;
+                    // 读取重试总开关状态
+                    this.implementations.retryGlobalEnabled = response.data.retry_global_enabled !== false;
                     console.log('更新后的 groups:', this.implementations.groups);
 
                     // 强制触发 Vue 响应式更新
@@ -2363,6 +2820,40 @@ const AdminApp = {
                 this.showToast(this.t('toast_load_impl_failed'), 'error');
             } finally {
                 this.implementations.loading = false;
+            }
+        },
+
+        // 切换供应商自动切换总开关
+        async toggleRetryGlobal() {
+            // 社区版限制
+            if (this.isCommunityEdition) {
+                this.showToast(this.t('toast_community_feature_locked'), 'warning');
+                this.implementations.retryGlobalEnabled = false;
+                return;
+            }
+
+            try {
+                const response = await axios.put('/api/admin/retry-global-enabled', {
+                    enabled: this.implementations.retryGlobalEnabled
+                }, {
+                    headers: { 'Authorization': `Bearer ${this.authToken}` }
+                });
+
+                if (response.data.code === 0) {
+                    this.showToast(response.data.message, 'success');
+                } else {
+                    this.showToast(response.data.detail || this.t('toast_save_failed'), 'error');
+                    this.implementations.retryGlobalEnabled = !this.implementations.retryGlobalEnabled;
+                }
+            } catch (error) {
+                console.error('Toggle retry global failed:', error);
+                if (error.response && error.response.status === 403) {
+                    this.showToast(error.response.data.detail || this.t('toast_community_feature_locked'), 'warning');
+                    this.implementations.retryGlobalEnabled = false;
+                } else {
+                    this.showToast(this.t('toast_save_failed'), 'error');
+                    this.implementations.retryGlobalEnabled = !this.implementations.retryGlobalEnabled;
+                }
             }
         },
 
@@ -2502,10 +2993,6 @@ const AdminApp = {
             const actionKey = impl.enabled ? 'btn_disable' : 'btn_enable';
             const newEnabled = !impl.enabled;
 
-            if (!confirm(this.t('confirm_impl_action', { action: this.t(actionKey), name: impl.display_name }))) {
-                return;
-            }
-
             try {
                 const response = await axios.put('/api/admin/implementation-config', {
                     implementation_name: impl.name,
@@ -2516,10 +3003,8 @@ const AdminApp = {
                 });
 
                 if (response.data.code === 0) {
+                    impl.enabled = newEnabled;
                     this.showToast(this.t('toast_impl_toggled', { action: this.t(actionKey) }), 'success');
-                    // 重新加载数据以获取最新状态
-                    await this.loadImplementations();
-                    console.log('数据重新加载完成');
                 } else {
                     this.showToast(response.data.message || this.t('toast_impl_action_failed'), 'error');
                 }

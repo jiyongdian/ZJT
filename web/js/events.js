@@ -236,6 +236,13 @@
       startNodePlacing(nodeId);
     });
 
+    document.getElementById('menuAddDigitalHuman').addEventListener('click', () => {
+      const nodeId = createDigitalHumanNode();
+      renderMinimap();
+      addMenu.classList.remove('show');
+      startNodePlacing(nodeId);
+    });
+
     // 点击其他地方关闭菜单
     document.addEventListener('click', (e) => {
       if(!e.target.closest('#addBtnContainer')){
@@ -516,48 +523,13 @@
         let nearestImgPort = null;
         let nearestDist = 50;
         
-        // 如果从图片节点拖拽，查找图片输入端口和首帧端口
+        // 如果从图片节点拖拽，查找所有注册的图片输入端口
         let nearestFirstFramePort = null;
         if(fromNode && fromNode.type === 'image'){
-          // 查找图生视频节点的图片端口
-          for(const node of state.nodes){
-            if(node.type !== 'image_to_video') continue;
-            const toEl = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
-            if(!toEl) continue;
-            
-            // 检查首帧端口
-            if(!node.data.startFile){
-              const startPort = toEl.querySelector('.start-image-port');
-              if(startPort){
-                const { dist, x: portX, y: portY } = getPortDistance(startPort, toX, toY);
-                if(dist < nearestDist){
-                  nearestDist = dist;
-                  nearestImgPort = { nodeId: node.id, portType: 'start', x: portX, y: portY };
-                }
-              }
-            }
-            // 检查尾帧端口
-            if(!node.data.endFile){
-              const endPort = toEl.querySelector('.end-image-port');
-              if(endPort){
-                const { dist, x: portX, y: portY } = getPortDistance(endPort, toX, toY);
-                if(dist < nearestDist){
-                  nearestDist = dist;
-                  nearestImgPort = { nodeId: node.id, portType: 'end', x: portX, y: portY };
-                }
-              }
-            }
-            // 检查参考图端口（多参考图模式）
-            if(node.data.imageMode === 'multi_reference'){
-              const refImgPort = toEl.querySelector('.ref-image-input-port');
-              if(refImgPort){
-                const { dist, x: portX, y: portY } = getPortDistance(refImgPort, toX, toY);
-                if(dist < nearestDist){
-                  nearestDist = dist;
-                  nearestImgPort = { nodeId: node.id, portType: 'ref-image', x: portX, y: portY };
-                }
-              }
-            }
+          // 通过注册表自动查找所有可接受图片节点的端口（image_to_video、digital_human 等）
+          const registryPort = findNearestConnectablePort(toX, toY, 'image', 50);
+          if(registryPort){
+            nearestImgPort = { nodeId: registryPort.nodeId, portType: registryPort.portType, x: registryPort.x, y: registryPort.y };
           }
           
           // 查找分镜节点的首帧端口
@@ -656,21 +628,12 @@
           }
         }
 
-        // 如果从音频节点拖拽，查找图生视频节点的音频输入端口
+        // 如果从音频节点拖拽，通过注册表查找所有音频输入端口
         let nearestAudioInputPort = null;
         if(fromNode && fromNode.type === 'audio'){
-          let nearestAudioDist = 50;
-          for(const node of state.nodes){
-            if(node.type !== 'image_to_video') continue;
-            const toEl = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
-            if(!toEl) continue;
-            const portEl = toEl.querySelector('.audio-input-port');
-            if(!portEl) continue;
-            const { dist, x: portX, y: portY } = getPortDistance(portEl, toX, toY);
-            if(dist < nearestAudioDist){
-              nearestAudioDist = dist;
-              nearestAudioInputPort = { nodeId: node.id, x: portX, y: portY };
-            }
+          const registryAudioPort = findNearestConnectablePort(toX, toY, 'audio', 50);
+          if(registryAudioPort){
+            nearestAudioInputPort = { nodeId: registryAudioPort.nodeId, x: registryAudioPort.x, y: registryAudioPort.y };
           }
         }
         
@@ -836,81 +799,47 @@
           return getPortDistance(portEl, mouseX, mouseY);
         }
 
-        // 辅助：在 image_to_video 节点中查找最近的可见端口
-        function findNearestI2VPort(fromType, portSelectors){
-          let best = null;
-          let bestDist = PROXIMITY_DIST;
-          for(const node of state.nodes){
-            if(node.type !== 'image_to_video') continue;
-            const toEl = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
-            if(!toEl) continue;
-            for(const { selector, portType, guard } of portSelectors){
-              if(guard && !guard(node)) continue;
-              const portEl = toEl.querySelector(selector);
-              if(!portEl) continue;
-              const { dist } = distToPort(portEl);
-              if(dist < bestDist){
-                bestDist = dist;
-                best = { nodeId: node.id, portType, node };
-              }
-            }
-          }
-          return best;
-        }
-
         if(fromNode && fromNode.type === 'image'){
-          // 图生视频节点端口
+          // 通过注册表查找所有可接受图片节点的端口（image_to_video、digital_human 等）
           let imgConnected = false;
           {
-            const i2vPort = findNearestI2VPort('image', [
-              { selector: '.start-image-port', portType: 'start', guard: n => !n.data.startFile },
-              { selector: '.end-image-port', portType: 'end', guard: n => !n.data.endFile },
-              { selector: '.ref-image-input-port', portType: 'ref-image', guard: n => {
-                if(n.data.imageMode !== 'multi_reference') return false;
-                // 检查是否已达到最大参考图数量
-                if(window.TaskConfig && window.TaskConfig.isLoaded()) {
-                  const modelConfigs = window.TaskConfig.getModelConfigs();
-                  const maxCount = modelConfigs[n.data.videoModel]?.max_multi_ref_images || 5;
-                  return (n.data.referenceUrls || []).length < maxCount;
-                }
-                return true;
-              }},
-            ]);
+            const i2vPort = findNearestConnectablePort(mouseX, mouseY, 'image', PROXIMITY_DIST);
             if(i2vPort){
-              // ref-image 允许多个连接（guard 已限制数量），其他端口类型检查重复
-              const shouldConnect = i2vPort.portType === 'ref-image'
+              const connArray = state[i2vPort.portCfg.connectionType] || state.imageConnections;
+              // 允许端口声明支持多连接（如参考图），否则检查重复
+              const shouldConnect = i2vPort.portCfg.allowMultiple
                 ? true
-                : !state.imageConnections.some(c => c.to === i2vPort.nodeId && c.portType === i2vPort.portType);
+                : !connArray.some(c => c.to === i2vPort.nodeId && c.portType === i2vPort.portType);
               if(shouldConnect){
-                state.imageConnections.push({ id: state.nextImgConnId++, from: fromNode.id, to: i2vPort.nodeId, portType: i2vPort.portType });
-                const tn = state.nodes.find(n => n.id === i2vPort.nodeId);
-                if(i2vPort.portType === 'start'){
-                  if(tn){
+                connArray.push({ id: state.nextImgConnId++, from: fromNode.id, to: i2vPort.nodeId, portType: i2vPort.portType });
+                const tn = i2vPort.node;
+                // 优先使用注册表的 onConnect 回调，否则使用默认行为
+                if(typeof i2vPort.portCfg.onConnect === 'function'){
+                  i2vPort.portCfg.onConnect(fromNode, tn);
+                } else {
+                  // 默认行为：根据 portType 设置节点数据
+                  if(i2vPort.portType === 'start'){
                     tn.data.startUrl = fromNode.data.url || '';
                     tn.data.startPreview = fromNode.data.preview || fromNode.data.url || '';
-                  }
-                } else if(i2vPort.portType === 'end'){
-                  if(tn){
+                  } else if(i2vPort.portType === 'end'){
                     tn.data.endUrl = fromNode.data.url || '';
                     tn.data.endPreview = fromNode.data.preview || fromNode.data.url || '';
-                  }
-                } else if(i2vPort.portType === 'ref-image'){
-                  if(tn && fromNode.data.url){
-                    if(!tn.data.referenceUrls) tn.data.referenceUrls = [];
-                    tn.data.referenceUrls.push(fromNode.data.url);
+                  } else if(i2vPort.portType === 'ref-image'){
+                    if(fromNode.data.url){
+                      if(!tn.data.referenceUrls) tn.data.referenceUrls = [];
+                      tn.data.referenceUrls.push(fromNode.data.url);
+                    }
                   }
                 }
                 renderImageConnections();
                 // 更新预览显示
-                if(tn){
-                  const targetEl = canvasEl.querySelector(`.node[data-node-id="${tn.id}"]`);
-                  if(i2vPort.portType === 'start' && typeof targetEl?._updateStartFrame === 'function'){
-                    targetEl._updateStartFrame();
-                  } else if(i2vPort.portType === 'end' && typeof targetEl?._updateEndFrame === 'function'){
-                    targetEl._updateEndFrame();
-                  } else if(i2vPort.portType === 'ref-image' && typeof targetEl?._updateReferencePreview === 'function'){
-                    targetEl._updateReferencePreview();
-                  }
+                const targetEl = canvasEl.querySelector(`.node[data-node-id="${tn.id}"]`);
+                if(i2vPort.portType === 'start' && typeof targetEl?._updateStartFrame === 'function'){
+                  targetEl._updateStartFrame();
+                } else if(i2vPort.portType === 'end' && typeof targetEl?._updateEndFrame === 'function'){
+                  targetEl._updateEndFrame();
+                } else if(i2vPort.portType === 'ref-image' && typeof targetEl?._updateReferencePreview === 'function'){
+                  targetEl._updateReferencePreview();
                 }
                 safeAutoSave()
                 imgConnected = true;
@@ -1142,49 +1071,38 @@
           }
         }
 
-        // 如果从音频节点拖拽，查找图生视频节点的音频输入端口
+        // 如果从音频节点拖拽，通过注册表查找所有音频输入端口
         if(fromNode && fromNode.type === 'audio'){
-          {
-            let nearestAudioInputPort = null;
-            let nearestAudioDist = PROXIMITY_DIST;
-            for(const node of state.nodes){
-              if(node.type !== 'image_to_video') continue;
-              const toEl = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
-              if(!toEl) continue;
-              const portEl = toEl.querySelector('.audio-input-port');
-              if(!portEl || portEl.classList.contains('disabled')) continue;
-              const { dist } = distToPort(portEl);
-              if(dist < nearestAudioDist){
-                nearestAudioDist = dist;
-                nearestAudioInputPort = { nodeId: node.id };
-              }
-            }
-
-            if(nearestAudioInputPort){
-              const exists = state.audioConnections.some(c =>
-                c.from === fromNode.id && c.to === nearestAudioInputPort.nodeId
-              );
-              if(!exists){
-                state.audioConnections.push({
-                  id: state.nextAudioConnId++,
-                  from: fromNode.id,
-                  to: nearestAudioInputPort.nodeId
-                });
-                const targetNode = state.nodes.find(n => n.id === nearestAudioInputPort.nodeId);
+          const audioPort = findNearestConnectablePort(mouseX, mouseY, 'audio', PROXIMITY_DIST);
+          if(audioPort){
+            const connArray = state[audioPort.portCfg.connectionType] || state.audioConnections;
+            const exists = connArray.some(c =>
+              c.from === fromNode.id && c.to === audioPort.nodeId
+            );
+            if(!exists){
+              connArray.push({
+                id: state.nextAudioConnId++,
+                from: fromNode.id,
+                to: audioPort.nodeId
+              });
+              const targetNode = audioPort.node;
+              // 优先使用注册表的 onConnect 回调，否则使用默认行为
+              if(typeof audioPort.portCfg.onConnect === 'function'){
+                audioPort.portCfg.onConnect(fromNode, targetNode);
+              } else {
+                // 默认行为：追加到 audioUrls 数组
                 if(targetNode && fromNode.data.url){
                   if(!targetNode.data.audioUrls) targetNode.data.audioUrls = [];
                   targetNode.data.audioUrls.push({name: fromNode.data.name || '连接的音频', url: fromNode.data.url});
                 }
-                renderAudioConnections();
-                // 更新目标节点的音频预览显示
-                if(targetNode){
-                  const targetEl = canvasEl.querySelector(`.node[data-node-id="${targetNode.id}"]`);
-                  if(targetEl && typeof targetEl._updateAudioPreview === 'function') {
-                    targetEl._updateAudioPreview();
-                  }
-                }
-                safeAutoSave()
               }
+              renderAudioConnections();
+              // 更新目标节点的音频预览显示
+              const targetEl = canvasEl.querySelector(`.node[data-node-id="${targetNode.id}"]`);
+              if(targetEl && typeof targetEl._updateAudioPreview === 'function') {
+                targetEl._updateAudioPreview();
+              }
+              safeAutoSave()
             }
           }
         }

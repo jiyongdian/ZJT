@@ -1,0 +1,24 @@
+schema_version: 1
+module_path: documentation
+title: 系统架构与开发运维文档中心
+scope:
+    - docs/
+source_files: []
+depends_on: []
+related_to:
+    - path: infrastructure
+    - path: backend_api
+    - path: frontend_web
+    - path: ai_engine
+    - path: config_management
+    - path: jianying_integration
+    - path: test_suite
+    - path: ai_engine/agent_skills
+    - path: backend_api/business_api
+    - path: ai_engine/llm_clients
+    - path: backend_api/business_api/user_management
+    - path: ai_engine/task_drivers
+    - path: backend_api/shared_models
+    - path: backend_api/core_auth
+    - path: ai_engine/script_writer
+    - path: ai_engine/task_drivers/task_execution

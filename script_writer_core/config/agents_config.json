@@ -5,6 +5,7 @@
     "allowed_tools": [
       "call_agent",
       "ask_user",
+      "load_sop",
       "list_character_jsons",
       "list_location_jsons",
       "list_prop_jsons",
@@ -109,6 +110,21 @@
       ],
       "summary_only": true
     },
+    "asset-readiness-checker": {
+      "skills": ["asset-readiness-checker"],
+      "model": "gemini/gemini-3-flash-preview",
+      "allowed_tools": [
+        "read_world",
+        "read_character_json",
+        "list_character_jsons",
+        "read_location_json",
+        "list_location_jsons",
+        "read_prop_json",
+        "list_prop_jsons",
+        "ask_user"
+      ],
+      "summary_only": true
+    },
     "novel-episode-splitter": {
       "skills": ["novel-episode-splitter"],
       "model": "gemini/gemini-3-flash-preview",
@@ -130,17 +146,21 @@
     "character-image-designer": {
       "skills": ["character-image-designer"],
       "model": "gemini/gemini-3-flash-preview",
-      "max_iterations": 20,
+      "max_iterations": 50,
+      "max_consecutive_no_progress": 5,
       "allowed_tools": [
         "list_character_jsons",
         "read_character_json",
         "generate_text_to_image",
         "generate_4grid_character_images",
+        "generate_character_variant_image",
         "generate_character_reference_audio",
         "check_reference_audio_status",
         "get_text_to_image_model_info",
         "get_task_status",
         "read_world",
+        "list_script_jsons",
+        "read_script_json",
         "ask_user"
       ],
       "summary_only": true
@@ -148,6 +168,8 @@
     "location-prop-image-designer": {
       "skills": ["location-prop-image-designer"],
       "model": "gemini/gemini-3-flash-preview",
+      "max_iterations": 50,
+      "max_consecutive_no_progress": 5,
       "allowed_tools": [
         "read_world",
         "list_location_jsons",
@@ -166,6 +188,7 @@
     "marketing-image": {
       "skills": ["marketing-image"],
       "model": "gemini/gemini-3-flash-preview",
+      "max_iterations": 30,
       "allowed_tools": [
         "generate_text_to_image",
         "edit_image",
@@ -179,6 +202,7 @@
     "marketing-video": {
       "skills": ["marketing-video"],
       "model": "gemini/gemini-3-flash-preview",
+      "max_iterations": 30,
       "allowed_tools": [
         "generate_text_to_video",
         "image_to_video",

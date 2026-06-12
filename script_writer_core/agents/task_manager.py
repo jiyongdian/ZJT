@@ -157,6 +157,7 @@ class AgentTask:
     image_urls: Optional[List[str]] = None
     video_urls: Optional[List[str]] = None
     audio_urls: Optional[List[str]] = None
+    thumbnail_urls: Optional[List[str]] = None
     language: str = "zh-CN"
     status: TaskStatus = TaskStatus.PENDING
     created_at: datetime = field(default_factory=datetime.now)
@@ -218,6 +219,7 @@ class TaskManager:
         image_urls: Optional[List[str]] = None,
         video_urls: Optional[List[str]] = None,
         audio_urls: Optional[List[str]] = None,
+        thumbnail_urls: Optional[List[str]] = None,
         language: str = "zh-CN",
     ) -> str:
         """创建新任务，返回 task_id"""
@@ -254,6 +256,7 @@ class TaskManager:
             image_urls=image_urls,
             video_urls=video_urls,
             audio_urls=audio_urls,
+            thumbnail_urls=thumbnail_urls,
             language=language,
         )
         logger.info(f"AgentTask created, task.language='{task.language}'")
@@ -550,6 +553,7 @@ class TaskManager:
 
                     result = db_verification.result or {}
                     result["success"] = db_verification.status == "approved"
+                    result["status"] = db_verification.status  # "approved" 或 "rejected" 等
                     return result
             except Exception as e:
                 logger.error(f"Error polling verification {verification.verification_id}: {e}")
@@ -562,7 +566,7 @@ class TaskManager:
             AgentVerificationsModel.submit_result(
                 verification.verification_id,
                 status='cancelled',
-                result={"success": False, "error": "验证超时"}
+                result={"success": False, "status": "timeout", "error": "验证超时"}
             )
         except Exception as e:
             logger.error(f"Failed to cancel verification on timeout: {e}")
@@ -584,7 +588,7 @@ class TaskManager:
             'error': '验证超时'
         })
 
-        return {"success": False, "error": "验证超时"}
+        return {"success": False, "status": "timeout", "error": "验证超时"}
     
     def submit_verification(
         self,

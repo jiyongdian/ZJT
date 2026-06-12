@@ -13,8 +13,15 @@ from script_writer_core.skill_loader import SkillLoader
 from agents.skill_loader import SopLoader
 from model.model import ModelModel
 import json
+import uuid
 
 logger = logging.getLogger(__name__)
+
+
+def _get_session_storage():
+    """延迟导入 session_storage 以避免循环导入"""
+    from api.script_writer import session_storage
+    return session_storage
 
 
 class PMAgent(BaseAgent, AskUserMixin):
@@ -144,6 +151,7 @@ class PMAgent(BaseAgent, AskUserMixin):
 - 任务必须串行执行，一次只能调用一个专家
 - 连续失败3次或累计失败7次时必须停止并报告
 - 绝不直接生成剧本内容，必须通过 call_agent 调用专家
+- 向用户提问时必须使用 ask_user 工具，禁止以纯文本方式提问（纯文本提问用户无法收到交互弹框）
 """
         
         # 加载所有技能内容
@@ -172,9 +180,60 @@ class PMAgent(BaseAgent, AskUserMixin):
         # 设置 task_id，供 AskUserMixin 使用
         self.task_id = task.task_id
 
+        # 设置逐条消息持久化上下文。__init__ 阶段 recorder 还未绑定 session，
+        # system prompt 和工具定义需要在任务开始时补写到 chat_messages。
+        self._session_id = task.session_id
+        self._task_id = task.task_id
+        self._vendor_id = task.vendor_id
+        self._agent_scope = "pm"
+        try:
+            from script_writer_core.conversation_recorder import ConversationRecorder
+            self._conversation_recorder = ConversationRecorder()
+        except Exception as e:
+            logger.error(f"{self.agent_id}: Failed to initialize ConversationRecorder: {e}")
+            self._conversation_recorder = None
+
         # 保存当前任务的语言设置
         self.current_language = task.language
         logger.info(f"{self.agent_id}: Language set to '{task.language}' (current_language={self.current_language})")
+
+        if self._conversation_recorder and self._session_id:
+            try:
+                system_content = self.system_prompt
+                if self.current_language and self.current_language != 'zh-CN':
+                    from config.constant import LANGUAGE_INSTRUCTIONS
+                    lang_instruction = LANGUAGE_INSTRUCTIONS.get(self.current_language, '')
+                    if lang_instruction:
+                        system_content += lang_instruction
+
+                self._conversation_recorder.append_message(
+                    session_id=self._session_id,
+                    role="system",
+                    content=system_content,
+                    message_type="system_prompt",
+                    visibility="llm",
+                    agent_scope="pm",
+                    source="system",
+                )
+                logger.info(f"{self.agent_id}: Persisted system prompt to DB ({len(system_content)} chars)")
+            except Exception as e:
+                logger.error(f"{self.agent_id}: Failed to persist system prompt to DB: {e}")
+
+            try:
+                tool_defs = self._get_tool_definitions()
+                if tool_defs:
+                    self._conversation_recorder.append_message(
+                        session_id=self._session_id,
+                        role="system",
+                        content={"tools": tool_defs},
+                        message_type="tool_definitions",
+                        visibility="internal",
+                        agent_scope="pm",
+                        source="system",
+                    )
+                    logger.info(f"{self.agent_id}: Persisted tool_definitions to DB ({len(tool_defs)} tools)")
+            except Exception as e:
+                logger.error(f"{self.agent_id}: Failed to persist tool_definitions to DB: {e}")
 
         # 重置失败计数器，确保每个新任务独立（避免算力不足停止后残留计数导致新任务立即失败）
         self.consecutive_failures = 0
@@ -185,7 +244,10 @@ class PMAgent(BaseAgent, AskUserMixin):
             combined_parts = []
             if task.image_urls:
                 for i, image_url in enumerate(task.image_urls):
-                    combined_parts.append(f"[图片{i + 1}]（URL: {image_url}）")
+                    thumb = ""
+                    if task.thumbnail_urls and i < len(task.thumbnail_urls) and task.thumbnail_urls[i]:
+                        thumb = f" thumb: {task.thumbnail_urls[i]}"
+                    combined_parts.append(f"[图片{i + 1}]（URL: {image_url}{thumb}）")
             if task.video_urls:
                 for i, video_url in enumerate(task.video_urls):
                     combined_parts.append(f"[视频{i + 1}]（URL: {video_url}）")
@@ -194,9 +256,17 @@ class PMAgent(BaseAgent, AskUserMixin):
                     combined_parts.append(f"[音频{i + 1}]（URL: {audio_url}）")
             if combined_parts:
                 combined = "\n".join(combined_parts) + "\n\n" + task.user_message
-                self.add_to_history("user", combined)
+                self.add_to_history(
+                    "user",
+                    combined,
+                    extra_meta={"idempotency_key": f"task:{task.task_id}:user:initial"}
+                )
             else:
-                self.add_to_history("user", task.user_message)
+                self.add_to_history(
+                    "user",
+                    task.user_message,
+                    extra_meta={"idempotency_key": f"task:{task.task_id}:user:initial"}
+                )
 
             # 执行 PM 循环
             result = self._run_pm_loop(task, session_data)
@@ -265,8 +335,11 @@ class PMAgent(BaseAgent, AskUserMixin):
                 # 构建消息列表（使用初始化时已包含环境上下文的 system_prompt）
                 messages = self._build_messages_for_api()
 
-                # 获取工具定义
-                tool_definitions = self._get_tool_definitions()
+                # 获取工具定义，优先使用 LLMContextBuilder 从 DB 恢复的 tool_definitions
+                if hasattr(self, '_current_llm_context') and self._current_llm_context and self._current_llm_context.tools:
+                    tool_definitions = self._current_llm_context.tools
+                else:
+                    tool_definitions = self._get_tool_definitions()
 
                 # 从数据库获取模型的最大输出 token 数
                 max_output_tokens = 65536  # 默认值
@@ -354,6 +427,13 @@ class PMAgent(BaseAgent, AskUserMixin):
         """处理工具调用"""
         tool_calls = message.tool_calls
 
+        # 向前端推送工具调用事件，实时显示正在调用的函数
+        tool_names = [tc.function.name for tc in tool_calls]
+        self.task_manager.push_message(task.task_id, 'tool_call', {
+            'tool_names': tool_names,
+            'count': len(tool_calls)
+        })
+
         # 构建历史记录条目，包含 tool_calls
         history_entry = {
             "tool_calls": [
@@ -389,8 +469,17 @@ class PMAgent(BaseAgent, AskUserMixin):
             tool_name = tool_call.function.name
             try:
                 tool_args = json.loads(tool_call.function.arguments) if isinstance(tool_call.function.arguments, str) else tool_call.function.arguments
-            except:
-                tool_args = {}
+            except json.JSONDecodeError as e:
+                logger.error(f"{self.agent_id}: Failed to parse tool arguments for {tool_name}: {e}")
+                logger.error(f"{self.agent_id}: Raw arguments: {tool_call.function.arguments[:500]}")
+                error_msg = f"JSON参数解析失败: {str(e)}。请检查参数格式，确保所有字符串中的引号和特殊字符已正确转义。"
+                result = {"error": error_msg}
+                self.add_to_history("tool", {
+                    "tool_call_id": tool_call.id,
+                    "name": tool_name,
+                    "content": json.dumps(result, ensure_ascii=False)
+                })
+                continue
 
             result = self._execute_tool(tool_name, tool_args, task, session_data)
 
@@ -401,17 +490,20 @@ class PMAgent(BaseAgent, AskUserMixin):
                     deferred_expert_outputs.append(expert_output)
 
             # ask_user 工具：在 tool 回答之前，将问题写入历史（保证顺序正确）
+            verification_id_for_answer = None
             if tool_name == "ask_user" and isinstance(result, dict) and "_verification_meta" in result:
                 meta = result.pop("_verification_meta")
+                verification_id_for_answer = meta.get("verification_id")
                 agent_name = self._get_agent_display_name()
                 self.add_to_history("verification", {
+                    "verification_id": verification_id_for_answer,
                     "title": f"{agent_name} 向您提问",
                     "description": meta["question"],
                     "options": meta["options"]
                 })
                 user_input = result.get("user_input", "")
                 if user_input:
-                    deferred_user_inputs.append(user_input)
+                    deferred_user_inputs.append((user_input, verification_id_for_answer))
 
             tool_history_entry = {
                 "tool_call_id": tool_call.id,
@@ -423,13 +515,17 @@ class PMAgent(BaseAgent, AskUserMixin):
 
         # 将用户的回答作为 user 消息写入历史，放在所有 tool 消息之后
         # 避免在 assistant(tool_calls) 和 tool 之间插入 user 消息导致 API 报错
-        for user_input in deferred_user_inputs:
-            self.add_to_history("user", user_input)
+        for item in deferred_user_inputs:
+            if isinstance(item, tuple):
+                user_input, verification_id = item
+                self.add_to_history("user", user_input, extra_meta={"verification_id": verification_id})
+            else:
+                self.add_to_history("user", item)
 
         # 将专家输出作为 assistant 消息写入历史，确保刷新后能恢复显示
         # 顺序：assistant(tool_calls) -> tool -> user(如有) -> assistant(专家输出)
         for expert_output in deferred_expert_outputs:
-            self.add_to_history("assistant", expert_output)
+            self.add_to_history("assistant", expert_output, extra_meta={"visibility": "llm"})
 
     def _execute_tool(
         self,
@@ -457,7 +553,9 @@ class PMAgent(BaseAgent, AskUserMixin):
                     user_id=self.user_id,
                     world_id=self.world_id,
                     auth_token=self.auth_token,
-                    language=getattr(self, 'current_language', 'zh-CN')
+                    language=getattr(self, 'current_language', 'zh-CN'),
+                    model=self.model,
+                    vendor_id=task.vendor_id,
                 )
         except InsufficientComputingPowerError:
             raise
@@ -535,7 +633,10 @@ class PMAgent(BaseAgent, AskUserMixin):
             task_manager=self.task_manager,
             task_id=task.task_id,
             max_iterations=expert_config.get("max_iterations", 10),
-            language=task.language
+            language=task.language,
+            max_consecutive_no_progress=expert_config.get("max_consecutive_no_progress", 3),
+            max_consecutive_errors=expert_config.get("max_consecutive_errors", 3),
+            max_total_errors=expert_config.get("max_total_errors", 7)
         )
 
         # 合并 LLM 提供的 conversation_history 和 PM 已有的 ask_user 交互
@@ -549,6 +650,8 @@ class PMAgent(BaseAgent, AskUserMixin):
 
         expert_task = {
             "session_id": task.task_id,
+            "pm_session_id": task.session_id,
+            "pm_task_id": task.task_id,
             "description": tool_args.get("task_description", "执行任务"),
             "pm_context": context,
             "conversation_history": merged_history,
@@ -584,7 +687,9 @@ class PMAgent(BaseAgent, AskUserMixin):
                 "timestamp": datetime.now().isoformat()
             })
 
-            # 发送 expert 的完整响应内容到前端
+            # Expert output must be visible immediately. The frontend keeps a
+            # content-based dedupe guard, so a later PM response with identical
+            # text will not render as a second bubble.
             expert_response = result.get('result', '')
             if expert_response:
                 self.task_manager.push_message(task.task_id, 'message', {
@@ -592,11 +697,9 @@ class PMAgent(BaseAgent, AskUserMixin):
                     'content': expert_response
                 })
             else:
-                # 如果没有响应内容，发送摘要
-                message_content = f"专家 {skill_name} 执行完成"
                 self.task_manager.push_message(task.task_id, 'message', {
                     'role': 'assistant',
-                    'content': message_content
+                    'content': f"专家 {skill_name} 执行完成"
                 })
         else:
             self.total_failures += 1
@@ -644,6 +747,11 @@ class PMAgent(BaseAgent, AskUserMixin):
                     conversation_history=history,
                     update_tokens=False
                 )
+                # 使缓存失效，确保下次加载时从数据库读取最新数据
+                try:
+                    _get_session_storage().invalidate_cache(session_id)
+                except Exception as cache_err:
+                    logger.warning(f"{self.agent_id}: 清除会话缓存失败: {cache_err}")
         except Exception as e:
             logger.warning(f"{self.agent_id}: 保存 pending task 标记到对话历史失败: {e}")
 
@@ -790,8 +898,15 @@ class PMAgent(BaseAgent, AskUserMixin):
         """
         from config.constant import SessionHistoryConstants
 
-        history = self.conversation_history
-        original_count = len(history)
+        original_count = len(self.conversation_history)
+        count_from_db = False
+        if self._session_id:
+            try:
+                from model.chat_messages import ChatMessagesModel
+                original_count = len(ChatMessagesModel.list_active_for_context(self._session_id, agent_scope='pm'))
+                count_from_db = True
+            except Exception as e:
+                logger.warning(f"{self.agent_id}: Failed to count DB history before compression: {e}")
 
         # 检查是否有足够消息可压缩
         if original_count <= SessionHistoryConstants.MIN_HISTORY_MESSAGES:
@@ -806,6 +921,12 @@ class PMAgent(BaseAgent, AskUserMixin):
         summary_text = self._compress_conversation_history(task)
 
         new_count = len(self.conversation_history)
+        if count_from_db:
+            try:
+                from model.chat_messages import ChatMessagesModel
+                new_count = len(ChatMessagesModel.list_active_for_context(self._session_id, agent_scope='pm'))
+            except Exception as e:
+                logger.warning(f"{self.agent_id}: Failed to count DB history after compression: {e}")
 
         return {
             "success": True,
@@ -816,11 +937,118 @@ class PMAgent(BaseAgent, AskUserMixin):
         }
 
     def _compress_conversation_history(self, task: AgentTask) -> str:
-        """压缩对话历史：优先使用 summarizer，兜底使用滑动窗口截断
+        """压缩对话历史：优先压缩 chat_messages，兜底压缩内存历史。"""
+        if self._session_id:
+            try:
+                return self._compress_via_db(task)
+            except Exception as e:
+                logger.error(f"{self.agent_id}: DB compression failed, falling back to memory: {e}")
 
-        Returns:
-            str: 压缩生成的摘要文本
-        """
+        return self._compress_via_memory(task)
+
+    def _compress_via_db(self, task: AgentTask) -> str:
+        """基于 chat_messages 的 DB 历史压缩。"""
+        from config.constant import SessionHistoryConstants
+        from model.chat_messages import ChatMessagesModel
+
+        all_active = ChatMessagesModel.list_active_for_context(self._session_id, agent_scope='pm')
+        normal_msgs = [
+            msg for msg in all_active
+            if msg.message_type not in ('system_prompt', 'tool_definitions')
+        ]
+
+        keep_count = SessionHistoryConstants.MIN_HISTORY_MESSAGES
+        if len(normal_msgs) <= keep_count:
+            logger.info(f"{self.agent_id}: DB active messages too few ({len(normal_msgs)}), skip compression")
+            return ""
+
+        desired_start = len(normal_msgs) - keep_count
+        safe_start = self._find_safe_preserve_start_db(normal_msgs, desired_start)
+        compressible = normal_msgs[:safe_start]
+        preserved = normal_msgs[safe_start:]
+
+        if not compressible:
+            return ""
+
+        logger.warning(
+            f"{self.agent_id}: Triggering DB history compression. "
+            f"compressible={len(compressible)}, preserved={len(preserved)}"
+        )
+
+        expert_conversation = [
+            {"role": msg.role, "content": msg.content}
+            for msg in compressible
+        ]
+
+        pm_context = self._build_context_for_expert("script-orchestrator", self.user_id, self.world_id)
+        summary = self.summarizer.summarize(
+            pm_context=pm_context,
+            expert_conversation=expert_conversation,
+            expert_name="script-orchestrator",
+            model=self.model,
+            vendor_id=task.vendor_id,
+            auth_token=task.auth_token,
+            model_id=task.model_id,
+            enable_thinking=task.enable_thinking,
+            thinking_effort=task.thinking_effort
+        )
+        summary_text = summary.get("summary", "")
+        if not summary_text:
+            summary_text = f"[上下文摘要] 任务: {summary.get('task', '')}; 状态: {summary.get('status', '')}"
+
+        summary_uuid = f"sum_{uuid.uuid4().hex[:12]}"
+        parent_summary_ids = [m.generated_summary_id for m in compressible if m.generated_summary_id]
+
+        if not self._conversation_recorder:
+            from script_writer_core.conversation_recorder import ConversationRecorder
+            self._conversation_recorder = ConversationRecorder()
+
+        summary_entity = self._conversation_recorder.append_message(
+            session_id=self._session_id,
+            role="system",
+            content={
+                "text": f"[历史对话已压缩] {summary_text}",
+                "parent_summary_ids": parent_summary_ids,
+            },
+            message_type="context_summary",
+            visibility="llm",
+            context_state="active",
+            generated_summary_id=summary_uuid,
+            agent_scope="pm",
+            task_id=task.task_id,
+            agent_id=self.agent_id,
+            source="compression",
+        )
+
+        ChatMessagesModel.update_context_state(
+            message_ids=[m.id for m in compressible],
+            context_state="summarized",
+            covered_by_summary_id=summary_uuid,
+        )
+
+        try:
+            from model.chat_history_summaries import ChatHistorySummariesModel
+            ChatHistorySummariesModel.create(
+                summary_id=summary_uuid,
+                session_id=self._session_id,
+                summary_message_id=summary_entity.id if summary_entity else None,
+                summary_text=summary_text,
+                from_message_id=compressible[0].id if compressible else None,
+                to_message_id=compressible[-1].id if compressible else None,
+                summary_level=1,
+                parent_summary_ids=parent_summary_ids,
+                raw_message_count=len(compressible),
+                model_id=task.model_id,
+                vendor_id=task.vendor_id,
+            )
+        except Exception as e:
+            logger.warning(f"{self.agent_id}: Failed to create chat history summary record: {e}")
+
+        logger.info(f"{self.agent_id}: DB compression done, {len(compressible)} messages summarized as {summary_uuid}")
+        return summary_text
+
+    def _compress_via_memory(self, task: AgentTask) -> str:
+        """压缩内存 conversation_history（无 DB 会话时兜底）。"""
         from config.constant import SessionHistoryConstants
 
         history = self.conversation_history
@@ -901,6 +1129,27 @@ class PMAgent(BaseAgent, AskUserMixin):
             return f"[滑动窗口截断] 保留最近 {len(self.conversation_history)} 条消息"
 
     @staticmethod
+    def _find_safe_preserve_start_db(msgs: List, desired_start: int) -> int:
+        """找到 DB 消息安全保留起点，避免拆分 tool_call/tool_result 组。"""
+        start = desired_start
+
+        while start > 0 and start < len(msgs):
+            msg = msgs[start]
+            if msg.message_type in ('tool_result', 'verification_request', 'verification_answer'):
+                start -= 1
+            else:
+                break
+
+        while start > 0 and start < len(msgs):
+            tail_msg = msgs[start - 1]
+            if tail_msg.message_type == 'tool_call':
+                start += 1
+            else:
+                break
+
+        return start
+
+    @staticmethod
     def _find_safe_preserve_start(msgs: List[Dict[str, Any]], desired_start: int) -> int:
         """找到安全的保留起始索引，确保不会将 tool 消息与其前置的 assistant(tool_calls) 拆分。
 
@@ -937,7 +1186,27 @@ class PMAgent(BaseAgent, AskUserMixin):
         """构建用于 API 调用的消息列表
 
         使用初始化时已经包含环境上下文的 self.system_prompt
+        优先从 chat_messages 数据库构建，失败时回退到内存构建。
         """
+        if self._session_id:
+            try:
+                from script_writer_core.llm_context_builder import LLMContextBuilder
+                self._current_llm_context = LLMContextBuilder().build(
+                    session_id=self._session_id,
+                    model=self.model,
+                    vendor_id=getattr(self, '_vendor_id', None)
+                )
+                return self._current_llm_context.messages
+            except Exception as e:
+                logger.error(f"{self.agent_id}: LLMContextBuilder failed, falling back to memory: {e}")
+                self._current_llm_context = None
+        else:
+            self._current_llm_context = None
+
+        return self._build_messages_from_memory()
+
+    def _build_messages_from_memory(self) -> List[Dict[str, Any]]:
+        """从内存 conversation_history 构建消息列表（降级路径）"""
         messages = []
 
         # 1. 添加 system 消息（已在 __init__ 中包含环境上下文）

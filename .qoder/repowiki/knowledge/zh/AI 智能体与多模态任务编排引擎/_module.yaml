@@ -1,0 +1,19 @@
+schema_version: 1
+module_path: ai_engine
+title: AI 智能体与多模态任务编排引擎
+scope:
+    - llm/
+    - task/
+    - agents/
+    - script_writer_core/
+source_files: []
+depends_on: []
+related_to:
+    - path: frontend_web
+    - path: jianying_integration
+    - path: test_suite
+    - path: backend_api/business_api
+    - path: documentation
+    - path: config_management
+    - path: infrastructure
+    - path: backend_api/core_auth

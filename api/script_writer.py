@@ -54,6 +54,8 @@ from script_writer_core.chat_session import ChatSession
 from script_writer_core.file_manager import FileManager
 from script_writer_core.skill_loader import SkillLoader
 from utils.file_storage import get_file_storage
+from utils.conversation_history import append_message_if_not_duplicate
+from utils.sse import format_sse_event, parse_last_event_id
 from utils.video_compressor import get_video_info, needs_compression
 logger = logging.getLogger(__name__)
 
@@ -801,9 +803,42 @@ class TaskCreateRequest(BaseModel):
     image_urls: Optional[List[str]] = None
     video_urls: Optional[List[str]] = None
     audio_urls: Optional[List[str]] = None
+    thumbnail_urls: Optional[List[str]] = None
     image_preferences: Optional[Dict[str, Any]] = None
     video_preferences: Optional[Dict[str, Any]] = None
     language: Optional[str] = None
+
+
+def build_agent_user_message_with_media(
+    user_message: str,
+    image_urls: Optional[List[str]] = None,
+    video_urls: Optional[List[str]] = None,
+    audio_urls: Optional[List[str]] = None,
+    thumbnail_urls: Optional[List[str]] = None,
+) -> str:
+    """构建 PM/前端历史共用的用户消息文本，保留上传接口返回的媒体 URL。
+
+    上传接口已经根据配置决定返回本地 URL 还是 CDN URL；这里不重新判断 CDN，
+    只负责把 URL 写入可恢复展示的媒体标签。
+    """
+    combined_parts = []
+    if image_urls:
+        for i, image_url in enumerate(image_urls):
+            thumb = ""
+            if thumbnail_urls and i < len(thumbnail_urls) and thumbnail_urls[i]:
+                thumb = f" thumb: {thumbnail_urls[i]}"
+            combined_parts.append(f"[图片{i + 1}]（URL: {image_url}{thumb}）")
+    if video_urls:
+        for i, video_url in enumerate(video_urls):
+            combined_parts.append(f"[视频{i + 1}]（URL: {video_url}）")
+    if audio_urls:
+        for i, audio_url in enumerate(audio_urls):
+            combined_parts.append(f"[音频{i + 1}]（URL: {audio_url}）")
+
+    if combined_parts:
+        return "\n".join(combined_parts) + "\n\n" + (user_message or "")
+    return user_message or ""
+
 
 class ModelChangeRequest(BaseModel):
     model: str
@@ -910,6 +945,44 @@ async def create_session(request: Request, session_request: SessionCreateRequest
                 'error': '会话保存失败'
             }, status_code=500)
 
+        # 将 system prompt 和 tool_definitions 写入 chat_messages（仅创建时执行一次）
+        try:
+            from script_writer_core.conversation_recorder import ConversationRecorder
+            recorder = ConversationRecorder()
+
+            # 写入 system prompt
+            await asyncio.to_thread(
+                recorder.append_message,
+                session_id=session_id,
+                role="system",
+                content=session.pm_agent.system_prompt,
+                message_type="system_prompt",
+                visibility="llm",
+                context_state="active",
+                source="system",
+                agent_scope="pm",
+            )
+
+            # 写入工具定义
+            tool_defs = session.pm_agent._get_tool_definitions()
+            if tool_defs:
+                await asyncio.to_thread(
+                    recorder.append_message,
+                    session_id=session_id,
+                    role="system",
+                    content={"tools": tool_defs},
+                    provider_payload={"tools": tool_defs},
+                    message_type="tool_definitions",
+                    visibility="internal",
+                    context_state="active",
+                    source="system",
+                    agent_scope="pm",
+                )
+
+            logger.info(f'System prompt and tool_definitions written to chat_messages for session {session_id}')
+        except Exception as e:
+            logger.error(f'写入 chat_messages 失败（非致命）: {e}')
+
         logger.info(f'会话创建成功 - session_id: {session_id}, user_id: {session_request.user_id}, world_id: {session_request.world_id}')
         
         return JSONResponse({
@@ -933,16 +1006,35 @@ async def create_session(request: Request, session_request: SessionCreateRequest
 async def get_session_history(request: Request, session_id: str):
     """获取会话历史"""
     try:
-        # 从数据库加载会话
-        session = session_storage.load_session(
-            session_id=session_id,
-            task_manager=task_manager,
-            file_manager=file_manager,
-            tool_executor=tool_executor,
-            agents_config=agents_config
-        )
+        # 优先从 chat_messages 读取（新路径）
+        try:
+            from model.chat_messages import ChatMessagesModel
+            messages = await asyncio.to_thread(
+                ChatMessagesModel.list_for_session, session_id,
+                visibility=['ui', 'both'],
+                exclude_context_state=['deleted'],
+                exclude_message_types=['context_summary'],  # 排除 context_summary，不混入聊天流
+            )
 
-        if not session:
+            if messages:
+                history = [msg.to_frontend_dict() for msg in messages]
+                # 从 chat_sessions 获取时间戳
+                from model.chat_sessions import ChatSessionsModel
+                entity = await asyncio.to_thread(ChatSessionsModel.get_by_session_id, session_id)
+                return JSONResponse({
+                    'success': True,
+                    'history': history,
+                    'created_at': entity.created_at.isoformat() if entity and entity.created_at else None,
+                    'updated_at': entity.updated_at.isoformat() if entity and entity.updated_at else None
+                })
+        except Exception as e:
+            logger.warning(f'从 chat_messages 读取历史失败: {e}')
+
+        # 新路径：chat_messages 无数据时返回空历史（不再回退旧 conversation_history）
+        # 获取 session 时间戳用于响应
+        from model.chat_sessions import ChatSessionsModel
+        entity = await asyncio.to_thread(ChatSessionsModel.get_by_session_id, session_id)
+        if not entity:
             return JSONResponse({
                 'success': False,
                 'error': '会话不存在'
@@ -950,9 +1042,9 @@ async def get_session_history(request: Request, session_id: str):
 
         return JSONResponse({
             'success': True,
-            'history': session.get_history(),
-            'created_at': session.created_at.isoformat() if session.created_at else None,
-            'updated_at': session.updated_at.isoformat() if session.updated_at else None
+            'history': [],
+            'created_at': entity.created_at.isoformat() if entity.created_at else None,
+            'updated_at': entity.updated_at.isoformat() if entity.updated_at else None
         })
     except Exception as e:
         logger.error(f'获取会话历史失败: {str(e)}')
@@ -966,27 +1058,37 @@ async def get_session_history(request: Request, session_id: str):
 async def clear_session_history(request: Request, session_id: str):
     """清空会话历史"""
     try:
-        # 从数据库加载会话
-        session = session_storage.load_session(
-            session_id=session_id,
-            task_manager=task_manager,
-            file_manager=file_manager,
-            tool_executor=tool_executor,
-            agents_config=agents_config
-        )
+        # 从数据库加载会话（仅用于检查是否存在）
+        from model.chat_sessions import ChatSessionsModel
+        entity = await asyncio.to_thread(ChatSessionsModel.get_by_session_id, session_id)
 
-        if not session:
+        if not entity:
             return JSONResponse({
                 'success': False,
                 'error': '会话不存在'
             }, status_code=404)
 
-        # 清空历史
-        session.clear_history()
+        # 清空旧 conversation_history（兼容过渡期）
+        await asyncio.to_thread(ChatSessionsModel.clear_history, session_id)
 
-        # 持久化到数据库
-        from model.chat_sessions import ChatSessionsModel
-        ChatSessionsModel.clear_history(session_id)
+        # 软删除 chat_messages 中所有消息
+        from model.chat_messages import ChatMessagesModel
+        all_msgs = await asyncio.to_thread(
+            ChatMessagesModel.list_for_session, session_id,
+            exclude_context_state=['deleted'],
+        )
+        deletable_ids = [
+            m.id for m in all_msgs
+            if m.message_type not in ('system_prompt', 'tool_definitions')
+        ]
+        if deletable_ids:
+            await asyncio.to_thread(
+                ChatMessagesModel.update_context_state,
+                deletable_ids,
+                'deleted',
+            )
+
+        session_storage.invalidate_cache(session_id)
 
         return JSONResponse({
             'success': True,
@@ -1002,9 +1104,29 @@ async def clear_session_history(request: Request, session_id: str):
 @router.post('/session/{session_id}/compress')
 @require_permission("script_session:compress_history")
 async def compress_session_history(request: Request, session_id: str):
-    """压缩会话历史"""
+    """压缩会话历史（基于 chat_messages DB 压缩）"""
     try:
-        # 从数据库加载会话
+        from model.chat_sessions import ChatSessionsModel
+        from model.chat_messages import ChatMessagesModel
+        from model.agent_tasks import AgentTasksModel
+
+        # 检查会话是否存在
+        session_entity = await asyncio.to_thread(ChatSessionsModel.get_by_session_id, session_id)
+        if not session_entity:
+            return JSONResponse({
+                'success': False,
+                'error': '会话不存在'
+            }, status_code=404)
+
+        # 获取最近的任务信息（用于模型配置）
+        task_entity = await asyncio.to_thread(AgentTasksModel.get_latest_by_session, session_id)
+        if not task_entity:
+            return JSONResponse({
+                'success': False,
+                'error': '没有可用的任务信息，无法确定模型配置'
+            }, status_code=400)
+
+        # 加载 session 并设置 _session_id，确保 PM Agent 走 DB 压缩路径
         session = session_storage.load_session(
             session_id=session_id,
             task_manager=task_manager,
@@ -1012,32 +1134,45 @@ async def compress_session_history(request: Request, session_id: str):
             tool_executor=tool_executor,
             agents_config=agents_config
         )
-
         if not session:
             return JSONResponse({
                 'success': False,
-                'error': '会话不存在'
+                'error': '会话加载失败'
             }, status_code=404)
 
-        # 获取当前任务信息（从请求体或数据库）
-        from model.agent_tasks import AgentTasksModel
-        task = AgentTasksModel.get_latest_by_session(session_id)
+        # 从 task_entity 构建 AgentTask
+        from script_writer_core.agents.task_manager import AgentTask
+        task = AgentTask(
+            task_id=task_entity.task_id,
+            session_id=session_id,
+            user_message=task_entity.user_message or '',
+            user_id=session_entity.user_id,
+            world_id=session_entity.world_id,
+            auth_token=task_entity.auth_token or session_entity.auth_token or '',
+            vendor_id=task_entity.vendor_id,
+            model_id=task_entity.model_id or session_entity.model_id,
+            enable_thinking=str(getattr(task_entity, 'enable_thinking', False)).lower() == 'true',
+            thinking_effort=getattr(task_entity, 'thinking_effort', 'medium'),
+            image_urls=getattr(task_entity, 'image_urls', None),
+            video_urls=getattr(task_entity, 'video_urls', None),
+            audio_urls=getattr(task_entity, 'audio_urls', None),
+            language=getattr(task_entity, 'language', 'zh-CN'),
+        )
 
-        if not task:
-            return JSONResponse({
-                'success': False,
-                'error': '没有可用的任务信息，无法确定模型配置'
-            }, status_code=400)
+        # 确保 PM Agent 设置了 _session_id（DB 压缩前置条件）
+        if not session.pm_agent._session_id:
+            session.pm_agent._session_id = session_id
+        session.pm_agent._task_id = task.task_id
+        session.pm_agent._vendor_id = task.vendor_id
+        if not session.pm_agent._conversation_recorder:
+            from script_writer_core.conversation_recorder import ConversationRecorder
+            session.pm_agent._conversation_recorder = ConversationRecorder()
 
         # 执行压缩（使用 run_in_executor 避免阻塞事件循环）
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(None, session.compress_history, task)
 
         if result.get('success'):
-            # 持久化压缩后的历史到数据库
-            from model.chat_sessions import ChatSessionsModel
-            ChatSessionsModel.update_conversation_history(session_id, session.get_history())
-
             return JSONResponse({
                 'success': True,
                 'message': f"对话历史已压缩：{result.get('before_count')} → {result.get('after_count')} 条消息",
@@ -1070,27 +1205,58 @@ async def clear_user_directory(request: SyncFilesRequest):
 @router.put('/session/{session_id}/history')
 @require_permission("script_session:update")
 async def update_session_history(request: Request, session_id: str, history_request: SessionHistoryUpdateRequest):
-    """更新会话历史消息"""
+    """更新会话历史消息（整体替换模式，用于前端手动编辑历史）"""
     try:
         from model.chat_sessions import ChatSessionsModel
-        
-        session_entity = ChatSessionsModel.get_by_session_id(session_id)
+        from model.chat_messages import ChatMessagesModel
+
+        session_entity = await asyncio.to_thread(ChatSessionsModel.get_by_session_id, session_id)
         if not session_entity:
             return JSONResponse({
                 'success': False,
                 'error': '会话不存在'
             }, status_code=404)
-        
+
+        # 过滤 system 消息
         filtered_messages = [msg for msg in history_request.messages if msg.get('role') != 'system']
-        
-        ChatSessionsModel.update_conversation_history(
-            session_id=session_id,
-            conversation_history=filtered_messages,
-            update_tokens=False
+
+        # 只软删 UI 可编辑的普通消息，保留基础设施消息（system_prompt、tool_definitions、context_summary）
+        existing = await asyncio.to_thread(
+            ChatMessagesModel.list_for_session, session_id,
+            agent_scope='pm',
+            exclude_context_state=['deleted'],
         )
-        
+        ui_editable_ids = [
+            m.id for m in existing
+            if m.message_type in ('normal', 'tool_call', 'tool_result',
+                                  'verification_request', 'verification_answer')
+        ]
+        if ui_editable_ids:
+            await asyncio.to_thread(
+                ChatMessagesModel.update_context_state,
+                ui_editable_ids,
+                'deleted',
+            )
+
+        # 逐条写入新历史
+        from script_writer_core.conversation_recorder import ConversationRecorder
+        recorder = ConversationRecorder()
+        for msg in filtered_messages:
+            role = msg.get('role', 'user')
+            content = msg.get('content', '')
+            await asyncio.to_thread(
+                recorder.append_message,
+                session_id=session_id,
+                role=role,
+                content={"text": content} if isinstance(content, str) else content,
+                message_type="normal",
+                visibility="both",
+                agent_scope="pm",
+                source="frontend",
+            )
+
         session_storage.invalidate_cache(session_id)
-        
+
         return JSONResponse({
             'success': True,
             'message': '会话历史已更新'
@@ -1105,36 +1271,48 @@ async def update_session_history(request: Request, session_id: str, history_requ
 @router.post('/session/{session_id}/message')
 @require_permission("script_session:update")
 async def append_session_message(request: Request, session_id: str, message_request: SessionMessageAppendRequest):
-    """追加消息到会话历史"""
+    """追加消息到会话历史（写入 chat_messages 表）"""
     try:
         from model.chat_sessions import ChatSessionsModel
-        
-        session_entity = ChatSessionsModel.get_by_session_id(session_id)
+        from script_writer_core.conversation_recorder import ConversationRecorder
+
+        session_entity = await asyncio.to_thread(ChatSessionsModel.get_by_session_id, session_id)
         if not session_entity:
             return JSONResponse({
                 'success': False,
                 'error': '会话不存在'
             }, status_code=404)
-        
-        current_history = session_entity.conversation_history or []
-        
-        new_message = {
-            'role': message_request.role,
-            'content': message_request.content,
-            'timestamp': datetime.now().isoformat()
-        }
-        
-        current_history.append(new_message)
-        
-        ChatSessionsModel.update_conversation_history(
+
+        role = message_request.role
+        content = message_request.content
+
+        # 写入 chat_messages（幂等，重复消息自动跳过）
+        recorder = ConversationRecorder()
+
+        # 判断消息类型
+        message_type = "normal"
+        if role == "assistant" and content and content.startswith('__PENDING_TASK__'):
+            message_type = "normal"  # pending task 标记也作为普通 assistant 消息
+
+        # 显式 idempotency_key：避免同一分钟内相同内容被吞掉
+        import uuid as _uuid
+        idem_key = f"frontend:{session_id}:{role}:{_uuid.uuid4().hex[:16]}"
+
+        await asyncio.to_thread(
+            recorder.append_message,
             session_id=session_id,
-            conversation_history=current_history,
-            update_tokens=False
+            role=role,
+            content={"text": content} if isinstance(content, str) else content,
+            message_type=message_type,
+            visibility="both",
+            agent_scope="pm",
+            source="frontend",
+            idempotency_key=idem_key,
         )
-        
+
         # 清除缓存，确保下次加载时从数据库读取最新数据
         session_storage.invalidate_cache(session_id)
-        
+
         return JSONResponse({
             'success': True,
             'message': '消息已追加'
@@ -1149,33 +1327,40 @@ async def append_session_message(request: Request, session_id: str, message_requ
 @router.post('/session/{session_id}/clean-pending-tasks')
 @require_permission("script_session:update")
 async def clean_pending_tasks(request: Request, session_id: str):
-    """清理对话历史中的 __PENDING_TASK__ 标记"""
+    """清理对话历史中的 __PENDING_TASK__ 标记（软删除 chat_messages 中对应记录）"""
     try:
-        from model.chat_sessions import ChatSessionsModel
+        from model.chat_messages import ChatMessagesModel
 
-        session_entity = ChatSessionsModel.get_by_session_id(session_id)
-        if not session_entity:
-            return JSONResponse({
-                'success': False,
-                'error': '会话不存在'
-            }, status_code=404)
+        # 查询所有非 deleted 的 assistant 消息
+        all_msgs = await asyncio.to_thread(
+            ChatMessagesModel.list_for_session, session_id,
+            agent_scope='pm',
+            exclude_context_state=['deleted'],
+        )
 
-        history = session_entity.conversation_history or []
-        cleaned = [msg for msg in history
-                   if not (msg.get('content', '').startswith('__PENDING_TASK__'))]
-        removed_count = len(history) - len(cleaned)
+        pending_msg_ids = []
+        for m in all_msgs:
+            content = m.content
+            # 检查是否是 __PENDING_TASK__ 消息
+            text = ''
+            if isinstance(content, str):
+                text = content
+            elif isinstance(content, dict):
+                text = content.get('text', '')
+            if text.startswith('__PENDING_TASK__'):
+                pending_msg_ids.append(m.id)
 
-        if removed_count > 0:
-            ChatSessionsModel.update_conversation_history(
-                session_id=session_id,
-                conversation_history=cleaned,
-                update_tokens=False
+        if pending_msg_ids:
+            await asyncio.to_thread(
+                ChatMessagesModel.update_context_state,
+                pending_msg_ids,
+                'deleted',
             )
             session_storage.invalidate_cache(session_id)
 
         return JSONResponse({
             'success': True,
-            'removed': removed_count
+            'removed': len(pending_msg_ids)
         })
     except Exception as e:
         logger.error(f'清理 pending task 标记失败: {str(e)}')
@@ -1191,7 +1376,7 @@ async def get_latest_task_for_session(request: Request, session_id: str):
     try:
         from model.agent_tasks import AgentTasksModel
 
-        task = AgentTasksModel.get_latest_by_session(session_id)
+        task = await asyncio.to_thread(AgentTasksModel.get_latest_by_session, session_id)
         if not task:
             return JSONResponse({
                 'success': False,
@@ -1891,7 +2076,7 @@ async def submit_to_database(request: SubmitDatabaseRequest):
             scripts = file_manager.list_scripts(str(user_id), str(world_id))
             for script in scripts:
                 try:
-                    script_data = file_manager.get_script(script['name'], str(user_id), str(world_id))
+                    script_data = file_manager.get_script(script['file_name'], str(user_id), str(world_id))
                     if script_data and isinstance(script_data, dict):
                         title = script_data.get('title', script['name'])
                         episode_number = script_data.get('episode_number')
@@ -2519,13 +2704,44 @@ async def create_agent_task(request: Request, session_id: str, task_request: Tas
             image_urls=task_request.image_urls,
             video_urls=task_request.video_urls,
             audio_urls=task_request.audio_urls,
+            thumbnail_urls=task_request.thumbnail_urls,
             language=task_language
         )
         
         # 获取任务对象
         task = task_manager.get_task(task_id)
-        
+
         logger.info(f'任务已创建: {task_id}, user_id: {user_id}, model_id: {model_id}')
+
+        # 将用户消息写入 chat_messages（使用 task 创建后的最终 user_message）。
+        # 这里必须保留图片/视频/音频 URL 标签，否则历史接口从 chat_messages 恢复时
+        # marketing_agent.html 无法还原媒体预览。URL 已由上传接口按 is_local/CDN 配置生成。
+        try:
+            from script_writer_core.conversation_recorder import ConversationRecorder
+            recorder = ConversationRecorder()
+            persisted_user_message = build_agent_user_message_with_media(
+                user_message=user_message,
+                image_urls=task_request.image_urls,
+                video_urls=task_request.video_urls,
+                audio_urls=task_request.audio_urls,
+                thumbnail_urls=task_request.thumbnail_urls,
+            )
+            await asyncio.to_thread(
+                recorder.append_message,
+                session_id=session_id,
+                role="user",
+                content={"text": persisted_user_message},
+                provider_payload={"role": "user", "content": persisted_user_message},
+                message_type="normal",
+                task_id=task_id,
+                idempotency_key=f"task:{task_id}:user:initial",
+                visibility="both",
+                source="frontend",
+                agent_scope="pm",
+            )
+            logger.info(f'User message written to chat_messages for task {task_id}')
+        except Exception as e:
+            logger.error(f'写入用户消息到 chat_messages 失败（非致命）: {e}')
         
         # 准备会话数据
         session_data = {
@@ -2583,10 +2799,12 @@ async def stream_task_messages(request: Request, task_id: str):
             logger.info(f"[SSE-STREAM] Starting SSE stream for task {task_id}")
             heartbeat_counter = 0
             message_count = 0
-            last_message_id = 0  # 用于追踪已读取的消息
+            last_message_id = parse_last_event_id(
+                request.headers.get("last-event-id") or request.query_params.get("last_id")
+            )  # 用于追踪已读取的消息
 
             # 立即发送连接确认消息
-            yield f"data: {json.dumps({'type': 'connected', 'task_id': task_id}, ensure_ascii=False)}\n\n"
+            yield format_sse_event({'type': 'connected', 'task_id': task_id})
 
             while True:
                 messages_to_send = []
@@ -2611,7 +2829,7 @@ async def stream_task_messages(request: Request, task_id: str):
                     if msg.get('content'):
                         logger.info(f"[SSE-STREAM] Message content preview: {str(msg.get('content'))[:100]}...")
 
-                    yield f"data: {json.dumps(msg, ensure_ascii=False)}\n\n"
+                    yield format_sse_event(msg, event_id=msg.get('id'))
 
                     # 如果是完成或错误消息，结束流
                     if msg_type in ['done', 'error']:
@@ -2626,7 +2844,7 @@ async def stream_task_messages(request: Request, task_id: str):
 
                     # 每9秒发送心跳
                     if heartbeat_counter >= 3:
-                        yield f"data: {json.dumps({'type': 'heartbeat', 'timestamp': datetime.now().isoformat()}, ensure_ascii=False)}\n\n"
+                        yield format_sse_event({'type': 'heartbeat', 'timestamp': datetime.now().isoformat()})
                         heartbeat_counter = 0
 
                     # 检查任务状态（从数据库）
@@ -2634,7 +2852,7 @@ async def stream_task_messages(request: Request, task_id: str):
                         db_task = await asyncio.to_thread(AgentTasksModel.get_by_task_id, task_id)
                         if db_task and db_task.status in ['completed', 'failed', 'cancelled']:
                             logger.info(f"[SSE-STREAM] Task status changed to {db_task.status}, ending stream")
-                            yield f"data: {json.dumps({'type': 'done', 'status': db_task.status}, ensure_ascii=False)}\n\n"
+                            yield format_sse_event({'type': 'done', 'status': db_task.status})
                             return
                     except Exception as e:
                         logger.error(f"[SSE-STREAM] Failed to check task status: {e}")
@@ -2723,7 +2941,7 @@ async def submit_verification(request: Request, verification_id: str, verify_req
             verification_id=verification_id,
             result=result
         )
-        
+
         if not success:
             # 查询实际状态，返回更有意义的错误信息
             db_verification = task_manager.get_verification(verification_id)
@@ -2739,7 +2957,38 @@ async def submit_verification(request: Request, verification_id: str, verify_req
                     'error': '验证请求不存在或已处理',
                     'status': db_verification.status if db_verification else 'not_found'
                 }, status_code=404)
-        
+
+        # 将 verification_answer 写入 chat_messages
+        if verify_request.user_input:
+            try:
+                from script_writer_core.conversation_recorder import ConversationRecorder
+                recorder = ConversationRecorder()
+                # 从 verification 获取 session_id（通过 task_id 关联 agent_tasks 表）
+                db_verification = task_manager.get_verification(verification_id)
+                session_id_for_msg = None
+                if db_verification:
+                    from model.agent_tasks import AgentTasksModel
+                    task_entity = await asyncio.to_thread(
+                        AgentTasksModel.get_by_task_id, db_verification.task_id
+                    )
+                    if task_entity:
+                        session_id_for_msg = task_entity.session_id
+                if session_id_for_msg:
+                    await asyncio.to_thread(
+                        recorder.append_message,
+                        session_id=session_id_for_msg,
+                        role="user",
+                        content={"text": verify_request.user_input},
+                        message_type="verification_answer",
+                        verification_id=verification_id,
+                        idempotency_key=f"verification:{verification_id}:answer:{recorder._content_hash({'text': verify_request.user_input})}",
+                        visibility="both",
+                        source="verification",
+                        agent_scope="pm",
+                    )
+            except Exception as e:
+                logger.error(f"Failed to persist verification_answer: {e}")
+
         return JSONResponse({
             'success': True,
             'message': '验证提交成功'
@@ -3655,11 +3904,32 @@ async def upload_agent_image(
         server_host = get_config()["server"]["host"]
         url = f"{server_host.rstrip('/')}/{upload_dir.replace(os.sep, '/')}/{filename}"
 
+        # 生成缩略图
+        thumbnail_url = None
+        try:
+            thumb_dir = os.path.join(full_upload_dir, 'thumb')
+            os.makedirs(thumb_dir, exist_ok=True)
+            thumb_filename = f"thumb_{filename.rsplit('.', 1)[0]}.jpg"
+            thumb_path = os.path.join(thumb_dir, thumb_filename)
+
+            from PIL import Image
+            with Image.open(file_path) as img:
+                img.thumbnail((200, 200), Image.LANCZOS)
+                if img.mode in ("RGBA", "P"):
+                    img = img.convert("RGB")
+                img.save(thumb_path, "JPEG", quality=75)
+
+            thumbnail_url = f"{server_host.rstrip('/')}/{upload_dir.replace(os.sep, '/')}/thumb/{thumb_filename}"
+            logger.info(f'Agent 图片缩略图生成成功: {thumbnail_url}')
+        except Exception as thumb_err:
+            logger.warning(f'生成缩略图失败，使用原图: {thumb_err}')
+
         logger.info(f'Agent 图片上传成功: {url}')
 
         return JSONResponse({
             'success': True,
-            'url': url
+            'url': url,
+            'thumbnail_url': thumbnail_url or url
         })
 
     except Exception as e:
@@ -3754,12 +4024,15 @@ async def upload_agent_video(
             url = f"{server_host.rstrip('/')}/{upload_dir.replace(os.sep, '/')}/{filename}"
         else:
             # 生产环境：上传到七牛云 CDN，返回 CDN URL
+            # CDN key 包含 session_id，便于按会话清理
             try:
                 storage = get_file_storage(get_config())
-                storage_key = storage.generate_key_with_datetime(f"marketing_video_{filename}")
+                storage_key = f"marketing/{session_id}/video/{filename}"
                 upload_result = await storage.upload_file(storage_key, file_path)
                 if upload_result.success:
-                    url = storage.get_download_url(upload_result.key)
+                    # 签名 URL 有效期 30 天，与会话生命周期一致
+                    cdn_url_expires = 30 * 24 * 3600  # 30天
+                    url = storage.get_download_url(upload_result.key, expires=cdn_url_expires)
                 else:
                     # CDN 上传失败，降级返回本地 URL
                     logger.warning(f'视频 CDN 上传失败({upload_result.error})，降级返回本地 URL')

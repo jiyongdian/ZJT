@@ -78,7 +78,7 @@ class RunningHubSlotsModel:
     @staticmethod
     def try_acquire_slot(task_id: int, task_type: int, source: str, max_slots: int = None) -> bool:
         """
-        尝试获取槽位（带并发检查）
+        尝试获取槽位（带并发检查，幂等操作）
 
         Args:
             task_id: 源表主键 (source='task' 时为 tasks.id, source='async' 时为 async_tasks.id)
@@ -93,16 +93,29 @@ class RunningHubSlotsModel:
             if max_slots is None:
                 max_slots = _get_max_concurrent_slots()
 
+            # 先检查是否已持有活跃槽位（避免不必要的写操作）
+            existing = RunningHubSlotsModel.get_slot(task_id, source)
+            if existing and existing.status == 1:
+                logger.info(f"Slot already active for {source} task {task_id}")
+                return True
+
             current_count = RunningHubSlotsModel.count_active_slots()
 
             if current_count >= max_slots:
                 logger.info(f"RunningHub slots full ({current_count}/{max_slots}), cannot acquire for {source} task {task_id}")
                 return False
 
+            # 使用 INSERT ON DUPLICATE KEY UPDATE 实现幂等
+            # 解决任务重试时旧记录（status=2）仍存在导致唯一键冲突的问题
             sql = """
                 INSERT INTO runninghub_slots
-                (task_id, task_type, status, source)
-                VALUES (%s, %s, 1, %s)
+                (task_id, task_type, status, source, acquired_at)
+                VALUES (%s, %s, 1, %s, NOW())
+                ON DUPLICATE KEY UPDATE
+                    status = 1,
+                    task_type = VALUES(task_type),
+                    acquired_at = NOW(),
+                    released_at = NULL
             """
             execute_insert(sql, (task_id, task_type, source))
 

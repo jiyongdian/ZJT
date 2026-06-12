@@ -194,7 +194,7 @@ class TestParseExtraParams(unittest.TestCase):
         """无 extra_config 时使用默认值"""
         ai_tool = _make_ai_tool(extra_config=None)
         result = self.driver._parse_extra_params(ai_tool)
-        self.assertEqual(result['resolution'], '1080P')
+        self.assertEqual(result['resolution'], '720P')
         self.assertFalse(result['watermark'])
         self.assertTrue(result['prompt_extend'])
 
@@ -226,7 +226,7 @@ class TestParseExtraParams(unittest.TestCase):
         """无效的 resolution 值被忽略，使用默认值"""
         ai_tool = _make_ai_tool(extra_config={'resolution': '4K'})
         result = self.driver._parse_extra_params(ai_tool)
-        self.assertEqual(result['resolution'], '1080P')
+        self.assertEqual(result['resolution'], '720P')
 
     def test_seed_out_of_range_ignored(self):
         """超出范围的 seed 被忽略"""
@@ -238,7 +238,7 @@ class TestParseExtraParams(unittest.TestCase):
         """无效 JSON 字符串使用默认值"""
         ai_tool = _make_ai_tool(extra_config='not json')
         result = self.driver._parse_extra_params(ai_tool)
-        self.assertEqual(result['resolution'], '1080P')
+        self.assertEqual(result['resolution'], '720P')
 
 
 # ============================================================

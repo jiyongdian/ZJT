@@ -7,7 +7,6 @@ import traceback
 from .base_video_driver import BaseVideoDriver
 from config.config_util import get_config, get_dynamic_config_value
 from utils.sentry_util import SentryUtil, AlertLevel
-from utils.image_upload_utils import upload_local_images_to_cdn_sync
 
 
 class GptImageDuomiV1Driver(BaseVideoDriver):
@@ -15,6 +14,8 @@ class GptImageDuomiV1Driver(BaseVideoDriver):
     GPT Image 2 多米供应商 v1 版本驱动
     支持文生图任务
     """
+
+    agent_hint = "提示词长度请控制在5000字符以内，超出将被API拒绝。请精简描述，避免冗余。"
 
     # 比例映射：前端比例 -> API 支持的比例
     # API 仅支持 1:1, 3:2, 2:3，需要将 16:9 映射为 3:2，9:16 映射为 2:3
@@ -152,11 +153,9 @@ class GptImageDuomiV1Driver(BaseVideoDriver):
         if ai_tool.image_path:
             image_urls = ai_tool.image_path.split(',') if ',' in ai_tool.image_path else [ai_tool.image_path]
 
-        # 如果是本地环境，将本地图片上传到图床
-        if self._is_local and image_urls:
-            self.logger.info(f"本地环境检测到图片路径，准备上传到图床: {image_urls}")
-            image_urls = upload_local_images_to_cdn_sync(image_urls, self._config)
-            self.logger.info(f"图片上传完成，CDN链接: {image_urls}")
+        # 上传图片到CDN图床，确保外部API可访问
+        if image_urls:
+            image_urls = self.ensure_public_urls(image_urls)
 
         # 映射比例（多米只支持 1K 分辨率，忽略 image_size 参数）
         api_ratio = self._map_ratio(ai_tool.ratio or "1:1")
