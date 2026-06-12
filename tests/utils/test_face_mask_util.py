@@ -15,12 +15,13 @@ from unittest.mock import MagicMock, patch
 sys.modules['cv2'] = MagicMock()
 sys.modules['numpy'] = MagicMock()
 _saved_config_util = sys.modules.get('config.config_util')
+_saved_project_path = sys.modules.get('utils.project_path')
 sys.modules['config.config_util'] = MagicMock()
 sys.modules['utils.project_path'] = MagicMock()
 
 from utils.face_mask_util import _log_ffmpeg_error, overlay_face_mask
 
-# 恢复 config.config_util，防止污染后续测试
+# 恢复 config.config_util（overlay_face_mask 内部 lazy import project_path，需保持 mock 到测试结束）
 if _saved_config_util is not None:
     sys.modules['config.config_util'] = _saved_config_util
 else:
@@ -113,6 +114,14 @@ class TestOverlayFaceMaskValidation(unittest.TestCase):
             self.assertFalse(success)
             self.assertIsNone(output)
             self.assertIn("原始视频不存在", error)
+
+
+def tearDownModule():
+    """测试全部结束后恢复 utils.project_path，防止污染后续测试模块"""
+    if _saved_project_path is not None:
+        sys.modules['utils.project_path'] = _saved_project_path
+    else:
+        sys.modules.pop('utils.project_path', None)
 
 
 if __name__ == '__main__':

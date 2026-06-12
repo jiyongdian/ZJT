@@ -361,3 +361,9 @@ WHERE stage = 'before_finish'
 GROUP BY failed_impl, target_impl, status
 ORDER BY cnt DESC;
 ```
+
+## 11. 失败原因写入约束
+
+外部视频驱动返回失败时，`result["error"]` 可能是字符串，也可能是类似 `{"code": "...", "message": "..."}` 的对象。统一失败入口 `_handle_task_failure()` 会先通过 `_normalize_failure_reason()` 将失败原因转换为字符串，再写入 `implementation_attempts.error_message` 和 `ai_tools.message`。
+
+新增或修改驱动时建议优先返回字符串错误；如果必须返回对象，需要确保对象中包含可读的 `message` 字段，便于落库和前端展示。不要将 dict/list 等 Python 对象直接作为 PyMySQL 参数写入文本字段，否则会触发 `dict can not be used as parameter`。

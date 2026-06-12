@@ -868,6 +868,9 @@
             const processedSseMessageIds = new Set();
             let loadingSessionId = null;  // 追踪哪个 session 触发了 loading，防止跨 session 竞态清除
             const activeIntervals = new Set();  // 追踪所有活跃的 setInterval ID
+            const MAX_CONSECUTIVE_TASK_ERRORS = 3;
+            const taskErrorCounts = new Map();
+            const activeGenerationPollKeys = new Set();
 
             function generateMsgUid() {
                 return `msg_${Date.now()}_${msgUidCounter++}`;
@@ -887,6 +890,197 @@
             function clearAllTaskIntervals() {
                 activeIntervals.forEach(id => clearInterval(id));
                 activeIntervals.clear();
+                taskErrorCounts.clear();
+                activeGenerationPollKeys.clear();
+            }
+
+            function getTaskErrorKey(type, ids) {
+                const raw = Array.isArray(ids) ? ids.join(',') : String(ids || '');
+                return `${type}:${raw}`;
+            }
+
+            function resetTaskErrorCount(key) {
+                if (key) taskErrorCounts.delete(key);
+            }
+
+            function recordTaskError(key) {
+                if (!key) return 0;
+                const next = (taskErrorCounts.get(key) || 0) + 1;
+                taskErrorCounts.set(key, next);
+                return next;
+            }
+
+            function stopTaskAfterRepeatedErrors(key, interval, msgUid, fallbackContent) {
+                if (interval) trackedClearInterval(interval);
+                if (msgUid) {
+                    const idx = messages.value.findIndex(m => m._uid === msgUid);
+                    if (idx !== -1 && fallbackContent) {
+                        messages.value[idx].content = fallbackContent;
+                        scrollToBottom();
+                    }
+                }
+                resetTaskErrorCount(key);
+            }
+
+            function getGenerationPollKey(type, ids, sessionId = currentSessionId.value) {
+                const raw = Array.isArray(ids) ? ids.join(',') : String(ids || '');
+                return `${sessionId || 'no-session'}:${type}:${raw}`;
+            }
+
+            function normalizeGenerationStatus(status) {
+                return String(status || '').trim().toUpperCase();
+            }
+
+            function isGenerationSuccess(task) {
+                const status = normalizeGenerationStatus(task && task.status);
+                return status === 'SUCCESS' || status === 'COMPLETED' || status === 'DONE';
+            }
+
+            function isGenerationFailed(task) {
+                const status = normalizeGenerationStatus(task && task.status);
+                return status === 'FAILED' || status === 'FAILURE' || status === 'ERROR' || status === 'TIMEOUT';
+            }
+
+            function isGenerationTerminal(task) {
+                return isGenerationSuccess(task) || isGenerationFailed(task);
+            }
+
+            function collectGenerationUrls(task) {
+                const urls = [];
+                const urlKeys = new Set();
+                const getGenerationUrlKey = (url) => {
+                    if (!url || typeof url !== 'string') return '';
+                    try {
+                        const parsed = new URL(url, window.location.origin);
+                        return parsed.pathname || url.split('?')[0];
+                    } catch (e) {
+                        return url.split('?')[0];
+                    }
+                };
+                const addUrl = (url) => {
+                    if (!url || typeof url !== 'string') return;
+                    const key = getGenerationUrlKey(url);
+                    if (!key || urlKeys.has(key)) return;
+                    urlKeys.add(key);
+                    urls.push(url);
+                };
+                const collectFrom = (item) => {
+                    if (!item || typeof item !== 'object') return;
+                    addUrl(item.file_url);
+                    addUrl(item.result_url);
+                    addUrl(item.url);
+                    addUrl(item.image_url);
+                    addUrl(item.video_url);
+                    addUrl(item.output_url);
+                    addUrl(item.download_url);
+                    if (Array.isArray(item.urls)) item.urls.forEach(addUrl);
+                    if (Array.isArray(item.result_urls)) item.result_urls.forEach(addUrl);
+                };
+
+                collectFrom(task);
+                if (Array.isArray(task?.results)) {
+                    task.results.forEach(collectFrom);
+                }
+                if (task?.result && typeof task.result === 'object') {
+                    collectFrom(task.result);
+                }
+                return urls;
+            }
+
+            function extractProjectIdsFromText(text) {
+                if (!text || typeof text !== 'string') return [];
+                const match = text.match(/project_ids?[\s\S]{0,40}?\[([^\]]+)\]/i);
+                if (match) {
+                    return match[1]
+                        .split(',')
+                        .map(item => item.replace(/["'`\s]/g, ''))
+                        .filter(Boolean);
+                }
+
+                const ids = [];
+                const inlineProjectIdPattern = /(?:项目ID|project[_\s-]*id)\s*[:：]\s*([A-Za-z0-9_-]+)/gi;
+                let inlineMatch;
+                while ((inlineMatch = inlineProjectIdPattern.exec(text)) !== null) {
+                    const id = inlineMatch[1];
+                    if (id && !ids.includes(id)) ids.push(id);
+                }
+                return ids;
+            }
+
+            function maybeRecoverImageTaskFromAssistantText(text) {
+                if (!text || typeof text !== 'string') return;
+                if (!/(图片|图像|image)/i.test(text)) return;
+                const projectIds = extractProjectIdsFromText(text);
+                if (projectIds.length === 0) return;
+                if (hasGeneratedImageResult(projectIds)) return;
+                handleImageTaskSubmitted({
+                    project_ids: projectIds,
+                    message: window.t('image_task_submitted')
+                });
+            }
+
+            function hasGeneratedImageResult(projectIds, imageUrls = []) {
+                const ids = Array.isArray(projectIds) ? projectIds.map(String) : [String(projectIds || '')];
+                const urls = Array.isArray(imageUrls) ? imageUrls.filter(Boolean) : [];
+                return messages.value.some(msg => {
+                    const content = msg?.content || '';
+                    if (msg?.role !== 'ai' || !content.includes('generated-image-wrapper')) return false;
+                    if (urls.some(url => content.includes(url))) return true;
+                    return ids.some(id => id && (content.includes(`${id}_`) || content.includes(`/${id}`)));
+                });
+            }
+
+            function maybeRecoverVideoTaskFromAssistantText(text) {
+                if (!text || typeof text !== 'string') return;
+                if (!/(视频|video)/i.test(text)) return;
+                const projectIds = extractProjectIdsFromText(text);
+                if (projectIds.length === 0) return;
+                if (hasGeneratedVideoResult(projectIds)) return;
+                handleVideoTaskSubmitted({
+                    project_ids: projectIds,
+                    message: window.t('video_task_submitted')
+                });
+            }
+
+            function hasGeneratedVideoResult(projectIds, videoUrls = []) {
+                const ids = Array.isArray(projectIds) ? projectIds.map(String) : [String(projectIds || '')];
+                const urls = Array.isArray(videoUrls) ? videoUrls.filter(Boolean) : [];
+                return messages.value.some(msg => {
+                    const content = msg?.content || '';
+                    if (msg?.role !== 'ai' || !content.includes('<video')) return false;
+                    if (urls.some(url => content.includes(url))) return true;
+                    return ids.some(id => id && (content.includes(`${id}_`) || content.includes(`/${id}`)));
+                });
+            }
+
+            function recoverVideoTasksFromAssistantMessages() {
+                messages.value.forEach(msg => {
+                    if (msg.role === 'ai' && !msg._isPendingTask) {
+                        maybeRecoverImageTaskFromAssistantText(msg.content || '');
+                        maybeRecoverVideoTaskFromAssistantText(msg.content || '');
+                    }
+                });
+            }
+
+            function normalizeLoadedMessages(messageList) {
+                const seenVideoUrls = new Set();
+                return messageList.filter(msg => {
+                    const content = msg?.content || '';
+                    if (msg?.role === 'ai' && !msg?.isVerification && !content.trim()) {
+                        return false;
+                    }
+                    if (msg?.role === 'ai' && content.includes('<video')) {
+                        const urls = [];
+                        content.replace(/<video[^>]+src=["']([^"']+)["']/gi, (match, url) => {
+                            urls.push(url);
+                            return match;
+                        });
+                        const key = urls.join('|') || content;
+                        if (seenVideoUrls.has(key)) return false;
+                        seenVideoUrls.add(key);
+                    }
+                    return true;
+                });
             }
 
 
@@ -1931,6 +2125,7 @@
             // 轮询图片生成状态
             async function checkImageStatus(msgUid) {
                 if (!imageProjectIds.value || imageProjectIds.value.length === 0) return;
+                const errorKey = getTaskErrorKey('image-status', imageProjectIds.value);
 
                 const msgIdx = messages.value.findIndex(m => m._uid === msgUid);
                 if (msgIdx === -1) {
@@ -1942,20 +2137,17 @@
                     const params = authToken.value ? { auth_token: authToken.value } : {};
                     const projectIdsStr = imageProjectIds.value.join(',');
                     const res = await axios.get(`/api/get-status/${projectIdsStr}`, { params });
+                    resetTaskErrorCount(errorKey);
 
                     if (res.data.tasks) {
                         const tasks = res.data.tasks;
-                        const allSuccess = tasks.every(t => t.status === 'SUCCESS');
-                        const anyFailed = tasks.some(t => t.status === 'FAILED');
-                        const anyRunning = tasks.some(t => t.status === 'RUNNING');
+                        const allSuccess = tasks.every(isGenerationSuccess);
+                        const anyFailed = tasks.some(isGenerationFailed);
+                        const anyRunning = tasks.some(t => !isGenerationTerminal(t));
 
                         const allResults = [];
                         tasks.forEach(task => {
-                            if (task.results && task.results.length > 0) {
-                                task.results.forEach(result => {
-                                    allResults.push(result);
-                                });
-                            }
+                            collectGenerationUrls(task).forEach(url => allResults.push({ result_url: url }));
                         });
                         imageResults.value = allResults;
 
@@ -1990,6 +2182,16 @@
                     }
                 } catch (err) {
                     console.error('图片状态轮询错误:', err);
+                    const failures = recordTaskError(errorKey);
+                    if (failures >= MAX_CONSECUTIVE_TASK_ERRORS) {
+                        clearImageStatusCheck();
+                        const currentMsgIdx = messages.value.findIndex(m => m._uid === msgUid);
+                        if (currentMsgIdx !== -1) {
+                            messages.value[currentMsgIdx].content = window.t('request_timeout') || '请求超时，请稍后重试。';
+                            scrollToBottom();
+                        }
+                        resetTaskErrorCount(errorKey);
+                    }
                 }
             }
 
@@ -2011,6 +2213,11 @@
             function handleImageTaskSubmitted(data) {
                 const { project_ids, message } = data;
                 if (!project_ids || project_ids.length === 0) return;
+                const pollSessionId = currentSessionId.value;
+                if (hasGeneratedImageResult(project_ids)) return;
+                const pollKey = getGenerationPollKey('image', project_ids, pollSessionId);
+                if (activeGenerationPollKeys.has(pollKey)) return;
+                activeGenerationPollKeys.add(pollKey);
 
                 const msgUid = generateMsgUid();
                 messages.value.push({
@@ -2020,14 +2227,23 @@
                     timestamp: new Date().toISOString()
                 });
                 scrollToBottom();
-                pollAgentImageStatus(msgUid, project_ids);
+                pollAgentImageStatus(msgUid, project_ids, pollSessionId);
             }
 
-            function pollAgentImageStatus(msgUid, projectIds) {
+            function pollAgentImageStatus(msgUid, projectIds, pollSessionId = currentSessionId.value) {
+                const errorKey = getTaskErrorKey('agent-image-status', projectIds);
+                const pollKey = getGenerationPollKey('image', projectIds, pollSessionId);
                 const interval = trackedSetInterval(async () => {
+                    if (currentSessionId.value !== pollSessionId) {
+                        trackedClearInterval(interval);
+                        activeGenerationPollKeys.delete(pollKey);
+                        return;
+                    }
+
                     const msgIdx = messages.value.findIndex(m => m._uid === msgUid);
                     if (msgIdx === -1) {
                         trackedClearInterval(interval);
+                        activeGenerationPollKeys.delete(pollKey);
                         return;
                     }
 
@@ -2035,23 +2251,26 @@
                         const params = authToken.value ? { auth_token: authToken.value } : {};
                         const projectIdsStr = projectIds.join(',');
                         const res = await axios.get(`/api/get-status/${projectIdsStr}`, { params });
+                        resetTaskErrorCount(errorKey);
+
+                        if (currentSessionId.value !== pollSessionId) {
+                            trackedClearInterval(interval);
+                            activeGenerationPollKeys.delete(pollKey);
+                            return;
+                        }
 
                         if (res.data.tasks) {
                             const tasks = res.data.tasks;
-                            const allDone = tasks.every(t => t.status === 'SUCCESS' || t.status === 'FAILED');
+                            const allDone = tasks.every(isGenerationTerminal);
 
                             const imageUrls = [];
                             tasks.forEach(task => {
-                                if (task.results) {
-                                    task.results.forEach(r => {
-                                        const url = r.result_url || r.file_url || r.url || r.image_url;
-                                        if (url) imageUrls.push(url);
-                                    });
-                                }
+                                collectGenerationUrls(task).forEach(url => imageUrls.push(url));
                             });
 
                             if (allDone) {
                                 trackedClearInterval(interval);
+                                activeGenerationPollKeys.delete(pollKey);
                                 let finalContent = '';
                                 if (imageUrls.length > 0) {
                                     const imageHtml = imageUrls.map(url =>
@@ -2067,16 +2286,26 @@
                                     messages.value[currentMsgIdx].content = finalContent;
                                     scrollToBottom();
                                 }
-                                await appendMessageToBackend('assistant', finalContent);
-                                await cleanPendingTasksFromHistory();
+                                await appendMessageToBackend('assistant', finalContent, pollSessionId);
+                                await cleanPendingTasksFromHistory(pollSessionId);
                             } else {
-                                const doneCount = tasks.filter(t => t.status === 'SUCCESS').length;
+                                const doneCount = tasks.filter(isGenerationSuccess).length;
                                 messages.value[msgIdx].content = window.t('image_generating_progress', { done: doneCount, total: tasks.length });
                                 scrollToBottom();
                             }
                         }
                     } catch (err) {
                         console.error('Agent 图片状态轮询错误:', err);
+                        const failures = recordTaskError(errorKey);
+                        if (failures >= MAX_CONSECUTIVE_TASK_ERRORS) {
+                            activeGenerationPollKeys.delete(pollKey);
+                            stopTaskAfterRepeatedErrors(
+                                errorKey,
+                                interval,
+                                msgUid,
+                                window.t('request_timeout') || '请求超时，请稍后重试。'
+                            );
+                        }
                     }
                 }, 5000);
             }
@@ -2085,6 +2314,11 @@
             function handleVideoTaskSubmitted(data) {
                 const { project_ids, message } = data;
                 if (!project_ids || project_ids.length === 0) return;
+                const pollSessionId = currentSessionId.value;
+                if (hasGeneratedVideoResult(project_ids)) return;
+                const pollKey = getGenerationPollKey('video', project_ids, pollSessionId);
+                if (activeGenerationPollKeys.has(pollKey)) return;
+                activeGenerationPollKeys.add(pollKey);
 
                 const msgUid = generateMsgUid();
                 messages.value.push({
@@ -2094,15 +2328,27 @@
                     timestamp: new Date().toISOString()
                 });
                 scrollToBottom();
-                pollAgentVideoStatus(msgUid, project_ids);
+                pollAgentVideoStatus(msgUid, project_ids, pollSessionId);
             }
 
             // 轮询 Agent 视频生成状态
-            function pollAgentVideoStatus(msgUid, projectIds) {
-                const interval = trackedSetInterval(async () => {
+            function pollAgentVideoStatus(msgUid, projectIds, pollSessionId = currentSessionId.value) {
+                const errorKey = getTaskErrorKey('agent-video-status', projectIds);
+                const pollKey = getGenerationPollKey('video', projectIds, pollSessionId);
+                let interval = null;
+                let shouldContinuePolling = true;
+                const checkStatus = async () => {
+                    if (currentSessionId.value !== pollSessionId) {
+                        shouldContinuePolling = false;
+                        if (interval) trackedClearInterval(interval);
+                        activeGenerationPollKeys.delete(pollKey);
+                        return;
+                    }
                     const msgIdx = messages.value.findIndex(m => m._uid === msgUid);
                     if (msgIdx === -1) {
-                        trackedClearInterval(interval);
+                        shouldContinuePolling = false;
+                        if (interval) trackedClearInterval(interval);
+                        activeGenerationPollKeys.delete(pollKey);
                         return;
                     }
 
@@ -2110,25 +2356,35 @@
                         const params = authToken.value ? { auth_token: authToken.value } : {};
                         const projectIdsStr = projectIds.join(',');
                         const res = await axios.get(`/api/get-status/${projectIdsStr}`, { params });
+                        resetTaskErrorCount(errorKey);
+                        if (currentSessionId.value !== pollSessionId) {
+                            shouldContinuePolling = false;
+                            if (interval) trackedClearInterval(interval);
+                            activeGenerationPollKeys.delete(pollKey);
+                            return;
+                        }
 
                         if (res.data.tasks) {
                             const tasks = res.data.tasks;
-                            const allDone = tasks.every(t => t.status === 'SUCCESS' || t.status === 'FAILED');
+                            const allDone = tasks.every(isGenerationTerminal);
 
                             const videoUrls = [];
                             tasks.forEach(task => {
-                                if (task.results) {
-                                    task.results.forEach(r => {
-                                        const url = r.result_url || r.file_url || r.url || '';
-                                        if (url) videoUrls.push(url);
-                                    });
-                                }
+                                collectGenerationUrls(task).forEach(url => videoUrls.push(url));
                             });
 
                             if (allDone) {
-                                trackedClearInterval(interval);
+                                shouldContinuePolling = false;
+                                if (interval) trackedClearInterval(interval);
+                                activeGenerationPollKeys.delete(pollKey);
                                 let finalContent = '';
                                 if (videoUrls.length > 0) {
+                                    if (hasGeneratedVideoResult(projectIds, videoUrls)) {
+                                        const duplicateIdx = messages.value.findIndex(m => m._uid === msgUid);
+                                        if (duplicateIdx !== -1) messages.value.splice(duplicateIdx, 1);
+                                        scrollToBottom();
+                                        return;
+                                    }
                                     const videoHtml = videoUrls.map(url =>
                                         `<video src="${url}" controls style="max-width:100%;max-height:400px;border-radius:8px;margin:8px 0;"></video>`
                                     ).join('');
@@ -2145,15 +2401,31 @@
                                 await appendMessageToBackend('assistant', finalContent);
                                 await cleanPendingTasksFromHistory();
                             } else {
-                                const doneCount = tasks.filter(t => t.status === 'SUCCESS').length;
+                                const doneCount = tasks.filter(isGenerationSuccess).length;
                                 messages.value[msgIdx].content = window.t('video_generating_progress', { done: doneCount, total: tasks.length });
                                 scrollToBottom();
                             }
                         }
                     } catch (err) {
                         console.error('Agent 视频状态轮询错误:', err);
+                        const failures = recordTaskError(errorKey);
+                        if (failures >= MAX_CONSECUTIVE_TASK_ERRORS) {
+                            shouldContinuePolling = false;
+                            activeGenerationPollKeys.delete(pollKey);
+                            stopTaskAfterRepeatedErrors(
+                                errorKey,
+                                interval,
+                                msgUid,
+                                window.t('request_timeout') || '请求超时，请稍后重试。'
+                            );
+                        }
                     }
-                }, 10000);  // 视频轮询间隔 10 秒
+                };
+                checkStatus().finally(() => {
+                    if (shouldContinuePolling) {
+                        interval = trackedSetInterval(checkStatus, 10000);  // 视频轮询间隔 10 秒
+                    }
+                });
             }
 
             // 发送视频生成请求
@@ -2303,6 +2575,7 @@
 
             async function checkVideoStatus(msgUid) {
                 if (!videoProjectIds.value || videoProjectIds.value.length === 0) return;
+                const errorKey = getTaskErrorKey('video-status', videoProjectIds.value);
 
                 const msgIdx = messages.value.findIndex(m => m._uid === msgUid);
                 if (msgIdx === -1) {
@@ -2314,20 +2587,17 @@
                     const params = authToken.value ? { auth_token: authToken.value } : {};
                     const projectIdsStr = videoProjectIds.value.join(',');
                     const res = await axios.get(`/api/get-status/${projectIdsStr}`, { params });
+                    resetTaskErrorCount(errorKey);
 
                     if (res.data.tasks) {
                         const tasks = res.data.tasks;
-                        const allSuccess = tasks.every(t => t.status === 'SUCCESS');
-                        const anyFailed = tasks.some(t => t.status === 'FAILED');
-                        const anyRunning = tasks.some(t => t.status === 'RUNNING');
+                        const allSuccess = tasks.every(isGenerationSuccess);
+                        const anyFailed = tasks.some(isGenerationFailed);
+                        const anyRunning = tasks.some(t => !isGenerationTerminal(t));
 
                         const allResults = [];
                         tasks.forEach(task => {
-                            if (task.results && task.results.length > 0) {
-                                task.results.forEach(result => {
-                                    allResults.push(result);
-                                });
-                            }
+                            collectGenerationUrls(task).forEach(url => allResults.push({ result_url: url }));
                         });
                         videoResults.value = allResults;
 
@@ -2363,6 +2633,16 @@
                     }
                 } catch (err) {
                     console.error('视频状态轮询错误:', err);
+                    const failures = recordTaskError(errorKey);
+                    if (failures >= MAX_CONSECUTIVE_TASK_ERRORS) {
+                        clearVideoStatusCheck();
+                        const currentMsgIdx = messages.value.findIndex(m => m._uid === msgUid);
+                        if (currentMsgIdx !== -1) {
+                            messages.value[currentMsgIdx].content = window.t('request_timeout') || '请求超时，请稍后重试。';
+                            scrollToBottom();
+                        }
+                        resetTaskErrorCount(errorKey);
+                    }
                 }
             }
 
@@ -2547,17 +2827,20 @@
                     await handleStream(taskId);
 
                 } catch (e) {
-                    if (e.name === 'AbortError') {
+                    const isTimeoutError = e.name === 'AbortError' || e.message === 'Stream timeout';
+                    if (isTimeoutError) {
                         showError(window.t('request_timeout'));
                     } else {
                         showError(e.message);
                     }
-                    // 添加错误消息
-                    messages.value.push({
-                        role: 'ai',
-                        content: window.t('request_error'),
-                        timestamp: new Date().toISOString()
-                    });
+                    // 超时分支已在 handleStream 中写入明确提示，避免额外追加通用错误气泡刷屏。
+                    if (!isTimeoutError) {
+                        messages.value.push({
+                            role: 'ai',
+                            content: window.t('request_error'),
+                            timestamp: new Date().toISOString()
+                        });
+                    }
                 } finally {
                     // 仅当本次发送的会话仍然活跃时才清除 loading（防止跨会话竞态清除）
                     console.log('[Loading] sendMessageToApi finally, sessionId=', sessionId, ', loadingSessionId=', loadingSessionId, ', currentSession=', currentSessionId.value);
@@ -2577,9 +2860,21 @@
                 return new Promise((resolve, reject) => {
                     const eventSource = new EventSource(`/api/task/${taskId}/stream`);
                     currentEventSource = eventSource;
+                    const streamSessionId = currentSessionId.value;
+                    const streamErrorKey = getTaskErrorKey('stream', taskId);
                     let fullContent = '';
                     let hasReceivedData = false;
                     let msgUid = '';  // 使用 _uid 替代 msgIndex
+                    let streamSettled = false;
+                    let streamTimeoutId = null;
+
+                    function settleStream() {
+                        streamSettled = true;
+                        if (streamTimeoutId) {
+                            clearTimeout(streamTimeoutId);
+                            streamTimeoutId = null;
+                        }
+                    }
 
                     // 确保 msgUid 对应的占位消息存在
                     function ensurePlaceholder() {
@@ -2611,6 +2906,7 @@
 
                             if (data.type === 'message') {
                                 hasReceivedData = true;
+                                resetTaskErrorCount(streamErrorKey);
                                 if (window.AgentMessageDedupe?.hasDisplayedAssistantMessage(messages.value, data.content, msgUid)) {
                                     console.log('[SSE] 跳过历史中已展示的消息:', data.id);
                                     return;
@@ -2619,6 +2915,8 @@
                                 const uid = ensurePlaceholder();
                                 const idx = findMsgByIdx(uid);
                                 if (idx !== -1) messages.value[idx].content = fullContent;
+                                maybeRecoverImageTaskFromAssistantText(data.content || '');
+                                maybeRecoverVideoTaskFromAssistantText(data.content || '');
                                 scrollToBottom();
                             } else if (data.type === 'status') {
                                 // 状态更新，可忽略
@@ -2627,6 +2925,7 @@
                             } else if (data.type === 'human_verification_required') {
                                 // AI 向用户提问（ask_user 工具）
                                 hasReceivedData = true;
+                                resetTaskErrorCount(streamErrorKey);
                                 handleHumanVerification(data.verification);
                             } else if (data.type === 'verification_timeout') {
                                 // 验证超时
@@ -2645,15 +2944,18 @@
                             } else if (data.type === 'image_task_submitted') {
                                 // Agent 提交了图片生成任务，前端开始轮询
                                 hasReceivedData = true;
+                                resetTaskErrorCount(streamErrorKey);
                                 handleImageTaskSubmitted(data);
                             } else if (data.type === 'video_task_submitted') {
                                 // Agent 提交了视频生成任务，前端开始轮询
                                 hasReceivedData = true;
+                                resetTaskErrorCount(streamErrorKey);
                                 handleVideoTaskSubmitted(data);
                             } else if (data.type === 'error') {
+                                settleStream();
                                 eventSource.close();
                                 if (currentEventSource === eventSource) currentEventSource = null;
-                                delete sessionActiveTaskId[currentSessionId.value];
+                                delete sessionActiveTaskId[streamSessionId];
                                 pendingVerificationId.value = null;
                 showOtherInput.value = false;
                 otherInputText.value = '';
@@ -2670,13 +2972,21 @@
                                 }
                                 reject(new Error(data.error || data.message || 'Stream error'));
                             } else if (data.type === 'done') {
-                                console.log('[Loading] handleStream 收到 done 事件, 流结束, 清理 sessionActiveTaskId[', currentSessionId.value, ']');
+                                console.log('[Loading] handleStream 收到 done 事件, 流结束, 清理 sessionActiveTaskId[', streamSessionId, ']');
+                                settleStream();
+                                resetTaskErrorCount(streamErrorKey);
                                 eventSource.close();
                                 if (currentEventSource === eventSource) currentEventSource = null;
-                                delete sessionActiveTaskId[currentSessionId.value];
+                                delete sessionActiveTaskId[streamSessionId];
                                 if (msgUid) {
                                     const idx = findMsgByIdx(msgUid);
-                                    if (idx !== -1) messages.value[idx].content = fullContent;
+                                    if (idx !== -1) {
+                                        if (fullContent) {
+                                            messages.value[idx].content = fullContent;
+                                        } else {
+                                            messages.value.splice(idx, 1);
+                                        }
+                                    }
                                 }
                                 showContinue.value = true;
                                 // 刷新算力显示
@@ -2696,43 +3006,63 @@
                     };
 
                     eventSource.onerror = (e) => {
+                        if (streamSettled) return;
                         console.log('[Loading] handleStream onerror, hasReceivedData=', hasReceivedData);
+                        settleStream();
                         eventSource.close();
                         if (currentEventSource === eventSource) currentEventSource = null;
                         pendingVerificationId.value = null;
                 showOtherInput.value = false;
                 otherInputText.value = '';
                         if (!hasReceivedData) {
+                            const failures = recordTaskError(streamErrorKey);
                             messages.value.push({
                                 _uid: generateMsgUid(),
                                 role: 'ai',
                                 content: window.t('connection_error'),
                                 timestamp: new Date().toISOString()
                             });
+                            if (failures >= MAX_CONSECUTIVE_TASK_ERRORS) {
+                                delete sessionActiveTaskId[streamSessionId];
+                                clearAllTaskIntervals();
+                                showContinue.value = false;
+                                resetTaskErrorCount(streamErrorKey);
+                            }
                             reject(new Error('EventSource error'));
                         } else {
                             showContinue.value = true;
+                            resetTaskErrorCount(streamErrorKey);
                             resolve();
                         }
                     };
 
                     // 超时处理
-                    setTimeout(() => {
+                    streamTimeoutId = setTimeout(() => {
+                        if (streamSettled) return;
+                        settleStream();
                         eventSource.close();
                         if (currentEventSource === eventSource) currentEventSource = null;
                         pendingVerificationId.value = null;
                 showOtherInput.value = false;
                 otherInputText.value = '';
                         if (!hasReceivedData) {
+                            const failures = recordTaskError(streamErrorKey);
                             messages.value.push({
                                 _uid: generateMsgUid(),
                                 role: 'ai',
                                 content: window.t('request_timeout'),
                                 timestamp: new Date().toISOString()
                             });
+                            if (failures >= MAX_CONSECUTIVE_TASK_ERRORS) {
+                                delete sessionActiveTaskId[streamSessionId];
+                                clearAllTaskIntervals();
+                                showContinue.value = false;
+                                resetTaskErrorCount(streamErrorKey);
+                            }
                             reject(new Error('Stream timeout'));
                         } else {
                             showContinue.value = true;
+                            resetTaskErrorCount(streamErrorKey);
                             resolve();
                         }
                     }, 900000);
@@ -2822,7 +3152,20 @@
                         })
                     });
 
-                    const data = await response.json();
+                    let data = {};
+                    try {
+                        data = await response.json();
+                    } catch (jsonErr) {
+                        data = {};
+                    }
+                    if (response.status === 404 || response.status === 410) {
+                        pendingVerificationId.value = null;
+                        showOtherInput.value = false;
+                        otherInputText.value = '';
+                        showError(data.error || window.t('verification_timeout') || window.t('send_failed'));
+                        return;
+                    }
+
                     if (data.success) {
                         pendingVerificationId.value = null;
                         showOtherInput.value = false;
@@ -3042,11 +3385,11 @@
             }
 
             // 追加消息到后端
-            async function appendMessageToBackend(role, content) {
-                if (!currentSessionId.value) return;
+            async function appendMessageToBackend(role, content, sessionId = currentSessionId.value) {
+                if (!sessionId) return;
                 
                 try {
-                    const response = await fetch(`/api/session/${currentSessionId.value}/message`, {
+                    const response = await fetch(`/api/session/${sessionId}/message`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -3069,10 +3412,10 @@
             }
 
             // 清理对话历史中的 __PENDING_TASK__ 标记
-            async function cleanPendingTasksFromHistory() {
-                if (!currentSessionId.value) return;
+            async function cleanPendingTasksFromHistory(sessionId = currentSessionId.value) {
+                if (!sessionId) return;
                 try {
-                    await fetch(`/api/session/${currentSessionId.value}/clean-pending-tasks`, {
+                    await fetch(`/api/session/${sessionId}/clean-pending-tasks`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -3089,12 +3432,7 @@
             function buildResultContent(type, tasks) {
                 const urls = [];
                 tasks.forEach(task => {
-                    if (task.results) {
-                        task.results.forEach(r => {
-                            const url = r.result_url || r.file_url || r.url || r.image_url || '';
-                            if (url) urls.push(url);
-                        });
-                    }
+                    collectGenerationUrls(task).forEach(url => urls.push(url));
                 });
                 if (urls.length > 0) {
                     if (type === 'image') {
@@ -3122,7 +3460,7 @@
                         const params = authToken.value ? { auth_token: authToken.value } : {};
                         const res = await axios.get(`/api/get-status/${msg._projectIds.join(',')}`, { params });
 
-                        if (res.data.tasks && res.data.tasks.every(t => t.status === 'SUCCESS' || t.status === 'FAILED')) {
+                        if (res.data.tasks && res.data.tasks.every(isGenerationTerminal)) {
                             // 任务已完成：替换为结果
                             const content = buildResultContent(msg._taskType, res.data.tasks);
                             msg.role = 'ai';
@@ -3177,7 +3515,8 @@
                 if (fileInputRef.value) fileInputRef.value.value = '';
                 if (referenceInputRef.value) referenceInputRef.value.value = '';
                 const history = await loadSessionHistory(sessionId);
-                messages.value = history.filter(filterHistoryMessage).map(parseHistoryMessage);
+                messages.value = normalizeLoadedMessages(history.filter(filterHistoryMessage).map(parseHistoryMessage));
+                recoverVideoTasksFromAssistantMessages();
 
                 // 恢复活跃任务（从历史中的 __PENDING_TASK__ 标记恢复）
                 await recoverPendingTasks();
@@ -3438,7 +3777,8 @@
                     currentSessionId.value = latestSession.id;
                     const history = await loadSessionHistory(latestSession.id);
                     if (history.length > 0) {
-                        messages.value = history.filter(filterHistoryMessage).map(parseHistoryMessage);
+                        messages.value = normalizeLoadedMessages(history.filter(filterHistoryMessage).map(parseHistoryMessage));
+                        recoverVideoTasksFromAssistantMessages();
                         await recoverPendingTasks();
                     }
                 } else {

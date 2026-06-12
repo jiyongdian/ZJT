@@ -2505,6 +2505,26 @@
     `,
   };
 
+  // 全局工具函数：获取生成模式标签
+  function getGenerationModeLabel(item) {
+    try {
+      const extraConfig = item.extra_config ? (typeof item.extra_config === 'string' ? JSON.parse(item.extra_config) : item.extra_config) : null;
+      const imageMode = extraConfig?.image_mode;
+      
+      const modeMap = {
+        'first_last_frame': '首尾帧模式',
+        'first_last_with_tail': '首尾帧模式',
+        'multi_reference': '多参考图模式',
+        'first_last_with_ref': '首尾帧+参考图模式'
+      };
+      
+      return (imageMode && modeMap[imageMode]) ? modeMap[imageMode] : '-';
+    } catch (e) {
+      console.error('解析 extra_config 失败:', e);
+      return '-';
+    }
+  }
+
   const ImageEdit = {
     name: 'ImageEdit',
     data() {
@@ -4973,6 +4993,10 @@
         const resolved = item.ratio || this.model;
         return modelMap[resolved] || resolved || '未知';
       },
+
+      getGenerationMode(item) {
+        return getGenerationModeLabel(item);
+      },
       
       goToCharacterCard(projectId) {
         window.location.href = '/character_card.html?task_id=' + projectId;
@@ -5240,6 +5264,7 @@
                 <div style="display: flex; gap: 16px; font-size: 13px; color: var(--muted); margin-bottom: 8px;">
                   <span>{{ $t('type_label') || '类型' }}: {{ getHistoryTypeText(item.type) }}</span>
                   <span>{{ $t('mode_display') || '模式' }}: {{ getModelLabel(item) }}</span>
+                  <span>生成模式: {{ getGenerationMode(item) }}</span>
                   <span>{{ $t('duration_label') || '时长' }}: {{ getDurationText(item) }}</span>
                   <span>{{ $t('created_time_display') || '创建时间' }}: {{ item.create_time ? new Date(item.create_time).toLocaleString('zh-CN') : ($t('unknown') || '未知') }}</span>
                 </div>
@@ -5882,6 +5907,10 @@
       getDurationText(item) {
         const duration = item?.original_duration ?? item?.duration ?? item?.video_duration ?? (typeof this.durationSeconds === 'number' ? this.durationSeconds : null);
         return duration ? `${duration}秒` : '未知';
+      },
+
+      getGenerationMode(item) {
+        return getGenerationModeLabel(item);
       }
     },
     
@@ -6019,6 +6048,7 @@
                 <div style="display: flex; gap: 16px; font-size: 13px; color: var(--muted); margin-bottom: 8px;">
                   <span>{{ $t('type_label') }}: {{ getHistoryTypeText(item.type) }}</span>
                   <span>{{ $t('mode_switch') }}: {{ getModelLabel(item.ratio) }}</span>
+                  <span>生成模式: {{ getGenerationMode(item) }}</span>
                   <span>{{ $t('duration_label') }}: {{ getDurationText(item) }}</span>
                   <span>{{ $t('create_time') }}: {{ item.create_time ? new Date(item.create_time).toLocaleString('zh-CN') : $t('unknown') }}</span>
                 </div>
