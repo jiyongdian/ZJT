@@ -978,11 +978,44 @@
             function extractProjectIdsFromText(text) {
                 if (!text || typeof text !== 'string') return [];
                 const match = text.match(/project_ids?[\s\S]{0,40}?\[([^\]]+)\]/i);
-                if (!match) return [];
-                return match[1]
-                    .split(',')
-                    .map(item => item.replace(/["'`\s]/g, ''))
-                    .filter(Boolean);
+                if (match) {
+                    return match[1]
+                        .split(',')
+                        .map(item => item.replace(/["'`\s]/g, ''))
+                        .filter(Boolean);
+                }
+
+                const ids = [];
+                const inlineProjectIdPattern = /(?:项目ID|project[_\s-]*id)\s*[:：]\s*([A-Za-z0-9_-]+)/gi;
+                let inlineMatch;
+                while ((inlineMatch = inlineProjectIdPattern.exec(text)) !== null) {
+                    const id = inlineMatch[1];
+                    if (id && !ids.includes(id)) ids.push(id);
+                }
+                return ids;
+            }
+
+            function maybeRecoverImageTaskFromAssistantText(text) {
+                if (!text || typeof text !== 'string') return;
+                if (!/(图片|图像|image)/i.test(text)) return;
+                const projectIds = extractProjectIdsFromText(text);
+                if (projectIds.length === 0) return;
+                if (hasGeneratedImageResult(projectIds)) return;
+                handleImageTaskSubmitted({
+                    project_ids: projectIds,
+                    message: window.t('image_task_submitted')
+                });
+            }
+
+            function hasGeneratedImageResult(projectIds, imageUrls = []) {
+                const ids = Array.isArray(projectIds) ? projectIds.map(String) : [String(projectIds || '')];
+                const urls = Array.isArray(imageUrls) ? imageUrls.filter(Boolean) : [];
+                return messages.value.some(msg => {
+                    const content = msg?.content || '';
+                    if (msg?.role !== 'ai' || !content.includes('generated-image-wrapper')) return false;
+                    if (urls.some(url => content.includes(url))) return true;
+                    return ids.some(id => id && (content.includes(`${id}_`) || content.includes(`/${id}`)));
+                });
             }
 
             function maybeRecoverVideoTaskFromAssistantText(text) {
@@ -1011,6 +1044,7 @@
             function recoverVideoTasksFromAssistantMessages() {
                 messages.value.forEach(msg => {
                     if (msg.role === 'ai' && !msg._isPendingTask) {
+                        maybeRecoverImageTaskFromAssistantText(msg.content || '');
                         maybeRecoverVideoTaskFromAssistantText(msg.content || '');
                     }
                 });
@@ -2167,6 +2201,11 @@
             function handleImageTaskSubmitted(data) {
                 const { project_ids, message } = data;
                 if (!project_ids || project_ids.length === 0) return;
+                const pollSessionId = currentSessionId.value;
+                if (hasGeneratedImageResult(project_ids)) return;
+                const pollKey = getGenerationPollKey('image', project_ids, pollSessionId);
+                if (activeGenerationPollKeys.has(pollKey)) return;
+                activeGenerationPollKeys.add(pollKey);
 
                 const msgUid = generateMsgUid();
                 messages.value.push({
@@ -2176,15 +2215,23 @@
                     timestamp: new Date().toISOString()
                 });
                 scrollToBottom();
-                pollAgentImageStatus(msgUid, project_ids);
+                pollAgentImageStatus(msgUid, project_ids, pollSessionId);
             }
 
-            function pollAgentImageStatus(msgUid, projectIds) {
+            function pollAgentImageStatus(msgUid, projectIds, pollSessionId = currentSessionId.value) {
                 const errorKey = getTaskErrorKey('agent-image-status', projectIds);
+                const pollKey = getGenerationPollKey('image', projectIds, pollSessionId);
                 const interval = trackedSetInterval(async () => {
+                    if (currentSessionId.value !== pollSessionId) {
+                        trackedClearInterval(interval);
+                        activeGenerationPollKeys.delete(pollKey);
+                        return;
+                    }
+
                     const msgIdx = messages.value.findIndex(m => m._uid === msgUid);
                     if (msgIdx === -1) {
                         trackedClearInterval(interval);
+                        activeGenerationPollKeys.delete(pollKey);
                         return;
                     }
 
@@ -2193,6 +2240,12 @@
                         const projectIdsStr = projectIds.join(',');
                         const res = await axios.get(`/api/get-status/${projectIdsStr}`, { params });
                         resetTaskErrorCount(errorKey);
+
+                        if (currentSessionId.value !== pollSessionId) {
+                            trackedClearInterval(interval);
+                            activeGenerationPollKeys.delete(pollKey);
+                            return;
+                        }
 
                         if (res.data.tasks) {
                             const tasks = res.data.tasks;
@@ -2205,6 +2258,7 @@
 
                             if (allDone) {
                                 trackedClearInterval(interval);
+                                activeGenerationPollKeys.delete(pollKey);
                                 let finalContent = '';
                                 if (imageUrls.length > 0) {
                                     const imageHtml = imageUrls.map(url =>
@@ -2232,6 +2286,7 @@
                         console.error('Agent 图片状态轮询错误:', err);
                         const failures = recordTaskError(errorKey);
                         if (failures >= MAX_CONSECUTIVE_TASK_ERRORS) {
+                            activeGenerationPollKeys.delete(pollKey);
                             stopTaskAfterRepeatedErrors(
                                 errorKey,
                                 interval,
@@ -2848,6 +2903,7 @@
                                 const uid = ensurePlaceholder();
                                 const idx = findMsgByIdx(uid);
                                 if (idx !== -1) messages.value[idx].content = fullContent;
+                                maybeRecoverImageTaskFromAssistantText(data.content || '');
                                 maybeRecoverVideoTaskFromAssistantText(data.content || '');
                                 scrollToBottom();
                             } else if (data.type === 'status') {
