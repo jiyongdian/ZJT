@@ -2647,8 +2647,13 @@
                             }, 2000);
                         }
                     }).catch(() => {
-                        // 无法获取任务状态，保守处理：保持旋转但显示提示
-                        updateStatus(window.t ? window.t('status_connection_lost') : '连接中断，请等待或刷新页面');
+                        // If status lookup also fails, the backend is likely unavailable.
+                        // End the local sending state so the user is not trapped in loading.
+                        hideTypingIndicator();
+                        hideToolCalls();
+                        resetProcessingState();
+                        updateStatus(window.t ? window.t('status_connection_lost') : '连接中断，请刷新页面后重试');
+                        showError(window.t ? window.t('error_connection_lost') : '连接中断，无法确认任务状态，请刷新页面后重试');
                     });
                 };
 
@@ -2785,7 +2790,11 @@
                         }, 2000);
                     }
                 }).catch(() => {
+                    hideTypingIndicator();
+                    hideToolCalls();
+                    resetProcessingState();
                     updateStatus(window.t ? window.t('status_reconnect_final') : '重连失败，请刷新页面');
+                    showError(window.t ? window.t('error_connection_lost') : '重连失败，无法确认任务状态，请刷新页面后重试');
                 });
             };
 

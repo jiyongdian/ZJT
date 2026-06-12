@@ -1660,7 +1660,7 @@ async def get_status(
 
         for ai_tool_id in ai_tool_ids:
             # Query database to get task type
-            task_record = AIToolsModel.get_by_id(ai_tool_id)
+            task_record = await asyncio.to_thread(AIToolsModel.get_by_id, ai_tool_id)
             
             if not task_record:
                 tasks_response.append({
@@ -1689,7 +1689,8 @@ async def get_status(
             if status == AI_TOOL_STATUS_COMPLETED:  # Success
                 from utils.cdn_util import CDNUtil, CDNStatus
 
-                media_url, cdn_status = CDNUtil.get_media_url(
+                media_url, cdn_status = await asyncio.to_thread(
+                    CDNUtil.get_media_url,
                     task_record.media_mapping_id,
                     task_record.result_url
                 )
@@ -1701,11 +1702,20 @@ async def get_status(
                         results_payload = [{
                             "file_url": media_url,
                             "result_url": task_record.result_url,
+                            "cdn_status": cdn_status,
                             "task_cost_time": task_cost_time
                         }]
                 elif cdn_status == CDNStatus.PENDING:
+                    fallback_url = media_url or task_record.result_url
+                    if fallback_url:
+                        results_payload = [{
+                            "file_url": fallback_url,
+                            "result_url": task_record.result_url,
+                            "cdn_status": cdn_status,
+                            "task_cost_time": task_cost_time
+                        }]
                     # CDN 还在处理中，返回等待状态
-                    status_str = "RUNNING"
+                    status_str = "SUCCESS"
                     logger.info(f"任务 {ai_tool_id} CDN 未完成，等待中")
                 else:
                     # CDN 未启用或获取失败，使用本地 URL
@@ -1714,6 +1724,7 @@ async def get_status(
                         results_payload = [{
                             "file_url": media_url,
                             "result_url": task_record.result_url,
+                            "cdn_status": cdn_status,
                             "task_cost_time": task_cost_time
                         }]
 
