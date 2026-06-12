@@ -2877,6 +2877,8 @@
             // 过滤和解析历史消息的共享逻辑
             function filterHistoryMessage(h) {
                 if (h.role === 'system' || h.role === 'tool') return false;
+                // 过滤 context_summary 消息（已在后端 API 排除，此处双重保障）
+                if (h.message_type === 'context_summary') return false;
                 if (h.role === 'assistant' && h.content) {
                     let content = h.content;
                     if (typeof content === 'string') {

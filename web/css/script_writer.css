@@ -824,6 +824,99 @@ body {
     color: var(--text-secondary);
 }
 
+/* Tool Call Indicator - 实时显示工具调用状态 */
+.tool-call-indicator {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%);
+    border: 1px solid #e0e7ff;
+    border-radius: var(--radius-lg, 12px);
+    border-bottom-left-radius: 4px;
+    max-width: 360px;
+    box-shadow: 0 1px 3px rgba(99, 102, 241, 0.08);
+    animation: toolCallSlideIn 0.3s ease-out;
+    margin-top: 4px;
+}
+
+@keyframes toolCallSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.tool-call-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #4338ca;
+    line-height: 1.4;
+}
+
+.tool-call-item .tool-spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid #c7d2fe;
+    border-top-color: #6366f1;
+    border-radius: 50%;
+    animation: toolSpinner 0.8s linear infinite;
+    flex-shrink: 0;
+}
+
+@keyframes toolSpinner {
+    to { transform: rotate(360deg); }
+}
+
+.tool-call-item .tool-name {
+    font-weight: 500;
+    color: #4338ca;
+}
+
+.tool-call-item .tool-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.tool-call-item.tool-completed .tool-spinner {
+    display: none;
+}
+
+.tool-call-item.tool-completed::before {
+    content: '✓';
+    color: #16a34a;
+    font-weight: bold;
+    font-size: 14px;
+    flex-shrink: 0;
+    width: 14px;
+    text-align: center;
+}
+
+.tool-call-item.tool-completed .tool-name {
+    color: #16a34a;
+}
+
+.tool-call-indicator.fade-out {
+    animation: toolCallFadeOut 0.5s ease-out forwards;
+}
+
+@keyframes toolCallFadeOut {
+    to {
+        opacity: 0;
+        transform: translateY(-4px);
+        max-height: 0;
+        padding: 0 16px;
+        margin: 0;
+        overflow: hidden;
+    }
+}
+
 /* Input Section */
 .input-section {
     padding: 24px;

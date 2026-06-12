@@ -159,6 +159,18 @@ class ExpertAgent(BaseAgent, AskUserMixin):
         conversation_history = task.get("conversation_history", [])
         image_urls = task.get("image_urls", [])
 
+        # 设置双写属性：使用 PM 的 session_id，agent_scope = expert
+        self._agent_scope = "expert"
+        self._session_id = task.get("pm_session_id")  # PM 的真实 session_id
+        self._task_id = task.get("pm_task_id")         # PM 的 task_id
+        if self._session_id:
+            try:
+                from script_writer_core.conversation_recorder import ConversationRecorder
+                self._conversation_recorder = ConversationRecorder()
+            except Exception as e:
+                logger.error(f"{self.agent_id}: Failed to init ConversationRecorder: {e}")
+                self._conversation_recorder = None
+
         logger.info(f"{self.agent_id}: Starting task execution - {task_description}")
 
         try:
@@ -168,7 +180,7 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                     role = msg.get("role")
                     content = msg.get("content")
                     if role and content:
-                        self.add_to_history(role, content)
+                        self.add_to_history(role, content, extra_meta={"visibility": "internal"})
 
             # 图片、视频、音频以文字标签形式注入，不需要 base64
             # 需要看图的专家（如 image-understanding）通过 fetch_image_as_base64 工具按需获取
@@ -316,6 +328,14 @@ class ExpertAgent(BaseAgent, AskUserMixin):
     def _handle_tool_calls(self, message):
         """处理工具调用"""
         tool_calls = message.tool_calls
+
+        # 向前端推送工具调用事件，实时显示正在调用的函数
+        if self.task_manager and self.task_id:
+            tool_names = [tc.function.name for tc in tool_calls]
+            self.task_manager.push_message(self.task_id, 'tool_call', {
+                'tool_names': tool_names,
+                'count': len(tool_calls)
+            })
         
         # 构建历史记录条目，包含 tool_calls
         history_entry = {
@@ -397,9 +417,7 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                 })
                 user_input = result.get("user_input", "")
                 if user_input:
-                    deferred_user_inputs.append(user_input)
-
-            self.outputs.append(result)
+                    deferred_user_inputs.append((user_input, meta.get("verification_id")))
 
             # 将result转换为JSON字符串以便后续解析，而不是Python dict的字符串表示
             self.add_to_history("tool", {
@@ -423,8 +441,13 @@ class ExpertAgent(BaseAgent, AskUserMixin):
 
         # 将用户的回答作为 user 消息写入历史，放在所有 tool 消息之后
         # 避免在 assistant(tool_calls) 和 tool 之间插入 user 消息导致 API 报错
-        for user_input in deferred_user_inputs:
-            self.add_to_history("user", user_input)
+        # 携带 verification_id 确保幂等键对齐
+        for item in deferred_user_inputs:
+            if isinstance(item, tuple):
+                user_input, ver_id = item
+                self.add_to_history("user", user_input, extra_meta={"verification_id": ver_id})
+            else:
+                self.add_to_history("user", item)
 
         # 将 fetch_image_as_base64 获取的图片作为多模态 user 消息注入
         # API 工具结果消息只支持文本内容，多模态图片必须通过 user 消息注入

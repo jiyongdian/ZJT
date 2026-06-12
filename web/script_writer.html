@@ -1736,6 +1736,11 @@
                             return;
                         }
 
+                        // 不显示 context_summary 消息（已在后端排除，此处双重保障）
+                        if (msg.message_type === 'context_summary') {
+                            return;
+                        }
+
                         // 特殊处理 tool 消息：只显示 ask_user 的用户回答
                         if (msg.role === 'tool') {
                             const content = msg.content;
@@ -2547,6 +2552,7 @@
                         }
                         
                         if (data.type === 'message') {
+                            hideToolCalls(); // 收到文本消息时隐藏工具调用指示器
                             if (data.content) {
                                 // 如果 verification 出现过，创建新 div（此时 verification 已在 DOM 中）
                                 if (needsNewMessageDiv) {
@@ -2561,12 +2567,18 @@
                             }
                         } else if (data.type === 'progress') {
                             updateStatus(window.t ? window.t('status_executing', {step: data.step || ''}) : `执行中: ${data.step || ''}`);
+                        } else if (data.type === 'tool_call') {
+                            // 实时显示工具调用
+                            if (data.tool_names && data.tool_names.length > 0) {
+                                showToolCalls(data.tool_names);
+                            }
                         } else if (data.type === 'context_compression') {
                             updateStatus(window.t ? window.t('status_context_compressed') : '上下文已自动压缩，继续回复中...');
                             console.log('[SSE] 上下文压缩事件:', data.reason);
                         } else if (data.type === 'done') {
                             eventSource.close();
                             hideTypingIndicator(); // 确保移除打字指示器
+                            hideToolCalls(); // 确保移除工具调用指示器
                             updateStatus(window.t ? window.t('status_done') : '完成');
                             isProcessing = false;
                             pendingVerificationId = null;
@@ -2584,6 +2596,7 @@
                             }
                         } else if (data.type === 'error') {
                             eventSource.close();
+                            hideToolCalls(); // 确保移除工具调用指示器
                             showError((window.t ? window.t('error_task_execution', {error: data.error}) : '任务执行错误: ' + data.error));
                             isProcessing = false;
                             pendingVerificationId = null;
@@ -2592,6 +2605,7 @@
                             sendBtn.disabled = false;
                             sendBtn.classList.remove('sending');
                         } else if (data.type === 'human_verification_required') {
+                            hideToolCalls(); // ask_user 工具调用完成，隐藏指示器
                             const verification = data.verification || {};
                             console.log('[SSE] Received human_verification_required:', verification);
                             handleHumanVerification(verification);
@@ -2702,6 +2716,7 @@
                     }
 
                     if (data.type === 'message') {
+                        hideToolCalls();
                         if (data.content) {
                             if (needsNewMessageDiv) {
                                 const newDiv = addMessage('assistant', '');
@@ -2715,10 +2730,15 @@
                         }
                     } else if (data.type === 'progress') {
                         updateStatus(window.t ? window.t('status_executing', {step: data.step || ''}) : `执行中: ${data.step || ''}`);
+                    } else if (data.type === 'tool_call') {
+                        if (data.tool_names && data.tool_names.length > 0) {
+                            showToolCalls(data.tool_names);
+                        }
                     } else if (data.type === 'context_compression') {
                         updateStatus(window.t ? window.t('status_context_compressed') : '上下文已自动压缩，继续回复中...');
                     } else if (data.type === 'done') {
                         newEventSource.close();
+                        hideToolCalls();
                         updateStatus(window.t ? window.t('status_done') : '完成');
                         resetProcessingState();
                         loadComputingPower();
@@ -2729,9 +2749,11 @@
                         }
                     } else if (data.type === 'error') {
                         newEventSource.close();
+                        hideToolCalls();
                         showError((window.t ? window.t('error_task_execution', {error: data.error}) : '任务执行错误: ' + data.error));
                         resetProcessingState();
                     } else if (data.type === 'human_verification_required') {
+                        hideToolCalls();
                         const verification = data.verification || {};
                         handleHumanVerification(verification);
                     } else if (data.type === 'verification_timeout') {
@@ -2851,6 +2873,57 @@
         function hideTypingIndicator() {
             const indicator = document.getElementById('typing-indicator');
             if (indicator) indicator.remove();
+        }
+
+        // ===== 工具调用实时显示 =====
+        const TOOL_NAME_MAP = {
+            'call_agent': '🤖 调用专家',
+            'ask_user': '❓ 向用户提问',
+            'load_sop': '📋 加载流程',
+            'write_file': '📝 写入文件',
+            'read_file': '📖 读取文件',
+            'list_files': '📂 列出文件',
+            'generate_text_to_image': '🎨 生成图片',
+            'generate_text_to_video': '🎬 生成视频',
+            'image_to_video': '🎬 图生视频',
+            'edit_image': '✏️ 编辑图片',
+            'fetch_image_as_base64': '🖼️ 获取图片',
+            'submit_video_project': '📤 提交视频任务',
+            'search_web': '🔍 搜索网络',
+        };
+
+        function getToolDisplayName(toolName) {
+            return TOOL_NAME_MAP[toolName] || `🔧 ${toolName}`;
+        }
+
+        function showToolCalls(toolNames) {
+            const messagesDiv = document.getElementById('chat-messages');
+            // 移除已有的工具调用指示器
+            const existing = document.getElementById('tool-call-indicator');
+            if (existing) existing.remove();
+
+            const indicator = document.createElement('div');
+            indicator.className = 'tool-call-indicator';
+            indicator.id = 'tool-call-indicator';
+
+            let html = '';
+            for (const name of toolNames) {
+                html += `<div class="tool-call-item">
+                    <div class="tool-spinner"></div>
+                    <span class="tool-name">${escapeHtml(getToolDisplayName(name))}</span>
+                </div>`;
+            }
+            indicator.innerHTML = html;
+            messagesDiv.appendChild(indicator);
+            scrollToBottom();
+        }
+
+        function hideToolCalls() {
+            const indicator = document.getElementById('tool-call-indicator');
+            if (indicator) {
+                indicator.classList.add('fade-out');
+                setTimeout(() => indicator.remove(), 500);
+            }
         }
 
         function scrollToBottom() {
