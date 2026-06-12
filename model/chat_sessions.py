@@ -367,6 +367,85 @@ class ChatSessionsModel:
             raise
 
     @staticmethod
+    def update_metadata(session_id: str, expires_at: Optional[datetime] = None) -> int:
+        """
+        轻量元数据更新（仅 expires_at），不触碰 conversation_history。
+        供 session_storage.save_session 在新消息路径下使用。
+
+        Args:
+            session_id: Session identifier
+            expires_at: New expiration time (optional)
+
+        Returns:
+            Number of affected rows
+        """
+        update_fields = ["updated_at = NOW()"]
+        params = []
+
+        if expires_at:
+            update_fields.append("expires_at = %s")
+            params.append(expires_at)
+
+        if len(update_fields) == 1:
+            # 只有 updated_at，无实质更新
+            return 0
+
+        params.append(session_id)
+        sql = f"""
+            UPDATE chat_sessions
+            SET {', '.join(update_fields)}
+            WHERE session_id = %s AND is_active = 1
+        """
+
+        try:
+            return execute_update(sql, tuple(params))
+        except Exception as e:
+            logger.error(f"Failed to update metadata for {session_id}: {e}")
+            raise
+
+    @staticmethod
+    def update_tokens(
+        session_id: str,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        cache_creation_tokens: int = 0,
+        cache_read_tokens: int = 0
+    ) -> int:
+        """
+        轻量 token 统计更新，不触碰 conversation_history。
+        供 session_storage.update_session_tokens 在新消息路径下使用。
+
+        Args:
+            session_id: Session identifier
+            input_tokens: Input tokens to add
+            output_tokens: Output tokens to add
+            cache_creation_tokens: Cache creation tokens to add
+            cache_read_tokens: Cache read tokens to add
+
+        Returns:
+            Number of affected rows
+        """
+        sql = """
+            UPDATE chat_sessions
+            SET updated_at = NOW(),
+                total_input_tokens = total_input_tokens + %s,
+                total_output_tokens = total_output_tokens + %s,
+                total_cache_creation_tokens = total_cache_creation_tokens + %s,
+                total_cache_read_tokens = total_cache_read_tokens + %s
+            WHERE session_id = %s AND is_active = 1
+        """
+        params = (
+            input_tokens, output_tokens,
+            cache_creation_tokens, cache_read_tokens,
+            session_id
+        )
+        try:
+            return execute_update(sql, params)
+        except Exception as e:
+            logger.error(f"Failed to update tokens for {session_id}: {e}")
+            raise
+
+    @staticmethod
     def clear_history(session_id: str) -> int:
         """
         Clear conversation history
