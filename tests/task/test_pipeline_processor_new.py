@@ -143,9 +143,10 @@ class TestApplyResults(unittest.TestCase):
     def test_apply_face_mask_result(self, mock_step_model, mock_ai_tools_model):
         """应用 face_mask 步骤结果到 ai_tool"""
         from task.pipeline_processor import PipelineProcessor
+        from model.ai_tool_pipeline_steps import PipelineStepStatus
 
         mock_step = MagicMock()
-        mock_step.status = 'COMPLETED'
+        mock_step.status = PipelineStepStatus.COMPLETED  # 2
         mock_step.step_type = 'face_mask'
         mock_step.result_url = 'http://example.com/masked_video.mp4'
 
@@ -163,9 +164,10 @@ class TestApplyResults(unittest.TestCase):
     def test_skip_non_completed_steps(self, mock_step_model, mock_ai_tools_model):
         """跳过未完成的步骤"""
         from task.pipeline_processor import PipelineProcessor
+        from model.ai_tool_pipeline_steps import PipelineStepStatus
 
         mock_step = MagicMock()
-        mock_step.status = 'PENDING'
+        mock_step.status = PipelineStepStatus.PENDING  # 0
         mock_step.step_type = 'face_mask'
 
         mock_step_model.get_by_ai_tool_and_stage.return_value = [mock_step]
@@ -182,9 +184,10 @@ class TestApplyResults(unittest.TestCase):
     def test_skip_non_face_mask_steps(self, mock_step_model, mock_ai_tools_model):
         """跳过非 face_mask 步骤"""
         from task.pipeline_processor import PipelineProcessor
+        from model.ai_tool_pipeline_steps import PipelineStepStatus
 
         mock_step = MagicMock()
-        mock_step.status = 'COMPLETED'
+        mock_step.status = PipelineStepStatus.COMPLETED  # 2
         mock_step.step_type = 'other_type'
 
         mock_step_model.get_by_ai_tool_and_stage.return_value = [mock_step]
