@@ -365,7 +365,9 @@ class PMAgent(BaseAgent, AskUserMixin):
                     vendor_id=task.vendor_id,
                     model_id=task.model_id,
                     enable_thinking=task.enable_thinking,
-                    thinking_effort=task.thinking_effort
+                    thinking_effort=task.thinking_effort,
+                    agent_id=self.agent_id,
+                    agent_scope="pm"
                 )
 
                 # 更新最后一次 API 调用的真实 input token 数，用于后续压缩判断
