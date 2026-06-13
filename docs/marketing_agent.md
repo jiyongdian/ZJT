@@ -181,7 +181,7 @@ Agent 提交图片/视频生成任务后，前端通过 `setInterval` 轮询 `GE
 - 任务完成后将结果（图片/视频 URL）渲染到消息气泡中
 - 使用 `sessionTaskRegistry` 注册表跟踪所有活跃任务，支持会话切换后恢复
 - `GET /api/get-status/{project_ids}` 对 CDN 结果采用 CDN 优先策略；如果生成任务已完成但 CDN 仍处于 pending，会先返回本地 `result_url` 作为 `file_url`，并附带 `cdn_status: "pending"`，避免聊天框一直显示生成中
-- 前端轮询统一识别 `SUCCESS`/`COMPLETED`/`DONE` 等完成状态，并从 task 本身和 `results[]` 中提取 `file_url`、`result_url`、`video_url`、`image_url`、`output_url`、`download_url` 等字段；同一路径的 CDN `file_url` 与本地 `result_url` 只展示一个，优先展示先返回的 CDN URL
+- 前端轮询统一识别 `SUCCESS`/`COMPLETED`/`DONE` 等完成状态，并从 task 本身和 `results[]` 中提取 `file_url`、`result_url`、`video_url`、`image_url`、`output_url`、`download_url` 等字段
 - 如果 `video_task_submitted` SSE 事件缺失，但专家工作总结中包含 `project_ids: [...]` 且文本语义为视频任务，前端会自动补启动视频轮询；加载历史会话时也会执行同样的兜底恢复
 - 如果 `image_task_submitted` SSE 事件缺失，但专家回复中包含 `project_ids: [...]` 或 `项目ID: 744` 这类图片任务标识，前端会自动补启动图片轮询；图片轮询会绑定触发时的会话，避免切换会话后把结果写入当前对话
 - Agent 视频轮询启动后会立即查询一次状态，已完成的视频任务可直接渲染结果，不必等待第一个 10 秒轮询周期
