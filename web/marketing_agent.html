@@ -955,7 +955,7 @@
                 const collectFrom = (item) => {
                     if (!item || typeof item !== 'object') return;
                     addUrl(item.file_url);
-                    addUrl(item.result_url);
+		    if (!item.file_url) addUrl(item.result_url);
                     addUrl(item.url);
                     addUrl(item.image_url);
                     addUrl(item.video_url);
