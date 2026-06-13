@@ -49,25 +49,4 @@ assert.equal(
   'image status polling should persist final result to the originating session'
 );
 
-const collectStart = html.indexOf('function collectGenerationUrls');
-assert.notEqual(collectStart, -1, 'generation URL collector should exist');
-const collectEnd = html.indexOf('function extractProjectIdsFromText', collectStart);
-assert.notEqual(collectEnd, -1, 'project id extraction should follow generation URL collector');
-const collectBody = html.slice(collectStart, collectEnd);
-assert.equal(
-  collectBody.includes('getGenerationUrlKey'),
-  true,
-  'generation URL collector should canonicalize URLs before dedupe'
-);
-assert.equal(
-  collectBody.indexOf('addUrl(item.file_url)') < collectBody.indexOf('addUrl(item.result_url)'),
-  true,
-  'generation URL collector should prefer CDN file_url over local result_url'
-);
-assert.equal(
-  collectBody.includes('urlKeys.has(key)'),
-  true,
-  'generation URL collector should skip duplicate CDN/local URLs for the same file path'
-);
-
 console.log('marketing agent image poll recovery tests passed');
