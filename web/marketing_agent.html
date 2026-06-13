@@ -947,22 +947,10 @@
 
             function collectGenerationUrls(task) {
                 const urls = [];
-                const urlKeys = new Set();
-                const getGenerationUrlKey = (url) => {
-                    if (!url || typeof url !== 'string') return '';
-                    try {
-                        const parsed = new URL(url, window.location.origin);
-                        return parsed.pathname || url.split('?')[0];
-                    } catch (e) {
-                        return url.split('?')[0];
-                    }
-                };
                 const addUrl = (url) => {
-                    if (!url || typeof url !== 'string') return;
-                    const key = getGenerationUrlKey(url);
-                    if (!key || urlKeys.has(key)) return;
-                    urlKeys.add(key);
-                    urls.push(url);
+                    if (url && typeof url === 'string' && !urls.includes(url)) {
+                        urls.push(url);
+                    }
                 };
                 const collectFrom = (item) => {
                     if (!item || typeof item !== 'object') return;
