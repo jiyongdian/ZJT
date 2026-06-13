@@ -10,7 +10,7 @@ from typing import Dict, List, Any, Optional
 from openai import OpenAI
 from config.config_util import get_dynamic_config_value
 from .base_llm_client import BaseLLMClient
-from script_writer_core.log_utils import should_log_debug
+from script_writer_core.log_utils import should_log_debug, truncate_log_content
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +102,9 @@ class OpenAIBaseClient(BaseLLMClient):
         vendor_id: int = None,
         model_id: int = None,
         enable_thinking: bool = False,
-        thinking_effort: str = "medium"
+        thinking_effort: str = "medium",
+        agent_id: Optional[str] = None,
+        agent_scope: Optional[str] = None
     ) -> Any:
         """
         调用 OpenAI 兼容格式 API
@@ -157,6 +159,7 @@ class OpenAIBaseClient(BaseLLMClient):
             llm_logger.info(f"  Base URL: {self.base_url}")
             llm_logger.info(f"  API Key: {_mask_api_key(self.api_key)}")
             llm_logger.info(f"  Messages count: {len(messages)}")
+            self._log_request_context(llm_logger, agent_id, agent_scope)
             llm_logger.info(f"  Temperature: {temperature}")
             llm_logger.info(f"  Max tokens: {max_tokens}")
             llm_logger.info(f"  Thinking: enabled={enable_thinking}, mode={self.thinking_mode}, effort={thinking_effort}")
@@ -214,6 +217,7 @@ class OpenAIBaseClient(BaseLLMClient):
                 llm_logger.info(f"  Content:\n{content}")
             if reasoning_content:
                 llm_logger.info(f"  Reasoning content length: {len(reasoning_content)} chars")
+                llm_logger.info(f"  Reasoning content:\n{truncate_log_content(reasoning_content)}")
             if tool_calls:
                 llm_logger.info(f"  Tool calls count: {len(tool_calls)}")
                 for i, tc in enumerate(tool_calls):

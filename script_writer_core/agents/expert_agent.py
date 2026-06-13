@@ -273,7 +273,9 @@ class ExpertAgent(BaseAgent, AskUserMixin):
                     vendor_id=self.vendor_id,
                     model_id=self.model_id,
                     enable_thinking=self.enable_thinking,
-                    thinking_effort=self.thinking_effort
+                    thinking_effort=self.thinking_effort,
+                    agent_id=self.agent_id,
+                    agent_scope="expert"
                 )
 
                 message = response.choices[0].message

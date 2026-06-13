@@ -181,5 +181,39 @@ class TestPayloadSanitization(unittest.TestCase):
                 mock_client.chat.completions.create.assert_called_once()
 
 
+    def test_agent_id_and_reasoning_content_logged(self):
+        with patch('llm.openai_base_client._get_llm_logger') as mock_get_logger:
+            mock_logger = MagicMock()
+            mock_get_logger.return_value = mock_logger
+
+            with patch('llm.openai_base_client.OpenAI') as mock_openai_cls:
+                mock_client = MagicMock()
+                mock_openai_cls.return_value = mock_client
+                mock_completion = MagicMock()
+                mock_completion.choices = [MagicMock()]
+                mock_completion.choices[0].message.content = "done"
+                mock_completion.choices[0].message.tool_calls = None
+                mock_completion.choices[0].message.reasoning_content = "expert private reasoning trace"
+                mock_completion.usage = None
+                mock_client.chat.completions.create.return_value = mock_completion
+
+                client = TestableOpenAIClient()
+                client.call_api(
+                    "gpt-4",
+                    messages=[{"role": "user", "content": "hello"}],
+                    agent_id="expert_marketing-image",
+                    agent_scope="expert",
+                )
+
+                logged = "\n".join(
+                    str(call.args[0])
+                    for call in mock_logger.info.call_args_list
+                    if call.args
+                )
+                self.assertIn("Agent: expert_marketing-image", logged)
+                self.assertIn("Agent scope: expert", logged)
+                self.assertIn("expert private reasoning trace", logged)
+
+
 if __name__ == '__main__':
     unittest.main()
