@@ -113,7 +113,7 @@ class HappyHorseDashscopeV1Driver(BaseVideoDriver):
         支持: resolution (720P/1080P), watermark (true/false), seed (int), prompt_extend (bool)
         """
         params = {
-            "resolution": "1080P",  # 默认值
+            "resolution": "720P",  # 默认值
             "watermark": False,      # 默认添加水印
             "prompt_extend": True,  # 默认开启 prompt 扩展
         }
@@ -198,7 +198,7 @@ class HappyHorseDashscopeV1Driver(BaseVideoDriver):
 
     def _upload_media_to_cdn(self, media_urls: List[str], media_type: str = "媒体") -> List[str]:
         """
-        将本地媒体文件上传到图床
+        将媒体文件上传到CDN图床，确保外部API可访问
 
         Args:
             media_urls: 媒体文件路径或URL列表
@@ -210,13 +210,10 @@ class HappyHorseDashscopeV1Driver(BaseVideoDriver):
         if not media_urls:
             return media_urls
 
-        if self._is_local:
-            self.logger.info(f"本地环境检测到{media_type}路径，准备上传到图床: {media_urls}")
-            result = upload_local_images_to_cdn_sync(media_urls, self._config)
-            self.logger.info(f"{media_type}上传完成，CDN链接: {result}")
-            return result
-
-        return media_urls
+        self.logger.info(f"准备上传{media_type}到CDN图床: {media_urls}")
+        result = upload_local_images_to_cdn_sync(media_urls, self._config)
+        self.logger.info(f"{media_type}上传完成，CDN链接: {result}")
+        return result
 
     def build_create_request(self, ai_tool) -> Dict[str, Any]:
         """

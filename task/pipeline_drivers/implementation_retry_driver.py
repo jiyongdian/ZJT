@@ -6,8 +6,8 @@ import logging
 from typing import Dict, Any
 
 from .base_pipeline_driver import BasePipelineDriver
-from model import PipelineStep, AITool, AIToolsModel
-from config.constant import AI_TOOL_STATUS_PENDING
+from model import PipelineStep, AITool, AIToolsModel, TasksModel
+from config.constant import AI_TOOL_STATUS_PENDING, TASK_STATUS_QUEUED
 from config.unified_config import get_implementation_id
 
 logger = logging.getLogger(__name__)
@@ -58,6 +58,9 @@ class ImplementationRetryPipelineDriver(BasePipelineDriver):
                     'error': f'未知的实现方: {target_implementation}'
                 }
 
+            # 在更新前保存旧的 implementation 值（用于 result_data 记录）
+            old_implementation = ai_tool.implementation
+
             # 更新 ai_tools 实现方和状态
             AIToolsModel.update(
                 ai_tool.id,
@@ -67,15 +70,33 @@ class ImplementationRetryPipelineDriver(BasePipelineDriver):
                 message=None  # 清除旧的错误信息
             )
 
+            # 同步更新 tasks 状态为 QUEUED，确保调度器能重新拾取
+            TasksModel.update_by_task_id(ai_tool.id, status=TASK_STATUS_QUEUED)
+
+            # 记录重试实现方尝试
+            try:
+                from model.implementation_attempts import ImplementationAttemptModel
+                from datetime import datetime as dt
+                attempt_number = step.step_order + 2  # step_order 从 0 开始，首次是 1
+                ImplementationAttemptModel.create(
+                    ai_tool_id=ai_tool.id,
+                    implementation=target_impl_id,
+                    attempt_number=attempt_number,
+                    status=0,
+                    started_at=dt.now()
+                )
+            except Exception as e:
+                self.logger.warning(f"Failed to record retry attempt for ai_tool {ai_tool.id}: {e}")
+
             self.logger.info(
                 f"Implementation retry: ai_tool_id={ai_tool.id}, "
-                f"old_impl={ai_tool.implementation}, new_impl={target_impl_id} ({target_implementation})"
+                f"old_impl={old_implementation}, new_impl={target_impl_id} ({target_implementation})"
             )
 
             return {
                 'success': True,
                 'result_data': {
-                    'old_implementation': ai_tool.implementation,
+                    'old_implementation': old_implementation,
                     'new_implementation': target_impl_id,
                     'new_implementation_name': target_implementation
                 }

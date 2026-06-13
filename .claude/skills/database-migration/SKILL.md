@@ -38,12 +38,16 @@ allowed-tools: Read, Write, Terminal
 
 ### 第二步：创建迁移脚本
 
-**文件命名规范**：`YYYYMMDD_简短描述.py`
+**文件命名规范**：`no_XX_YYYYMMDD_简短描述.py`
+
+- `no_XX`：序号前缀，查看 `alembic/versions/` 目录下最新的迁移脚本，获取其序号并递增（如最新为 `no_95_...`，则新脚本为 `no_96_...`）
+- `YYYYMMDD`：日期
+- `简短描述`：迁移内容简述
 
 示例：
-- `20260421_add_claude_haiku.py`
-- `20260228_create_sys_config.py`
-- `20260325_add_user_avatar.py`
+- `no_96_20260612_add_claude_haiku.py`
+- `no_97_20260228_create_sys_config.py`
+- `no_98_20260325_add_user_avatar.py`
 
 **⚠️ 重要**：`revision` ID **必须 ≤ 32 字符**（数据库 `alembic_version.version_num` 为 `varchar(32)`）
 
@@ -220,6 +224,8 @@ from model.example_model import ExampleModel
 ls -lt alembic/versions/ | head -5
 ```
 
+**注意**：最新的迁移脚本文件名带有 `no_XX_` 前缀，例如 `no_95_20260605_add_create_at_index.py`。读取文件时注意定位正确。
+
 然后读取最新文件中的 `revision` 值。
 
 ### 第六步：执行迁移
@@ -267,7 +273,7 @@ alembic downgrade -1
 
 在完成迁移脚本后，确认以下事项：
 
-- [ ] 迁移脚本文件名符合规范 `YYYYMMDD_描述.py`
+- [ ] 迁移脚本文件名符合规范 `no_XX_YYYYMMDD_描述.py`
 - [ ] `revision` 和 `down_revision` 正确设置
 - [ ] `upgrade()` 函数实现完整
 - [ ] `downgrade()` 函数能完全回滚

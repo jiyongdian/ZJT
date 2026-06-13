@@ -251,45 +251,26 @@ class SessionStorage:
                 expires_at = datetime.now() + timedelta(hours=expires_hours)
 
             if existing:
-                # 获取当前历史记录
-                current_history = session.get_history()
-                logger.info(f"[Session Save] Session {session.session_id} - Current history has {len(current_history)} messages")
-                
-                # 过滤掉 system 消息（系统提示在每次初始化时重新生成，不需要保存）
-                filtered_history = [msg for msg in current_history if msg.get('role') != 'system']
-                logger.info(f"[Session Save] After filtering system messages: {len(filtered_history)} messages")
-                
-                # 记录最后几条消息的角色
-                if filtered_history:
-                    last_messages = filtered_history[-3:]
-                    roles_summary = [f"{msg.get('role', 'unknown')}" for msg in last_messages]
-                    logger.info(f"[Session Save] Last {len(last_messages)} message roles: {', '.join(roles_summary)}")
-                
-                # 截断对话历史以避免无限增长
-                truncated_history = truncate_conversation_history(
-                    filtered_history,
-                    max_messages=SessionHistoryConstants.MAX_HISTORY_MESSAGES,
-                    keep_system=False  # 已经过滤掉了 system 消息
-                )
-                
-                logger.info(f"[Session Save] After truncation: {len(truncated_history)} messages")
-                
-                # Update existing session (conversation history only, tokens are cumulative in DB)
-                ChatSessionsModel.update_conversation_history(
-                    session_id=session.session_id,
-                    conversation_history=truncated_history,
-                    update_tokens=False,  # Token stats are cumulative, don't add delta
-                    expires_at=expires_at  # Update expiration time to extend session validity
-                )
-                # Also update the model if changed
+                # 新路径：不再覆盖 conversation_history，消息已在 add_to_history 中逐条写入 chat_messages
+                # 只更新元数据（model、expires_at 等）
+                logger.info(f"[Session Save] Session {session.session_id} - Saving metadata only (conversation_history is now in chat_messages)")
+
+                # 只更新 model 和 expires_at，不写 conversation_history
                 ChatSessionsModel.update_model(
                     session_id=session.session_id,
                     model=session.model,
                     model_id=session.model_id,
                     expires_at=expires_at
                 )
-                logger.info(f"Session {session.session_id} updated in database")
-                
+
+                # 轻量更新 expires_at（不触碰 conversation_history）
+                ChatSessionsModel.update_metadata(
+                    session_id=session.session_id,
+                    expires_at=expires_at
+                )
+
+                logger.info(f"Session {session.session_id} updated in database (metadata only)")
+
                 # Update cache with the latest session state
                 if self.use_cache:
                     with self._lock:
@@ -305,7 +286,7 @@ class SessionStorage:
                     model=session.model,
                     model_id=session.model_id,
                     text_to_image_model_id=session.text_to_image_model_id,
-                    conversation_history=session.get_history(),
+                    conversation_history=[],  # 新路径：不再用旧字段存历史，消息在 chat_messages 表中
                     expires_at=expires_at,
                     session_type=getattr(session, 'session_type', 1)
                 )
@@ -348,22 +329,12 @@ class SessionStorage:
             True if successful, False otherwise
         """
         try:
-            # Get current history to update
-            entity = ChatSessionsModel.get_by_session_id(session_id)
-            if not entity:
-                logger.warning(f"Session {session_id} not found for token update")
-                return False
-
-            ChatSessionsModel.update_conversation_history(
+            ChatSessionsModel.update_tokens(
                 session_id=session_id,
-                conversation_history=entity.conversation_history,
-                update_tokens=True,
-                token_stats={
-                    'input_tokens': input_tokens,
-                    'output_tokens': output_tokens,
-                    'cache_creation_tokens': cache_creation_tokens,
-                    'cache_read_tokens': cache_read_tokens
-                }
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cache_creation_tokens=cache_creation_tokens,
+                cache_read_tokens=cache_read_tokens
             )
             return True
         except Exception as e:

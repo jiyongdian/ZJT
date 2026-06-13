@@ -15,6 +15,16 @@
       .replace(/'/g, '&#039;');
   }
 
+  // 截断过长的角色名称，超过 maxLen 只显示首尾
+  function truncateName(name, maxLen) {
+    maxLen = maxLen || 10;
+    if (!name) return '';
+    if (name.length <= maxLen) return name;
+    var headLen = Math.ceil(maxLen * 0.4);
+    var tailLen = Math.floor(maxLen * 0.3);
+    return name.substring(0, headLen) + '...' + name.substring(name.length - tailLen);
+  }
+
   var DIALOGUE_GROUP_PORTS = [
     { direction: 'input', titleI18nKey: 'dialogue_input_port_title', acceptType: 'shot_frame', connectionType: 'connections' },
     { direction: 'input', cssClass: 'video-input-port', titleI18nKey: 'dialogue_video_input_port_title' },
@@ -56,7 +66,7 @@
             dialogueItemsHtml +=
               '<div class="dialogue-item" data-index="' + di + '" style="margin-bottom: 12px; padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">' +
                 '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">' +
-                  '<div style="font-weight: 600; color: #374151;">' + escapeHtml(characterName) + '</div>' +
+                  '<div style="font-weight: 600; color: #374151; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + escapeHtml(characterName) + '">' + escapeHtml(truncateName(characterName)) + '</div>' +
                   '<button class="mini-btn dialogue-generate-btn" data-index="' + di + '" type="button" style="font-size: 11px; padding: 4px 8px;" data-i18n="dialogue_generate_btn">' + (window.t ? window.t('dialogue_generate_btn') : '生成音频') + '</button>' +
                 '</div>' +
                 '<div style="color: #6b7280; font-size: 13px; margin-bottom: 8px;">"' + escapeHtml(text) + '"</div>' +
@@ -464,7 +474,7 @@
 
             html += '<div class="dialogue-item" data-index="' + dli + '" style="margin-bottom: 12px; padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">' +
               '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">' +
-                '<div style="font-weight: 600; color: #374151;">' + escapeHtml(characterName) + '</div>' +
+                '<div style="font-weight: 600; color: #374151; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + escapeHtml(characterName) + '">' + escapeHtml(truncateName(characterName)) + '</div>' +
                 '<div style="display: flex; gap: 4px;">' +
                   '<button class="mini-btn dialogue-edit-btn" data-index="' + dli + '" type="button" style="font-size: 11px; padding: 4px 8px;" title="' + (window.t ? window.t('dialogue_edit_btn') : '编辑') + '" data-i18n="dialogue_edit_btn">' + (window.t ? window.t('dialogue_edit_btn') : '编辑') + '</button>' +
                   '<button class="mini-btn dialogue-delete-btn" data-index="' + dli + '" type="button" style="font-size: 11px; padding: 4px 8px; background: #ef4444; color: white;" title="' + (window.t ? window.t('dialogue_delete_btn') : '删除') + '" data-i18n="dialogue_delete_btn">' + (window.t ? window.t('dialogue_delete_btn') : '删除') + '</button>' +
@@ -722,7 +732,6 @@
             }
 
             var characterName = dialogue.character_name;
-            console.log('当前对话角色名称:', characterName);
 
             var form = new FormData();
             form.append('text', dialogue.text);
@@ -750,14 +759,12 @@
               }
 
               if (matchedRefAudio) {
-                console.log('从对话组参考音频中找到匹配:', matchedRefAudio);
                 var voiceUrl = proxyDownloadUrl(matchedRefAudio.url);
 
                 try {
                   var voiceResponse = await fetch(voiceUrl);
                   if (voiceResponse.ok) {
                     var voiceBlob = await voiceResponse.blob();
-                    console.log('对话组参考音频Blob大小:', voiceBlob.size, '类型:', voiceBlob.type);
                     form.append('ref_audio', voiceBlob, 'ref_audio.wav');
                     refAudioFound = true;
                   }
@@ -770,19 +777,15 @@
             // 如果对话组中没有找到，则从角色库中查找
             if (!refAudioFound) {
               var matchedCharacter = await fetchAndMatchCharacter(worldId, characterName);
-              console.log('匹配到的角色:', matchedCharacter);
 
               if (matchedCharacter && matchedCharacter.default_voice) {
-                console.log('角色参考音频URL:', matchedCharacter.default_voice);
                 var voiceUrl2 = proxyDownloadUrl(matchedCharacter.default_voice);
-                console.log('代理后的音频URL:', voiceUrl2);
 
                 var voiceResponse2 = await fetch(voiceUrl2);
                 if (!voiceResponse2.ok) {
                   throw new Error('获取参考音频失败: ' + voiceResponse2.status + ' ' + voiceResponse2.statusText);
                 }
                 var voiceBlob2 = await voiceResponse2.blob();
-                console.log('参考音频Blob大小:', voiceBlob2.size, '类型:', voiceBlob2.type);
 
                 form.append('ref_audio', voiceBlob2, 'ref_audio.wav');
                 refAudioFound = true;
@@ -831,20 +834,17 @@
               form.append('auth_token', authToken);
             }
 
-            console.log('发送音频生成请求...');
             var res = await fetch('/api/audio-generate', {
               method: 'POST',
               body: form
             });
 
-            console.log('音频生成响应状态:', res.status);
             if (!res.ok) {
               var errorText = await res.text();
               throw new Error('服务器错误 (' + res.status + '): ' + (errorText || '请求失败'));
             }
 
             var result = await res.json();
-            console.log('音频生成响应结果:', result);
 
             if (result.code !== 0 && result.code !== undefined) {
               throw new Error(result.message || result.msg || '音频生成请求失败');
@@ -878,12 +878,86 @@
                 if (audio) audio.src = payload.result_url;
                 resultDiv.style.display = 'block';
 
+                // 创建或更新独立音频节点
+                try {
+                  var dialogue = node.data.dialogues[index];
+                  var characterName = dialogue ? (dialogue.character_name || '角色') : '音频';
+                  var audioName = characterName + ': ' + (dialogue ? dialogue.text.substring(0, 15) : '') + '...';
+                  var existingAudioNodeId = node.data.audioResults[index].audioNodeId;
+                  var existingAudioNode = existingAudioNodeId
+                    ? state.nodes.find(function(n) { return n.id === existingAudioNodeId; })
+                    : null;
+
+
+                  if (existingAudioNode) {
+                    // 更新已有音频节点的URL
+                    existingAudioNode.data.url = payload.result_url;
+                    existingAudioNode.data.name = audioName;
+                    var existingEl = canvasEl.querySelector('.node[data-node-id="' + existingAudioNode.id + '"]');
+                    if (existingEl) {
+                      var playerEl = existingEl.querySelector('.audio-node-player');
+                      var nameEl = existingEl.querySelector('.audio-node-name');
+                      var previewField = existingEl.querySelector('.audio-preview-field');
+                      var previewActionsField = existingEl.querySelector('.audio-preview-actions-field');
+                      if (playerEl) playerEl.src = typeof proxyDownloadUrl === 'function' ? proxyDownloadUrl(payload.result_url) : payload.result_url;
+                      if (nameEl) { nameEl.textContent = audioName; nameEl.title = audioName; }
+                      if (previewField) previewField.style.display = 'block';
+                      if (previewActionsField) previewActionsField.style.display = 'block';
+                    }
+                  } else {
+                    // 创建新的独立音频节点
+                    var newAudioId = createAudioNode({
+                      x: node.x + 420,
+                      y: node.y + index * 100,
+                      title: characterName + ' - 音频',
+                      data: {
+                        url: payload.result_url,
+                        name: audioName
+                      }
+                    });
+                    var newAudioNode = state.nodes.find(function(n) { return n.id === newAudioId; });
+                    if (newAudioNode) {
+                      newAudioNode.data.sourceNodeId = node.id;
+                      newAudioNode.data.dialogueIndex = index;
+                      // 显示"添加到时间轴"按钮
+                      var newEl = canvasEl.querySelector('.node[data-node-id="' + newAudioId + '"]');
+                      if (newEl) {
+                        var addTlBtn = newEl.querySelector('.audio-add-timeline-btn');
+                        if (addTlBtn) addTlBtn.style.display = 'inline-block';
+                      }
+                      // 添加音频连接线：对话组 → 新音频节点
+                      if (!state.audioConnections) state.audioConnections = [];
+                      state.audioConnections.push({
+                        id: state.nextAudioConnId++,
+                        from: node.id,
+                        to: newAudioId
+                      });
+                      if (typeof renderAudioConnections === 'function') renderAudioConnections();
+                      // 记录音频节点ID，便于后续更新
+                      node.data.audioResults[index].audioNodeId = newAudioId;
+                    }
+                  }
+                } catch (err) {
+                  console.error('[对话组] 创建独立音频节点失败:', err);
+                }
+
                 statusEl.textContent = window.t ? window.t('tts_generate_success') : '生成成功！';
+                statusEl.style.color = '#16a34a';
                 showToast(window.t ? window.t('tts_generate_success') : '语音生成成功', 'success');
+
+                // 3秒后淡出隐藏状态提示
+                setTimeout(function() {
+                  statusEl.style.transition = 'opacity 0.5s ease';
+                  statusEl.style.opacity = '0';
+                  setTimeout(function() {
+                    statusEl.style.display = 'none';
+                    statusEl.style.opacity = '';
+                    statusEl.style.transition = '';
+                  }, 500);
+                }, 3000);
 
                 safeAutoSave();
               }
-              statusEl.style.color = '#16a34a';
               setBtnReady(generateBtn, window.t ? window.t('dialogue_generate_btn') : '生成音频');
             },
             onFailed: function(payload) {
@@ -894,7 +968,7 @@
             },
             onTimeout: function() {
               statusEl.style.color = '#dc2626';
-              statusEl.textContent = window.t ? window.t('tts_generate_timeout') : '生成超时';
+              statusEl.textContent = window.t ? window.t('tts_generate_timeout_hint') : '等待超时，但音频仍在生成中。你可以通过刷新页面后查看是否生成成功。';
               setBtnReady(generateBtn, window.t ? window.t('dialogue_generate_btn') : '生成音频');
             }
           });
@@ -956,7 +1030,6 @@
 
           try {
             var cleanName = characterName.replace(/【/g, '').replace(/】/g, '');
-            console.log('清理后的角色名称:', cleanName);
 
             var authToken = getAuthToken();
             var userId = getUserId();
@@ -973,15 +1046,12 @@
             }
 
             var result = await response.json();
-            console.log('角色"' + cleanName + '"查询结果:', result);
 
             if (result.code === 0 && result.data && Array.isArray(result.data.data)) {
               var characters = result.data.data;
-              console.log('找到' + characters.length + '个匹配角色:', characters.map(function(c) { return c.name; }));
 
               if (characters.length > 0) {
                 var matchedChar = characters.find(function(c) { return c.name === cleanName; }) || characters[0];
-                console.log('最终匹配角色:', matchedChar.name, 'default_voice:', matchedChar.default_voice);
                 return matchedChar;
               }
             }
@@ -1026,6 +1096,8 @@
 
         // 暴露渲染参考音频列表的方法
         node.renderRefAudiosList = renderRefAudiosList;
+        // 暴露更新对话列表的方法（用于数据恢复时重建DOM）
+        node.updateDialogueList = updateDialogueList;
       }
     }, opts);
   }
@@ -1033,6 +1105,11 @@
   var createDialogueGroupNodeWithData = createNodeWithDataFactory(
     createDialogueGroupNode,
     function(el, node, nodeData) {
+      // 先用已恢复的数据重新渲染对话列表（onCreated时dialogues为空，DOM中无对话条目）
+      if (node.updateDialogueList && node.data.dialogues && node.data.dialogues.length > 0) {
+        node.updateDialogueList();
+      }
+
       // 恢复对话数据到DOM
       var emoControlSelect = el.querySelector('.dialogue-emo-control-select');
       var emoRefAudioField = el.querySelector('.dialogue-emo-ref-audio-field');

@@ -1,0 +1,15 @@
+schema_version: 1
+module_path: ai_engine/script_writer
+title: 剧本与营销智能体编排引擎
+scope:
+    - script_writer_core/
+source_files: []
+depends_on: []
+related_to:
+    - path: ai_engine/agent_skills
+    - path: ai_engine/llm_clients
+    - path: ai_engine/task_drivers
+    - path: backend_api
+    - path: documentation
+    - path: ai_engine/task_drivers/task_execution
+    - path: frontend_web

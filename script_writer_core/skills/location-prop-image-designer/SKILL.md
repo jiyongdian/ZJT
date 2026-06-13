@@ -194,8 +194,40 @@ ABSOLUTELY NO text, NO watermark, NO letters, NO characters, NO words, NO signs,
   - `cost_per_image_max_size`: 最大尺寸单张算力消耗
   - `supported_sizes`: 支持的尺寸列表
   - `supports_grid_image`: 是否支持4宫格生成
+  - `driver_hint`: **模型特定的强制约束**（⚠️ 必须严格遵守，否则生成会失败）
 - **使用获取到的算力值计算总消耗，代替任何写死的算力数值**
 - 如果算力不足，向用户报告所需算力和当前模型信息
+
+**⚠️ 返回值示例及关键字段说明：**
+```json
+{
+  "success": true,
+  "task_id": 26,
+  "name": "GPT Image 2 图片编辑",
+  "computing_power": 2,
+  "supported_sizes": ["1k", "2k", "4k"],
+  "supported_ratios": ["1:1", "2:3", "3:2", "16:9", "9:16"],
+  "supports_grid_image": true,
+  "default_size": "1k",
+  "max_size": "4k",
+  "cost_per_image_default_size": 2,
+  "cost_per_image_max_size": 2,
+  "driver_hint": "提示词长度请控制在5000字符以内，超出将被API拒绝。请精简描述，避免冗余。"
+}
+```
+
+**🔴 `driver_hint` 强制约束（违反将导致生成失败）：**
+- `driver_hint` 包含当前生图模型的硬性限制和约束条件
+- 这些约束因模型不同而不同，必须每次调用后动态读取并严格遵守
+- 常见约束示例：
+  - 提示词长度限制（如：5000字符以内）
+  - 特定格式要求
+  - 不支持的功能或参数
+- **执行要求**：
+  1. 调用 `get_text_to_image_model_info()` 后，**立即检查 `driver_hint` 字段**
+  2. 在构建提示词时，**必须确保所有提示词都符合 `driver_hint` 中的约束**
+  3. 如果提示词超出限制，**必须精简提示词**，删除冗余描述，保留核心视觉信息
+  4. **绝对不允许**无视 `driver_hint` 的约束直接提交超限提示词
 
 ### 4. 逐个项目图像生成
 

@@ -218,6 +218,50 @@ class VideoDriverFactory:
         return impl_name
 
     @classmethod
+    def get_agent_hint_for_task(cls, task_id: int, user_id: Optional[int] = None) -> Optional[Dict[str, str]]:
+        """
+        获取特定任务类型在特定用户下的第一个顺位实现方的 agent_hint。
+        走与 create_driver_by_type 相同的实现方选择逻辑（用户偏好 → 排序 → 可用性）。
+
+        Args:
+            task_id: 任务类型 ID
+            user_id: 用户ID（可选），用于获取用户偏好
+
+        Returns:
+            dict or None: {"impl_name": ..., "display_name": ..., "hint": ...}，无 hint 时返回 None
+        """
+        config = UnifiedConfigRegistry.get_by_id(task_id)
+        if not config:
+            return None
+
+        impl_name, _ = cls._get_implementation_for_user(task_id, user_id, config)
+        if not impl_name:
+            return None
+
+        driver_class = cls._registered_drivers.get(impl_name)
+        if not driver_class:
+            return None
+
+        hint = getattr(driver_class, 'agent_hint', '')
+        if not hint:
+            return None
+
+        display_name = cls._get_display_name_for_impl(impl_name)
+        return {
+            "impl_name": impl_name,
+            "display_name": display_name,
+            "hint": hint
+        }
+
+    @classmethod
+    def _get_display_name_for_impl(cls, impl_name: str) -> str:
+        """从统一配置获取实现方的显示名称"""
+        impl_config = UnifiedConfigRegistry.get_implementation(impl_name)
+        if impl_config:
+            return impl_config.display_name or impl_name
+        return impl_name
+
+    @classmethod
     def _get_implementation_for_user(cls, task_type: int, user_id: Optional[int], config) -> Tuple[Optional[str], Dict[str, Any]]:
         """
         获取实现方名称和驱动参数（考虑用户偏好）
@@ -572,6 +616,13 @@ def register_all_drivers():
         VideoDriverFactory.register_driver(DriverImplementation.DIGITAL_HUMAN_RUNNINGHUB_V1, DigitalHumanRunninghubV1Driver)
     except ImportError as e:
         logger.warning(f"Failed to import DigitalHumanRunninghubV1Driver: {e}")
+
+    try:
+        from .digital_human_ltx2_3_voice_runninghub_v1_driver import Ltx23WithVoiceRunninghubV1Driver
+        # 注册 LTX2.3 With Voice RunningHub v1 版本
+        VideoDriverFactory.register_driver(DriverImplementation.LTX2_3_WITH_VOICE_RUNNINGHUB_V1, Ltx23WithVoiceRunninghubV1Driver)
+    except ImportError as e:
+        logger.warning(f"Failed to import Ltx23WithVoiceRunninghubV1Driver: {e}")
     
     try:
         from .vidu_default_driver import ViduDefaultDriver

@@ -227,7 +227,12 @@ count = RunningHubSlotsModel.count_active_slots()
 ```
 
 #### try_acquire_slot(task_id, task_type, source, max_slots=None)
-统一获取槽位（带并发检查），通过 `source` 参数区分任务来源
+统一获取槽位（带并发检查，幂等操作），通过 `source` 参数区分任务来源。
+
+**幂等机制**：使用 `INSERT ... ON DUPLICATE KEY UPDATE` 实现，解决任务重试时旧记录（status=2）仍存在导致唯一键冲突的问题。同一任务多次调用结果一致：
+- 已持有活跃槽位（status=1）→ 直接返回 True
+- 存在已释放记录（status=2）→ 重新激活为 status=1
+- 不存在记录 → 插入新记录
 
 ```python
 from model.runninghub_slots import RunningHubSlot

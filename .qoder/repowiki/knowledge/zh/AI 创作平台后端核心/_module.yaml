@@ -1,0 +1,20 @@
+schema_version: 1
+module_path: backend_api
+title: AI 创作平台后端核心
+scope:
+    - api/
+    - model/
+    - services/
+    - perseids_server/
+source_files: []
+depends_on: []
+related_to:
+    - path: frontend_web
+    - path: infrastructure
+    - path: test_suite
+    - path: config_management
+    - path: documentation
+    - path: ai_engine/llm_clients
+    - path: jianying_integration
+    - path: ai_engine/script_writer
+    - path: ai_engine/agent_skills

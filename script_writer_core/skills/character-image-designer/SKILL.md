@@ -1,7 +1,7 @@
 ---
 name: 角色形象设计师
-description: 角色形象设计师专门负责管理和生成角色的视觉形象和音色。它能够扫描所有角色，识别缺少参考图像或音色的角色，并批量生成角色的参考图像和音色配置。
-allowed-tools: ["read_world", "list_character_jsons", "read_character_json", "generate_text_to_image", "generate_4grid_character_images", "get_text_to_image_model_info", "get_task_status", "generate_character_reference_audio", "check_reference_audio_status"]
+description: 角色形象设计师专门负责管理和生成角色的视觉形象和音色。它能够扫描所有角色，识别缺少参考图像或音色的角色，并批量生成角色的参考图像和音色配置。同时能根据剧情需要为角色生成服装/造型变体图。
+allowed-tools: ["read_world", "list_character_jsons", "read_character_json", "generate_text_to_image", "generate_4grid_character_images", "generate_character_variant_image", "get_text_to_image_model_info", "get_task_status", "generate_character_reference_audio", "check_reference_audio_status", "list_script_jsons", "read_script_json", "ask_user"]
 ---
 
 # 角色形象设计师 (Character Image Designer)
@@ -16,7 +16,8 @@ allowed-tools: ["read_world", "list_character_jsons", "read_character_json", "ge
 4. **图像提示词生成** - 基于角色特征和标准模板创建专业的图像生成提示词
 5. **任务状态检查** - 确保同一角色没有正在进行的图像或音色生成任务
 6. **批量图像生成** - 为多个角色生成参考图像
-7. **批量音色生成** - 为多个角色生成参考音色
+7. **变体图生成** - 根据剧情需要为角色生成服装/造型变体图，写入 reference_images 数组
+8. **批量音色生成** - 为多个角色生成参考音色
 
 ## 🚨 核心规则：图像与音色必须同时生成（强制执行）
 
@@ -567,7 +568,114 @@ if not result.get("success"):
 - 对于失败的角色，记录失败原因
 - 提供完整的处理报告
 
-### 5. 批量音色生成（必须执行）
+### 4.6 变体图分析与生成（主图生成完成后执行）
+
+**⚠️ 重要：在完成所有角色的主参考图(reference_image)生成后，应根据剧情需要为角色生成服装/造型变体图，写入 reference_images 数组**
+
+变体图与主图格式完全相同——都是三视角参考图（正面、侧面、背面），只是服装/造型描述不同。变体图会追加到角色的 `reference_images` 数组中，标签(label)标识变体类型。
+
+#### 4.6.1 变体图判断逻辑（智能判断）
+
+**步骤1：确定角色重要性**
+- 调用 `list_script_jsons()` 获取所有剧本/剧集文件列表
+- 调用 `read_script_json()` 读取各剧集内容
+- 分析每个角色在各剧集中的出场频率和情节参与程度
+- 主角：出场频繁且情节关键 → 通常需要更多变体图
+- 配角：出场较少且情节参与度低 → 通常需要较少或不需要变体图
+- **注意：配角也可生成变体图，不是硬限定为0个**。只是主角通常需要更多，配角通常需要更少
+
+**步骤2：从角色描述中推导变体**
+- 仔细阅读角色的 `appearance` 字段和 `other_info` 字段
+- 检查是否包含明确的多造型描述关键词：
+  - "双形态"、"变身"、"黑化"、"前期/后期"
+  - 多种服装描述（如"工作时穿西装，休息时穿休闲装"）
+  - 造型变化（如"白天温和、夜晚冷酷"、"战斗形态/日常形态")
+- 如果角色描述**明确提到了多造型** → 自动推导变体标签和提示词
+- 如果角色描述**不明确**但该角色在剧情中重要 → 使用 `ask_user` 询问用户需要哪些变体
+
+**示例：**
+```
+角色 "豆包" appearance 描述："双形态角色，白天是温顺可爱的小精灵形象，穿着明黄色斗篷和粉色围巾；黑化后变成暗黑魔灵形象，穿着黑色长袍和银色锁链，眼睛从碧绿变成血红色"
+
+自动推导变体：
+- 变体1: label="黑化形态", 提示词使用黑色长袍+银色锁链+血红眼睛的三视角描述
+- 变体2: label="日常形态", 提示词使用明黄色斗篷+粉色围巾+碧绿眼睛的三视角描述（如果主图已包含日常形态则跳过）
+```
+
+#### 4.6.2 变体图提示词模板
+
+变体图使用**与主图完全相同的三视角模板**，只是将服装/造型描述替换为变体对应的描述。物理特征（身高、体型、发型、眼睛、面部特征、特殊标记）必须与主图保持一致。
+
+**写实风格变体模板**：
+```
+[画风描述], [时代环境], [色彩基调]. A professional cinematic photography portfolio of [角色英文名] ([角色中文名]) from [作品/世界名称], shot in studio lighting with neutral gray backdrop. Three high-resolution full-body photographs arranged in a horizontal row from left to right: [角色名] from front angle (facing camera directly), side profile (90-degree turn to the left), and back view (facing away from camera). The subject is wearing [变体服装/造型详细描述: 上衣款式、下装、鞋子、材质、颜色、特殊装饰] in all three shots with identical appearance. Physical characteristics remain consistent with the character's default appearance: [身高体型描述], [发型详细描述], [眼睛描述], [面部特征], [特殊标记]. Facial expression: [基于此变体的情绪/状态表情]. ABSOLUTELY NO text, NO watermark, NO letters, NO characters, NO words, NO signs, NO writing, NO typography, NO labels, NO captions, NO subtitles, NO Chinese characters, NO English text, NO numbers, NO logos, NO stamps, NO seals, completely text-free image, pure visual content without any written language.
+```
+
+**动漫风格变体模板**：
+```
+[画风描述], [时代环境], [色彩基调]. A character turnaround reference sheet for [角色英文名] ([角色中文名]) from [作品/世界名称], set on a clean neutral background. Three full-body illustrations arranged in a horizontal row from left to right showing front view (facing viewer directly), side profile (turned 90 degrees), and back view (facing away) of the SAME character [角色名] wearing [变体服装/造型详细描述]. All three views must show identical clothing, features and proportions. Physical features remain consistent with the character's default appearance: [身高体型描述], [发型详细描述], [眼睛描述], [面部特征], [特殊标记]. Expression shows [基于此变体的情绪/状态表情]. ABSOLUTELY NO text, NO watermark, NO letters, NO characters, NO words, NO signs, NO writing, NO typography, NO labels, NO captions, NO subtitles, NO Chinese characters, NO English text, NO numbers, NO logos, NO stamps, NO seals, completely text-free image, pure visual content without any written language.
+```
+
+**⚠️ 变体图提示词关键要求：**
+- 物理特征（身高、体型、发型、眼睛等）**必须与主图保持完全一致**，只有服装/造型描述不同
+- 画风选择（写实/动漫）必须与主图一致，使用与主图相同的模板
+- 末尾必须包含相同的反文字声明
+- 变体标签(variant_label)应简洁明了，如"战斗装"、"晚礼服"、"黑化形态"
+
+#### 4.6.3 变体图生成调用
+
+变体图必须使用 `generate_character_variant_image()` 逐个生成（不能用4宫格，因为每个变体属于不同角色+不同标签）：
+
+```python
+# 为角色生成一个变体图
+result = generate_character_variant_image(
+    character_name="豆包",
+    variant_label="黑化形态",
+    variant_prompt="[变体三视角提示词]"
+)
+
+# 检查返回结果
+if result.get('success'):
+    print(f"变体图生成请求已提交: 角色={result['character_name']}, 标签={result['variant_label']}")
+    # 使用 get_task_status 蟥询生成状态
+    # 注意：item_type=7, item_name 使用 composite_item_name（格式："角色名|变体标签"）
+    status = get_task_status(
+        item_type=7,
+        item_name=result['composite_item_name']  # 例如 "豆包|黑化形态"
+    )
+else:
+    print(f"变体图生成失败: {result.get('error')}")
+
+# 如果需要覆盖已有变体，设置 force_update=True
+result = generate_character_variant_image(
+    character_name="豆包",
+    variant_label="黑化形态",
+    variant_prompt="[变体三视角提示词]",
+    force_update=True
+)
+```
+
+**⚠️ 前置条件**：
+- 角色**必须已存在**且**已有主参考图(reference_image)**，才能生成变体图
+- 如果角色没有主参考图，`generate_character_variant_image` 会返回错误提示先生成主图
+
+**⚠️ 注意事项**：
+- 变体图生成完成后会**自动追加**到角色的 `reference_images` 数组中，无需手动写入
+- 每个变体在数组中有唯一的 `label` 标签和 `id`，前端可以自动识别和展示
+- 同一角色同一标签的变体图默认不重复生成（除非设置 `force_update=True`）
+- 变体图不能用4宫格批量生成，必须逐个调用 `generate_character_variant_image()`
+
+#### 4.6.4 ask_user 询问用户示例
+
+当角色描述不明确但剧情重要性较高时，使用 `ask_user` 询问：
+
+```python
+# 询问用户需要哪些变体
+result = ask_user(
+    question=f"角色 '{character_name}' 在剧情中较为重要，但其描述中没有明确的多造型信息。是否需要为该角色生成额外的造型变体图？如果需要，请描述想要的造型（如：战斗装、晚礼服、黑化形态等）。",
+    options=["不需要变体图", "需要1个变体图（请说明造型）", "需要2-3个变体图（请说明造型）"]
+)
+``
 
 **⚠️ 重要：完成图像生成后，必须立即为相同的角色生成音色**
 
@@ -592,7 +700,7 @@ if not result.get("success"):
   - `'FAILED'` - 生成失败
 - 记录每个角色的音色生成结果
 
-### 6. 完整处理报告（必须包含图像和音色）
+### 6. 完整处理报告（必须包含图像、变体图和音色）
 最终报告必须包含以下信息：
 ```
 批量处理完成报告：
@@ -605,6 +713,14 @@ if not result.get("success"):
 - 成功：X 个角色
 - 失败：X 个角色
 - 跳过（已有图像）：X 个角色
+
+🎭 变体图生成结果：
+- 成功：X 个变体图
+- 失败：X 个变体图
+- 跳过（不需要变体图）：X 个角色
+- 各角色变体详情：
+  - 角色A: 晚礼服(成功) | 战斗装(处理中)
+  - 角色B: 无需变体图
 
 🎙️ 音色生成结果：
 - 成功：X 个角色

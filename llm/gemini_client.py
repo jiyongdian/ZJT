@@ -174,6 +174,7 @@ class GeminiClient(BaseLLMClient):
             "contents": [],
             "generationConfig": {}
         }
+        system_texts = []
 
         if tools:
             gemini_tools = []
@@ -194,9 +195,27 @@ class GeminiClient(BaseLLMClient):
             role = msg.get("role")
 
             if role == "system":
-                gemini_data["systemInstruction"] = {
-                    "parts": [{"text": msg["content"]}]
-                }
+                content = msg.get("content", "")
+                if isinstance(content, str):
+                    text = content
+                elif isinstance(content, list):
+                    text_parts = []
+                    for part in content:
+                        if isinstance(part, dict):
+                            if part.get("type") == "text":
+                                text_parts.append(str(part.get("text", "")))
+                            elif "text" in part:
+                                text_parts.append(str(part.get("text", "")))
+                            else:
+                                text_parts.append(json.dumps(part, ensure_ascii=False))
+                        else:
+                            text_parts.append(str(part))
+                    text = "\n".join(part for part in text_parts if part)
+                else:
+                    text = json.dumps(content, ensure_ascii=False)
+
+                if text:
+                    system_texts.append(text)
             elif role == "user":
                 parts = []
                 if isinstance(msg["content"], list):
@@ -307,6 +326,19 @@ class GeminiClient(BaseLLMClient):
                         "parts": [func_response_part]
                     })
 
+        if system_texts:
+            system_instruction = {
+                "parts": [{"text": "\n\n".join(system_texts)}]
+            }
+            ordered_data = {
+                "systemInstruction": system_instruction,
+                "contents": gemini_data.get("contents", [])
+            }
+            for key, value in gemini_data.items():
+                if key not in ordered_data:
+                    ordered_data[key] = value
+            gemini_data = ordered_data
+
         return gemini_data
 
     def call_api(
@@ -320,7 +352,9 @@ class GeminiClient(BaseLLMClient):
         vendor_id: int = None,
         model_id: int = None,
         enable_thinking: bool = False,
-        thinking_effort: str = "medium"
+        thinking_effort: str = "medium",
+        agent_id: Optional[str] = None,
+        agent_scope: Optional[str] = None
     ) -> Any:
         """
         调用 Gemini 原生 API
@@ -357,6 +391,7 @@ class GeminiClient(BaseLLMClient):
         llm_logger.info(f"  URL: {url}")
         llm_logger.info(f"  API Key: {_mask_api_key(self.api_key)}")
         llm_logger.info(f"  Contents count: {len(gemini_payload.get('contents', []))}")
+        self._log_request_context(llm_logger, agent_id, agent_scope)
         llm_logger.info(f"  Max tokens: {max_tokens}")
         if tools:
             llm_logger.info(f"  Tools count: {len(tools)}")

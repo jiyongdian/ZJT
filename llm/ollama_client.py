@@ -8,7 +8,7 @@ from typing import Dict, List, Any, Optional
 from openai import OpenAI
 from config.config_util import get_dynamic_config_value
 from .base_llm_client import BaseLLMClient
-from script_writer_core.log_utils import should_log_debug
+from script_writer_core.log_utils import should_log_debug, truncate_log_content
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,9 @@ class OllamaClient(BaseLLMClient):
         vendor_id: int = None,
         model_id: int = None,
         enable_thinking: bool = False,
-        thinking_effort: str = "medium"
+        thinking_effort: str = "medium",
+        agent_id: Optional[str] = None,
+        agent_scope: Optional[str] = None
     ) -> Any:
         """
         调用 Ollama 本地模型 API
@@ -135,6 +137,7 @@ class OllamaClient(BaseLLMClient):
             llm_logger.info(f"  Model: {actual_model}")
             llm_logger.info(f"  Base URL: {self.base_url}")
             llm_logger.info(f"  Messages count: {len(messages)}")
+            self._log_request_context(llm_logger, agent_id, agent_scope)
             llm_logger.info(f"  Temperature: {actual_temperature}, top_p: {self.top_p}, top_k: {self.top_k}")
             llm_logger.info(f"  presence_penalty: {self.presence_penalty}, repetition_penalty: {self.repetition_penalty}")
             llm_logger.info(f"  enable_thinking: {self.enable_thinking}")
@@ -189,6 +192,9 @@ class OllamaClient(BaseLLMClient):
             llm_logger.info(f"  Content length: {len(content)} chars")
             if content:
                 llm_logger.info(f"  Content:\n{content}")
+            if reasoning_content:
+                llm_logger.info(f"  Reasoning content length: {len(reasoning_content)} chars")
+                llm_logger.info(f"  Reasoning content:\n{truncate_log_content(reasoning_content)}")
             if tool_calls:
                 llm_logger.info(f"  Tool calls count: {len(tool_calls)}")
                 for i, tc in enumerate(tool_calls):

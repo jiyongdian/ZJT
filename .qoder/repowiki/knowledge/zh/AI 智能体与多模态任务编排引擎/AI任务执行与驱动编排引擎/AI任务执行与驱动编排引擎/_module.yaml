@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: ai_engine/task_drivers/task_execution
+title: AI任务执行与驱动编排引擎
+scope:
+    - task/
+source_files: []
+depends_on: []
+related_to:
+    - path: config_management
+    - path: jianying_integration
+    - path: ai_engine/script_writer
+    - path: documentation

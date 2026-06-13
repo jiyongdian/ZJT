@@ -156,11 +156,44 @@ class PipelineDriverFactory:
 
         failed_impl_name = get_implementation_name(failed_implementation)
 
-        # 收集替代实现方（排除已失败的）
+        # 收集替代实现方：按 sort_order 优先级从头遍历，跳过已尝试过的（包括当前失败的）
+        impl_list = [impl['name'] for impl in task_config._get_implementations_info()]
+
+        # 获取该 ai_tool 历史上已尝试过的所有实现方
+        attempted_ids = set()
+        try:
+            from model.implementation_attempts import ImplementationAttemptModel
+            attempted_ids = ImplementationAttemptModel.get_attempted_implementations(ai_tool_id)
+        except Exception as e:
+            logger.warning(f"Failed to get attempted implementations for ai_tool {ai_tool_id}: {e}")
+
+        attempted_names = {get_implementation_name(i) for i in attempted_ids}
+        attempted_names.discard(None)
+        attempted_names.discard('unknown')
+        attempted_names.add(failed_impl_name)  # 确保当前失败的也被跳过
+
         alternatives = []
-        for impl_name in task_config.implementations:
-            if impl_name != failed_impl_name:
-                alternatives.append(impl_name)
+        for impl_name in impl_list:
+            if impl_name in attempted_names:
+                continue
+            # 检查实现方是否启用
+            impl_config = UnifiedConfigRegistry.get_implementation(impl_name)
+            if impl_config and not impl_config.is_enabled(task_config.driver_name):
+                logger.info(f"Skipping disabled implementation {impl_name} for retry")
+                continue
+            # 检查实现方是否能初始化（是否有关键配置/key）
+            try:
+                from task.visual_drivers import VideoDriverFactory
+                test_driver = VideoDriverFactory.create_driver_by_implementation(impl_name)
+                if not test_driver:
+                    create_error = VideoDriverFactory.get_last_create_error()
+                    skip_reason = create_error.get('message', '未知原因') if create_error else '未知原因'
+                    logger.info(f"Skipping implementation {impl_name} for retry: cannot initialize ({skip_reason})")
+                    continue
+            except Exception as e:
+                logger.info(f"Skipping implementation {impl_name} for retry: validation error ({e})")
+                continue
+            alternatives.append(impl_name)
 
         if not alternatives:
             logger.info(f"No alternative implementations for ai_tool {ai_tool_id}")

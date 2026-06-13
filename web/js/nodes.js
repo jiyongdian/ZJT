@@ -104,15 +104,19 @@
         } else if(gridLayoutPref === '9') {
           finalModel = 'gemini-3-pro-image-preview';
         } else {
-          // auto: 根据分镜数量和参考图片数量自动选择
-          if(shotCount <= 5 && !forceEnhancedModel) {
+          // auto: 根据分镜数量自动选择宫格大小
+          if(shotCount <= 5) {
             gridSize = 4;
             gridLayout = '2x2';
-            finalModel = 'gemini-2.5-flash-image-preview';
           } else {
             gridSize = 9;
             gridLayout = '3x3';
+          }
+          // 根据参考图片数量选择模型（forceEnhancedModel 仅影响模型，不影响宫格大小）
+          if(forceEnhancedModel) {
             finalModel = 'gemini-3-pro-image-preview';
+          } else {
+            finalModel = 'gemini-2.5-flash-image-preview';
           }
         }
       } else if(gridModel === 'gemini-2.5-flash-image-preview' && !forceEnhancedModel) {
@@ -477,7 +481,7 @@
       inputPort.addEventListener('mouseup', (e) => {
         if(state.connecting && state.connecting.fromId !== id){
           const fromNode = state.nodes.find(n => n.id === state.connecting.fromId);
-          if(fromNode && (fromNode.type === 'image_to_video' || fromNode.type === 'character')){
+          if(fromNode && (fromNode.type === 'image_to_video' || fromNode.type === 'character' || fromNode.type === 'digital_human')){
             const exists = state.connections.some(c => c.to === id);
             if(!exists){
               state.connections.push({
@@ -652,6 +656,7 @@
       el.style.top = node.y + 'px';
 
       el.innerHTML = `
+        <div class="port audio-input-port" data-port-type="audio" title="${window.t ? window.t('audio') : '音频输入'}"></div>
         <div class="port output" title="${window.t ? window.t('node_output_port_video') : '输出（连接到图生视频节点）'}"></div>
         <div class="node-header">
           <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${node.title}</div>
@@ -671,6 +676,7 @@
           <div class="field field-collapsible audio-preview-actions-field" style="display:none;">
             <div class="preview-row" style="margin-top: 4px;">
               <button class="mini-btn audio-clear" type="button" data-i18n="node_clear_btn">${window.t ? window.t('node_clear_btn') : '清除'}</button>
+              <button class="mini-btn audio-add-timeline-btn" type="button" style="display:none; background:#10b981; color:white;" data-i18n="dialogue_add_timeline">${window.t ? window.t('dialogue_add_timeline') : '添加到时间轴'}</button>
             </div>
           </div>
         </div>
@@ -685,6 +691,12 @@
       const nameEl = el.querySelector('.audio-node-name');
       const playerEl = el.querySelector('.audio-node-player');
       const clearBtn = el.querySelector('.audio-clear');
+      const addTimelineBtn = el.querySelector('.audio-add-timeline-btn');
+
+      // 显示"添加到时间轴"按钮（当音频来自对话组时）
+      if(node.data.sourceNodeId !== undefined && node.data.sourceNodeId !== null){
+        addTimelineBtn.style.display = 'inline-block';
+      }
 
       deleteBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -757,6 +769,23 @@
         e.stopPropagation();
         try{ playerEl.pause(); } catch(err){}
         setAudioFromFile(null);
+      });
+
+      // "添加到时间轴"按钮点击事件
+      addTimelineBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if(!node.data.url){
+          showToast(window.t ? window.t('dialogue_no_audio_to_add') : '没有可添加的音频', 'error');
+          return;
+        }
+        const audioName = node.data.name || '音频';
+        try {
+          const duration = await getAudioDuration(node.data.url);
+          addAudioToTimeline(node.id, node.data.dialogueIndex != null ? node.data.dialogueIndex : 0, node.data.url, audioName, duration);
+        } catch(err) {
+          console.warn('获取音频时长失败，使用默认时长:', err);
+          addAudioToTimeline(node.id, node.data.dialogueIndex != null ? node.data.dialogueIndex : 0, node.data.url, audioName, 5);
+        }
       });
 
       // 恢复已保存的数据
@@ -1712,11 +1741,17 @@
           });
         }
 
-        // 视频模型选择器和相关元素
+        // 视频模型选择器和相关元素（根据当前视频生成模式过滤）
         const shotGroupVideoModelEl = nodeBody.querySelector('.shot-group-video-model');
+        const shotGroupVideoGenMode = nodeBody.querySelector('.shot-group-video-gen-mode');
         if(shotGroupVideoModelEl) {
+          const mode = node.data.videoGenMode || 'first_last_frame';
           if(window.TaskConfig && window.TaskConfig.isLoaded()) {
-            const options = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+            const allOptions = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+            const options = allOptions.filter(opt => {
+              const modes = opt.supportedImageModes || ['first_last_frame'];
+              return modes.includes(mode);
+            });
             options.forEach(opt => {
               const optEl = document.createElement('option');
               optEl.value = opt.value;
@@ -4831,6 +4866,43 @@
       return id;
     }
 
+    // ─── 注册 image_to_video 输入端口（供连接系统自动发现）───
+    if (typeof registerInputPorts === 'function') {
+      registerInputPorts('image_to_video', [
+        // 首帧端口（接受图片节点连接）
+        PORT_PRESETS.IMAGE_INPUT({
+          guard: function(n) { return !n.data.startFile; }
+        }),
+        // 尾帧端口
+        {
+          selector: '.end-image-port',
+          portType: 'end',
+          accepts: ['image'],
+          connectionType: 'imageConnections',
+          guard: function(n) { return !n.data.endFile; }
+        },
+        // 参考图端口（多参考模式，允许多连接）
+        {
+          selector: '.ref-image-input-port',
+          portType: 'ref-image',
+          accepts: ['image'],
+          connectionType: 'imageConnections',
+          allowMultiple: true,
+          guard: function(n) {
+            if (n.data.imageMode !== 'multi_reference') return false;
+            if (window.TaskConfig && window.TaskConfig.isLoaded()) {
+              var modelConfigs = window.TaskConfig.getModelConfigs();
+              var maxCount = modelConfigs[n.data.videoModel] && modelConfigs[n.data.videoModel].max_multi_ref_images || 5;
+              return (n.data.referenceUrls || []).length < maxCount;
+            }
+            return true;
+          }
+        },
+        // 音频端口（接受音频节点连接）
+        PORT_PRESETS.AUDIO_INPUT()
+      ]);
+    }
+
     function createImageNode(opts){
       const id = state.nextNodeId++;
       const viewportPos = getViewportNodePosition();
@@ -6071,8 +6143,8 @@
             return;
           }
 
-          // 按指定顺序排序：qwen3.5 > qwen3.6 > flash-3.0 > flash-3.5 > gemini-3-flash > gemini-3.1-flash-lite > 其他
-          const sortOrder = ['qwen3.5', 'qwen3.6', 'flash-3.0', 'flash-3.5', 'flash', 'gemini-3-flash', 'gemini-3.1-flash-lite'];
+          // 按指定顺序排序：deepseek-v4 > qwen3.5 > qwen3.6 > flash-3.0 > flash-3.5 > flash > gemini-3-flash > gemini-3.1-flash-lite > 其他
+          const sortOrder = ['deepseek-v4', 'qwen3.5', 'qwen3.6', 'flash-3.0', 'flash-3.5', 'flash', 'gemini-3-flash', 'gemini-3.1-flash-lite'];
           const sortedModels = [...data.models].sort((a, b) => {
             const nameA = (a.model_name || a.name || '').toLowerCase();
             const nameB = (b.model_name || b.name || '').toLowerCase();
@@ -6153,7 +6225,7 @@
           splitModelSelect.appendChild(optGroup);
         });
 
-        // 恢复已保存的拆分模型选择，若无保存值则选中第一个
+        // 恢复已保存的拆分模型选择，若无保存值则按优先级选择默认模型
         const savedSplitModel = node.data.splitModel;
         let restored = false;
         if(savedSplitModel) {
@@ -6166,12 +6238,60 @@
             restored = true;
           }
         }
-        if(!restored && firstEnabled) {
-          firstEnabled.selected = true;
-          node.data.splitModel = firstEnabled.value;
-          node.data.splitModelId = firstEnabled.dataset.modelId || '';
-          node.data.splitModelVendorId = firstEnabled.dataset.vendorId || '';
-          node.data.splitModelVendorName = firstEnabled.dataset.vendorName || '';
+        if(!restored) {
+          // 优先级：deepseek供应商的deepseek-v4-flash → zjt_api供应商的qwen3.5-plus → 第一个启用的模型
+          const allOptions = splitModelSelect.querySelectorAll('option');
+          let defaultOption = null;
+
+          // 第一轮：优先查找 deepseek 供应商下的 deepseek-v4-flash
+          for (let i = 0; i < allOptions.length; i++) {
+            const opt = allOptions[i];
+            if (!opt.disabled && opt.value && opt.value.includes('deepseek-v4-flash')
+                && opt.dataset.vendorName === 'deepseek') {
+              defaultOption = opt;
+              console.log('[剧本节点-拆分模型] 选择默认模型: deepseek-v4-flash (deepseek)');
+              break;
+            }
+          }
+
+          // 第二轮：查找 zjt_api 供应商下的 qwen3.5-plus
+          if (!defaultOption) {
+            for (let i = 0; i < allOptions.length; i++) {
+              const opt = allOptions[i];
+              if (!opt.disabled && opt.value && opt.value.includes('qwen3.5-plus')
+                  && opt.dataset.vendorName === 'zjt_api') {
+                defaultOption = opt;
+                console.log('[剧本节点-拆分模型] 选择默认模型: qwen3.5-plus (zjt_api)');
+                break;
+              }
+            }
+          }
+
+          // 第三轮：查找其他供应商的 qwen3.5-plus
+          if (!defaultOption) {
+            for (let i = 0; i < allOptions.length; i++) {
+              const opt = allOptions[i];
+              if (!opt.disabled && opt.value && opt.value.includes('qwen3.5-plus')) {
+                defaultOption = opt;
+                console.log(`[剧本节点-拆分模型] 未找到 zjt_api 的 qwen3.5-plus，选择其他供应商: ${opt.dataset.vendorName}`);
+                break;
+              }
+            }
+          }
+
+          // 最终回退：使用第一个启用的模型
+          if (!defaultOption && firstEnabled) {
+            defaultOption = firstEnabled;
+            console.log(`[剧本节点-拆分模型] 未找到推荐模型，选择第一个启用的模型: ${firstEnabled.value}`);
+          }
+
+          if (defaultOption) {
+            defaultOption.selected = true;
+            node.data.splitModel = defaultOption.value;
+            node.data.splitModelId = defaultOption.dataset.modelId || '';
+            node.data.splitModelVendorId = defaultOption.dataset.vendorId || '';
+            node.data.splitModelVendorName = defaultOption.dataset.vendorName || '';
+          }
         }
       }
 
@@ -6357,6 +6477,32 @@
             languageCustomEl.style.display = 'block';
             languageCustomEl.value = node.data.language;
           }
+        }
+
+        // 监听右上角语言切换，联动更新剧本输出语言
+        if(window.ZJTi18n) {
+          window.ZJTi18n.on('locale-changed', ({ locale }) => {
+            // 根据界面语言自动设置剧本输出语言
+            const localeToLanguage = {
+              'en': 'English',
+              'zh-CN': ''
+            };
+            const newLanguage = localeToLanguage[locale];
+            if(newLanguage !== undefined) {
+              // 更新节点数据
+              node.data.language = newLanguage;
+              // 更新下拉框显示
+              const presetValues = ['', 'English', 'Deutsch', 'Français', 'Русский'];
+              if(presetValues.includes(newLanguage)) {
+                languageSelectEl.value = newLanguage;
+                languageCustomEl.style.display = 'none';
+              } else {
+                languageSelectEl.value = '__custom__';
+                languageCustomEl.style.display = 'block';
+                languageCustomEl.value = newLanguage;
+              }
+            }
+          });
         }
       }
 
@@ -8145,12 +8291,17 @@
       const computingPowerValue = el.querySelector('.shot-group-computing-power-value');
       const computingPowerDetail = el.querySelector('.shot-group-computing-power-detail');
 
-      // 动态填充视频模型选项
+      // 动态填充视频模型选项（根据当前视频生成模式过滤）
       let firstShotGroupVideoModelValue = 'wan22';
+      const shotGroupMode = node.data.videoGenMode || 'first_last_frame';
       if(videoModelEl) {
         videoModelEl.innerHTML = '';
         if(window.TaskConfig && window.TaskConfig.isLoaded()) {
-          const options = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+          const allOptions = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+          const options = allOptions.filter(opt => {
+            const modes = opt.supportedImageModes || ['first_last_frame'];
+            return modes.includes(shotGroupMode);
+          });
           if(options.length > 0) firstShotGroupVideoModelValue = options[0].value;
           options.forEach(opt => {
             const optEl = document.createElement('option');
@@ -8160,14 +8311,23 @@
             videoModelEl.appendChild(optEl);
           });
         } else {
-          videoModelEl.innerHTML = `
-            <option value="wan22" selected>Wan2.2</option>
-            <option value="sora2">Sora2</option>
-            <option value="ltx2">LTX2.0</option>
-            <option value="kling">可灵</option>
-            <option value="vidu">Vidu</option>
-            <option value="veo3">VEO3.1</option>
-          `;
+          if(shotGroupMode === 'multi_reference') {
+            videoModelEl.innerHTML = `
+              <option value="veo3">VEO3.1</option>
+              <option value="seedance_2_0">Seedance 2.0</option>
+              <option value="vidu_q2">Vidu-Q2</option>
+            `;
+            firstShotGroupVideoModelValue = 'veo3';
+          } else {
+            videoModelEl.innerHTML = `
+              <option value="wan22" selected>Wan2.2</option>
+              <option value="sora2">Sora2</option>
+              <option value="ltx2">LTX2.0</option>
+              <option value="kling">可灵</option>
+              <option value="vidu">Vidu</option>
+              <option value="veo3">VEO3.1</option>
+            `;
+          }
         }
       }
 
@@ -8220,8 +8380,64 @@
           node.data.videoDuration = firstOption;
         }
       }
-      
+
       updateVideoDurationOptions(node.data.videoModel);
+
+      // 根据当前视频生成模式重新填充视频模型选项
+      function populateShotGroupVideoModelOptions() {
+        if(!videoModelEl) return;
+        const mode = node.data.videoGenMode || 'first_last_frame';
+        let firstValue = mode === 'multi_reference' ? 'veo3' : 'wan22';
+        let filteredOptions = [];
+
+        videoModelEl.innerHTML = '';
+
+        if(window.TaskConfig && window.TaskConfig.isLoaded()) {
+          const allOptions = window.TaskConfig.getModelOptionsForCategory('image_to_video');
+          filteredOptions = allOptions.filter(opt => {
+            const modes = opt.supportedImageModes || ['first_last_frame'];
+            return modes.includes(mode);
+          });
+          if(filteredOptions.length > 0) firstValue = filteredOptions[0].value;
+          filteredOptions.forEach(opt => {
+            const optEl = document.createElement('option');
+            optEl.value = opt.value;
+            optEl.textContent = opt.label;
+            videoModelEl.appendChild(optEl);
+          });
+        } else {
+          if(mode === 'multi_reference') {
+            videoModelEl.innerHTML = `
+              <option value="veo3">VEO3.1</option>
+              <option value="seedance_2_0">Seedance 2.0</option>
+              <option value="vidu_q2">Vidu-Q2</option>
+            `;
+            firstValue = 'veo3';
+          } else {
+            videoModelEl.innerHTML = `
+              <option value="wan22">Wan2.2</option>
+              <option value="sora2">Sora2</option>
+              <option value="ltx2">LTX2.0</option>
+              <option value="kling">可灵</option>
+              <option value="vidu">Vidu</option>
+              <option value="veo3">VEO3.1</option>
+            `;
+            firstValue = 'wan22';
+          }
+        }
+
+        // 如果当前选择的模型不在新列表中，切换到第一个可用模型
+        const validValues = filteredOptions.map(o => o.value);
+        if(validValues.length > 0 && !validValues.includes(node.data.videoModel)) {
+          node.data.videoModel = firstValue;
+        }
+        ensureSelectHasSavedOption(videoModelEl, node.data.videoModel);
+        videoModelEl.value = node.data.videoModel || firstValue;
+        applyDriverStatusToSelect(videoModelEl);
+        // 模型变更后联动更新时长选项和算力显示
+        updateVideoDurationOptions(videoModelEl.value);
+        updateVideoComputingPowerDisplay();
+      }
 
       // 计算视频生成算力消耗
       function calculateVideoComputingPower() {
@@ -8273,11 +8489,13 @@
         updateMergeButtonVisibility(videoModelEl.value);
       });
 
-      // 视频生成模式选择事件
+      // 视频生成模式选择事件（切换模式时重新过滤视频模型列表）
       if(videoGenModeEl) {
         videoGenModeEl.addEventListener('change', () => {
           node.data.videoGenMode = videoGenModeEl.value;
+          populateShotGroupVideoModelOptions();
           updateMergeButtonVisibility(videoModelEl.value);
+          try { autoSaveWorkflow(); } catch(e) {}
         });
       }
 
@@ -8933,6 +9151,10 @@
       }
     }
 
+    // 角色图片选择下拉的全局追踪（跨节点共享，确保同时只有一个实例）
+    let _activeCharImgDropdown = null;
+    let _activeCharImgCloseHandler = null;
+
     // 分镜图节点
     function createShotFrameNode(opts){
       const id = state.nextNodeId++;
@@ -9065,10 +9287,6 @@
                     <span class="shot-ref-label" data-i18n="shot_frame_prop_label">${window.t ? window.t('shot_frame_prop_label') : '道具'}</span>
                     <div class="shot-ref-tags shot-ref-prop-tags"></div>
                   </div>
-                  <div class="shot-ref-row">
-                    <span class="shot-ref-label" data-i18n="shot_frame_character_label">${window.t ? window.t('shot_frame_character_label') : '角色'}</span>
-                    <div class="shot-ref-tags shot-ref-char-tags"></div>
-                  </div>
                 </div>
               </div>
               <div class="field field-always-visible">
@@ -9101,14 +9319,14 @@
                   <div class="label" style="margin: 0;" data-i18n="shot_frame_image_prompt_label">${window.t ? window.t('shot_frame_image_prompt_label') : '图片提示词'}</div>
                   <span style="font-size: 10px; color: #9ca3af;" data-i18n="shot_frame_image_prompt_hint">${window.t ? window.t('shot_frame_image_prompt_hint') : '点击编辑 | 按 / 选择角色'}</span>
                 </div>
-                <textarea class="shot-frame-image-prompt" rows="3" readonly style="width: 100%; flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; resize: none; cursor: pointer; background: #fafafa; line-height: 1.4;">${escapeHtml(node.data.imagePrompt)}</textarea>
+                <div class="shot-prompt-display shot-frame-image-prompt-display" style="width: 100%; flex: 1; min-height: 60px; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; cursor: pointer; background: #fafafa; line-height: 1.6; overflow-y: auto; word-break: break-all;"></div>
               </div>
               <div class="field field-always-visible" style="flex: 1; display: flex; flex-direction: column;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                   <div class="label" style="margin: 0;" data-i18n="shot_frame_video_prompt_label">${window.t ? window.t('shot_frame_video_prompt_label') : '视频提示词'}</div>
                   <button class="mini-btn secondary reduce-violation-btn" type="button" style="font-size: 11px; padding: 4px 8px;" data-i18n="shot_frame_video_generation_failed_btn">${window.t ? window.t('shot_frame_video_generation_failed_btn') : '视频生成失败，请点此按钮'}</button>
                 </div>
-                <textarea class="shot-frame-video-prompt" rows="3" readonly style="width: 100%; flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; resize: none; cursor: pointer; background: #fafafa; line-height: 1.4;">${escapeHtml(node.data.videoPromptText || node.data.videoPrompt)}</textarea>
+                <div class="shot-prompt-display shot-frame-video-prompt-display" style="width: 100%; flex: 1; min-height: 60px; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; cursor: pointer; background: #fafafa; line-height: 1.6; overflow-y: auto; word-break: break-all;"></div>
               </div>
             </div>
             <!-- 第3列: 模型与生成 -->
@@ -9193,8 +9411,10 @@
 
       const headerEl = el.querySelector('.node-header');
       const deleteBtn = el.querySelector('.icon-btn');
-      const imagePromptEl = el.querySelector('.shot-frame-image-prompt');
-      const videoPromptEl = el.querySelector('.shot-frame-video-prompt');
+      const imagePromptDisplay = el.querySelector('.shot-frame-image-prompt-display');
+      const videoPromptDisplay = el.querySelector('.shot-frame-video-prompt-display');
+      const imagePromptEl = imagePromptDisplay;
+      const videoPromptEl = videoPromptDisplay;
       const generateBtn = el.querySelector('.shot-frame-generate-btn');
       const generateDialogueBtn = el.querySelector('.shot-frame-generate-dialogue-btn');
       const imageEl = el.querySelector('.shot-frame-image');
@@ -9223,7 +9443,6 @@
       const refSectionEl = el.querySelector('.shot-ref-section');
       const sceneTagsEl = el.querySelector('.shot-ref-scene-tags');
       const propTagsEl = el.querySelector('.shot-ref-prop-tags');
-      const charTagsEl = el.querySelector('.shot-ref-tags.shot-ref-char-tags');
 
       // 动态填充分镜模型选项
       if(modelEl) {
@@ -9264,12 +9483,10 @@
 
         if(window.TaskConfig && window.TaskConfig.isLoaded()) {
           allOptions = window.TaskConfig.getModelOptionsForCategory('image_to_video');
-          if(mode === 'multi_reference') {
-            allOptions = allOptions.filter(opt => {
-              const modes = opt.supportedImageModes || ['first_last_frame'];
-              return modes.includes('multi_reference');
-            });
-          }
+          allOptions = allOptions.filter(opt => {
+            const modes = opt.supportedImageModes || ['first_last_frame'];
+            return modes.includes(mode);
+          });
           if(allOptions.length > 0) firstVideoModelValue = allOptions[0].value;
           allOptions.forEach(opt => {
             const optEl = document.createElement('option');
@@ -9504,12 +9721,52 @@
         return names;
       }
 
-      // 初始匹配角色（根据当前模式选择提示词源）
-      const initMode = node.data.videoMode || 'first_last_frame';
-      const initPromptSource = initMode === 'multi_reference'
-        ? (node.data.videoPromptText || node.data.videoPrompt || '')
-        : (node.data.imagePrompt || '');
-      node.data.refCharacters = extractCharacterNames(initPromptSource);
+      // 优先使用后端返回的 db_character_info 匹配角色
+      function getCharactersFromDbInfo() {
+        const shotJson = node.data.shotJson || {};
+        const dbCharInfo = shotJson.db_character_info;
+        if(!dbCharInfo || !Array.isArray(dbCharInfo) || dbCharInfo.length === 0) {
+          return null;
+        }
+
+        const worldChars = state.worldCharacters || [];
+        const matchedNames = [];
+
+        dbCharInfo.forEach(info => {
+          if(info.db_character_id && info.db_character_name) {
+            // 后端已匹配到数据库角色，使用 db_character_name
+            if(!matchedNames.includes(info.db_character_name)) {
+              matchedNames.push(info.db_character_name);
+            }
+          } else if(info.character_id) {
+            // 后端未匹配到，尝试从 scriptData.characters 中查找名称
+            const scriptData = node.data.shotJson?.scriptData || {};
+            const characters = scriptData.characters || [];
+            const charObj = characters.find(c => c.id === info.character_id);
+            if(charObj && charObj.name) {
+              // 检查该名称是否在 worldCharacters 中存在
+              const existsInWorld = worldChars.some(wc => wc.name === charObj.name);
+              if(existsInWorld && !matchedNames.includes(charObj.name)) {
+                matchedNames.push(charObj.name);
+              }
+            }
+          }
+        });
+
+        return matchedNames.length > 0 ? matchedNames : null;
+      }
+
+      // 初始匹配角色：优先使用 db_character_info，否则从提示词提取
+      const dbMatchedChars = getCharactersFromDbInfo();
+      if(dbMatchedChars) {
+        node.data.refCharacters = dbMatchedChars;
+      } else {
+        const initMode = node.data.videoMode || 'first_last_frame';
+        const initPromptSource = initMode === 'multi_reference'
+          ? (node.data.videoPromptText || node.data.videoPrompt || '')
+          : (node.data.imagePrompt || '');
+        node.data.refCharacters = extractCharacterNames(initPromptSource);
+      }
 
       // 获取所有可用场景列表（从 state.worldLocations 获取）
       function getAvailableLocations() {
@@ -9761,59 +10018,133 @@
         setTimeout(() => document.addEventListener('click', closeHandler, true), 0);
       }
 
-      // 渲染角色标签（只读，自动从提示词匹配，仅显示 state.worldCharacters 中存在的角色）
-      function renderCharTags() {
-        charTagsEl.innerHTML = '';
-        const chars = node.data.refCharacters || [];
-        // 过滤：只保留在 state.worldCharacters 中真正存在的角色
+      // 获取缩略图URL
+      function getThumbnailUrl(imageUrl, size) {
+        size = size || 40;
+        if(!imageUrl) return '';
+        if(imageUrl.startsWith('data:') || imageUrl.startsWith('blob:')) return imageUrl;
+        return '/api/thumbnail?url=' + encodeURIComponent(imageUrl) + '&size=' + size;
+      }
+
+      // 渲染提示词（将【【角色名】】替换为内联角色图片）
+      function renderPromptWithInlineChars(displayEl, promptText) {
+        if(!displayEl) return;
+        displayEl.innerHTML = '';
+
         const worldChars = state.worldCharacters || [];
-        const validChars = chars.filter(name => worldChars.some(wc => wc.name === name));
-        if(validChars.length === 0) {
-          const empty = document.createElement('span');
-          empty.className = 'shot-ref-tag empty';
-          empty.textContent = '无（在提示词中用【【角色名】】引用）';
-          charTagsEl.appendChild(empty);
-        } else {
-          validChars.forEach(name => {
-            const wc = worldChars.find(c => c.name === name);
-            const hasImage = wc && wc.reference_image;
-            const hasMultiImages = wc && wc.reference_images && Array.isArray(wc.reference_images) && wc.reference_images.length > 0;
-            const selectedUrl = (node.data.selectedCharRefImages && node.data.selectedCharRefImages[name]);
-            const tag = document.createElement('span');
-            tag.className = 'shot-ref-tag character';
-            if(!hasImage && !hasMultiImages) {
-              tag.style.cssText = 'border-color: #ef4444; color: #ef4444; background: #fef2f2;';
-              tag.title = `${name}（该角色没有参考图片）`;
-              tag.textContent = name + ' ⚠';
-            } else {
-              tag.title = name + (selectedUrl ? '（已选特定图片）' : '（使用主图）');
-              tag.textContent = selectedUrl ? name + ' ✓' : name;
-              // 如果有多张参考图，显示选择按钮
-              if(hasMultiImages || (wc.reference_images && wc.reference_images.length > 0) || (wc.reference_image)) {
-                const selBtn = document.createElement('button');
-                selBtn.className = 'char-ref-img-btn';
-                selBtn.type = 'button';
-                selBtn.title = '选择参考图';
-                selBtn.textContent = '📷';
-                selBtn.style.cssText = 'background: none; border: none; cursor: pointer; font-size: 10px; padding: 0 2px; vertical-align: middle;';
-                selBtn.addEventListener('click', (e) => {
-                  e.stopPropagation();
-                  showCharImageSelector(wc, name);
-                });
-                tag.appendChild(selBtn);
-              }
+        const pattern = /【【([^】]+)】】/g;
+        let lastIndex = 0;
+        let match;
+
+        while((match = pattern.exec(promptText)) !== null) {
+          // 添加匹配前的文本
+          if(match.index > lastIndex) {
+            const textNode = document.createTextNode(promptText.substring(lastIndex, match.index));
+            displayEl.appendChild(textNode);
+          }
+
+          const charName = match[1].trim();
+          const wc = worldChars.find(c => c.name === charName);
+
+          // 如果角色不存在于数据库中，直接显示纯文本
+          if(!wc) {
+            const textNode = document.createTextNode(match[0]);
+            displayEl.appendChild(textNode);
+            lastIndex = match.index + match[0].length;
+            continue;
+          }
+
+          const selectedUrl = (node.data.selectedCharRefImages && node.data.selectedCharRefImages[charName]);
+          const imgUrl = selectedUrl || wc.reference_image;
+          const hasImage = wc.reference_image || (wc.reference_images && wc.reference_images.length > 0);
+
+          // 创建内联角色标签（只有存在的角色才渲染为标签）
+          const chip = document.createElement('span');
+          chip.className = 'shot-inline-char-chip' + (hasImage ? '' : ' no-image');
+          chip.title = charName + (selectedUrl ? '（已选特定图片）' : hasImage ? '（使用主图）' : '（无参考图）');
+
+          if(imgUrl) {
+            const avatar = document.createElement('img');
+            avatar.className = 'shot-inline-char-avatar';
+            avatar.src = getThumbnailUrl(imgUrl, 40);
+            avatar.alt = charName;
+            avatar.loading = 'lazy';
+            chip.appendChild(avatar);
+
+            if(selectedUrl) {
+              const check = document.createElement('span');
+              check.className = 'shot-inline-char-check';
+              check.textContent = '✓';
+              chip.appendChild(check);
             }
-            charTagsEl.appendChild(tag);
+          } else {
+            const avatar = document.createElement('span');
+            avatar.className = 'shot-inline-char-avatar no-image';
+            avatar.textContent = '👤';
+            chip.appendChild(avatar);
+          }
+
+          const nameSpan = document.createElement('span');
+          nameSpan.className = 'shot-inline-char-name';
+          nameSpan.textContent = charName;
+          chip.appendChild(nameSpan);
+
+          // 点击打开图片选择器
+          chip.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showCharImageSelector(wc, charName, chip);
           });
+
+          displayEl.appendChild(chip);
+          lastIndex = match.index + match[0].length;
+        }
+
+        // 添加剩余文本
+        if(lastIndex < promptText.length) {
+          const textNode = document.createTextNode(promptText.substring(lastIndex));
+          displayEl.appendChild(textNode);
+        }
+
+        // 如果没有内容，显示占位文本
+        if(displayEl.childNodes.length === 0) {
+          displayEl.innerHTML = '<span style="color: #9ca3af;">点击编辑提示词...</span>';
         }
       }
 
+      // 渲染角色图片（更新提示词显示）
+      function renderCharImages() {
+        renderPromptWithInlineChars(imagePromptDisplay, node.data.imagePrompt || '');
+        renderPromptWithInlineChars(videoPromptDisplay, node.data.videoPromptText || node.data.videoPrompt || '');
+      }
+
       // 显示角色参考图选择下拉
-      function showCharImageSelector(wc, charName) {
+      function showCharImageSelector(wc, charName, anchorEl) {
+        // 清理上一次的 char-img-dropdown（挂在 document.body 上，closeRefDropdowns 无法清理）
+        if(_activeCharImgDropdown) {
+          _activeCharImgDropdown.remove();
+          _activeCharImgDropdown = null;
+        }
+        if(_activeCharImgCloseHandler) {
+          document.removeEventListener('click', _activeCharImgCloseHandler, true);
+          _activeCharImgCloseHandler = null;
+        }
         closeRefDropdowns();
+
+        console.log('[charImgSelector] charName:', charName, 'reference_image:', wc.reference_image, 'reference_images:', wc.reference_images);
+
         const dropdown = document.createElement('div');
         dropdown.className = 'shot-ref-dropdown char-img-dropdown';
-        dropdown.style.cssText = 'min-width: 200px; max-height: 280px; overflow-y: auto;';
+        dropdown.style.cssText = 'min-width: 200px; max-height: 280px; overflow-y: auto; position: fixed; z-index: 10000;';
+
+        // 关闭并清理 dropdown 的辅助函数
+        function closeCharImgDropdown() {
+          dropdown.remove();
+          if(_activeCharImgCloseHandler) {
+            document.removeEventListener('click', _activeCharImgCloseHandler, true);
+          }
+          _activeCharImgDropdown = null;
+          _activeCharImgCloseHandler = null;
+        }
 
         // 构建图片选项列表：主图 + reference_images
         const options = [];
@@ -9827,6 +10158,8 @@
             }
           });
         }
+
+        console.log('[charImgSelector] options:', options.length, options.map(o => o.label));
 
         if(options.length === 0) {
           const noImg = document.createElement('div');
@@ -9844,14 +10177,14 @@
             if(!currentSelected || currentSelected === mainOpt.url) {
               mainItem.classList.add('selected');
             }
-            mainItem.innerHTML = `<img src="${mainOpt.url}" style="width:16px;height:16px;object-fit:cover;border-radius:2px;margin-right:6px;vertical-align:middle;">主图（默认）`;
+            mainItem.innerHTML = `<img src="${getThumbnailUrl(mainOpt.url, 40)}" style="width:16px;height:16px;object-fit:cover;border-radius:2px;margin-right:6px;vertical-align:middle;">主图（默认）`;
             mainItem.addEventListener('click', (e) => {
               e.stopPropagation();
               if(!node.data.selectedCharRefImages) node.data.selectedCharRefImages = {};
               delete node.data.selectedCharRefImages[charName];
               if(node.data.selectedCharRefImageLabels) delete node.data.selectedCharRefImageLabels[charName];
-              renderCharTags();
-              closeRefDropdowns();
+              closeCharImgDropdown();
+              renderCharImages();
               safeAutoSave()
             });
             dropdown.appendChild(mainItem);
@@ -9863,42 +10196,56 @@
             if(currentSelected === opt.url) {
               item.classList.add('selected');
             }
-            item.innerHTML = `<img src="${opt.url}" style="width:16px;height:16px;object-fit:cover;border-radius:2px;margin-right:6px;vertical-align:middle;">${opt.label}`;
+            item.innerHTML = `<img src="${getThumbnailUrl(opt.url, 40)}" style="width:16px;height:16px;object-fit:cover;border-radius:2px;margin-right:6px;vertical-align:middle;">${opt.label}`;
             item.addEventListener('click', (e) => {
               e.stopPropagation();
               if(!node.data.selectedCharRefImages) node.data.selectedCharRefImages = {};
               if(!node.data.selectedCharRefImageLabels) node.data.selectedCharRefImageLabels = {};
               node.data.selectedCharRefImages[charName] = opt.url;
               node.data.selectedCharRefImageLabels[charName] = opt.label;
-              renderCharTags();
-              closeRefDropdowns();
+              closeCharImgDropdown();
+              renderCharImages();
               safeAutoSave()
             });
             dropdown.appendChild(item);
           });
         }
 
-        refSectionEl.appendChild(dropdown);
+        // 定位下拉框到锚点元素下方
+        document.body.appendChild(dropdown);
+        if(anchorEl) {
+          const rect = anchorEl.getBoundingClientRect();
+          dropdown.style.left = rect.left + 'px';
+          dropdown.style.top = (rect.bottom + 4) + 'px';
+        }
+
+        // 注册全局引用和关闭监听
+        _activeCharImgDropdown = dropdown;
         const closeHandler = (e) => {
-          if(!dropdown.contains(e.target) && !e.target.classList.contains('char-ref-img-btn')) {
-            dropdown.remove();
-            document.removeEventListener('click', closeHandler, true);
+          if(!dropdown.contains(e.target)) {
+            closeCharImgDropdown();
           }
         };
+        _activeCharImgCloseHandler = closeHandler;
         setTimeout(() => document.addEventListener('click', closeHandler, true), 0);
       }
 
       // 触发全部引用匹配并渲染
       function updateShotReferences() {
-        // 重新匹配角色（参考模式从视频提示词提取，首帧模式从图片提示词提取）
-        const mode = node.data.videoMode || 'first_last_frame';
-        const promptSource = mode === 'multi_reference'
-          ? (node.data.videoPromptText || node.data.videoPrompt || '')
-          : (node.data.imagePrompt || '');
-        node.data.refCharacters = extractCharacterNames(promptSource);
+        // 重新匹配角色：优先使用 db_character_info，否则从提示词提取
+        const dbMatchedChars = getCharactersFromDbInfo();
+        if(dbMatchedChars) {
+          node.data.refCharacters = dbMatchedChars;
+        } else {
+          const mode = node.data.videoMode || 'first_last_frame';
+          const promptSource = mode === 'multi_reference'
+            ? (node.data.videoPromptText || node.data.videoPrompt || '')
+            : (node.data.imagePrompt || '');
+          node.data.refCharacters = extractCharacterNames(promptSource);
+        }
         renderSceneTags();
         renderPropTags();
-        renderCharTags();
+        renderCharImages();
       }
 
       // 暴露更新引用的方法供外部调用
@@ -10335,19 +10682,27 @@
         initNodeDrag(id, e.clientX, e.clientY);
       });
 
-      // 点击图片提示词textarea直接打开放大编辑窗口
-      imagePromptEl.addEventListener('click', (e) => {
+      // 点击图片提示词区域打开放大编辑窗口
+      imagePromptDisplay.addEventListener('click', (e) => {
+        // 如果点击的是角色标签，不打开编辑窗口
+        if(e.target.closest('.shot-inline-char-chip')) return;
         e.stopPropagation();
-        showPromptExpandModal(imagePromptEl, '图片提示词', (newValue) => {
+        // 创建一个模拟textarea的对象，提供value属性
+        const mockTextarea = { value: node.data.imagePrompt || '' };
+        showPromptExpandModal(mockTextarea, '图片提示词', (newValue) => {
           node.data.imagePrompt = newValue;
           updateShotReferences();
         }, { enableCharacterDropdown: true, nodeId: id });
       });
 
-      // 点击视频提示词textarea直接打开放大编辑窗口
-      videoPromptEl.addEventListener('click', (e) => {
+      // 点击视频提示词区域打开放大编辑窗口
+      videoPromptDisplay.addEventListener('click', (e) => {
+        // 如果点击的是角色标签，不打开编辑窗口
+        if(e.target.closest('.shot-inline-char-chip')) return;
         e.stopPropagation();
-        showPromptExpandModal(videoPromptEl, '视频提示词', (newValue) => {
+        // 创建一个模拟textarea的对象，提供value属性
+        const mockTextarea = { value: node.data.videoPromptText || node.data.videoPrompt || '' };
+        showPromptExpandModal(mockTextarea, '视频提示词', (newValue) => {
           node.data.videoPromptText = newValue;
           updateShotReferences();
         }, { enableCharacterDropdown: true, nodeId: id, dropdownKey: 'videoprompt' });
@@ -10374,7 +10729,7 @@
         reduceViolationBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
           
-          const currentPrompt = videoPromptEl.value.trim();
+          const currentPrompt = (node.data.videoPromptText || node.data.videoPrompt || '').trim();
           if(!currentPrompt){
             showToast('视频提示词为空', 'warning');
             return;
@@ -10395,8 +10750,8 @@
             const result = await response.json();
             
             if(result.code === 0 && result.data && result.data.prompt){
-              videoPromptEl.value = result.data.prompt;
               node.data.videoPromptText = result.data.prompt;
+              updateShotReferences();
               showToast('提示词已改写', 'success');
             } else {
               throw new Error(result.message || '改写失败');
@@ -10452,7 +10807,8 @@
             x: dialogueGroupX,
             y: dialogueGroupY,
             dialogueData: JSON.parse(JSON.stringify(node.data.shotJson.dialogue)),
-            shotNumber: node.data.shotJson.shot_number
+            shotNumber: node.data.shotJson.shot_number,
+            checkCollision: true
           });
           
           // 连接分镜节点到对话组节点

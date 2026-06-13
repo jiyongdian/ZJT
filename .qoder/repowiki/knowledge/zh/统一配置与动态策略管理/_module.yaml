@@ -1,0 +1,22 @@
+schema_version: 1
+module_path: config_management
+title: 统一配置与动态策略管理
+scope:
+    - config/
+source_files: []
+depends_on: []
+related_to:
+    - path: ai_engine/task_drivers
+    - path: backend_api
+    - path: infrastructure
+    - path: ai_engine/agent_skills
+    - path: backend_api/core_auth
+    - path: frontend_web
+    - path: ai_engine/task_drivers/task_execution
+    - path: documentation
+    - path: test_suite
+    - path: backend_api/business_api/user_management
+    - path: ai_engine
+    - path: backend_api/shared_models
+    - path: ai_engine/script_writer/session_infrastructure
+    - path: jianying_integration

@@ -6,7 +6,6 @@ import traceback
 from .base_video_driver import BaseVideoDriver, ImageMode
 from config.config_util import get_config, get_dynamic_config_value
 from utils.sentry_util import SentryUtil, AlertLevel
-from utils.image_upload_utils import upload_local_images_to_cdn_sync
 
 
 class ViduDefaultDriver(BaseVideoDriver):
@@ -179,11 +178,9 @@ class ViduDefaultDriver(BaseVideoDriver):
             if reference_images:
                 self.logger.warning(f"Vidu 不支持参考图，已忽略 {len(reference_images)} 张参考图")
 
-        # 如果是本地环境，将本地图片上传到图床
-        if self._is_local and image_urls:
-            self.logger.info(f"本地环境检测到图片路径，准备上传到图床: {image_urls}")
-            image_urls = upload_local_images_to_cdn_sync(image_urls, self._config)
-            self.logger.info(f"图片上传完成，CDN链接: {image_urls}")
+        # 上传图片到CDN图床，确保外部API可访问
+        if image_urls:
+            image_urls = self.ensure_public_urls(image_urls)
 
         if len(image_urls) == 2:
             # 两张图片：首尾图生视频

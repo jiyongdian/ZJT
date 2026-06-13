@@ -1,0 +1,14 @@
+schema_version: 1
+module_path: ai_engine/llm_clients
+title: 多供应商 LLM 客户端抽象与工厂
+scope:
+    - llm/
+source_files: []
+depends_on: []
+related_to:
+    - path: ai_engine/script_writer
+    - path: backend_api
+    - path: ai_engine/task_drivers
+    - path: ai_engine/script_writer/session_infrastructure
+    - path: documentation
+    - path: backend_api/business_api

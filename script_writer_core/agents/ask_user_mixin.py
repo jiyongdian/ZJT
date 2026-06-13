@@ -99,6 +99,28 @@ class AskUserMixin:
                 context=context
             )
 
+            # 立即将 verification_request 写入 chat_messages（Agent 后台线程，同步调用）
+            if getattr(self, '_conversation_recorder', None) and getattr(self, '_session_id', None):
+                try:
+                    self._conversation_recorder.append_message(
+                        session_id=self._session_id,
+                        role="verification",
+                        content={
+                            "title": f"{agent_name} 向您提问",
+                            "description": question,
+                            "options": options,
+                            "verification_id": verification.verification_id
+                        },
+                        message_type="verification_request",
+                        verification_id=verification.verification_id,
+                        visibility="ui",
+                        source="verification",
+                        agent_scope=getattr(self, '_agent_scope', 'pm'),
+                        task_id=getattr(self, '_task_id', None),
+                    )
+                except Exception as e:
+                    logger.error(f"{self.agent_id}: Failed to persist verification_request: {e}")
+
             # 阻塞等待用户响应（最多5分钟）
             result = self.task_manager.wait_for_verification(
                 verification=verification,
@@ -109,8 +131,13 @@ class AskUserMixin:
 
             # 检查是否超时或出错
             if not result.get("success"):
-                self._ask_fail_count = getattr(self, '_ask_fail_count', 0) + 1
-                logger.warning(f"{self.agent_id}: ask_user failed ({self._ask_fail_count}/{ASK_USER_MAX_CONSECUTIVE_FAILS})")
+                status = result.get("status", "")
+                if status != "timeout":
+                    # 只有非超时的失败才计入连续失败计数
+                    self._ask_fail_count = getattr(self, '_ask_fail_count', 0) + 1
+                    logger.warning(f"{self.agent_id}: ask_user failed ({self._ask_fail_count}/{ASK_USER_MAX_CONSECUTIVE_FAILS})")
+                else:
+                    logger.info(f"{self.agent_id}: ask_user 超时，不计入失败计数")
                 return {
                     "error": result.get("error", "验证失败"),
                     "user_input": None

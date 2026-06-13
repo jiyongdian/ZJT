@@ -108,6 +108,36 @@ class BaseFileStorage(ABC):
         """
         pass
 
+    async def list_by_prefix(self, prefix: str, limit: int = 1000) -> list:
+        """
+        列出指定前缀下的所有文件 key
+
+        Args:
+            prefix: key 前缀（如 "marketing/session_123/"）
+            limit: 最大返回数量
+
+        Returns:
+            list: 文件 key 列表
+        """
+        return []
+
+    async def delete_by_prefix(self, prefix: str) -> int:
+        """
+        删除指定前缀下的所有文件
+
+        Args:
+            prefix: key 前缀（如 "marketing/session_123/"）
+
+        Returns:
+            int: 成功删除的文件数量
+        """
+        keys = await self.list_by_prefix(prefix)
+        deleted = 0
+        for key in keys:
+            if await self.delete(key):
+                deleted += 1
+        return deleted
+
     def generate_key(self, prefix: str, filename: str) -> str:
         """
         生成存储key

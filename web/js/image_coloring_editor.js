@@ -289,7 +289,7 @@
   }
 
   // Open the coloring modal
-  function openImageColoringModal(imageUrl, nodeId, onCompleteCallback) {
+  async function openImageColoringModal(imageUrl, nodeId, onCompleteCallback) {
     const modal = document.getElementById('coloringEditorModal');
     const canvas = document.getElementById('coloringCanvas');
 
@@ -305,7 +305,23 @@
 
     // Load image
     const img = new Image();
+    // 通过 fetch 下载图片转为 blob URL，避免跨域图片污染 canvas
+    // blob URL 是同源的，canvas 永远不会被污染，且图片数据由浏览器直连 CDN 下载，不消耗服务器带宽
+    if (imageUrl && !imageUrl.startsWith('data:') && !imageUrl.startsWith('blob:')) {
+      try {
+        const response = await fetch(imageUrl);
+        const blob = await response.blob();
+        imageUrl = URL.createObjectURL(blob);
+      } catch (e) {
+        console.error('Failed to fetch image for coloring editor:', e);
+      }
+    }
     img.onload = () => {
+      // 释放 blob URL 避免内存泄漏
+      if (img.src.startsWith('blob:')) {
+        URL.revokeObjectURL(img.src);
+      }
+
       coloringState.originalImage = img;
 
       // Set canvas size to match image
@@ -315,7 +331,7 @@
       // Draw original image on canvas as background
       coloringState.ctx.clearRect(0, 0, canvas.width, canvas.height);
       coloringState.ctx.drawImage(img, 0, 0);
-      
+
       // Save initial state
       saveHistory();
 
@@ -327,6 +343,10 @@
       modal.setAttribute('aria-hidden', 'false');
     };
     img.onerror = () => {
+      // 释放 blob URL 避免内存泄漏
+      if (img.src.startsWith('blob:')) {
+        URL.revokeObjectURL(img.src);
+      }
       if (window.showToast) {
         window.showToast('图片加载失败', 'error');
       } else {

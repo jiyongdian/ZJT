@@ -241,6 +241,71 @@ class CDNUtil:
         return None
 
     @staticmethod
+    def refresh_cdn_signed_url(url: str) -> str:
+        """
+        检查 URL 是否为 CDN 链接，如果是则重新生成签名（防止 token 过期导致 403）。
+
+        仅对匹配已配置 CDN 域名的 URL 进行刷新，非 CDN URL 原样返回。
+        常用于导出剪影草稿等需要下载 CDN 资源的场景。
+
+        Args:
+            url: 原始媒体 URL（可能包含过期的 e/token 参数）
+
+        Returns:
+            刷新签名后的 URL 或原始 URL（刷新失败时也返回原始 URL）
+        """
+        if not url:
+            return url
+
+        try:
+            from urllib.parse import urlparse
+            from config.config_util import get_dynamic_config_value
+            from utils.file_storage.qiniu_storage import QiniuFileStorage
+
+            if not CDNUtil.is_cdn_url(url):
+                return url
+
+            parsed = urlparse(url)
+            # 提取文件 key（路径部分，去掉前导 /），忽略旧的过期查询参数
+            key = parsed.path.lstrip('/')
+
+            host = parsed.netloc
+            qiniu_long_term_domain = get_dynamic_config_value("file_storage", "qiniu_long_term", "cdn_domain", default="")
+            qiniu_domain = get_dynamic_config_value("file_storage", "qiniu", "cdn_domain", default="")
+
+            if host == qiniu_long_term_domain and qiniu_long_term_domain:
+                access_key = get_dynamic_config_value("file_storage", "qiniu_long_term", "access_key")
+                secret_key = get_dynamic_config_value("file_storage", "qiniu_long_term", "secret_key")
+                bucket_name = get_dynamic_config_value("file_storage", "qiniu_long_term", "bucket_name")
+                cdn_dom = qiniu_long_term_domain
+            elif host == qiniu_domain and qiniu_domain:
+                access_key = get_dynamic_config_value("file_storage", "qiniu", "access_key")
+                secret_key = get_dynamic_config_value("file_storage", "qiniu", "secret_key")
+                bucket_name = get_dynamic_config_value("file_storage", "qiniu", "bucket_name")
+                cdn_dom = qiniu_domain
+            else:
+                return url
+
+            if not (access_key and secret_key and bucket_name and cdn_dom):
+                logger.warning(f"[refresh_cdn_signed_url] CDN 配置不完整，使用原始 URL: {url[:100]}")
+                return url
+
+            storage = QiniuFileStorage(
+                access_key=access_key,
+                secret_key=secret_key,
+                bucket_name=bucket_name,
+                cdn_domain=cdn_dom
+            )
+            # 重新生成签名 URL，有效期 28 小时，不使用 attname（仅用于内容下载）
+            fresh_url = storage.get_download_url(key, expires=100800)
+            logger.info(f"[refresh_cdn_signed_url] 已刷新 CDN URL 签名: {url[:80]}... -> 新签名")
+            return fresh_url
+
+        except Exception as e:
+            logger.warning(f"[refresh_cdn_signed_url] 刷新 CDN URL 失败，使用原始 URL: {e}")
+            return url
+
+    @staticmethod
     def trigger_cdn_upload(mapping_id: int, local_path: str):
         """
         触发 CDN 上传（异步）

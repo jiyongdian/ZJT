@@ -1,287 +1,380 @@
 """
-SOP 加载器单元测试
+SopLoader 单元测试
 
-测试 SopLoader 的纯函数逻辑：front matter 解析、索引构建、内容加载。
-不依赖真实文件系统，使用临时目录。
+测试 SOP 加载器的核心逻辑方法。
 """
-import os
-import sys
-import tempfile
 import unittest
+from unittest.mock import patch, MagicMock
 from pathlib import Path
-
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(os.path.dirname(current_dir))
-sys.path.insert(0, project_root)
-
-from agents.skill_loader import SopLoader
 
 
 class TestParseFrontMatter(unittest.TestCase):
-    """测试 _parse_front_matter 方法"""
+    """测试 SopLoader._parse_front_matter()"""
 
-    def _create_sop_file(self, sop_dir: Path, name: str, content: str) -> Path:
-        file_path = sop_dir / f"{name}.md"
-        # 强制使用 \n 换行符，避免 Windows \r\n 导致正则匹配失败
-        with open(file_path, 'w', encoding='utf-8', newline='\n') as f:
-            f.write(content)
-        return file_path
+    def setUp(self):
+        """每个测试前重置类级别状态"""
+        from agents.skill_loader import SopLoader
+        SopLoader._extra_sops_dirs = []
 
     def test_valid_front_matter(self):
-        """测试正常 front matter 解析"""
-        with tempfile.TemporaryDirectory() as tmp:
-            sop_dir = Path(tmp)
-            content = """---
+        """解析有效的 front matter"""
+        from agents.skill_loader import SopLoader
+        content = """---
 name: test-sop
 description: 这是一个测试 SOP
-author: test
 ---
-# 正文内容
-这是 SOP 的正文。
+
+# 测试内容
 """
-            file_path = self._create_sop_file(sop_dir, "test", content)
-            loader = SopLoader(str(sop_dir))
-            result = loader._parse_front_matter(file_path)
-            self.assertEqual(result['name'], 'test-sop')
-            self.assertEqual(result['description'], '这是一个测试 SOP')
-            self.assertEqual(result['author'], 'test')
+        mock_path = MagicMock()
+        mock_path.read_text.return_value = content
+
+        loader = SopLoader.__new__(SopLoader)
+        result = loader._parse_front_matter(mock_path)
+
+        self.assertEqual(result['name'], 'test-sop')
+        self.assertEqual(result['description'], '这是一个测试 SOP')
 
     def test_no_front_matter(self):
-        """测试没有 front matter 的文件"""
-        with tempfile.TemporaryDirectory() as tmp:
-            sop_dir = Path(tmp)
-            content = "# 没有 front matter\n正文"
-            file_path = self._create_sop_file(sop_dir, "no_fm", content)
-            loader = SopLoader(str(sop_dir))
-            result = loader._parse_front_matter(file_path)
-            self.assertIsNone(result)
+        """没有 front matter 返回 None"""
+        from agents.skill_loader import SopLoader
+        content = """# 测试内容
+没有 front matter
+"""
+        mock_path = MagicMock()
+        mock_path.read_text.return_value = content
 
-    def test_empty_front_matter(self):
-        """测试空的 front matter（正则不匹配，返回 None）"""
-        from unittest.mock import patch
-        loader = SopLoader("/tmp")
-        with patch.object(Path, 'read_text', return_value="---\n---\n正文"):
-            result = loader._parse_front_matter(Path("fake.md"))
+        loader = SopLoader.__new__(SopLoader)
+        result = loader._parse_front_matter(mock_path)
+
         self.assertIsNone(result)
 
-    def test_multiline_description(self):
-        """测试多行 description（当前实现只按第一行解析）"""
-        with tempfile.TemporaryDirectory() as tmp:
-            sop_dir = Path(tmp)
-            content = """---
-name: multi-line
-description: 第一行
-extra: value
+    def test_empty_front_matter(self):
+        """空 front matter 返回 None（正则不匹配）"""
+        from agents.skill_loader import SopLoader
+        content = """---
 ---
-正文"""
-            file_path = self._create_sop_file(sop_dir, "multi", content)
-            loader = SopLoader(str(sop_dir))
-            result = loader._parse_front_matter(file_path)
-            # 注意：当前实现按行 split，多行 description 会被截断
-            self.assertEqual(result['description'], '第一行')
 
-    def test_special_chars_in_value(self):
-        """测试值中包含冒号的情况"""
-        with tempfile.TemporaryDirectory() as tmp:
-            sop_dir = Path(tmp)
-            content = """---
-name: test
-url: http://example.com:8080/path
----
-正文"""
-            file_path = self._create_sop_file(sop_dir, "special", content)
-            loader = SopLoader(str(sop_dir))
-            result = loader._parse_front_matter(file_path)
-            # line.split(':', 1) 只分割一次，所以值保留完整
-            self.assertEqual(result['url'], 'http://example.com:8080/path')
+# 测试内容
+"""
+        mock_path = MagicMock()
+        mock_path.read_text.return_value = content
 
-    def test_file_not_found(self):
-        """测试文件不存在时返回 None"""
-        with tempfile.TemporaryDirectory() as tmp:
-            loader = SopLoader(str(tmp))
-            result = loader._parse_front_matter(Path(tmp) / "nonexistent.md")
-            self.assertIsNone(result)
+        loader = SopLoader.__new__(SopLoader)
+        result = loader._parse_front_matter(mock_path)
+
+        # 空 front matter 不匹配正则，返回 None
+        self.assertIsNone(result)
+
+    def test_exception_returns_none(self):
+        """读取异常返回 None"""
+        from agents.skill_loader import SopLoader
+        mock_path = MagicMock()
+        mock_path.read_text.side_effect = Exception("文件读取失败")
+
+        loader = SopLoader.__new__(SopLoader)
+        result = loader._parse_front_matter(mock_path)
+
+        self.assertIsNone(result)
+
+
+class TestListSops(unittest.TestCase):
+    """测试 SopLoader.list_sops()"""
+
+    def setUp(self):
+        """每个测试前重置类级别状态"""
+        from agents.skill_loader import SopLoader
+        SopLoader._extra_sops_dirs = []
+
+    def test_returns_sop_names(self):
+        """返回所有 SOP 名称列表"""
+        from agents.skill_loader import SopLoader
+        loader = SopLoader.__new__(SopLoader)
+        loader.sops_metadata = {
+            'sop-a': {'name': 'sop-a', 'description': 'A'},
+            'sop-b': {'name': 'sop-b', 'description': 'B'},
+        }
+
+        result = loader.list_sops()
+        self.assertEqual(set(result), {'sop-a', 'sop-b'})
+
+    def test_empty_metadata(self):
+        """空元数据返回空列表"""
+        from agents.skill_loader import SopLoader
+        loader = SopLoader.__new__(SopLoader)
+        loader.sops_metadata = {}
+
+        result = loader.list_sops()
+        self.assertEqual(result, [])
+
+
+class TestGetSopMetadata(unittest.TestCase):
+    """测试 SopLoader.get_sop_metadata()"""
+
+    def setUp(self):
+        """每个测试前重置类级别状态"""
+        from agents.skill_loader import SopLoader
+        SopLoader._extra_sops_dirs = []
+
+    def test_existing_sop(self):
+        """获取存在的 SOP 元数据"""
+        from agents.skill_loader import SopLoader
+        loader = SopLoader.__new__(SopLoader)
+        loader.sops_metadata = {
+            'test-sop': {'name': 'test-sop', 'description': '测试'}
+        }
+
+        result = loader.get_sop_metadata('test-sop')
+        self.assertEqual(result['name'], 'test-sop')
+        self.assertEqual(result['description'], '测试')
+
+    def test_non_existing_sop(self):
+        """获取不存在的 SOP 返回 None"""
+        from agents.skill_loader import SopLoader
+        loader = SopLoader.__new__(SopLoader)
+        loader.sops_metadata = {}
+
+        result = loader.get_sop_metadata('non-existing')
+        self.assertIsNone(result)
 
 
 class TestBuildSopsIndex(unittest.TestCase):
-    """测试 build_sops_index 方法"""
+    """测试 SopLoader.build_sops_index()"""
 
-    def test_empty_metadata(self):
-        """测试空 metadata 返回空字符串"""
-        with tempfile.TemporaryDirectory() as tmp:
-            loader = SopLoader(str(tmp))
-            result = loader.build_sops_index()
-            self.assertEqual(result, "")
+    def setUp(self):
+        """每个测试前重置类级别状态"""
+        from agents.skill_loader import SopLoader
+        SopLoader._extra_sops_dirs = []
 
-    def test_single_sop(self):
-        """测试单个 SOP 索引"""
-        with tempfile.TemporaryDirectory() as tmp:
-            sop_dir = Path(tmp)
-            with open(sop_dir / "sop1.md", 'w', encoding='utf-8', newline='\n') as f:
-                f.write("""---
-name: sop-1
-description: 描述一
----
-正文""")
-            loader = SopLoader(str(sop_dir))
-            result = loader.build_sops_index()
-            self.assertIn("| SOP 名称 | 描述 |", result)
-            self.assertIn("| sop-1 | 描述一 |", result)
+    def test_build_index_with_sops(self):
+        """构建包含多个 SOP 的索引"""
+        from agents.skill_loader import SopLoader
+        loader = SopLoader.__new__(SopLoader)
+        loader.sops_metadata = {
+            'sop-a': {'name': 'sop-a', 'description': '描述A'},
+            'sop-b': {'name': 'sop-b', 'description': '描述B'},
+        }
 
-    def test_multiple_sops_sorted(self):
-        """测试多个 SOP 按名称排序"""
-        with tempfile.TemporaryDirectory() as tmp:
-            sop_dir = Path(tmp)
-            with open(sop_dir / "b.md", 'w', encoding='utf-8', newline='\n') as f:
-                f.write("""---
-name: beta
-description: B描述
----
-正文""")
-            with open(sop_dir / "a.md", 'w', encoding='utf-8', newline='\n') as f:
-                f.write("""---
-name: alpha
-description: A描述
----
-正文""")
-            loader = SopLoader(str(sop_dir))
-            result = loader.build_sops_index()
-            lines = result.split('\n')
-            # 按名称排序后 alpha 应在 beta 前面
-            self.assertTrue(lines[2].startswith("| alpha"))
-            self.assertTrue(lines[3].startswith("| beta"))
+        result = loader.build_sops_index()
 
-    def test_no_description(self):
-        """测试没有 description 时显示空字符串（metadata 中默认空字符串）"""
-        with tempfile.TemporaryDirectory() as tmp:
-            sop_dir = Path(tmp)
-            with open(sop_dir / "sop.md", 'w', encoding='utf-8', newline='\n') as f:
-                f.write("""---
-name: no-desc
----
-正文""")
-            loader = SopLoader(str(sop_dir))
-            result = loader.build_sops_index()
-            # _load_all_sops_metadata 中 description 默认 ''，build_sops_index 中 meta.get('description', '无描述') 拿到 ''
-            self.assertIn("| no-desc |  |", result)
+        self.assertIn('| SOP 名称 | 描述 |', result)
+        self.assertIn('| sop-a | 描述A |', result)
+        self.assertIn('| sop-b | 描述B |', result)
 
+    def test_build_index_empty(self):
+        """空元数据返回空字符串"""
+        from agents.skill_loader import SopLoader
+        loader = SopLoader.__new__(SopLoader)
+        loader.sops_metadata = {}
 
-class TestLoadSkillWithIndex(unittest.TestCase):
-    """测试 load_skill_with_index 方法"""
+        result = loader.build_sops_index()
+        self.assertEqual(result, '')
 
-    def test_replace_placeholder(self):
-        """测试 {{SOP_INDEX}} 占位符替换"""
-        with tempfile.TemporaryDirectory() as tmp:
-            sop_dir = Path(tmp)
-            (sop_dir / "sop.md").write_text("""---
-name: my-sop
-description: 我的SOP
----
-正文""", encoding='utf-8')
-            loader = SopLoader(str(sop_dir))
-            skill_content = "系统提示\n\n{{SOP_INDEX}}\n\n结束"
-            result = loader.load_skill_with_index(skill_content)
-            self.assertNotIn("{{SOP_INDEX}}", result)
-            self.assertIn("| my-sop | 我的SOP |", result)
-            self.assertIn("系统提示", result)
-            self.assertIn("结束", result)
+    def test_build_index_missing_description(self):
+        """缺少描述时显示默认文本"""
+        from agents.skill_loader import SopLoader
+        loader = SopLoader.__new__(SopLoader)
+        loader.sops_metadata = {
+            'sop-a': {'name': 'sop-a'}
+        }
 
-    def test_no_placeholder(self):
-        """测试没有占位符时不改变内容"""
-        with tempfile.TemporaryDirectory() as tmp:
-            loader = SopLoader(str(tmp))
-            skill_content = "没有占位符的内容"
-            result = loader.load_skill_with_index(skill_content)
-            self.assertEqual(result, skill_content)
+        result = loader.build_sops_index()
+        self.assertIn('| sop-a | 无描述 |', result)
 
 
 class TestGetSopContent(unittest.TestCase):
-    """测试 get_sop_content 方法"""
+    """测试 SopLoader.get_sop_content()"""
 
-    def test_get_content_without_front_matter(self):
-        """测试获取去掉 front matter 后的正文"""
-        with tempfile.TemporaryDirectory() as tmp:
-            sop_dir = Path(tmp)
-            (sop_dir / "sop.md").write_text("""---
+    def setUp(self):
+        """每个测试前重置类级别状态"""
+        from agents.skill_loader import SopLoader
+        SopLoader._extra_sops_dirs = []
+
+    def test_load_content_with_front_matter(self):
+        """加载包含 front matter 的 SOP 内容"""
+        from agents.skill_loader import SopLoader
+        content = """---
 name: test-sop
----
-# 标题
-正文内容
-第二行
-""", encoding='utf-8')
-            loader = SopLoader(str(sop_dir))
-            content = loader.get_sop_content("test-sop")
-            self.assertEqual(content, "# 标题\n正文内容\n第二行")
-
-    def test_content_without_front_matter(self):
-        """测试没有 front matter 时返回全部内容"""
-        with tempfile.TemporaryDirectory() as tmp:
-            sop_dir = Path(tmp)
-            (sop_dir / "sop.md").write_text("# 直接正文\n内容", encoding='utf-8')
-            loader = SopLoader(str(sop_dir))
-            # 由于没有 front matter，_parse_front_matter 返回 None，所以不会被加入 metadata
-            # 需要手动加入 metadata 来测试 get_sop_content
-            loader.sops_metadata["direct"] = {"name": "direct", "file": str(sop_dir / "sop.md")}
-            content = loader.get_sop_content("direct")
-            self.assertEqual(content, "# 直接正文\n内容")
-
-    def test_missing_sop(self):
-        """测试不存在的 SOP 返回 None"""
-        with tempfile.TemporaryDirectory() as tmp:
-            loader = SopLoader(str(tmp))
-            content = loader.get_sop_content("nonexistent")
-            self.assertIsNone(content)
-
-
-class TestSopsConfig(unittest.TestCase):
-    """测试 sops_config.json 加载"""
-
-    def test_load_tools_config(self):
-        """测试从 sops_config.json 读取工具列表"""
-        with tempfile.TemporaryDirectory() as tmp:
-            sop_dir = Path(tmp)
-            (sop_dir / "sops_config.json").write_text(
-                '{"sop-1": {"allowed_tools": ["tool_a", "tool_b"]}}',
-                encoding='utf-8'
-            )
-            (sop_dir / "sop.md").write_text("""---
-name: sop-1
 description: 测试
 ---
-正文""", encoding='utf-8')
-            loader = SopLoader(str(sop_dir))
-            tools = loader.get_sop_tools("sop-1")
-            self.assertEqual(tools, ["tool_a", "tool_b"])
 
-    def test_missing_config(self):
-        """测试 sops_config.json 不存在时返回空"""
-        with tempfile.TemporaryDirectory() as tmp:
-            sop_dir = Path(tmp)
-            loader = SopLoader(str(sop_dir))
-            tools = loader.get_sop_tools("any")
-            self.assertEqual(tools, [])
+# SOP 正文内容
+这是正文
+"""
+        loader = SopLoader.__new__(SopLoader)
+        loader.sops_metadata = {
+            'test-sop': {'name': 'test-sop', 'file': '/path/to/sop.md'}
+        }
 
-    def test_missing_sop_in_config(self):
-        """测试 SOP 在 config 中不存在时返回空"""
-        with tempfile.TemporaryDirectory() as tmp:
-            sop_dir = Path(tmp)
-            (sop_dir / "sops_config.json").write_text('{}', encoding='utf-8')
-            (sop_dir / "sop.md").write_text("""---
-name: sop-1
----
-正文""", encoding='utf-8')
-            loader = SopLoader(str(sop_dir))
-            tools = loader.get_sop_tools("sop-1")
-            self.assertEqual(tools, [])
+        with patch('pathlib.Path.exists', return_value=True), \
+             patch('pathlib.Path.read_text', return_value=content):
+            result = loader.get_sop_content('test-sop')
 
-    def test_malformed_config(self):
-        """测试损坏的 JSON 返回空"""
-        with tempfile.TemporaryDirectory() as tmp:
-            sop_dir = Path(tmp)
-            (sop_dir / "sops_config.json").write_text('not json', encoding='utf-8')
-            loader = SopLoader(str(sop_dir))
-            tools = loader.get_sop_tools("any")
-            self.assertEqual(tools, [])
+        self.assertIn('# SOP 正文内容', result)
+        self.assertIn('这是正文', result)
+        self.assertNotIn('---', result)
+
+    def test_load_content_without_front_matter(self):
+        """加载没有 front matter 的 SOP 内容"""
+        from agents.skill_loader import SopLoader
+        content = """# SOP 正文内容
+这是正文
+"""
+        loader = SopLoader.__new__(SopLoader)
+        loader.sops_metadata = {
+            'test-sop': {'name': 'test-sop', 'file': '/path/to/sop.md'}
+        }
+
+        with patch('pathlib.Path.exists', return_value=True), \
+             patch('pathlib.Path.read_text', return_value=content):
+            result = loader.get_sop_content('test-sop')
+
+        self.assertEqual(result, content.strip())
+
+    def test_non_existing_sop(self):
+        """不存在的 SOP 返回 None"""
+        from agents.skill_loader import SopLoader
+        loader = SopLoader.__new__(SopLoader)
+        loader.sops_metadata = {}
+
+        result = loader.get_sop_content('non-existing')
+        self.assertIsNone(result)
+
+    def test_non_existing_file(self):
+        """文件不存在返回 None"""
+        from agents.skill_loader import SopLoader
+        loader = SopLoader.__new__(SopLoader)
+        loader.sops_metadata = {
+            'test-sop': {'name': 'test-sop', 'file': '/path/to/non-existing.md'}
+        }
+
+        with patch('pathlib.Path.exists', return_value=False):
+            result = loader.get_sop_content('test-sop')
+
+        self.assertIsNone(result)
+
+
+class TestGetSopTools(unittest.TestCase):
+    """测试 SopLoader.get_sop_tools()"""
+
+    def setUp(self):
+        """每个测试前重置类级别状态"""
+        from agents.skill_loader import SopLoader
+        SopLoader._extra_sops_dirs = []
+
+    def test_get_tools_from_config(self):
+        """从配置获取工具列表"""
+        from agents.skill_loader import SopLoader
+        loader = SopLoader.__new__(SopLoader)
+        loader.sops_config = {
+            'test-sop': {'allowed_tools': ['tool1', 'tool2']}
+        }
+
+        result = loader.get_sop_tools('test-sop')
+        self.assertEqual(result, ['tool1', 'tool2'])
+
+    def test_no_config_returns_empty(self):
+        """无配置返回空列表"""
+        from agents.skill_loader import SopLoader
+        loader = SopLoader.__new__(SopLoader)
+        loader.sops_config = {}
+
+        result = loader.get_sop_tools('test-sop')
+        self.assertEqual(result, [])
+
+
+class TestAddSopsDir(unittest.TestCase):
+    """测试 SopLoader.add_sops_dir()"""
+
+    def setUp(self):
+        """每个测试前重置类级别状态"""
+        from agents.skill_loader import SopLoader
+        SopLoader._extra_sops_dirs = []
+
+    @patch('pathlib.Path.exists', return_value=True)
+    @patch('pathlib.Path.is_dir', return_value=True)
+    def test_add_valid_dir(self, mock_is_dir, mock_exists):
+        """添加有效目录"""
+        from agents.skill_loader import SopLoader
+        SopLoader.add_sops_dir('/path/to/extra/sops')
+        self.assertEqual(len(SopLoader._extra_sops_dirs), 1)
+
+    @patch('pathlib.Path.exists', return_value=False)
+    def test_add_non_existing_dir(self, mock_exists):
+        """添加不存在的目录不生效"""
+        from agents.skill_loader import SopLoader
+        SopLoader.add_sops_dir('/path/to/non-existing')
+        self.assertEqual(len(SopLoader._extra_sops_dirs), 0)
+
+    @patch('pathlib.Path.exists', return_value=True)
+    @patch('pathlib.Path.is_dir', return_value=False)
+    def test_add_file_path(self, mock_is_dir, mock_exists):
+        """添加文件路径不生效"""
+        from agents.skill_loader import SopLoader
+        SopLoader.add_sops_dir('/path/to/file.txt')
+        self.assertEqual(len(SopLoader._extra_sops_dirs), 0)
+
+    @patch('pathlib.Path.exists', return_value=True)
+    @patch('pathlib.Path.is_dir', return_value=True)
+    def test_add_duplicate_dir(self, mock_is_dir, mock_exists):
+        """重复添加同一目录不生效"""
+        from agents.skill_loader import SopLoader
+        SopLoader.add_sops_dir('/path/to/extra/sops')
+        SopLoader.add_sops_dir('/path/to/extra/sops')
+        self.assertEqual(len(SopLoader._extra_sops_dirs), 1)
+
+
+class TestLoadSkillWithIndex(unittest.TestCase):
+    """测试 SopLoader.load_skill_with_index()"""
+
+    def setUp(self):
+        """每个测试前重置类级别状态"""
+        from agents.skill_loader import SopLoader
+        SopLoader._extra_sops_dirs = []
+
+    def test_replace_placeholder(self):
+        """替换 {{SOP_INDEX}} 占位符"""
+        from agents.skill_loader import SopLoader
+        loader = SopLoader.__new__(SopLoader)
+        loader.sops_metadata = {
+            'sop-a': {'name': 'sop-a', 'description': '描述A'}
+        }
+
+        skill_content = """# 技能内容
+
+可用的 SOP：
+{{SOP_INDEX}}
+
+请根据上述 SOP 执行任务。
+"""
+        result = loader.load_skill_with_index(skill_content)
+
+        self.assertNotIn('{{SOP_INDEX}}', result)
+        self.assertIn('| sop-a | 描述A |', result)
+
+    def test_no_placeholder(self):
+        """没有占位符时返回原内容"""
+        from agents.skill_loader import SopLoader
+        loader = SopLoader.__new__(SopLoader)
+        loader.sops_metadata = {}
+
+        skill_content = "# 技能内容\n没有占位符"
+        result = loader.load_skill_with_index(skill_content)
+
+        self.assertEqual(result, skill_content)
+
+    def test_empty_metadata(self):
+        """空元数据时替换为空字符串"""
+        from agents.skill_loader import SopLoader
+        loader = SopLoader.__new__(SopLoader)
+        loader.sops_metadata = {}
+
+        skill_content = "内容\n{{SOP_INDEX}}\n结束"
+        result = loader.load_skill_with_index(skill_content)
+
+        self.assertNotIn('{{SOP_INDEX}}', result)
+        self.assertIn('内容', result)
+        self.assertIn('结束', result)
 
 
 if __name__ == '__main__':

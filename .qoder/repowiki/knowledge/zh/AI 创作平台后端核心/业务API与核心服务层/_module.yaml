@@ -1,0 +1,14 @@
+schema_version: 1
+module_path: backend_api/business_api
+title: 业务API与核心服务层
+scope:
+    - api/
+    - services/
+source_files: []
+depends_on: []
+related_to:
+    - path: ai_engine
+    - path: backend_api/core_auth
+    - path: documentation
+    - path: ai_engine/task_drivers
+    - path: ai_engine/llm_clients

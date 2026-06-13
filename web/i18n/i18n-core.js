@@ -81,7 +81,7 @@ window.ZJTi18n = (() => {
 
     // 如果是字符串，进行参数替换
     if (typeof value === 'string') {
-      return value.replace(/\{(\w+)\}/g, (match, paramKey) => {
+      return value.replace(/\{\{?(\w+)\}?}/g, (match, paramKey) => {
         return params[paramKey] !== undefined ? params[paramKey] : match;
       });
     }

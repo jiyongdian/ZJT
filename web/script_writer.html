@@ -87,6 +87,102 @@
             transform: scale(1);
         }
 
+        /* 多服装/造型详情弹窗 */
+        .outfit-detail-dialog {
+            max-width: 600px;
+            width: 90%;
+        }
+        .outfit-detail-body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            padding: 20px;
+        }
+        .outfit-detail-image-wrap {
+            position: relative;
+            display: inline-block;
+            max-width: 100%;
+        }
+        .outfit-detail-img {
+            max-width: 100%;
+            max-height: 55vh;
+            border-radius: 8px;
+            object-fit: contain;
+            display: block;
+        }
+        .outfit-detail-label {
+            margin-top: 10px;
+            text-align: center;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary, #1f2937);
+        }
+        .outfit-detail-thumbs {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .outfit-thumb-item {
+            width: 56px;
+            height: 56px;
+            border-radius: 6px;
+            overflow: hidden;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: border-color 0.2s, transform 0.15s;
+            opacity: 0.65;
+        }
+        .outfit-thumb-item:hover {
+            opacity: 0.9;
+            transform: scale(1.05);
+        }
+        .outfit-thumb-item.active {
+            border-color: var(--accent-color, #4f46e5);
+            opacity: 1;
+        }
+        .outfit-thumb-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .outfit-nav-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255,255,255,0.9);
+            border: 1px solid #e5e7eb;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 10;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .outfit-nav-btn:hover {
+            background: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .outfit-nav-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        .outfit-nav-prev { left: -52px; }
+        .outfit-nav-next { right: -52px; }
+        /* 多服装缩略图点击指针 */
+        #char-multi-image-list [data-multi-char-image] {
+            cursor: pointer;
+            transition: transform 0.15s;
+        }
+        #char-multi-image-list [data-multi-char-image]:hover {
+            transform: scale(1.06);
+        }
+
         /* 上线前隐藏 - 取消注释后隐藏按钮 */
         /* .debug-test-btn { display: none !important; } */
     </style>
@@ -551,7 +647,14 @@
                             <div class="view-field" id="view-script-episode"></div>
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label"><span data-i18n="label_script_content">剧本内容</span></label>
+                            <label class="form-label">
+                                <span data-i18n="label_script_content">剧本内容</span>
+                                <button class="script-fullscreen-btn" onclick="openScriptFullscreen()" title="全屏查看">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/>
+                                    </svg>
+                                </button>
+                            </label>
                             <div class="view-field script-content" id="view-script-content"></div>
                         </div>
                         <div class="form-group">
@@ -584,6 +687,29 @@
         <button class="feedback-close-btn" onclick="closeFeedbackFab()" title="关闭反馈按钮">
             ✕
         </button>
+    </div>
+
+    <!-- 剧本全屏查看弹框 -->
+    <div class="script-fullscreen-overlay" id="script-fullscreen-overlay">
+        <div class="script-fullscreen-toolbar">
+            <div class="toolbar-left">
+                <span id="fullscreen-title">📜 剧本内容</span>
+            </div>
+            <div class="toolbar-right">
+                <button class="font-size-btn" onclick="changeFullscreenFontSize(-2)" title="缩小字体">A-</button>
+                <span class="font-size-label" id="fullscreen-font-size">14px</span>
+                <button class="font-size-btn" onclick="changeFullscreenFontSize(2)" title="放大字体">A+</button>
+                <button class="fullscreen-close-btn" onclick="closeScriptFullscreen()" title="关闭">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6L6 18M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div class="script-fullscreen-body">
+            <div class="script-fullscreen-text" id="fullscreen-script-content"></div>
+            <textarea class="script-fullscreen-textarea" id="fullscreen-script-textarea" style="display: none;"></textarea>
+        </div>
     </div>
 
     <!-- 反馈二维码弹窗 -->
@@ -839,8 +965,16 @@
                             <input type="number" id="script-episode" class="form-input" placeholder="输入集数" data-i18n-placeholder="placeholder_episode_num">
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label"><span data-i18n="label_script_content">剧本内容</span></label>
-                            <textarea id="script-content" class="form-textarea" rows="10" placeholder="输入剧本内容" data-i18n-placeholder="placeholder_script_content"></textarea>
+                            <label class="form-label">
+                                <span data-i18n="label_script_content">剧本内容</span>
+                                <button class="script-fullscreen-btn" onclick="openScriptFullscreenFromEdit()" title="全屏编辑" style="margin-left: 8px; padding: 6px 10px;">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/>
+                                    </svg>
+                                    <span style="margin-left: 4px; font-size: 12px;">全屏编辑</span>
+                                </button>
+                            </label>
+                            <textarea id="script-content" class="form-textarea" rows="10" readonly onclick="openScriptFullscreenFromEdit()" style="cursor: pointer;" placeholder="点击进入全屏编辑" data-i18n-placeholder="placeholder_script_content"></textarea>
                         </div>
                         <div class="form-group">
                             <label class="form-label"><span data-i18n="label_created_at">创建时间</span></label>
@@ -1201,6 +1335,36 @@
                 <!-- 缩略图网格 -->
                 <div id="image-preview-thumbnails" style="display: flex; justify-content: center; flex-wrap: wrap; gap: 10px;"></div>
             </div>
+        </div>
+    </div>
+
+    <!-- 多服装/造型详情弹窗 -->
+    <div id="outfit-detail-modal" class="modal">
+        <div class="modal-overlay" onclick="closeOutfitDetailModal()"></div>
+        <div class="modal-dialog outfit-detail-dialog">
+            <div class="modal-header">
+                <h3 class="modal-title" id="outfit-detail-title">服装/造型详情</h3>
+                <button class="modal-close-btn" onclick="closeOutfitDetailModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6L6 18M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body outfit-detail-body">
+                <div class="outfit-detail-image-wrap">
+                    <img id="outfit-detail-image" class="outfit-detail-img" alt="服装/造型">
+                    <div class="outfit-detail-label" id="outfit-detail-label"></div>
+                </div>
+                <!-- 缩略图导航 -->
+                <div id="outfit-detail-thumbs" class="outfit-detail-thumbs"></div>
+            </div>
+            <!-- 左右切换按钮 -->
+            <button class="outfit-nav-btn outfit-nav-prev" id="outfit-nav-prev" onclick="navigateOutfitDetail(-1)" title="上一个">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <button class="outfit-nav-btn outfit-nav-next" id="outfit-nav-next" onclick="navigateOutfitDetail(1)" title="下一个">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
         </div>
     </div>
 
@@ -1569,6 +1733,11 @@
                     data.history.forEach(msg => {
                         // 不显示系统提示
                         if (msg.role === 'system') {
+                            return;
+                        }
+
+                        // 不显示 context_summary 消息（已在后端排除，此处双重保障）
+                        if (msg.message_type === 'context_summary') {
                             return;
                         }
 
@@ -2383,6 +2552,7 @@
                         }
                         
                         if (data.type === 'message') {
+                            hideToolCalls(); // 收到文本消息时隐藏工具调用指示器
                             if (data.content) {
                                 // 如果 verification 出现过，创建新 div（此时 verification 已在 DOM 中）
                                 if (needsNewMessageDiv) {
@@ -2397,12 +2567,18 @@
                             }
                         } else if (data.type === 'progress') {
                             updateStatus(window.t ? window.t('status_executing', {step: data.step || ''}) : `执行中: ${data.step || ''}`);
+                        } else if (data.type === 'tool_call') {
+                            // 实时显示工具调用
+                            if (data.tool_names && data.tool_names.length > 0) {
+                                showToolCalls(data.tool_names);
+                            }
                         } else if (data.type === 'context_compression') {
                             updateStatus(window.t ? window.t('status_context_compressed') : '上下文已自动压缩，继续回复中...');
                             console.log('[SSE] 上下文压缩事件:', data.reason);
                         } else if (data.type === 'done') {
                             eventSource.close();
                             hideTypingIndicator(); // 确保移除打字指示器
+                            hideToolCalls(); // 确保移除工具调用指示器
                             updateStatus(window.t ? window.t('status_done') : '完成');
                             isProcessing = false;
                             pendingVerificationId = null;
@@ -2420,6 +2596,7 @@
                             }
                         } else if (data.type === 'error') {
                             eventSource.close();
+                            hideToolCalls(); // 确保移除工具调用指示器
                             showError((window.t ? window.t('error_task_execution', {error: data.error}) : '任务执行错误: ' + data.error));
                             isProcessing = false;
                             pendingVerificationId = null;
@@ -2428,6 +2605,7 @@
                             sendBtn.disabled = false;
                             sendBtn.classList.remove('sending');
                         } else if (data.type === 'human_verification_required') {
+                            hideToolCalls(); // ask_user 工具调用完成，隐藏指示器
                             const verification = data.verification || {};
                             console.log('[SSE] Received human_verification_required:', verification);
                             handleHumanVerification(verification);
@@ -2469,8 +2647,13 @@
                             }, 2000);
                         }
                     }).catch(() => {
-                        // 无法获取任务状态，保守处理：保持旋转但显示提示
-                        updateStatus(window.t ? window.t('status_connection_lost') : '连接中断，请等待或刷新页面');
+                        // If status lookup also fails, the backend is likely unavailable.
+                        // End the local sending state so the user is not trapped in loading.
+                        hideTypingIndicator();
+                        hideToolCalls();
+                        resetProcessingState();
+                        updateStatus(window.t ? window.t('status_connection_lost') : '连接中断，请刷新页面后重试');
+                        showError(window.t ? window.t('error_connection_lost') : '连接中断，无法确认任务状态，请刷新页面后重试');
                     });
                 };
 
@@ -2496,7 +2679,7 @@
             const response = await fetch(`/api/task/${taskId}/status`);
             if (!response.ok) throw new Error('Failed to check task status');
             const data = await response.json();
-            return data.status;
+            return data.task?.status;
         }
 
         // 重置处理状态
@@ -2538,6 +2721,7 @@
                     }
 
                     if (data.type === 'message') {
+                        hideToolCalls();
                         if (data.content) {
                             if (needsNewMessageDiv) {
                                 const newDiv = addMessage('assistant', '');
@@ -2551,10 +2735,15 @@
                         }
                     } else if (data.type === 'progress') {
                         updateStatus(window.t ? window.t('status_executing', {step: data.step || ''}) : `执行中: ${data.step || ''}`);
+                    } else if (data.type === 'tool_call') {
+                        if (data.tool_names && data.tool_names.length > 0) {
+                            showToolCalls(data.tool_names);
+                        }
                     } else if (data.type === 'context_compression') {
                         updateStatus(window.t ? window.t('status_context_compressed') : '上下文已自动压缩，继续回复中...');
                     } else if (data.type === 'done') {
                         newEventSource.close();
+                        hideToolCalls();
                         updateStatus(window.t ? window.t('status_done') : '完成');
                         resetProcessingState();
                         loadComputingPower();
@@ -2565,9 +2754,11 @@
                         }
                     } else if (data.type === 'error') {
                         newEventSource.close();
+                        hideToolCalls();
                         showError((window.t ? window.t('error_task_execution', {error: data.error}) : '任务执行错误: ' + data.error));
                         resetProcessingState();
                     } else if (data.type === 'human_verification_required') {
+                        hideToolCalls();
                         const verification = data.verification || {};
                         handleHumanVerification(verification);
                     } else if (data.type === 'verification_timeout') {
@@ -2599,7 +2790,11 @@
                         }, 2000);
                     }
                 }).catch(() => {
+                    hideTypingIndicator();
+                    hideToolCalls();
+                    resetProcessingState();
                     updateStatus(window.t ? window.t('status_reconnect_final') : '重连失败，请刷新页面');
+                    showError(window.t ? window.t('error_connection_lost') : '重连失败，无法确认任务状态，请刷新页面后重试');
                 });
             };
 
@@ -2687,6 +2882,57 @@
         function hideTypingIndicator() {
             const indicator = document.getElementById('typing-indicator');
             if (indicator) indicator.remove();
+        }
+
+        // ===== 工具调用实时显示 =====
+        const TOOL_NAME_MAP = {
+            'call_agent': '🤖 调用专家',
+            'ask_user': '❓ 向用户提问',
+            'load_sop': '📋 加载流程',
+            'write_file': '📝 写入文件',
+            'read_file': '📖 读取文件',
+            'list_files': '📂 列出文件',
+            'generate_text_to_image': '🎨 生成图片',
+            'generate_text_to_video': '🎬 生成视频',
+            'image_to_video': '🎬 图生视频',
+            'edit_image': '✏️ 编辑图片',
+            'fetch_image_as_base64': '🖼️ 获取图片',
+            'submit_video_project': '📤 提交视频任务',
+            'search_web': '🔍 搜索网络',
+        };
+
+        function getToolDisplayName(toolName) {
+            return TOOL_NAME_MAP[toolName] || `🔧 ${toolName}`;
+        }
+
+        function showToolCalls(toolNames) {
+            const messagesDiv = document.getElementById('chat-messages');
+            // 移除已有的工具调用指示器
+            const existing = document.getElementById('tool-call-indicator');
+            if (existing) existing.remove();
+
+            const indicator = document.createElement('div');
+            indicator.className = 'tool-call-indicator';
+            indicator.id = 'tool-call-indicator';
+
+            let html = '';
+            for (const name of toolNames) {
+                html += `<div class="tool-call-item">
+                    <div class="tool-spinner"></div>
+                    <span class="tool-name">${escapeHtml(getToolDisplayName(name))}</span>
+                </div>`;
+            }
+            indicator.innerHTML = html;
+            messagesDiv.appendChild(indicator);
+            scrollToBottom();
+        }
+
+        function hideToolCalls() {
+            const indicator = document.getElementById('tool-call-indicator');
+            if (indicator) {
+                indicator.classList.add('fade-out');
+                setTimeout(() => indicator.remove(), 500);
+            }
         }
 
         function scrollToBottom() {
@@ -4175,6 +4421,63 @@
             document.getElementById('view-modal').classList.remove('show');
         }
 
+        // 剧本全屏查看
+        let _fullscreenFontSize = 14;
+        let _fullscreenEditMode = false;
+
+        function openScriptFullscreen() {
+            _fullscreenEditMode = false;
+            const content = document.getElementById('view-script-content').textContent || '';
+            const title = document.getElementById('view-modal-title').textContent || '📜 剧本内容';
+            document.getElementById('fullscreen-title').textContent = title;
+            document.getElementById('fullscreen-script-content').textContent = content;
+            document.getElementById('fullscreen-script-content').style.display = '';
+            document.getElementById('fullscreen-script-textarea').style.display = 'none';
+            _fullscreenFontSize = 14;
+            updateFullscreenFontSize();
+            document.getElementById('script-fullscreen-overlay').classList.add('show');
+            document.addEventListener('keydown', _fullscreenKeyHandler);
+        }
+
+        function openScriptFullscreenFromEdit() {
+            _fullscreenEditMode = true;
+            const content = document.getElementById('script-content').value || '';
+            const title = document.getElementById('script-title').value || '剧本内容';
+            document.getElementById('fullscreen-title').textContent = '📜 ' + title;
+            document.getElementById('fullscreen-script-textarea').value = content;
+            document.getElementById('fullscreen-script-content').style.display = 'none';
+            document.getElementById('fullscreen-script-textarea').style.display = '';
+            _fullscreenFontSize = 14;
+            updateFullscreenFontSize();
+            document.getElementById('script-fullscreen-overlay').classList.add('show');
+            document.getElementById('fullscreen-script-textarea').focus();
+            document.addEventListener('keydown', _fullscreenKeyHandler);
+        }
+
+        function closeScriptFullscreen() {
+            if (_fullscreenEditMode) {
+                const edited = document.getElementById('fullscreen-script-textarea').value || '';
+                document.getElementById('script-content').value = edited;
+            }
+            document.getElementById('script-fullscreen-overlay').classList.remove('show');
+            document.removeEventListener('keydown', _fullscreenKeyHandler);
+        }
+
+        function _fullscreenKeyHandler(e) {
+            if (e.key === 'Escape') closeScriptFullscreen();
+        }
+
+        function changeFullscreenFontSize(delta) {
+            _fullscreenFontSize = Math.max(12, Math.min(32, _fullscreenFontSize + delta));
+            updateFullscreenFontSize();
+        }
+
+        function updateFullscreenFontSize() {
+            document.getElementById('fullscreen-script-content').style.fontSize = _fullscreenFontSize + 'px';
+            document.getElementById('fullscreen-script-textarea').style.fontSize = _fullscreenFontSize + 'px';
+            document.getElementById('fullscreen-font-size').textContent = _fullscreenFontSize + 'px';
+        }
+
         async function editFile(fileType, fileName) {
             try {
                 const apiMap = {
@@ -5601,9 +5904,112 @@
                 <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.7);color:white;font-size:10px;padding:2px 6px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${label}</div>
                 <button type="button" style="position:absolute;top:2px;right:2px;background:rgba(239,68,68,0.8);border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;color:white;font-size:12px;line-height:20px;" title="删除" data-i18n-title="title_delete">&times;</button>
             `;
-            wrapper.querySelector('button').addEventListener('click', () => wrapper.remove());
+            // 删除按钮 - 阻止冒泡
+            wrapper.querySelector('button').addEventListener('click', (e) => {
+                e.stopPropagation();
+                wrapper.remove();
+            });
+            // 点击缩略图打开详情弹窗
+            wrapper.addEventListener('click', () => {
+                openOutfitDetailModal(wrapper);
+            });
             container.appendChild(wrapper);
         }
+
+        // ========== 多服装/造型详情弹窗 ==========
+        let outfitDetailItems = [];  // 当前弹窗中的所有服装项
+        let outfitDetailIndex = 0;   // 当前显示索引
+
+        function openOutfitDetailModal(clickedWrapper) {
+            const list = document.getElementById('char-multi-image-list');
+            const allItems = list.querySelectorAll('[data-multi-char-image]');
+            outfitDetailItems = [];
+            let clickedIdx = 0;
+            allItems.forEach((item, idx) => {
+                outfitDetailItems.push({
+                    label: item.dataset.label || '默认',
+                    url: item.dataset.url
+                });
+                if (item === clickedWrapper) clickedIdx = idx;
+            });
+            if (outfitDetailItems.length === 0) return;
+            outfitDetailIndex = clickedIdx;
+            renderOutfitDetail();
+            // 渲染缩略图
+            renderOutfitThumbs();
+            // 更新导航按钮状态
+            updateOutfitNavButtons();
+            document.getElementById('outfit-detail-modal').classList.add('show');
+        }
+
+        function closeOutfitDetailModal() {
+            document.getElementById('outfit-detail-modal').classList.remove('show');
+            outfitDetailItems = [];
+            outfitDetailIndex = 0;
+        }
+
+        function renderOutfitDetail() {
+            const item = outfitDetailItems[outfitDetailIndex];
+            if (!item) return;
+            document.getElementById('outfit-detail-image').src = item.url;
+            document.getElementById('outfit-detail-label').textContent = item.label;
+            document.getElementById('outfit-detail-title').textContent = item.label + ' - 服装/造型详情';
+            // 更新缩略图高亮
+            document.querySelectorAll('#outfit-detail-thumbs .outfit-thumb-item').forEach((thumb, idx) => {
+                thumb.classList.toggle('active', idx === outfitDetailIndex);
+            });
+            updateOutfitNavButtons();
+        }
+
+        function renderOutfitThumbs() {
+            const container = document.getElementById('outfit-detail-thumbs');
+            container.innerHTML = '';
+            if (outfitDetailItems.length <= 1) {
+                container.style.display = 'none';
+                return;
+            }
+            container.style.display = 'flex';
+            outfitDetailItems.forEach((item, idx) => {
+                const thumb = document.createElement('div');
+                thumb.className = 'outfit-thumb-item' + (idx === outfitDetailIndex ? ' active' : '');
+                thumb.innerHTML = `<img src="${item.url}" alt="${item.label}" onerror="this.style.display='none'" />`;
+                thumb.addEventListener('click', () => {
+                    outfitDetailIndex = idx;
+                    renderOutfitDetail();
+                });
+                container.appendChild(thumb);
+            });
+        }
+
+        function navigateOutfitDetail(direction) {
+            const newIdx = outfitDetailIndex + direction;
+            if (newIdx < 0 || newIdx >= outfitDetailItems.length) return;
+            outfitDetailIndex = newIdx;
+            renderOutfitDetail();
+        }
+
+        function updateOutfitNavButtons() {
+            const prevBtn = document.getElementById('outfit-nav-prev');
+            const nextBtn = document.getElementById('outfit-nav-next');
+            if (outfitDetailItems.length <= 1) {
+                prevBtn.style.display = 'none';
+                nextBtn.style.display = 'none';
+                return;
+            }
+            prevBtn.style.display = '';
+            nextBtn.style.display = '';
+            prevBtn.disabled = outfitDetailIndex === 0;
+            nextBtn.disabled = outfitDetailIndex === outfitDetailItems.length - 1;
+        }
+
+        // 键盘左右切换支持
+        document.addEventListener('keydown', (e) => {
+            const modal = document.getElementById('outfit-detail-modal');
+            if (!modal.classList.contains('show')) return;
+            if (e.key === 'ArrowLeft') { e.preventDefault(); navigateOutfitDetail(-1); }
+            if (e.key === 'ArrowRight') { e.preventDefault(); navigateOutfitDetail(1); }
+            if (e.key === 'Escape') { closeOutfitDetailModal(); }
+        });
 
         function collectLocationData() {
             const parentId = document.getElementById('loc-parent').value.trim();
