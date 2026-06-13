@@ -73,7 +73,9 @@ Expert ({expert_name}) 对话记录：
                 vendor_id=vendor_id,
                 model_id=model_id,
                 enable_thinking=enable_thinking,
-                thinking_effort=thinking_effort
+                thinking_effort=thinking_effort,
+                agent_id=f"conversation_summarizer:{expert_name}",
+                agent_scope="system"
             )
             
             content = response.choices[0].message.content.strip()

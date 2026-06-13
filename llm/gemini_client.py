@@ -352,7 +352,9 @@ class GeminiClient(BaseLLMClient):
         vendor_id: int = None,
         model_id: int = None,
         enable_thinking: bool = False,
-        thinking_effort: str = "medium"
+        thinking_effort: str = "medium",
+        agent_id: Optional[str] = None,
+        agent_scope: Optional[str] = None
     ) -> Any:
         """
         调用 Gemini 原生 API
@@ -389,6 +391,7 @@ class GeminiClient(BaseLLMClient):
         llm_logger.info(f"  URL: {url}")
         llm_logger.info(f"  API Key: {_mask_api_key(self.api_key)}")
         llm_logger.info(f"  Contents count: {len(gemini_payload.get('contents', []))}")
+        self._log_request_context(llm_logger, agent_id, agent_scope)
         llm_logger.info(f"  Max tokens: {max_tokens}")
         if tools:
             llm_logger.info(f"  Tools count: {len(tools)}")

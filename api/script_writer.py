@@ -840,6 +840,40 @@ def build_agent_user_message_with_media(
     return user_message or ""
 
 
+def sync_agent_image_preferences(user_id: str, world_id: str, prefs: Dict[str, Any]) -> List[str]:
+    """Persist image preferences sent with an Agent task and return text summary parts."""
+    if not prefs:
+        return []
+
+    # 可持久化的偏好字段：key -> 中文标签
+    STORABLE_PREFS = [
+        ('ratio', '图片比例'),
+        ('resolution', '分辨率'),
+    ]
+
+    pref_parts: List[str] = []
+    # 只在有需要持久化的字段时才读取/写入
+    needs_persist = any(prefs.get(k) not in (None, '') for k, _ in STORABLE_PREFS)
+    stored_prefs = dict(get_image_preferences(user_id, world_id) or {}) if needs_persist else {}
+    original_prefs = dict(stored_prefs) if needs_persist else None
+
+    for key, label in STORABLE_PREFS:
+        value = prefs.get(key)
+        if value is not None and value != '':
+            stored_prefs[key] = str(value)
+            pref_parts.append(f"{label}: {value}")
+
+    model_name = prefs.get('model_name')
+    if model_name:
+        pref_parts.append(f"生图模型: {model_name}")
+
+    if needs_persist and stored_prefs != original_prefs:
+        set_image_preferences(user_id, world_id, stored_prefs)
+        logger.info(f'[Agent任务] 已同步图片偏好: user_id={user_id}, world_id={world_id}, prefs={stored_prefs}')
+
+    return pref_parts
+
+
 class ModelChangeRequest(BaseModel):
     model: str
     model_id: Optional[int] = None
@@ -2621,7 +2655,6 @@ async def create_agent_task(request: Request, session_id: str, task_request: Tas
         user_message = task_request.message
         if task_request.image_preferences:
             prefs = task_request.image_preferences
-            pref_parts = []
 
             # 同步生图模型配置到内存（确保 Agent 实际使用的模型与前端选择一致）
             model_name = prefs.get('model_name')
@@ -2633,12 +2666,7 @@ async def create_agent_task(request: Request, session_id: str, task_request: Tas
                         logger.info(f'[Agent任务] 已同步生图模型: user_id={user_id}, world_id={world_id}, model={model_name}, task_id={tid}')
                         break
 
-            if prefs.get('ratio'):
-                pref_parts.append(f"图片比例: {prefs['ratio']}")
-            if prefs.get('resolution'):
-                pref_parts.append(f"分辨率: {prefs['resolution']}")
-            if model_name:
-                pref_parts.append(f"生图模型: {model_name}")
+            pref_parts = sync_agent_image_preferences(user_id, world_id, prefs)
             if pref_parts:
                 user_message += f"\n\n[用户图片偏好] {', '.join(pref_parts)}"
 

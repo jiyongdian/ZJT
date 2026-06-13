@@ -42,7 +42,9 @@ class BaseLLMClient(ABC):
         vendor_id: int = None,
         model_id: int = None,
         enable_thinking: bool = False,
-        thinking_effort: str = "medium"
+        thinking_effort: str = "medium",
+        agent_id: Optional[str] = None,
+        agent_scope: Optional[str] = None
     ) -> Any:
         """
         调用 LLM API
@@ -63,6 +65,13 @@ class BaseLLMClient(ABC):
             Response 对象（包含 choices 和 usage）
         """
         pass
+
+    def _log_request_context(self, llm_logger: logging.Logger, agent_id: Optional[str] = None, agent_scope: Optional[str] = None):
+        """记录 Agent 请求上下文信息（公共日志逻辑）"""
+        if agent_id:
+            llm_logger.info(f"  Agent: {agent_id}")
+        if agent_scope:
+            llm_logger.info(f"  Agent scope: {agent_scope}")
 
     def _create_response(self, content: str, tool_calls: Optional[List] = None, usage: Optional[Dict] = None, reasoning_content: Optional[str] = None) -> 'Response':
         """创建标准响应格式"""
