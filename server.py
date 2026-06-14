@@ -4771,6 +4771,27 @@ async def wechat_payment_callback(request: Request):
             # 更新订单状态为已支付
             PaymentOrdersModel.update_paid(order_id, transaction_id)
 
+            # 邀请抽佣结算（商业版；返回被邀请人到账算力，已按佣金比例打折）。
+            # 首充/社区版/无邀请人/未开启抽佣等情况下 service 内部返回全额 computing_power；
+            # 若抽佣调用异常，降级为全额算力发放（宁可漏抽佣，不少发用户算力）。
+            settle_ok, settle_msg, settle_data = await async_make_perseids_request(
+                endpoint='commission/settle',
+                method='POST',
+                data={
+                    "user_id": user_id,
+                    "order_id": order_id,
+                    "transaction_id": transaction_id,
+                    "package_id": order.package_id,
+                    "price": order.price,
+                    "computing_power": computing_power
+                }
+            )
+            granted_computing_power = computing_power
+            if settle_ok and settle_data and 'granted_computing_power' in settle_data:
+                granted_computing_power = settle_data['granted_computing_power']
+            else:
+                logger.warning(f"Commission settle fallback to full power for order {order_id}: {settle_msg}")
+
             headers = {'Authorization': f'Bearer {auth_token}'}
                         
             # 发起请求，增加算力
@@ -4779,7 +4800,7 @@ async def wechat_payment_callback(request: Request):
                 method='POST',
                 headers=headers,
                 data={
-                    "computing_power": computing_power,
+                    "computing_power": granted_computing_power,
                     "behavior": "increase",
                     "transaction_id": transaction_id
                 }

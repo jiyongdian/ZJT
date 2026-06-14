@@ -146,7 +146,24 @@ def make_perseids_request(endpoint=None, data=None, method='POST', headers=None)
                 offset=payload.get('offset', 0)
             )
             return result.get('success', False), result.get('message', ''), result.get('data', {})
-        
+
+        elif endpoint == 'commission/settle':
+            # 邀请抽佣结算（商业版）。内部回调调用，user_id 由支付回调从订单获取后传入，无需 token。
+            # 社区版或 enterprise 模块缺失时降级为全额算力（不抽佣）。
+            try:
+                from enterprise.services.commission_service import CommissionService
+            except ImportError:
+                return True, '社区版不抽佣', {'granted_computing_power': payload.get('computing_power', 0)}
+            result = CommissionService.settle(
+                invitee_id=payload.get('user_id'),
+                order_id=payload.get('order_id'),
+                transaction_id=payload.get('transaction_id'),
+                package_id=payload.get('package_id'),
+                order_amount=payload.get('price'),
+                computing_power=payload.get('computing_power', 0)
+            )
+            return result.get('success', False), result.get('message', ''), {'granted_computing_power': result.get('granted_computing_power')}
+
         else:
             logger.warning(f"未知的endpoint: {endpoint}")
             return False, f'未知的接口: {endpoint}', {}

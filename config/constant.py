@@ -575,6 +575,42 @@ RECHARGE_PACKAGES = [
 ]
 
 
+# ==================== 邀请佣金相关（商业版） ====================
+class Commission:
+    """邀请佣金配置（仅商业版启用；社区版由代码层 IS_COMMUNITY_EDITION 守卫跳过）"""
+    MIN_RATE = 0.0                # 最低佣金比例（0=关闭抽佣）
+    MAX_RATE = 0.5                # 最高佣金比例（50%）
+    STEP = 0.01                   # 比例设置步长（1%）
+    MIN_WITHDRAW_AMOUNT = 10.0    # 最低提现金额（元）
+    FIRST_RECHARGE_PACKAGE_ID = 1  # 首充福利套餐ID（首充不抽佣）
+
+
+class CommissionLogStatus:
+    """佣金明细状态"""
+    _CONSTANT_GROUP = True
+    _LABELS = {
+        'AVAILABLE': '可用(未提现)',
+        'WITHDRAWN': '已提现',
+        'REVERSED': '已冲正',
+    }
+    AVAILABLE = 0   # 可用（未提现）
+    WITHDRAWN = 1   # 已提现
+    REVERSED = 2    # 已冲正（退款预留）
+
+
+class CommissionWithdrawStatus:
+    """佣金提现申请状态"""
+    _CONSTANT_GROUP = True
+    _LABELS = {
+        'PENDING': '待审核',
+        'PAID': '已打款',
+        'REJECTED': '已驳回',
+    }
+    PENDING = 0     # 待审核
+    PAID = 1        # 已打款
+    REJECTED = 2    # 已驳回
+
+
 # 系统配置相关常量
 class SystemConfigConstants:
     """系统配置相关常量"""

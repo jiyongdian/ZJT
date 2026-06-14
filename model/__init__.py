@@ -23,6 +23,8 @@ from .notifications import NotificationsModel, NotificationEntity
 from .async_tasks import AsyncTasksModel, AsyncTask, AsyncTaskStatus
 from .ai_tool_pipeline_steps import PipelineStepModel, PipelineStep, PipelineStepStatus, PipelineStage, PipelineStepType
 from .implementation_attempts import ImplementationAttemptModel, ImplementationAttempt
+from .commission_log import CommissionLogModel, CommissionLog
+from .commission_withdraw import CommissionWithdrawModel, CommissionWithdraw
 
 __all__ = [
     'AIToolsModel',
@@ -80,4 +82,8 @@ __all__ = [
     'PipelineStepType',
     'ImplementationAttemptModel',
     'ImplementationAttempt',
+    'CommissionLogModel',
+    'CommissionLog',
+    'CommissionWithdrawModel',
+    'CommissionWithdraw',
 ]
