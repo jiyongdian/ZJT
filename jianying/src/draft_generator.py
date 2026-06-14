@@ -273,20 +273,15 @@ class DraftGenerator:
             # 创建速度配置
             speed_id = self.library._create_speed(segment.speed)
             
-            # 计算等比铺满（cover）缩放：让素材铺满画布，可能裁切边缘
-            material = self.library.video_materials[material_id]
-            cw, ch = self.library.width, self.library.height
-            mw = material.get('width', cw) or cw
-            mh = material.get('height', ch) or ch
-            cover_scale = max(cw / mw, ch / mh) if (mw and mh) else 1.0
-
             segment_data = {
                 "cartoon": False,
                 "clip": {
                     "alpha": 1.0,
                     "flip": {"horizontal": False, "vertical": False},
                     "rotation": 0.0,
-                    "scale": {"x": cover_scale, "y": cover_scale},
+                    # scale=1.0 为剪映默认适配基准：素材自动等比适应画布（保持长宽比、不裁切、不变形）。
+                    # 切勿按"画布/素材尺寸比例"计算后写入——剪映会在该适配基准上叠加，导致过度放大、画面双向溢出只看到中间。
+                    "scale": {"x": 1.0, "y": 1.0},
                     "transform": {"x": 0.0, "y": 0.0}
                 },
                 "common_keyframes": [],

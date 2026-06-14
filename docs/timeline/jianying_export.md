@@ -110,7 +110,7 @@
    - 根据前端 `ratio` 设置画布尺寸（查 `JIANYING_RATIO_RESOLUTION` 映射，写入 `canvas_config`）
    - 用 ffprobe 预取每个已下载文件的真实时长与视频尺寸（`asyncio.to_thread` + 信号量限流，不阻塞事件循环）
    - 创建 `JianyingMultiTrackLibrary` 实例，根据柱子系统或经典模式添加视频和音频片段
-   - 视频素材声明真实尺寸并按 cover 等比铺满画布；音视频用真实时长，超出部分完整保留
+   - 视频素材声明真实尺寸，`clip.scale` 保持 1.0（剪映默认适配基准，素材自动等比适应画布、保持长宽比、不裁切）；音视频用真实时长，超出部分完整保留
    - 生成草稿文件（`draft_content.json` 和 `draft_meta_info.json`）
    - 复制媒体文件到草稿的 `Resources/local` 目录
 
@@ -136,7 +136,7 @@
 ### 画布比例与素材适配
 
 - **画布尺寸**：由前端 `ratio` 决定，经 `JIANYING_RATIO_RESOLUTION`（`config/constant.py`）映射为像素尺寸（如 9:16 → 1080×1920），写入 `canvas_config.width/height/ratio` 与 `draft_meta_info.resolution`。
-- **素材尺寸**：视频素材的 `width/height` 用 ffprobe 探测的真实值（非画布尺寸），`clip.scale` 按 cover 等比铺满计算（`max(画布宽/素材宽, 画布高/素材高)`），`transform` 居中。横屏素材进竖屏画布会铺满裁边，无黑边。
+- **素材尺寸与适配**：视频素材的 `width/height` 用 ffprobe 探测的真实值（非画布尺寸）。`clip.scale` 保持 `1.0`——这是剪映的**默认适配基准**（导入素材时剪映自动等比适应画布，保持长宽比、不裁切、不变形）。**切勿**按"画布/素材尺寸比例"计算后写入 scale，否则剪映会在适配基准上叠加缩放，导致画面过度放大、双向溢出只看到中间。竖屏素材进竖屏画布（比例一致）会铺满无黑边；横屏素材进竖屏画布则完整显示、上下留黑边。
 - **超出不切除**：音视频用 ffprobe 真实时长（前端用浏览器元素取时长不可靠、失败回退默认值），在未手动裁剪时（`startTime==0 && endTime>=duration`）用真实时长覆盖前端预估；`material.duration` 存文件完整时长，草稿顶层 `duration` 自动延长以完整容纳最长素材。
 
 ### 素材路径
@@ -221,7 +221,7 @@
 - **解决**：
   - 前端导出请求体增加 `ratio` 字段（`web/js/timeline.js`）
   - 新增画布比例映射常量 `JIANYING_RATIO_RESOLUTION`（`config/constant.py`），后端按 `ratio` 设置画布 width/height 并写入 `canvas_config.ratio`（`server.py` / `jianying/src/core.py` / `draft_generator.py`）
-  - 视频素材用 ffprobe 真实尺寸，并按 `max(画布宽/素材宽, 画布高/素材高)` 计算 cover 缩放，实现等比铺满（铺满裁边，无黑边）
+  - 视频素材用 ffprobe 真实尺寸，`clip.scale` 保持 `1.0`（剪映默认适配基准，素材自动等比适应画布、保持长宽比、不裁切）
 
 **问题2：音频/视频超出预设时长被切除**
 - **原因**：`source_timerange.duration` 钉死在前端预估时长上（前端用浏览器 `<audio>`/`<video>` 取时长，失败回退默认值，不可靠），剪映只播放这段，超出被切。
@@ -229,6 +229,11 @@
   - 新增 `probe_safe`（`jianying/src/media_utils.py`）：单次 ffprobe 安全取时长/尺寸，失败返回零值不抛异常
   - 后端导出时用 `asyncio.to_thread` 预取真实时长（按 file_path 去重、`Semaphore(8)` 限流），在「未手动裁剪」时（`startTime==0 && endTime>=duration`）用真实时长覆盖前端预估
   - `material.duration` 存文件完整时长，`segment` 用使用片段时长；`total_duration` 自动延长以完整容纳长素材
+
+**后续修正：clip.scale 的剪映适配语义**
+- **现象**：首版按 `max(画布宽/素材宽, 画布高/素材高)` 计算 cover scale 写入 `clip.scale`，但导出后画面长宽双向溢出、只看到中间。
+- **根因**：剪映的 `clip.scale=1.0` 是**默认适配基准**（导入素材时剪映已自动等比适应画布），scale 字段是相对该基准的额外缩放。把 cover 比例写入会被叠加，导致过度放大。（与开源库 pyJianYingDraft 的 `ClipSettings` 默认 `scale=1.0`、添加视频时不计算 scale 的做法一致。）
+- **解决**：`clip.scale` 恢复 `1.0`，依赖剪映默认适配（保持长宽比、不裁切、不变形）。
 
 ### 2026-06-06 修复
 
