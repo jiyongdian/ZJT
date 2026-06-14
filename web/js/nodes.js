@@ -1278,22 +1278,33 @@
         ? Math.max(0, Math.min(insertIndex, node.data.shots.length))
         : node.data.shots.length;
 
+      // 选择参考分镜：优先取插入位置的上一个，否则取下一个（使"插到最前"也能继承共性字段）
+      const refShot = node.data.shots[idx - 1] || node.data.shots[idx] || {};
+
       const newShot = {
         shot_id: `s${Date.now()}`,
         shot_number: idx + 1,
-        duration: 5.0,
-        location_id: '',
-        shot_type: '中景',
-        camera_movement: '固定',
+        // 共性字段从相邻分镜继承（同一分镜组通常一致），无参考时用默认值
+        duration: refShot.duration || 5.0,
+        location_id: refShot.location_id || '',
+        db_location_id: refShot.db_location_id || '',
+        db_location_pic: refShot.db_location_pic || '',
+        location_name: refShot.location_name || '',
+        time_of_day: refShot.time_of_day || '',
+        weather: refShot.weather || '',
+        mood: refShot.mood || '',
+        environment_sound: refShot.environment_sound || '',
+        background_music: refShot.background_music || '',
+        shot_type: refShot.shot_type || '中景',
+        camera_movement: refShot.camera_movement || '固定',
+        // 以下为每个分镜独有内容，留空由用户填写差异
         description: '',
         opening_frame_description: '',
         scene_detail: '',
+        action: '',
+        audio_notes: '',
         characters_present: [],
         dialogue: null,
-        action: '',
-        mood: '',
-        environment_sound: '',
-        background_music: '',
         props: []
       };
 
@@ -8846,258 +8857,173 @@
       }
     }
 
-    // 生成分镜图节点 - 独立分镜模式
-    function generateShotFramesIndependent(shotGroupNodeId, shotGroupNode){
-      const shots = shotGroupNode.data.shots || [];
-      if(shots.length === 0){
-        showToast('分镜组中没有分镜数据', 'warning');
-        return;
-      }
+    // 就地更新已有 shot_frame 节点的基础信息（保守同步：保留生成结果与用户编辑的提示词）
+    function updateShotFrameNodeBasic(shotFrameNode, shot){
+      shotFrameNode.data.description = shot.description || '';
+      shotFrameNode.data.duration = shot.duration || 0;
+      shotFrameNode.data.shotType = shot.shot_type || '';
+      shotFrameNode.data.cameraMovement = shot.camera_movement || '';
+      // 更新 shotJson 快照，保留原有附加字段（allLocationInfo/scriptData 等）
+      shotFrameNode.data.shotJson = {
+        ...(shotFrameNode.data.shotJson || {}),
+        ...shot
+      };
+      // 保留：imageUrl/generatedImage/previewImageUrl/videoMode/model/drawCount/videoDrawCount/videoDuration/videoModel/imagePrompt/videoPrompt/videoPromptText
 
-      // 获取已存在的分镜节点（通过连接关系查找）
-      const existingConnections = state.connections.filter(c => c.from === shotGroupNodeId);
-      const existingShotIds = new Set();
-      let maxExistingY = shotGroupNode.y;
-      
-      existingConnections.forEach(conn => {
-        const targetNode = state.nodes.find(n => n.id === conn.to);
-        if(targetNode && targetNode.type === 'shot_frame'){
-          // 收集已存在的 shotId
-          const shotId = targetNode.data.shotId || (targetNode.data.shotJson && targetNode.data.shotJson.shot_id);
-          if(shotId){
-            existingShotIds.add(shotId);
-          }
-          // 记录最大的 Y 坐标
-          if(targetNode.y > maxExistingY){
-            maxExistingY = targetNode.y;
-          }
-        }
-      });
-
-      const createdNodeIds = [];
-      // 横向排列：shot_frame 在 shot_group 右侧，x 固定，y 纵向堆叠
-      const offsetX = 1200;
-      const SHOT_FRAME_GAP_Y = 120;  // 分镜节点之间的Y轴间距，与自动排列保持一致
-      const targetX = shotGroupNode.x + offsetX;
-      
-      // 从第一个镜头获取场景信息（所有镜头使用同一个场景）
-      const firstShot = shots[0];
-      const locationInfo = [];
-      if(firstShot.db_location_id && firstShot.location_name){
-        locationInfo.push({
-          name: firstShot.location_name,
-          pic: firstShot.db_location_pic,
-          id: firstShot.db_location_id
-        });
-      }
-
-      // 第一步：创建所有分镜节点（先放在临时Y位置）
-      let skippedCount = 0;
-      shots.forEach((shot) => {
-        if(existingShotIds.has(shot.shot_id)){
-          skippedCount++;
-          return;
-        }
-        
-        const shotDataWithLocation = {
-          ...shot,
-          allLocationInfo: locationInfo,
-          scriptData: shotGroupNode.data.scriptData
-        };
-        
-        const shotFrameNodeId = createShotFrameNode({
-          x: targetX,
-          y: 0,  // 临时位置，后面会重新定位
-          shotData: shotDataWithLocation,
-          model: shotGroupNode.data.model,
-          videoModel: shotGroupNode.data.videoModel,
-          checkCollision: false
-        });
-        createdNodeIds.push(shotFrameNodeId);
-
-        state.connections.push({
-          id: state.nextConnId++,
-          from: shotGroupNodeId,
-          to: shotFrameNodeId
-        });
-      });
-      
-      // 第二步：测量实际高度并重新定位（使用 setTimeout 确保布局完成）
-      // 扫描同一X列所有已有（非本次创建的）shot_frame 节点的最大底部位置
-      const newNodeIdSet = new Set(createdNodeIds);
-      let globalMaxBottom = shotGroupNode.y;
-      state.nodes.forEach(n => {
-        if(n.type === 'shot_frame' && !newNodeIdSet.has(n.id) && Math.abs(n.x - targetX) < 200) {
-          const el = canvasEl.querySelector(`.node[data-node-id="${n.id}"]`);
-          const h = el ? el.offsetHeight : 500;
-          const bottom = n.y + h;
-          if(bottom > globalMaxBottom) globalMaxBottom = bottom;
-        }
-      });
-      
-      let nextY = globalMaxBottom > shotGroupNode.y
-        ? globalMaxBottom + SHOT_FRAME_GAP_Y
-        : shotGroupNode.y;
-      
-      // 强制浏览器完成布局
-      void document.body.offsetHeight;
-      
-      // 按顺序重新定位每个新创建的节点
-      createdNodeIds.forEach(nodeId => {
-        const node = state.nodes.find(n => n.id === nodeId);
-        if(!node) return;
-        node.y = Math.max(MIN_NODE_Y, nextY);
-        const el = canvasEl.querySelector(`.node[data-node-id="${nodeId}"]`);
-        if(el) {
-          el.style.top = node.y + 'px';
-          const actualHeight = el.offsetHeight;
-          nextY = node.y + actualHeight + SHOT_FRAME_GAP_Y;
-        } else {
-          nextY += 600 + SHOT_FRAME_GAP_Y;
-        }
-      });
-
-      renderAllConnections();
-      safeAutoSave()
-      
-      // 显示合理的提示信息
-      if(createdNodeIds.length === 0 && skippedCount > 0){
-        showToast(`所有 ${skippedCount} 个分镜已存在对应节点，无需新增`, 'info');
-      } else if(skippedCount > 0){
-        showToast(`已生成 ${createdNodeIds.length} 个独立分镜节点，跳过 ${skippedCount} 个已存在的分镜`, 'success');
-      } else {
-        showToast(`已生成 ${createdNodeIds.length} 个独立分镜节点`, 'success');
+      // 就地更新 DOM 显示（只改 textContent，不重建 DOM，避免破坏事件绑定与生成结果展示）
+      const el = canvasEl.querySelector(`.node[data-node-id="${shotFrameNode.id}"]`);
+      if(!el) return;
+      const descEl = el.querySelector('.shot-frame-desc-display');
+      if(descEl) descEl.textContent = shotFrameNode.data.description;
+      const metaEl = el.querySelector('.shot-frame-meta');
+      if(metaEl){
+        const durLabel = window.t ? window.t('shot_frame_duration_label') : '时长:';
+        const secLabel = window.t ? window.t('shot_frame_seconds') : '秒';
+        metaEl.textContent = `${durLabel} ${shotFrameNode.data.duration}${secLabel} | ${shotFrameNode.data.shotType} | ${shotFrameNode.data.cameraMovement}`;
       }
     }
 
-    // 生成分镜图节点 - 独立分镜模式（异步版本，用于自动批量生成）
-    async function generateShotFramesIndependentAsync(shotGroupNodeId, shotGroupNode){
+    // 增量同步核心：按 shots 数组同步 shot_frame 节点
+    // 新建缺失节点、就地更新已有节点（保留生成结果与提示词）、按 shots 顺序重排、孤儿节点保留并提示
+    async function syncShotFramesToShots(shotGroupNodeId, shotGroupNode, options){
+      const isAsync = options && options.isAsync;
       const shots = shotGroupNode.data.shots || [];
       if(shots.length === 0){
-        console.log('[宫格生图] 分镜组没有分镜数据');
+        if(isAsync){
+          console.log('[分镜同步] 分镜组没有分镜数据');
+        } else {
+          showToast('分镜组中没有分镜数据', 'warning');
+        }
         return [];
       }
 
-      // 按 shot_number 排序，确保分镜按顺序创建
-      shots.sort((a, b) => (a.shot_number || 0) - (b.shot_number || 0));
+      // 按 shot_number 排序，确保按顺序处理（拷贝后排序，不修改原 shots 数组）
+      const sortedShots = [...shots].sort((a, b) => (a.shot_number || 0) - (b.shot_number || 0));
 
-      // 获取已存在的分镜节点（通过连接关系查找）
-      // 注意：只查找真实存在的节点，忽略已删除节点的连接
+      // 建立 shot_id → 已有 shot_frame 节点 的映射，并收集所有关联节点（用于孤儿检测）
+      const existingMap = new Map();
+      const connectedNodes = [];
       const existingConnections = state.connections.filter(c => c.from === shotGroupNodeId);
-      const existingShotIds = new Set();
-      let maxExistingY = shotGroupNode.y;
-      
-      console.log(`[宫格生图] 分镜组 ${shotGroupNodeId} 有 ${existingConnections.length} 个连接`);
-      
       existingConnections.forEach(conn => {
         const targetNode = state.nodes.find(n => n.id === conn.to);
         if(targetNode && targetNode.type === 'shot_frame'){
           const shotId = targetNode.data.shotId || (targetNode.data.shotJson && targetNode.data.shotJson.shot_id);
           if(shotId){
-            existingShotIds.add(shotId);
-            console.log(`[宫格生图] 找到已存在的分镜节点: ${shotId}`);
+            existingMap.set(shotId, targetNode);
           }
-          if(targetNode.y > maxExistingY){
-            maxExistingY = targetNode.y;
-          }
-        } else if(!targetNode) {
-          console.log(`[宫格生图] 连接 ${conn.id} 指向的节点 ${conn.to} 不存在（可能已删除）`);
+          connectedNodes.push(targetNode);
         }
       });
-      
-      console.log(`[宫格生图] 已存在的分镜ID: ${Array.from(existingShotIds).join(', ')}`);
-      console.log(`[宫格生图] 需要生成的分镜总数: ${shots.length}`);
 
-      const createdNodeIds = [];
-      // 横向排列：shot_frame 在 shot_group 右侧，x 固定，y 纵向堆叠
-      const offsetX = 1200;
       const SHOT_FRAME_GAP_Y = 120;  // 分镜节点之间的Y轴间距，与自动排列保持一致
-      const targetX = shotGroupNode.x + offsetX;
-      
-      const firstShot = shots[0];
-      const locationInfo = [];
-      if(firstShot.db_location_id && firstShot.location_name){
-        locationInfo.push({
-          name: firstShot.location_name,
-          pic: firstShot.db_location_pic,
-          id: firstShot.db_location_id
-        });
+      const targetX = shotGroupNode.x + 1200;
+
+      // 遍历 shots：就地更新已有节点 或 新建缺失节点，并记录顺序用于重排
+      const orderedNodes = [];
+      const createdNodeIds = [];
+      const matchedNodeIds = new Set();
+      let updatedCount = 0;
+
+      sortedShots.forEach((shot) => {
+        const existing = existingMap.get(shot.shot_id);
+        if(existing){
+          updateShotFrameNodeBasic(existing, shot);
+          matchedNodeIds.add(existing.id);
+          orderedNodes.push(existing);
+          updatedCount++;
+        } else {
+          // 每个分镜用自己的场景信息（同一分镜组内可能含不同场景）
+          const shotLocationInfo = [];
+          if(shot.db_location_id && shot.location_name){
+            shotLocationInfo.push({
+              name: shot.location_name,
+              pic: shot.db_location_pic,
+              id: shot.db_location_id
+            });
+          }
+          const shotDataWithLocation = {
+            ...shot,
+            allLocationInfo: shotLocationInfo,
+            scriptData: shotGroupNode.data.scriptData
+          };
+          const shotFrameNodeId = createShotFrameNode({
+            x: targetX,
+            y: 0,  // 临时位置，后面重新定位
+            shotData: shotDataWithLocation,
+            model: shotGroupNode.data.model,
+            videoModel: shotGroupNode.data.videoModel,
+            checkCollision: false
+          });
+          createdNodeIds.push(shotFrameNodeId);
+          matchedNodeIds.add(shotFrameNodeId);
+          const newNode = state.nodes.find(n => n.id === shotFrameNodeId);
+          if(newNode) orderedNodes.push(newNode);
+          state.connections.push({
+            id: state.nextConnId++,
+            from: shotGroupNodeId,
+            to: shotFrameNodeId
+          });
+        }
+      });
+
+      // 孤儿节点：关联但不在当前 shots 里的（用户已从列表移除），保留不删除
+      const orphanNodes = connectedNodes.filter(n => !matchedNodeIds.has(n.id));
+
+      // 等待布局（异步版用 rAF）或强制同步布局（同步版），确保能测量节点实际高度
+      if(isAsync){
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      } else {
+        void document.body.offsetHeight;
       }
 
-      // 第一步：创建所有分镜节点（先放在临时Y位置）
-      let skippedCount = 0;
-      shots.forEach((shot) => {
-        if(existingShotIds.has(shot.shot_id)){
-          console.log(`[宫格生图] 跳过已存在的分镜: ${shot.shot_id}`);
-          skippedCount++;
-          return;
-        }
-        
-        const shotDataWithLocation = {
-          ...shot,
-          allLocationInfo: locationInfo,
-          scriptData: shotGroupNode.data.scriptData
-        };
-        
-        const shotFrameNodeId = createShotFrameNode({
-          x: targetX,
-          y: 0,  // 临时位置，后面会重新定位
-          shotData: shotDataWithLocation,
-          model: shotGroupNode.data.model,
-          checkCollision: false
-        });
-        createdNodeIds.push(shotFrameNodeId);
-
-        state.connections.push({
-          id: state.nextConnId++,
-          from: shotGroupNodeId,
-          to: shotFrameNodeId
-        });
-      });
-      
-      // 第二步：等待浏览器完成布局后，测量实际高度并重新定位
-      // 使用 requestAnimationFrame 确保 DOM 完成渲染
-      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      
-      // 扫描同一X列所有已有（非本次创建的）shot_frame 节点的最大底部位置
-      const newNodeIdSet = new Set(createdNodeIds);
-      let globalMaxBottom = shotGroupNode.y;
-      state.nodes.forEach(n => {
-        if(n.type === 'shot_frame' && !newNodeIdSet.has(n.id) && Math.abs(n.x - targetX) < 200) {
-          const el = canvasEl.querySelector(`.node[data-node-id="${n.id}"]`);
-          const h = el ? el.offsetHeight : 500;
-          const bottom = n.y + h;
-          if(bottom > globalMaxBottom) globalMaxBottom = bottom;
-        }
-      });
-      
-      let nextY = globalMaxBottom > shotGroupNode.y
-        ? globalMaxBottom + SHOT_FRAME_GAP_Y
-        : shotGroupNode.y;
-      
-      // 按顺序重新定位每个新创建的节点
-      createdNodeIds.forEach(nodeId => {
-        const node = state.nodes.find(n => n.id === nodeId);
+      // 按 shots 顺序重排有效节点的 y 坐标，孤儿节点移到末尾避免重叠
+      let nextY = shotGroupNode.y;
+      const reposition = (node) => {
         if(!node) return;
+        node.x = targetX;
         node.y = Math.max(MIN_NODE_Y, nextY);
-        const el = canvasEl.querySelector(`.node[data-node-id="${nodeId}"]`);
-        if(el) {
+        const el = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
+        if(el){
+          el.style.left = node.x + 'px';
           el.style.top = node.y + 'px';
-          const actualHeight = el.offsetHeight;
-          console.log(`[分镜布局] nodeId=${nodeId} offsetHeight=${actualHeight} y=${node.y}`);
-          nextY = node.y + actualHeight + SHOT_FRAME_GAP_Y;
+          nextY = node.y + el.offsetHeight + SHOT_FRAME_GAP_Y;
         } else {
           nextY += 600 + SHOT_FRAME_GAP_Y;
         }
-      });
-      
-      console.log(`[宫格生图] 生成完成 - 新建: ${createdNodeIds.length}, 跳过: ${skippedCount}`);
+      };
+      orderedNodes.forEach(reposition);
+      orphanNodes.forEach(reposition);
 
       renderAllConnections();
-      safeAutoSave()
-      
-      // 返回创建的节点ID数组（供宫格生图等功能使用）
+      safeAutoSave();
+
+      // 提示
+      const parts = [];
+      if(createdNodeIds.length > 0) parts.push(`新增 ${createdNodeIds.length} 个`);
+      if(updatedCount > 0) parts.push(`更新 ${updatedCount} 个`);
+      if(orphanNodes.length > 0) parts.push(`保留 ${orphanNodes.length} 个已从列表移除的节点`);
+      const msg = parts.length > 0 ? `分镜已同步：${parts.join('、')}` : '分镜已是最新，无需同步';
+      showToast(msg, (createdNodeIds.length > 0 || updatedCount > 0) ? 'success' : 'info');
+
+      if(isAsync){
+        console.log(`[分镜同步] 新建: ${createdNodeIds.length}, 更新: ${updatedCount}, 孤儿保留: ${orphanNodes.length}`);
+      }
+
       return createdNodeIds;
+    }
+
+    // 生成分镜图节点 - 独立分镜模式（增量同步；同步包装器，保留原签名）
+    function generateShotFramesIndependent(shotGroupNodeId, shotGroupNode){
+      // isAsync=false：核心内部用 void offsetHeight 强制同步布局，函数体内无 await，所有工作在本次调用中同步完成
+      syncShotFramesToShots(shotGroupNodeId, shotGroupNode, { isAsync: false }).catch(err => {
+        console.error('[分镜同步] 同步失败:', err);
+        showToast('分镜同步失败: ' + (err && err.message || err), 'error');
+      });
+    }
+
+    // 生成分镜图节点 - 独立分镜模式（异步版本，用于自动批量生成；增量同步）
+    async function generateShotFramesIndependentAsync(shotGroupNodeId, shotGroupNode){
+      return await syncShotFramesToShots(shotGroupNodeId, shotGroupNode, { isAsync: true });
     }
 
     // 将视频提示词JSON转换为可读文本格式
@@ -9274,8 +9200,8 @@
                 <div class="script-section-title" data-i18n="shot_frame_basic_info_section">${window.t ? window.t('shot_frame_basic_info_section') : '基础信息'}</div>
               </div>
               <div class="field field-always-visible">
-                <div style="font-size: 13px; font-weight: 600; color: var(--text);">${escapeHtml(node.data.description)}</div>
-                <div class="gen-meta" style="margin-top: 4px;" data-i18n="shot_frame_duration_label">${window.t ? window.t('shot_frame_duration_label') : '时长:'} ${node.data.duration}${window.t ? window.t('shot_frame_seconds') : '秒'} | ${escapeHtml(node.data.shotType)} | ${escapeHtml(node.data.cameraMovement)}</div>
+                <div class="shot-frame-desc-display" style="font-size: 13px; font-weight: 600; color: var(--text);">${escapeHtml(node.data.description)}</div>
+                <div class="gen-meta shot-frame-meta" style="margin-top: 4px;" data-i18n="shot_frame_duration_label">${window.t ? window.t('shot_frame_duration_label') : '时长:'} ${node.data.duration}${window.t ? window.t('shot_frame_seconds') : '秒'} | ${escapeHtml(node.data.shotType)} | ${escapeHtml(node.data.cameraMovement)}</div>
               </div>
               <div class="field field-always-visible">
                 <div class="shot-ref-section" style="position: relative;">

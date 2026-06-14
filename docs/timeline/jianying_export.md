@@ -62,7 +62,8 @@
       audioClipIds: ["clip_id_2"]
     }
   ],
-  workflow_name: "工作流名称"
+  workflow_name: "工作流名称",
+  ratio: "9:16"  // 画布比例：9:16/16:9/1:1/3:4/4:3，决定草稿画布尺寸（竖屏/横屏）
 }
 ```
 
@@ -106,8 +107,10 @@
    - 使用缓存避免重复下载相同素材
 
 2. **生成剪影草稿**：
-   - 创建 `JianyingMultiTrackLibrary` 实例
-   - 根据柱子系统或经典模式添加视频和音频片段
+   - 根据前端 `ratio` 设置画布尺寸（查 `JIANYING_RATIO_RESOLUTION` 映射，写入 `canvas_config`）
+   - 用 ffprobe 预取每个已下载文件的真实时长与视频尺寸（`asyncio.to_thread` + 信号量限流，不阻塞事件循环）
+   - 创建 `JianyingMultiTrackLibrary` 实例，根据柱子系统或经典模式添加视频和音频片段
+   - 视频素材声明真实尺寸并按 cover 等比铺满画布；音视频用真实时长，超出部分完整保留
    - 生成草稿文件（`draft_content.json` 和 `draft_meta_info.json`）
    - 复制媒体文件到草稿的 `Resources/local` 目录
 
@@ -129,6 +132,12 @@
 
 - **前端**：秒（浮点数）
 - **后端**：微秒（整数），通过 `seconds_to_microseconds()` 转换
+
+### 画布比例与素材适配
+
+- **画布尺寸**：由前端 `ratio` 决定，经 `JIANYING_RATIO_RESOLUTION`（`config/constant.py`）映射为像素尺寸（如 9:16 → 1080×1920），写入 `canvas_config.width/height/ratio` 与 `draft_meta_info.resolution`。
+- **素材尺寸**：视频素材的 `width/height` 用 ffprobe 探测的真实值（非画布尺寸），`clip.scale` 按 cover 等比铺满计算（`max(画布宽/素材宽, 画布高/素材高)`），`transform` 居中。横屏素材进竖屏画布会铺满裁边，无黑边。
+- **超出不切除**：音视频用 ffprobe 真实时长（前端用浏览器元素取时长不可靠、失败回退默认值），在未手动裁剪时（`startTime==0 && endTime>=duration`）用真实时长覆盖前端预估；`material.duration` 存文件完整时长，草稿顶层 `duration` 自动延长以完整容纳最长素材。
 
 ### 素材路径
 
@@ -182,7 +191,8 @@
   "video_clips": [...],
   "audio_clips": [...],
   "pillars": [...],
-  "workflow_name": "工作流名称"
+  "workflow_name": "工作流名称",
+  "ratio": "画布比例（可选，如 9:16 / 16:9，默认 16:9）"
 }
 ```
 
@@ -203,6 +213,22 @@
   - `core.py` - 多轨道库核心
   - `draft_generator.py` - 草稿生成器
   - `jianying_utils.py` - 工具函数
+
+### 2026-06-14 修复
+
+**问题1：竖屏设置下导出的草稿画布/首个素材仍为横屏**
+- **原因**：前端 `state.ratio`（竖屏 9:16）从未传给后端导出接口；后端用硬编码 1920×1080 初始化剪映库，`canvas_config` 永远是横屏。次要：视频素材 material 的宽高用了画布尺寸而非真实文件尺寸，`clip.scale` 固定 1.0 无画布适配。
+- **解决**：
+  - 前端导出请求体增加 `ratio` 字段（`web/js/timeline.js`）
+  - 新增画布比例映射常量 `JIANYING_RATIO_RESOLUTION`（`config/constant.py`），后端按 `ratio` 设置画布 width/height 并写入 `canvas_config.ratio`（`server.py` / `jianying/src/core.py` / `draft_generator.py`）
+  - 视频素材用 ffprobe 真实尺寸，并按 `max(画布宽/素材宽, 画布高/素材高)` 计算 cover 缩放，实现等比铺满（铺满裁边，无黑边）
+
+**问题2：音频/视频超出预设时长被切除**
+- **原因**：`source_timerange.duration` 钉死在前端预估时长上（前端用浏览器 `<audio>`/`<video>` 取时长，失败回退默认值，不可靠），剪映只播放这段，超出被切。
+- **解决**：
+  - 新增 `probe_safe`（`jianying/src/media_utils.py`）：单次 ffprobe 安全取时长/尺寸，失败返回零值不抛异常
+  - 后端导出时用 `asyncio.to_thread` 预取真实时长（按 file_path 去重、`Semaphore(8)` 限流），在「未手动裁剪」时（`startTime==0 && endTime>=duration`）用真实时长覆盖前端预估
+  - `material.duration` 存文件完整时长，`segment` 用使用片段时长；`total_duration` 自动延长以完整容纳长素材
 
 ### 2026-06-06 修复
 

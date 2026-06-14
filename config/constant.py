@@ -553,6 +553,18 @@ class MediaConstants:
     VIDEO_COMPRESS_THRESHOLD_MB = 10    # 超过此大小的视频触发前端压缩
 
 
+# ============ 剪映（CapCut）草稿导出常量 ============
+# 画布比例 → 分辨率（宽, 高）映射，未知比例回退 JIANYING_DEFAULT_RATIO
+JIANYING_RATIO_RESOLUTION = {
+    '9:16': (1080, 1920),  # 竖屏
+    '16:9': (1920, 1080),  # 横屏
+    '1:1':  (1080, 1080),  # 正方形
+    '3:4':  (1080, 1440),  # 竖屏（3:4）
+    '4:3':  (1440, 1080),  # 横屏（4:3）
+}
+JIANYING_DEFAULT_RATIO = '16:9'
+
+
 RECHARGE_PACKAGES = [
     {
         "package_id": 1,
