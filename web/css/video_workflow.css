@@ -2139,6 +2139,15 @@ textarea:focus{ border-color: var(--primary); }
 .timeline-expand-btn.flashing {
   animation: timeline-btn-flash 1s ease;
 }
+
+/* 分镜组"生成分镜"按钮：新增/修改分镜保存后闪烁，提醒用户点击同步到画布 */
+@keyframes shot-group-generate-flash {
+  0%, 100% { background: #ffffff; color: #374151; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+  20%, 80% { background: #f59e0b; color: #ffffff; box-shadow: 0 2px 12px rgba(245,158,11,0.65); }
+}
+.shot-group-generate-btn.flashing {
+  animation: shot-group-generate-flash 1.2s ease-in-out 3;
+}
 .canvas-container.timeline-visible {
   padding-bottom: 280px;
 }

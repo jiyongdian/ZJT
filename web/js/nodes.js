@@ -1281,8 +1281,34 @@
       // 选择参考分镜：优先取插入位置的上一个，否则取下一个（使"插到最前"也能继承共性字段）
       const refShot = node.data.shots[idx - 1] || node.data.shots[idx] || {};
 
+      // 生成简短且唯一的 shot_id：基于插入位置的前一个分镜
+      // 规则：在分镜 N 后插入 → N_1；再在 N_x 后插入 → N_{最大x+1}
+      // 前一个是基础分镜 → base 用其 shot_number；前一个是 N_M 插入分镜 → base = N
+      const prevShotForId = node.data.shots[idx - 1];
+      let base;
+      if(prevShotForId){
+        const prevId = String(prevShotForId.shot_id || '');
+        const insertMatch = prevId.match(/^(\d+)_\d+$/);
+        base = insertMatch ? insertMatch[1] : String(prevShotForId.shot_number || idx);
+      } else {
+        base = '0';  // 插在最前（无前一个分镜），用虚拟前缀 0
+      }
+      const idPrefix = base + '_';
+      let maxSub = 0;
+      node.data.shots.forEach(s => {
+        const sid = String(s.shot_id || '');
+        if(sid.startsWith(idPrefix)){
+          const tail = sid.slice(idPrefix.length);
+          if(/^\d+$/.test(tail)){
+            const x = parseInt(tail, 10);
+            if(x > maxSub) maxSub = x;
+          }
+        }
+      });
+      const newShotId = `${base}_${maxSub + 1}`;
+
       const newShot = {
-        shot_id: `s${Date.now()}`,
+        shot_id: newShotId,
         shot_number: idx + 1,
         // 共性字段从相邻分镜继承（同一分镜组通常一致），无参考时用默认值
         duration: refShot.duration || 5.0,
@@ -1309,7 +1335,8 @@
       };
 
       node.data.shots.splice(idx, 0, newShot);
-      renumberShots(node.data.shots);
+      // 不再 renumberShots：它会把整组 shot_number 重排为 1,2,3...，破坏 LLM 生成的全局编号（如 5,6,7），
+      // 导致标题显示错误。新分镜的标题用 shot_id（N_x），LLM 分镜的标题用其原始 shot_number，数组顺序即显示顺序。
       shotGroupEditModalContent.innerHTML = renderShotGroupEditForm(node.data);
       bindShotEditEvents();
     }
@@ -1319,7 +1346,7 @@
       if(!node) return;
 
       node.data.shots.splice(index, 1);
-      renumberShots(node.data.shots);
+      // 不再 renumberShots：保留 LLM 生成的原始 shot_number（见 addNewShot 注释）
       shotGroupEditModalContent.innerHTML = renderShotGroupEditForm(node.data);
       bindShotEditEvents();
     }
@@ -1549,8 +1576,21 @@
       });
 
       updateShotGroupNodeDisplay(currentEditingNodeId);
+
+      // 提醒用户点击"生成分镜"按钮，把新增/修改的分镜同步到画布（按钮闪烁 3 次后自动恢复）
+      // 注意：必须在 closeShotGroupEditModal() 之前查询按钮——后者会把 currentEditingNodeId 置空
+      const genBtn = canvasEl.querySelector(`.node[data-node-id="${currentEditingNodeId}"] .shot-group-generate-btn`);
+      if(genBtn){
+        genBtn.classList.remove('flashing');
+        void genBtn.offsetWidth;  // 强制 reflow，重启动画
+        genBtn.classList.add('flashing');
+        genBtn.addEventListener('animationend', () => {
+          genBtn.classList.remove('flashing');
+        }, { once: true });
+      }
+
       closeShotGroupEditModal();
-      safeAutoSave()
+      safeAutoSave();
     }
 
     function updateShotGroupNodeDisplay(nodeId){
@@ -1571,6 +1611,20 @@
         `;
       }).join('');
 
+      // 局部更新：只刷新分镜列表与计数，保留 createShotGroupNode 的原始 DOM 结构（.script-node-body 横向3列布局）、事件与 select 状态。
+      // 不再重写整个 node-body（旧逻辑会丢失 .script-node-body，导致分镜组形状从横向坍塌为纵向）。
+      const shotsListEl = el.querySelector('.shot-group-shots-list');
+      if(shotsListEl){
+        shotsListEl.innerHTML = shotsHtml || '<div class="shot-group-empty">暂无分镜</div>';
+      }
+      const shotCountEl = el.querySelector('.shot-group-shot-count');
+      if(shotCountEl){
+        const countText = window.t ? window.t('shot_group_shot_count', { count: node.data.shots.length }) : `共 ${node.data.shots.length} 个分镜`;
+        shotCountEl.textContent = countText;
+        shotCountEl.setAttribute('data-i18n-params', JSON.stringify({ count: node.data.shots.length }));
+      }
+      return;
+      // 以下旧的全量重建逻辑已由上方局部更新取代（不会执行），保留备查。
       const nodeBody = el.querySelector('.node-body');
       if(nodeBody){
         nodeBody.innerHTML = `
@@ -8066,10 +8120,14 @@
               </div>
               <div class="field field-always-visible">
                 <div class="label" data-i18n="shot_group_label">${window.t ? window.t('shot_group_label') : '分镜组:'} ${escapeHtml(node.data.groupId || node.data.group_id)}</div>
-                <div class="gen-meta" data-i18n="shot_group_shot_count" data-i18n-params='${JSON.stringify({ count: node.data.shots.length })}'>${window.t ? window.t('shot_group_shot_count', { count: node.data.shots.length }) : `共 ${node.data.shots.length} 个分镜`}</div>
+                <div class="gen-meta shot-group-shot-count" data-i18n="shot_group_shot_count" data-i18n-params='${JSON.stringify({ count: node.data.shots.length })}'>${window.t ? window.t('shot_group_shot_count', { count: node.data.shots.length }) : `共 ${node.data.shots.length} 个分镜`}</div>
               </div>
-              <div class="field field-always-visible" style="flex: 1; max-height: 300px; overflow-y: auto;">
+              <div class="field field-always-visible shot-group-shots-list" style="flex: 1; max-height: 300px; overflow-y: auto;">
                 ${shotsHtml}
+              </div>
+              <div class="field field-always-visible">
+                <div class="label" data-i18n="shot_group_model_label">${window.t ? window.t('shot_group_model_label') : '分镜模型'}</div>
+                <select class="shot-group-model"></select>
               </div>
               <div class="field field-always-visible btn-row" style="margin-top: 12px;">
                 <button class="mini-btn secondary shot-group-detail-btn" type="button" style="flex: 1; padding: 9px 12px;" data-i18n="shot_group_detail_btn">${window.t ? window.t('shot_group_detail_btn') : '查看/编辑'}</button>
@@ -8229,6 +8287,38 @@
         e.stopPropagation();
         openShotGroupModal(node.data, id);
       });
+
+      // 分镜模型选择（第1列）—— 初始化选项 + 写回 node.data.model
+      const shotGroupModelEl = el.querySelector('.shot-group-model');
+      if(shotGroupModelEl){
+        let firstModelValue = 'gemini';
+        if(window.TaskConfig && window.TaskConfig.isLoaded()){
+          const modelOptions = window.TaskConfig.getModelOptionsForCategory('image_edit');
+          if(modelOptions.length > 0) firstModelValue = modelOptions[0].value;
+          modelOptions.forEach(opt => {
+            const optEl = document.createElement('option');
+            optEl.value = opt.value;
+            optEl.textContent = opt.label;
+            if(opt.value === node.data.model) optEl.selected = true;
+            shotGroupModelEl.appendChild(optEl);
+          });
+        } else {
+          shotGroupModelEl.innerHTML = `
+            <option value="gemini" ${node.data.model === 'gemini' ? 'selected' : ''}>标准版</option>
+            <option value="gemini_pro" ${node.data.model === 'gemini_pro' ? 'selected' : ''}>加强版</option>
+            <option value="seedream-5.0" ${node.data.model === 'seedream-5.0' ? 'selected' : ''}>Seedream 5.0</option>
+          `;
+        }
+        if(!node.data.model){
+          node.data.model = firstModelValue;
+          shotGroupModelEl.value = firstModelValue;
+        }
+        ensureSelectHasSavedOption(shotGroupModelEl, node.data.model);
+        applyDriverStatusToSelect(shotGroupModelEl);
+        shotGroupModelEl.addEventListener('change', () => {
+          node.data.model = shotGroupModelEl.value;
+        });
+      }
 
       // 宫格生图按钮和模型选择器
       const gridBtn = el.querySelector('.shot-group-grid-btn');
@@ -8881,6 +8971,27 @@
         const secLabel = window.t ? window.t('shot_frame_seconds') : '秒';
         metaEl.textContent = `${durLabel} ${shotFrameNode.data.duration}${secLabel} | ${shotFrameNode.data.shotType} | ${shotFrameNode.data.cameraMovement}`;
       }
+
+      // 同步更新节点标题（shot_number 重排后避免与新节点标题重名）；保留 svg 图标，只更新文本
+      // 标题：手动添加（N_x 格式）用 shot_id；LLM 生成的用 shot_number
+      const _updSid = String(shot.shot_id || '');
+      const newTitle = /^\d+_\d+$/.test(_updSid) ? _updSid : (shot.shot_number ? String(shot.shot_number) : (shotFrameNode.title || '分镜图'));
+      if(newTitle !== shotFrameNode.title){
+        shotFrameNode.title = newTitle;
+        const titleEl = el.querySelector('.node-title');
+        if(titleEl){
+          const titleText = window.t ? window.t('shot_frame_title', { title: newTitle }) : `分镜: ${newTitle}`;
+          titleEl.setAttribute('data-i18n-params', JSON.stringify({ title: newTitle }));
+          const svg = titleEl.querySelector('svg');
+          if(svg){
+            let nxt = svg.nextSibling;
+            while(nxt){ const n = nxt.nextSibling; nxt.remove(); nxt = n; }
+            titleEl.appendChild(document.createTextNode(titleText));
+          } else {
+            titleEl.textContent = titleText;
+          }
+        }
+      }
     }
 
     // 增量同步核心：按 shots 数组同步 shot_frame 节点
@@ -8889,16 +9000,14 @@
       const isAsync = options && options.isAsync;
       const shots = shotGroupNode.data.shots || [];
       if(shots.length === 0){
-        if(isAsync){
-          console.log('[分镜同步] 分镜组没有分镜数据');
-        } else {
-          showToast('分镜组中没有分镜数据', 'warning');
-        }
+        if(!isAsync) showToast('分镜组中没有分镜数据', 'warning');
         return [];
       }
 
-      // 按 shot_number 排序，确保按顺序处理（拷贝后排序，不修改原 shots 数组）
-      const sortedShots = [...shots].sort((a, b) => (a.shot_number || 0) - (b.shot_number || 0));
+      // 按数组顺序处理（用户编辑后的显示顺序），不再按 shot_number 排序：
+      // addNewShot/deleteShot 已不 renumber，LLM 生成的 shot_number（全局值如 5/6/7）需保留用于标题显示，
+      // 数组顺序即正确顺序。
+      const sortedShots = [...shots];
 
       // 建立 shot_id → 已有 shot_frame 节点 的映射，并收集所有关联节点（用于孤儿检测）
       const existingMap = new Map();
@@ -8977,7 +9086,31 @@
       }
 
       // 按 shots 顺序重排有效节点的 y 坐标，孤儿节点移到末尾避免重叠
-      let nextY = shotGroupNode.y;
+      // 起点 nextY 的确定（关键：避免剧本拆分时多个分镜组的分镜节点重合）：
+      //  - 增量同步（updatedCount>0，如"生成分镜"按钮就地更新已有节点）：在本分镜组旁边重排，从 group.y 起。
+      //  - 全新建（updatedCount===0，如剧本拆分批量生成）：多个分镜组共享同一 targetX 列（x+1200），
+      //    且 parse-script 给每组预留的纵向空间（shotCount*700）小于实际分镜节点堆叠高度，
+      //    故需扫描同列已有 shot_frame 的最大底部，从其下方起排，避免覆盖前一组节点。
+      let nextY;
+      if(updatedCount > 0){
+        nextY = shotGroupNode.y;
+      } else {
+        const processedIdSet = new Set();
+        orderedNodes.forEach(n => { if(n) processedIdSet.add(n.id); });
+        orphanNodes.forEach(n => { if(n) processedIdSet.add(n.id); });
+        let globalMaxBottom = shotGroupNode.y;
+        state.nodes.forEach(n => {
+          if(n.type === 'shot_frame' && !processedIdSet.has(n.id) && Math.abs(n.x - targetX) < 200){
+            const otherEl = canvasEl.querySelector(`.node[data-node-id="${n.id}"]`);
+            const h = otherEl ? otherEl.offsetHeight : 500;
+            const bottom = n.y + h;
+            if(bottom > globalMaxBottom) globalMaxBottom = bottom;
+          }
+        });
+        nextY = globalMaxBottom > shotGroupNode.y
+          ? globalMaxBottom + SHOT_FRAME_GAP_Y
+          : shotGroupNode.y;
+      }
       const reposition = (node) => {
         if(!node) return;
         node.x = targetX;
@@ -9004,10 +9137,6 @@
       if(orphanNodes.length > 0) parts.push(`保留 ${orphanNodes.length} 个已从列表移除的节点`);
       const msg = parts.length > 0 ? `分镜已同步：${parts.join('、')}` : '分镜已是最新，无需同步';
       showToast(msg, (createdNodeIds.length > 0 || updatedCount > 0) ? 'success' : 'info');
-
-      if(isAsync){
-        console.log(`[分镜同步] 新建: ${createdNodeIds.length}, 更新: ${updatedCount}, 孤儿保留: ${orphanNodes.length}`);
-      }
 
       return createdNodeIds;
     }
@@ -9109,7 +9238,9 @@
       const inheritedModel = opts && opts.model ? opts.model : defaultImageModel;
       const inheritedVideoModel = (opts && opts.videoModel) || getVideoModelFromData(shotData) || defaultVideoModel;
       
-      const shotTitle = shotData.shot_id || shotData.shot_number ? `镜头${shotData.shot_number || ''}` : '分镜图';
+      // 标题：手动添加的分镜（shot_id 为 N_x 格式，如 5_1）用 shot_id；LLM 生成的（s001 等）用 shot_number（位置序号）
+      const _titleSid = String(shotData.shot_id || '');
+      const shotTitle = /^\d+_\d+$/.test(_titleSid) ? _titleSid : (shotData.shot_number ? String(shotData.shot_number) : (shotData.shot_id || '分镜图'));
       
       // 构建图片提示词，包含时间和天气信息
       let imagePrompt = shotData.opening_frame_description || '';

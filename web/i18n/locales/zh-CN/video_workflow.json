@@ -412,6 +412,7 @@
   "shot_group_preview_section": "分镜预览与生成",
   "shot_group_preview_label": "分镜预览（{count}个分镜）",
   "shot_group_no_shot_node": "暂无分镜节点",
+  "shot_group_model_label": "分镜模型",
   "shot_group_grid_model_label": "宫格生图模型",
   "shot_group_grid_type_label": "宫格类型",
   "shot_group_grid_auto": "自动选择",
