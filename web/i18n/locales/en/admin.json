@@ -451,5 +451,15 @@
   "toast_commission_approve_success": "Payment confirmed",
   "toast_commission_reject_success": "Rejected and commission returned",
   "toast_commission_action_failed": "Action failed",
-  "toast_commission_load_failed": "Failed to load withdrawal list"
+  "toast_commission_load_failed": "Failed to load withdrawal list",
+  "commission_max_rate_title": "Max Commission Rate",
+  "commission_max_rate_desc": "Maximum commission rate that invitees can set",
+  "commission_max_rate_current": "Current Max",
+  "commission_max_rate_edit": "Edit Max Rate",
+  "commission_max_rate_new": "New Max Rate(%)",
+  "commission_max_rate_warning": "After modification, users with rates exceeding the new limit will be automatically reduced",
+  "commission_max_rate_affected": "{{count}} user(s) commission rate has been adjusted",
+  "commission_max_rate_no_affected": "No users affected",
+  "toast_max_rate_load_failed": "Failed to load max rate",
+  "toast_max_rate_updated": "Max commission rate updated"
 }

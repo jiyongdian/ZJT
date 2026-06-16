@@ -633,9 +633,9 @@
                 <span>我的抽佣比例</span>
                 <strong>{{ commissionRateInput }}%</strong>
               </div>
-              <input class="commission-rate-range" type="range" min="0" max="50" step="1" v-model.number="commissionRateInput" />
+              <input class="commission-rate-range" type="range" min="0" :max="maxCommissionRate" step="1" v-model.number="commissionRateInput" />
               <div class="commission-hint">
-                你邀请的用户充值时，按此比例给你抽佣（0%=关闭，范围 0%~50%）
+                你邀请的用户充值时，按此比例给你抽佣（0%=关闭，范围 0%~{{ maxCommissionRate }}%）
               </div>
               <button class="btn secondary commission-save-btn" :disabled="commissionSaving" @click="saveCommissionRate">
                 {{ commissionSaving ? '保存中...' : '保存比例' }}
@@ -7395,6 +7395,7 @@
       commissionSummary: { available: 0, frozen: 0, withdrawn: 0, total: 0 },
       commissionRate: 0,
       commissionRateInput: 0,
+      maxCommissionRate: 50,
       commissionRecords: [],
       commissionWithdrawals: [],
       commissionSaving: false,
@@ -8670,6 +8671,10 @@
           if (response.data.code === 0) {
             this.commissionRate = response.data.data.rate || 0;
             this.commissionRateInput = Math.round(this.commissionRate * 100);
+            // 动态获取管理员设置的上限（百分比整数）
+            if (response.data.data.max_rate != null) {
+              this.maxCommissionRate = Math.round(response.data.data.max_rate * 100);
+            }
           }
         } catch (error) {
           // 忽略
@@ -8678,6 +8683,10 @@
 
       async saveCommissionRate() {
         if (!this.authToken) return;
+        // 确保不超过上限
+        if (this.commissionRateInput > this.maxCommissionRate) {
+          this.commissionRateInput = this.maxCommissionRate;
+        }
         this.commissionSaving = true;
         try {
           const rate = (Number(this.commissionRateInput) / 100).toFixed(2);

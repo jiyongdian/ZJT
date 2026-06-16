@@ -451,5 +451,15 @@
   "toast_commission_approve_success": "已确认打款",
   "toast_commission_reject_success": "已驳回并退回佣金",
   "toast_commission_action_failed": "操作失败",
-  "toast_commission_load_failed": "加载提现列表失败"
+  "toast_commission_load_failed": "加载提现列表失败",
+  "commission_max_rate_title": "佣金比例上限",
+  "commission_max_rate_desc": "邀请人可设置的最高佣金比例",
+  "commission_max_rate_current": "当前上限",
+  "commission_max_rate_edit": "修改上限",
+  "commission_max_rate_new": "新上限(%)",
+  "commission_max_rate_warning": "修改后，超过新上限的用户佣金比例将被自动降低为新上限值",
+  "commission_max_rate_affected": "共 {{count}} 个用户的佣金比例已被调整",
+  "commission_max_rate_no_affected": "无用户受到影响",
+  "toast_max_rate_load_failed": "加载佣金上限失败",
+  "toast_max_rate_updated": "佣金比例上限已更新"
 }
