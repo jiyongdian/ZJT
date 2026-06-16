@@ -63,7 +63,9 @@ from config.constant import (
     GRID_LOCK_TIMEOUT_SECONDS,
     GRID_IMAGE_DOWNLOAD_TIMEOUT,
     FilePathConstants,
-    UploadPathConstants
+    UploadPathConstants,
+    JIANYING_RATIO_RESOLUTION,
+    JIANYING_DEFAULT_RATIO
 )
 from utils.wechat_pay_util import WechatPayUtil
 from utils.project_path import (
@@ -8148,6 +8150,7 @@ class ExportTimelineDraftRequest(BaseModel):
     pillars: List[dict] = []
     workflow_name: Optional[str] = "未命名工作流"
     request_origin: Optional[str] = None
+    ratio: Optional[str] = None  # 画布比例，如 9:16 / 16:9
     # 兼容旧版本
     timeline_clips: Optional[List[dict]] = None
 
@@ -8383,16 +8386,43 @@ async def export_timeline_draft(
         # 创建剪影草稿
         logger.info("开始生成剪影草稿...")
         
-        # 创建库实例
+        # 根据前端选择的比例设置画布尺寸
+        ratio = payload.ratio or JIANYING_DEFAULT_RATIO
+        canvas_width, canvas_height = JIANYING_RATIO_RESOLUTION.get(
+            ratio, JIANYING_RATIO_RESOLUTION[JIANYING_DEFAULT_RATIO])
         library = JianyingMultiTrackLibrary(
             draft_name=draft_name,
             output_dir=local_draft_parent,
-            material_path_prefix=payload.draft_path
+            material_path_prefix=payload.draft_path,
+            width=canvas_width,
+            height=canvas_height,
+            ratio=ratio
         )
+        logger.info(f"画布比例: {ratio} -> {canvas_width}x{canvas_height}")
         
         # 创建视频轨道和音频轨道
         video_track = library.create_video_track("主轨道")
         audio_track = library.create_audio_track("音频轨道")
+
+        # 预取每个已下载文件的真实时长/尺寸（ffprobe 在线程池执行，不阻塞事件循环）
+        probe_cache = {}
+        probe_sem = asyncio.Semaphore(8)
+
+        async def _probe_media(item):
+            fp = item['file_path']
+            if fp not in probe_cache:
+                async with probe_sem:
+                    info = await asyncio.to_thread(library.media_utils.probe_safe, fp)
+                probe_cache[fp] = info
+            info = probe_cache[fp]
+            item['real_duration_us'] = info.get('duration_us', 0)
+            item['real_width'] = info.get('width', 0)
+            item['real_height'] = info.get('height', 0)
+            return item
+
+        if downloaded_video_files or downloaded_audio_files:
+            await asyncio.gather(*[_probe_media(it) for it in downloaded_video_files + downloaded_audio_files])
+            logger.info(f"已完成 {len(probe_cache)} 个文件的媒体信息探测")
         
         # 如果有柱子数据，使用柱子系统处理（支持不连续的视频）
         if payload.pillars:
@@ -8434,25 +8464,32 @@ async def export_timeline_draft(
                             has_video = True
                             clip = downloaded_item['clip']
                             file_path = downloaded_item['file_path']
-                            
+
                             # 计算剪切后的时长
                             start_time = clip.get('startTime', 0)
                             end_time = clip.get('endTime', clip.get('duration', 0))
                             clip_duration_sec = end_time - start_time
-                            
-                            # 转换为微秒
                             source_start = seconds_to_microseconds(start_time)
+
+                            # 未手动裁剪时用 ffprobe 真实时长，避免超出部分被切除
+                            real_duration_us = downloaded_item.get('real_duration_us', 0)
+                            if start_time == 0 and end_time >= clip.get('duration', 0) and real_duration_us > 0:
+                                clip_duration_sec = real_duration_us / 1_000_000
+
                             clip_duration = seconds_to_microseconds(clip_duration_sec)
-                            
-                            # 添加到轨道
+
+                            # 添加到轨道（传真实尺寸用于等比铺满，material_duration 为文件完整时长）
                             library.add_video_to_track(
                                 track_id=video_track,
                                 file_path=file_path,
                                 start_time=seconds_to_microseconds(current_time + pillar_video_duration),
                                 duration=clip_duration,
-                                source_start=source_start
+                                source_start=source_start,
+                                width=downloaded_item.get('real_width') or None,
+                                height=downloaded_item.get('real_height') or None,
+                                material_duration=real_duration_us or None
                             )
-                            
+
                             pillar_video_duration += clip_duration_sec
                             logger.info(f"  添加视频片段: {clip.get('name')}, 时长={clip_duration_sec:.2f}秒")
                 
@@ -8494,20 +8531,25 @@ async def export_timeline_draft(
                             start_time = clip.get('startTime', 0)
                             end_time = clip.get('endTime', clip.get('duration', 0))
                             clip_duration_sec = end_time - start_time
-                            
-                            # 转换为微秒
                             source_start = seconds_to_microseconds(start_time)
+
+                            # 未手动裁剪时用 ffprobe 真实时长，避免超出部分被切除
+                            real_duration_us = downloaded_item.get('real_duration_us', 0)
+                            if start_time == 0 and end_time >= clip.get('duration', 0) and real_duration_us > 0:
+                                clip_duration_sec = real_duration_us / 1_000_000
+
                             clip_duration = seconds_to_microseconds(clip_duration_sec)
-                            
-                            # 添加到轨道
+
+                            # 添加到轨道（material_duration 为文件完整时长）
                             library.add_audio_to_track(
                                 track_id=audio_track,
                                 file_path=file_path,
                                 start_time=seconds_to_microseconds(current_time + pillar_audio_duration),
                                 duration=clip_duration,
-                                source_start=source_start
+                                source_start=source_start,
+                                material_duration=real_duration_us or None
                             )
-                            
+
                             pillar_audio_duration += clip_duration_sec
                             logger.info(f"  添加音频片段: {clip.get('name')}, 时长={clip_duration_sec:.2f}秒")
                 
@@ -8529,21 +8571,30 @@ async def export_timeline_draft(
                 # 计算剪切后的时长
                 start_time = clip.get('startTime', 0)
                 end_time = clip.get('endTime', clip.get('duration', 0))
-                
-                # 转换为微秒
                 source_start = seconds_to_microseconds(start_time)
-                clip_duration = seconds_to_microseconds(end_time - start_time)
-                
-                # 添加到轨道
+
+                # 未手动裁剪时用 ffprobe 真实时长，避免超出部分被切除
+                real_duration_us = item.get('real_duration_us', 0)
+                if start_time == 0 and end_time >= clip.get('duration', 0) and real_duration_us > 0:
+                    used_duration_sec = real_duration_us / 1_000_000
+                else:
+                    used_duration_sec = end_time - start_time
+
+                clip_duration = seconds_to_microseconds(used_duration_sec)
+
+                # 添加到轨道（传真实尺寸用于等比铺满，material_duration 为文件完整时长）
                 library.add_video_to_track(
                     track_id=video_track,
                     file_path=file_path,
                     start_time=seconds_to_microseconds(current_time),
                     duration=clip_duration,
-                    source_start=source_start
+                    source_start=source_start,
+                    width=item.get('real_width') or None,
+                    height=item.get('real_height') or None,
+                    material_duration=real_duration_us or None
                 )
-                
-                current_time += (end_time - start_time)
+
+                current_time += used_duration_sec
             
             # 添加音频片段
             audio_time = 0
@@ -8554,21 +8605,28 @@ async def export_timeline_draft(
                 # 计算剪切后的时长
                 start_time = clip.get('startTime', 0)
                 end_time = clip.get('endTime', clip.get('duration', 0))
-                
-                # 转换为微秒
                 source_start = seconds_to_microseconds(start_time)
-                clip_duration = seconds_to_microseconds(end_time - start_time)
-                
-                # 添加到轨道
+
+                # 未手动裁剪时用 ffprobe 真实时长，避免超出部分被切除
+                real_duration_us = item.get('real_duration_us', 0)
+                if start_time == 0 and end_time >= clip.get('duration', 0) and real_duration_us > 0:
+                    used_duration_sec = real_duration_us / 1_000_000
+                else:
+                    used_duration_sec = end_time - start_time
+
+                clip_duration = seconds_to_microseconds(used_duration_sec)
+
+                # 添加到轨道（material_duration 为文件完整时长）
                 library.add_audio_to_track(
                     track_id=audio_track,
                     file_path=file_path,
                     start_time=seconds_to_microseconds(audio_time),
                     duration=clip_duration,
-                    source_start=source_start
+                    source_start=source_start,
+                    material_duration=real_duration_us or None
                 )
-                
-                audio_time += (end_time - start_time)
+
+                audio_time += used_duration_sec
         
         # 生成草稿
         generator = DraftGenerator(library)

@@ -100,14 +100,15 @@ if not "!UV_MIRROR!"=="auto" (
     if "%UV_MIRROR%"=="ghfast" set "MIRROR_IDX=0"
     if "%UV_MIRROR%"=="ghproxy" set "MIRROR_IDX=1"
     if "%UV_MIRROR%"=="direct" set "MIRROR_IDX=2"
-    set "AUTO_RETRY=0"
+    REM 仅用户手动指定镜像时才禁止回退，auto检测结果允许回退
+    if "%COMFYUI_MIRROR_MODE%"=="manual" set "AUTO_RETRY=0"
 )
 
 :try_mirror
 if "!MIRROR_IDX!"=="0" set "MIRROR_NAME=ghfast"
-if "!MIRROR_IDX!"=="0" set "MIRROR_URL=https://ghfast.top/https://github.com/indygreg/python-build-standalone/releases/download"
+if "!MIRROR_IDX!"=="0" set "MIRROR_URL=https://ghfast.top/https://github.com/astral-sh/python-build-standalone/releases/download"
 if "!MIRROR_IDX!"=="1" set "MIRROR_NAME=ghproxy"
-if "!MIRROR_IDX!"=="1" set "MIRROR_URL=https://ghproxy.cn/https://github.com/indygreg/python-build-standalone/releases/download"
+if "!MIRROR_IDX!"=="1" set "MIRROR_URL=https://ghproxy.cn/https://github.com/astral-sh/python-build-standalone/releases/download"
 if "!MIRROR_IDX!"=="2" set "MIRROR_NAME=direct"
 if "!MIRROR_IDX!"=="2" set "MIRROR_URL="
 if "!MIRROR_IDX!"=="3" goto :mirror_all_failed

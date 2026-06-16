@@ -101,7 +101,7 @@ class DraftGenerator:
         return {
             "canvas_config": {
                 "height": self.library.height,
-                "ratio": "original",
+                "ratio": self.library.ratio,
                 "width": self.library.width
             },
             "color_space": 0,
@@ -279,6 +279,8 @@ class DraftGenerator:
                     "alpha": 1.0,
                     "flip": {"horizontal": False, "vertical": False},
                     "rotation": 0.0,
+                    # scale=1.0 为剪映默认适配基准：素材自动等比适应画布（保持长宽比、不裁切、不变形）。
+                    # 切勿按"画布/素材尺寸比例"计算后写入——剪映会在该适配基准上叠加，导致过度放大、画面双向溢出只看到中间。
                     "scale": {"x": 1.0, "y": 1.0},
                     "transform": {"x": 0.0, "y": 0.0}
                 },

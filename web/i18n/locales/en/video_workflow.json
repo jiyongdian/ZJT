@@ -412,6 +412,7 @@
   "shot_group_preview_section": "Shot Preview and Generation",
   "shot_group_preview_label": "Shot Preview ({count} shots)",
   "shot_group_no_shot_node": "No shot nodes",
+  "shot_group_model_label": "Shot Model",
   "shot_group_grid_model_label": "Grid Generation Model",
   "shot_group_grid_type_label": "Grid Type",
   "shot_group_grid_auto": "Auto Select",
