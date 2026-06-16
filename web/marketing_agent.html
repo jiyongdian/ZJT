@@ -359,7 +359,7 @@
                                         <div style="margin-bottom: 20px;">
                                             <span style="font-size: 14px; font-weight: 500; color: #1a1a1a; display: block; margin-bottom: 12px;">{{ $t('select_ratio') }}</span>
                                             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                                                <div v-for="ratio in currentRatios" :key="ratio.value" @click.stop="selectedRatio = ratio.value" style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 10px; border-radius: 10px; cursor: pointer; transition: all 0.2s;" :style="{ border: selectedRatio === ratio.value ? '2px solid #00a8e6' : '2px solid transparent', background: selectedRatio === ratio.value ? '#e6f7ff' : '#f5f5f5' }">
+                                                <div v-for="ratio in currentRatios" :key="ratio.value" @click.stop="selectRatio(ratio.value)" style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 10px; border-radius: 10px; cursor: pointer; transition: all 0.2s;" :style="{ border: selectedRatio === ratio.value ? '2px solid #00a8e6' : '2px solid transparent', background: selectedRatio === ratio.value ? '#e6f7ff' : '#f5f5f5' }">
                                                     <div :style="{ width: ratio.w + 'px', height: ratio.h + 'px', border: '2px solid ' + (selectedRatio === ratio.value ? '#00a8e6' : '#ccc'), borderRadius: '3px', display: 'flex', alignItems: 'center', justifyContent: 'center' }">
                                                         <div v-if="ratio.value === 'auto'" style="font-size: 10px; color: #666;">☆</div>
                                                     </div>
@@ -408,13 +408,14 @@
                                                 <div style="flex: 1;">
                                                     <button @click.stop="showModelSelect = !showModelSelect" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #f5f5f5; border: none; border-radius: 10px; cursor: pointer; font-size: 13px; color: #1a1a1a;">
                                                         <span style="display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px;">
-                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                                                                <path d="M12 5c-2.5 0-4.5 1.5-4.5 3.5 0 1.5 1 2.8 2.5 3.4-.3.8-.5 1.6-.5 2.6 0 3 2.5 5.5 5.5 5.5s5.5-2.5 5.5-5.5c0-1-.2-1.8-.5-2.6 1.5-.6 2.5-1.9 2.5-3.4 0-2-2-3.5-4.5-3.5z"/>
-                                                                <path d="M12 5c0-1.5-1-2.5-2.5-2.5s-2.5 1-2.5 2.5"/>
-                                                                <path d="M12 5c0-1.5 1-2.5 2.5-2.5s2.5 1 2.5 2.5"/>
-                                                                <path d="M7.5 8c-1 0-2 .5-2.5 1.5"/>
-                                                                <path d="M16.5 8c1 0 2 .5 2.5 1.5"/>
-                                                                <path d="M9 12c0 1.5 1 3 3 3s3-1.5 3-3"/>
+                                                            <svg v-if="!isVideoMode" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                                                <rect x="3" y="5" width="18" height="14" rx="2"/>
+                                                                <circle cx="8.5" cy="10" r="1.5"/>
+                                                                <path d="M21 15l-5-5L5 19"/>
+                                                            </svg>
+                                                            <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                                                <rect x="3" y="5" width="18" height="14" rx="2"/>
+                                                                <path d="M10 9l5 3-5 3V9z"/>
                                                             </svg>
                                                             <span style="overflow: hidden; text-overflow: ellipsis;">{{ selectedModel }}</span>
                                                         </span>
@@ -436,7 +437,7 @@
                                                 <!-- LLM 模型选择列表 -->
                                                 <div v-if="showLLMModelSelect" style="background: #fafafa; border-radius: 12px; padding: 12px; margin-top: 8px; max-height: 200px; overflow-y: auto;">
                                                     <div style="font-size: 12px; color: #999; margin-bottom: 10px;">{{ $t('select_llm_model_label') }}{{ selectedLLMModel ? selectedLLMModel.name : '' }}</div>
-                                                    <div v-for="model in allLLMModels" :key="model.id" @click.stop="selectLLMModel(model)" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: background 0.2s; margin-bottom: 4px;" :style="{ background: selectedLLMModel && selectedLLMModel.id === model.id ? '#fff' : 'transparent', border: selectedLLMModel && selectedLLMModel.id === model.id ? '1px solid #e8e8e8' : '1px solid transparent', boxShadow: selectedLLMModel && selectedLLMModel.id === model.id ? '0 1px 4px rgba(0,0,0,0.05)' : 'none' }">
+                                                    <div v-for="model in allLLMModels" :key="getLLMModelSelectionKey(model)" @click.stop="selectLLMModel(model)" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: background 0.2s; margin-bottom: 4px;" :style="{ background: selectedLLMModelKey === getLLMModelSelectionKey(model) ? '#fff' : 'transparent', border: selectedLLMModelKey === getLLMModelSelectionKey(model) ? '1px solid #e8e8e8' : '1px solid transparent', boxShadow: selectedLLMModelKey === getLLMModelSelectionKey(model) ? '0 1px 4px rgba(0,0,0,0.05)' : 'none' }">
                                                         <div style="width: 36px; height: 36px; background: #f0f0f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px;">🤖</div>
                                                         <div style="flex: 1;">
                                                             <div style="font-size: 14px; font-weight: 500; color: #1a1a1a; display: flex; align-items: center; gap: 6px;">
@@ -446,7 +447,7 @@
                                                             </div>
                                                             <div style="font-size: 12px; color: #999; margin-top: 2px;">{{ model.vendor }}</div>
                                                         </div>
-                                                        <span v-if="selectedLLMModel && selectedLLMModel.id === model.id" style="color: #1a1a1a; font-size: 18px;">✓</span>
+                                                        <span v-if="selectedLLMModelKey === getLLMModelSelectionKey(model)" style="color: #1a1a1a; font-size: 18px;">✓</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -458,12 +459,9 @@
                                                     <div style="width: 36px; height: 36px; background: #f0f0f0; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
                                                         <!-- 图片模型 icon -->
                                                         <svg v-if="!isVideoMode" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                                                            <path d="M12 5c-2.5 0-4.5 1.5-4.5 3.5 0 1.5 1 2.8 2.5 3.4-.3.8-.5 1.6-.5 2.6 0 3 2.5 5.5 5.5 5.5s5.5-2.5 5.5-5.5c0-1-.2-1.8-.5-2.6 1.5-.6 2.5-1.9 2.5-3.4 0-2-2-3.5-4.5-3.5z"/>
-                                                            <path d="M12 5c0-1.5-1-2.5-2.5-2.5s-2.5 1-2.5 2.5"/>
-                                                            <path d="M12 5c0-1.5 1-2.5 2.5-2.5s2.5 1 2.5 2.5"/>
-                                                            <path d="M7.5 8c-1 0-2 .5-2.5 1.5"/>
-                                                            <path d="M16.5 8c1 0 2 .5 2.5 1.5"/>
-                                                            <path d="M9 12c0 1.5 1 3 3 3s3-1.5 3-3"/>
+                                                            <rect x="3" y="5" width="18" height="14" rx="2"/>
+                                                            <circle cx="8.5" cy="10" r="1.5"/>
+                                                            <path d="M21 15l-5-5L5 19"/>
                                                         </svg>
                                                         <!-- 视频模型 icon -->
                                                         <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -491,8 +489,14 @@
                                 <!-- 模型选择 -->
                                 <div class="marketing-dropdown" style="position: relative;">
                                     <button class="marketing-bar-btn" @click.stop="toggleModelPanel">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                                        <svg v-if="!isVideoMode" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                                            <rect x="3" y="5" width="18" height="14" rx="2"/>
+                                            <circle cx="8.5" cy="10" r="1.5"/>
+                                            <path d="M21 15l-5-5L5 19"/>
+                                        </svg>
+                                        <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                                            <rect x="3" y="5" width="18" height="14" rx="2"/>
+                                            <path d="M10 9l5 3-5 3V9z"/>
                                         </svg>
                                         <span>{{ selectedModel }}</span>
                                     </button>
@@ -504,12 +508,9 @@
                                             <div style="width: 36px; height: 36px; background: #f0f0f0; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
                                                 <!-- 图片模型 icon -->
                                                 <svg v-if="!isVideoMode" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                                                    <path d="M12 5c-2.5 0-4.5 1.5-4.5 3.5 0 1.5 1 2.8 2.5 3.4-.3.8-.5 1.6-.5 2.6 0 3 2.5 5.5 5.5 5.5s5.5-2.5 5.5-5.5c0-1-.2-1.8-.5-2.6 1.5-.6 2.5-1.9 2.5-3.4 0-2-2-3.5-4.5-3.5z"/>
-                                                    <path d="M12 5c0-1.5-1-2.5-2.5-2.5s-2.5 1-2.5 2.5"/>
-                                                    <path d="M12 5c0-1.5 1-2.5 2.5-2.5s2.5 1 2.5 2.5"/>
-                                                    <path d="M7.5 8c-1 0-2 .5-2.5 1.5"/>
-                                                    <path d="M16.5 8c1 0 2 .5 2.5 1.5"/>
-                                                    <path d="M9 12c0 1.5 1 3 3 3s3-1.5 3-3"/>
+                                                    <rect x="3" y="5" width="18" height="14" rx="2"/>
+                                                    <circle cx="8.5" cy="10" r="1.5"/>
+                                                    <path d="M21 15l-5-5L5 19"/>
                                                 </svg>
                                                 <!-- 视频模型 icon -->
                                                 <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -543,7 +544,7 @@
                                         <div style="margin-bottom: 16px;">
                                             <span style="font-size: 13px; color: #999; display: block; margin-bottom: 10px;">{{ $t('select_ratio') }}</span>
                                             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                                                <div v-for="ratio in currentRatios" :key="ratio.value" @click.stop="selectedRatio = ratio.value" style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 10px; border-radius: 10px; cursor: pointer; transition: all 0.2s;" :style="{ border: selectedRatio === ratio.value ? '2px solid #00a8e6' : '2px solid transparent', background: selectedRatio === ratio.value ? '#e6f7ff' : '#f5f5f5' }">
+                                                <div v-for="ratio in currentRatios" :key="ratio.value" @click.stop="selectRatio(ratio.value)" style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 10px; border-radius: 10px; cursor: pointer; transition: all 0.2s;" :style="{ border: selectedRatio === ratio.value ? '2px solid #00a8e6' : '2px solid transparent', background: selectedRatio === ratio.value ? '#e6f7ff' : '#f5f5f5' }">
                                                     <div :style="{ width: ratio.w + 'px', height: ratio.h + 'px', border: '2px solid ' + (selectedRatio === ratio.value ? '#00a8e6' : '#ccc'), borderRadius: '3px', display: 'flex', alignItems: 'center', justifyContent: 'center' }">
                                                         <div v-if="ratio.value === 'auto'" style="font-size: 10px; color: #666;">☆</div>
                                                     </div>
@@ -817,9 +818,10 @@
             const autoMode = ref(false);
             const showModelSelect = ref(false);
             const mediaType = ref('image');
-            const selectedRatio = ref('1:1');
-            const selectedModel = ref('');
-            const selectedModelKey = ref('');
+            const selectedRatio = ref('9:16');
+            const hasUserSelectedRatio = ref(false);
+            const selectedImageModel = ref('');
+            const selectedImageModelKey = ref('');
             const selectedResolution = ref('');
             // 专用视频模型状态（独立于图片模型的 selectedModelKey）
             const selectedVideoModelKey = ref('');
@@ -1099,6 +1101,7 @@
             // LLM 模型数据（用于 Agent 模式对话）
             const allLLMModels = ref([]);
             const selectedLLMModel = ref(null);
+            const selectedLLMModelKey = Vue.computed(() => getLLMModelSelectionKey(selectedLLMModel.value));
             const showLLMModelSelect = ref(false);
 
             // Verification（ask_user 交互）状态
@@ -1151,6 +1154,32 @@
             const isVideoMode = Vue.computed(() => {
                 return selectedType.value === 'video' ||
                        (selectedType.value === 'agent' && mediaType.value === 'video');
+            });
+
+            const selectedModel = Vue.computed({
+                get() {
+                    return isVideoMode.value ? selectedVideoModelName.value : selectedImageModel.value;
+                },
+                set(value) {
+                    if (isVideoMode.value) {
+                        selectedVideoModelName.value = value || '';
+                    } else {
+                        selectedImageModel.value = value || '';
+                    }
+                }
+            });
+
+            const selectedModelKey = Vue.computed({
+                get() {
+                    return isVideoMode.value ? selectedVideoModelKey.value : selectedImageModelKey.value;
+                },
+                set(value) {
+                    if (isVideoMode.value) {
+                        selectedVideoModelKey.value = value || '';
+                    } else {
+                        selectedImageModelKey.value = value || '';
+                    }
+                }
             });
 
             // 当前视频时长选项（根据选中模型动态计算，videoModelConfigs 使用简短 key）
@@ -2796,7 +2825,7 @@
                     // 构建图片偏好（auto 分辨率不传）
                     const imagePreferences = {
                         ratio: selectedRatio.value,
-                        model_name: selectedModel.value
+                        model_name: selectedImageModel.value
                     };
                     if (selectedResolution.value && selectedResolution.value !== 'auto') {
                         const sizeMap = { '1K': '1K', [window.t('resolution_2k')]: '2K', [window.t('resolution_4k')]: '4K' };
@@ -2825,7 +2854,7 @@
                                 model_name: selectedVideoModelName.value || undefined,
                                 task_id: window.TaskConfig?.getTaskIdByKey
                                     ? (window.TaskConfig.getTaskIdByKey(
-                                        selectedVideoModelKey.value || selectedModelKey.value,
+                                        selectedVideoModelKey.value,
                                         hasUploadedImage.value ? 'image_to_video' : 'text_to_video'))
                                     : undefined
                             } : undefined
@@ -3964,7 +3993,7 @@
                     // 获取文生图模型
                     const imgOpts = window.TaskConfig.getModelOptionsForCategory('text_to_image');
                     allImageModels.value = imgOpts.map((opt, idx) => ({
-                        icon: '🚀',
+                        icon: '🖼️',
                         name: opt.label.split(' (')[0],
                         desc: opt.label,
                         key: opt.key,
@@ -3974,7 +4003,7 @@
                     // 获取文生视频模型
                     const txtVidOpts = window.TaskConfig.getModelOptionsForCategory('text_to_video');
                     allTextToVideoModels.value = txtVidOpts.map((opt, idx) => ({
-                        icon: '🎬',
+                        icon: '📹',
                         name: opt.label.split(' (')[0],
                         desc: opt.label,
                         key: opt.key,
@@ -3984,7 +4013,7 @@
                     // 获取图生视频模型
                     const imgVidOpts = window.TaskConfig.getModelOptionsForCategory('image_to_video');
                     allImageToVideoModels.value = imgVidOpts.map((opt, idx) => ({
-                        icon: '🎬',
+                        icon: '📹',
                         name: opt.label.split(' (')[0],
                         desc: opt.label,
                         key: opt.key,
@@ -3996,26 +4025,26 @@
                     videoModelConfigs.value = window.TaskConfig.getModelConfigs ? window.TaskConfig.getModelConfigs() : {};
 
                     // 恢复用户偏好或默认选中第一个模型
-                    if (allImageModels.value.length > 0 && !selectedModel.value) {
+                    if (allImageModels.value.length > 0 && !selectedImageModel.value) {
                         const savedImageModel = localStorage.getItem('marketing_selected_image_model');
                         const savedImageModelKey = localStorage.getItem('marketing_selected_image_model_key');
 
                         if (savedImageModel && allImageModels.value.find(m => m.name === savedImageModel)) {
                             // 恢复用户保存的模型
                             const m = allImageModels.value.find(m => m.name === savedImageModel);
-                            selectedModel.value = m.name;
-                            selectedModelKey.value = m.key || '';
+                            selectedImageModel.value = m.name;
+                            selectedImageModelKey.value = m.key || '';
                             console.log('[初始化] 恢复用户偏好图片模型:', m.name);
                         } else {
                             // 默认优先选择 Seedream 5.0，没有则选第一个
                             const seedreamModel = allImageModels.value.find(m => m.name.includes('Seedream 5.0') || m.key === 'seedream_5');
                             const m = seedreamModel || allImageModels.value[0];
-                            selectedModel.value = m.name;
-                            selectedModelKey.value = m.key || '';
+                            selectedImageModel.value = m.name;
+                            selectedImageModelKey.value = m.key || '';
                             console.log('[初始化] 默认选择图片模型:', m.name);
                         }
                         // 同步默认图片模型到后端
-                        syncImageModelToBackend(allImageModels.value.find(m => m.name === selectedModel.value));
+                        syncImageModelToBackend(allImageModels.value.find(m => m.name === selectedImageModel.value));
                     }
 
                     // 恢复用户保存的视频模型偏好（优先从服务端获取，回退到 localStorage）
@@ -4050,8 +4079,6 @@
                         if (restoredT2VModel) {
                             selectedVideoModelKey.value = restoredT2VModel.key || '';
                             selectedVideoModelName.value = restoredT2VModel.name;
-                            selectedModel.value = restoredT2VModel.name;
-                            selectedModelKey.value = restoredT2VModel.key || '';
                             localStorage.setItem('marketing_selected_t2v_model', restoredT2VModel.name);
                             console.log('[初始化] 恢复文生视频模型:', restoredT2VModel.name);
                         } else {
@@ -4103,12 +4130,13 @@
                     const savedRatio = localStorage.getItem('marketing_selected_ratio');
                     if (savedRatio) {
                         selectedRatio.value = savedRatio;
+                        hasUserSelectedRatio.value = true;
                         console.log('[初始化] 恢复用户偏好比例:', savedRatio);
                     }
 
                     // 刷新比例和分辨率
-                    refreshModelSettings();
                     taskConfigReady.value = true;
+                    refreshModelSettings();
 
                     // 加载 LLM 模型列表
                     await loadLLMModels();
@@ -4116,6 +4144,27 @@
                     console.error('加载 TaskConfig 失败:', e);
                     loadDefaultModels();
                 }
+            }
+
+            function getLLMModelSelectionKey(model) {
+                if (!model) return '';
+                return `${model.id || ''}:${model.vendor_id || ''}`;
+            }
+
+            function getLLMVendorPriority(model) {
+                const vendorName = String(model?.vendor || '').toLowerCase();
+                if (vendorName === 'volcengine') return 0;
+                if (vendorName === 'zjt_api') return 1;
+                return 2;
+            }
+
+            function pickPreferredLLMModel(models) {
+                if (!models || models.length === 0) return null;
+                return [...models].sort((a, b) => {
+                    const priorityDiff = getLLMVendorPriority(a) - getLLMVendorPriority(b);
+                    if (priorityDiff !== 0) return priorityDiff;
+                    return (a.id || 0) - (b.id || 0);
+                })[0];
             }
 
             // 加载 LLM 模型列表
@@ -4134,17 +4183,33 @@
                         }));
                         // 恢复用户保存的 LLM 模型偏好
                         const savedLLMModelId = localStorage.getItem('marketing_selected_llm_model_id');
+                        const savedLLMVendorId = localStorage.getItem('marketing_selected_llm_vendor_id');
                         if (savedLLMModelId && !selectedLLMModel.value && allLLMModels.value.length > 0) {
-                            const savedModel = allLLMModels.value.find(m => m.id === parseInt(savedLLMModelId));
+                            const savedModelId = parseInt(savedLLMModelId);
+                            const savedVendorId = savedLLMVendorId ? parseInt(savedLLMVendorId) : null;
+                            let savedModel = null;
+                            if (savedVendorId) {
+                                savedModel = allLLMModels.value.find(
+                                    m => m.id === savedModelId && m.vendor_id === savedVendorId
+                                );
+                            }
+                            if (!savedModel) {
+                                savedModel = pickPreferredLLMModel(
+                                    allLLMModels.value.filter(m => m.id === savedModelId)
+                                );
+                            }
                             if (savedModel) {
                                 selectedLLMModel.value = savedModel;
                                 console.log('[初始化] 恢复用户偏好 LLM 模型:', savedModel.name);
                             }
                         }
-                        // 如果没有恢复成功，默认选中 doubao-seed-2-0-lite，如果没有则选第一个
+                        // 如果没有恢复成功，默认选中火山引擎的 doubao-seed-2-0-lite，如果没有则选第一个
                         if (!selectedLLMModel.value && allLLMModels.value.length > 0) {
-                            const defaultModel = allLLMModels.value.find(m => m.name === 'doubao-seed-2-0-lite');
-                            selectedLLMModel.value = defaultModel || allLLMModels.value[0];
+                            const doubaoModel = pickPreferredLLMModel(
+                                allLLMModels.value.filter(m => m.name === 'doubao-seed-2-0-lite')
+                            );
+                            // 最后选择第一个模型
+                            selectedLLMModel.value = doubaoModel || allLLMModels.value[0];
                         }
                         console.log('[LLM] 加载了', allLLMModels.value.length, '个 LLM 模型');
                     }
@@ -4156,22 +4221,22 @@
             // 默认模型兜底
             function loadDefaultModels() {
                 allImageModels.value = [
-                    { icon: '🚀', name: 'Seedream 5.0', desc: window.t('desc_seedream'), tag: window.t('recommended'), key: 'seedream_5', value: 'seedream_5' },
-                    { icon: '🚀', name: 'GPT IMAGE 2', desc: window.t('desc_dalle3'), tag: '', key: 'gpt_image_2', value: 'gpt_image_2' },
-                    { icon: '🚀', name: '可图 3.0', desc: window.t('desc_kling_image'), tag: '', key: 'kling_image', value: 'kling_image' },
-                    { icon: '🚀', name: '通义万相 3.0', desc: window.t('desc_wanxiang'), tag: '', key: 'wanxiang', value: 'wanxiang' }
+                    { icon: '🖼️', name: 'Seedream 5.0', desc: window.t('desc_seedream'), tag: window.t('recommended'), key: 'seedream_5', value: 'seedream_5' },
+                    { icon: '🖼️', name: 'GPT IMAGE 2', desc: window.t('desc_dalle3'), tag: '', key: 'gpt_image_2', value: 'gpt_image_2' },
+                    { icon: '🖼️', name: '可图 3.0', desc: window.t('desc_kling_image'), tag: '', key: 'kling_image', value: 'kling_image' },
+                    { icon: '🖼️', name: '通义万相 3.0', desc: window.t('desc_wanxiang'), tag: '', key: 'wanxiang', value: 'wanxiang' }
                 ];
                 allTextToVideoModels.value = [
-                    { icon: '🎬', name: '可灵 2.0', desc: window.t('desc_kling_text_video'), tag: '', key: 'kling_text_video', value: 'kling_text_video' }
+                    { icon: '📹', name: '可灵 2.0', desc: window.t('desc_kling_text_video'), tag: '', key: 'kling_text_video', value: 'kling_text_video' }
                 ];
                 allImageToVideoModels.value = [
-                    { icon: '🎬', name: '可灵 2.0', desc: window.t('desc_kling_video'), tag: window.t('recommended'), key: 'kling_video', value: 'kling_video' },
-                    { icon: '🎬', name: '通义万相 3.0', desc: window.t('desc_wanxiang_video'), tag: '', key: 'wanxiang_video', value: 'wanxiang_video' }
+                    { icon: '📹', name: '可灵 2.0', desc: window.t('desc_kling_video'), tag: window.t('recommended'), key: 'kling_video', value: 'kling_video' },
+                    { icon: '📹', name: '通义万相 3.0', desc: window.t('desc_wanxiang_video'), tag: '', key: 'wanxiang_video', value: 'wanxiang_video' }
                 ];
-                if (!selectedModel.value) {
+                if (!selectedImageModel.value) {
                     const m = allImageModels.value[0];
-                    selectedModel.value = m.name;
-                    selectedModelKey.value = m.key || '';
+                    selectedImageModel.value = m.name;
+                    selectedImageModelKey.value = m.key || '';
                 }
                 availableRatios.value = ['auto', '1:1', '16:9', '9:16', '4:3', '3:4'];
                 availableResolutions.value = ['auto', '1K', window.t('resolution_2k')];
@@ -4191,8 +4256,16 @@
                 // 获取比例选项
                 const ratios = window.TaskConfig.getRatioOptions(modelKey);
                 availableRatios.value = ratios.length > 0 ? ratios : ['auto', '1:1', '16:9', '9:16', '4:3', '3:4'];
-                if (!availableRatios.value.includes(selectedRatio.value)) {
-                    selectedRatio.value = availableRatios.value[0];
+                const defaultRatio = window.TaskConfig.getDefaultRatio
+                    ? window.TaskConfig.getDefaultRatio(modelKey)
+                    : availableRatios.value[0];
+                const preferredDefaultRatio = availableRatios.value.includes(defaultRatio)
+                    ? defaultRatio
+                    : availableRatios.value[0];
+                if (!hasUserSelectedRatio.value && preferredDefaultRatio) {
+                    selectedRatio.value = preferredDefaultRatio;
+                } else if (!availableRatios.value.includes(selectedRatio.value)) {
+                    selectedRatio.value = preferredDefaultRatio;
                 }
 
                 // 获取分辨率选项
@@ -5627,17 +5700,24 @@
                 if (type.key === 'image') {
                     mediaType.value = 'image';
                     if (allImageModels.value.length > 0) {
-                        const m = allImageModels.value[0];
-                        selectedModel.value = m.name;
-                        selectedModelKey.value = m.key || '';
+                        const saved = localStorage.getItem('marketing_selected_image_model');
+                        const m = allImageModels.value.find(item => item.key === selectedImageModelKey.value)
+                            || (saved && allImageModels.value.find(item => item.name === saved))
+                            || allImageModels.value[0];
+                        selectedImageModel.value = m.name;
+                        selectedImageModelKey.value = m.key || '';
                     }
                 } else if (type.key === 'video') {
                     mediaType.value = 'video';
                     const list = hasUploadedImage.value ? allImageToVideoModels.value : allTextToVideoModels.value;
                     if (list.length > 0) {
-                        const m = list[0];
-                        selectedModel.value = m.name;
-                        selectedModelKey.value = m.key || '';
+                        const storageKey = hasUploadedImage.value ? 'marketing_selected_i2v_model' : 'marketing_selected_t2v_model';
+                        const saved = localStorage.getItem(storageKey);
+                        const m = list.find(item => item.key === selectedVideoModelKey.value)
+                            || (saved && list.find(item => item.name === saved))
+                            || list[0];
+                        selectedVideoModelName.value = m.name;
+                        selectedVideoModelKey.value = m.key || '';
                     }
                 }
                 refreshModelSettings();
@@ -5653,8 +5733,6 @@
                 if (isVideoMode.value) {
                     // 视频模型同步到后端
                     syncVideoModelToBackend(model);
-                    selectedVideoModelKey.value = model.key || '';
-                    selectedVideoModelName.value = model.name;
                     // 区分文生视频和图生视频的 localStorage key
                     if (hasUploadedImage.value) {
                         localStorage.setItem('marketing_selected_i2v_model', model.name);
@@ -5669,6 +5747,11 @@
                     localStorage.setItem('marketing_selected_image_model', model.name);
                     localStorage.setItem('marketing_selected_image_model_key', model.key || '');
                 }
+            }
+
+            function selectRatio(ratio) {
+                hasUserSelectedRatio.value = true;
+                selectedRatio.value = ratio;
             }
 
             // 同步图片模型配置到后端
@@ -5742,6 +5825,7 @@
                 console.log('[LLM] 选择模型:', model.name, 'supports_vl:', model.supportsVl);
                 // 保存用户偏好到 localStorage
                 localStorage.setItem('marketing_selected_llm_model_id', String(model.id));
+                localStorage.setItem('marketing_selected_llm_vendor_id', String(model.vendor_id || ''));
             }
 
             // 互斥切换下拉
@@ -5814,53 +5898,17 @@
                     agentVideoFiles.value = [];
                     agentAudioFiles.value = [];
                 }
-                if (newType === 'image') {
-                    const list = allImageModels.value;
-                    const saved = localStorage.getItem('marketing_selected_image_model');
-                    const m = (saved && list.find(m => m.name === saved)) || list[0];
-                    if (m) {
-                        selectedModel.value = m.name;
-                        selectedModelKey.value = m.key || '';
-                    }
-                } else {
-                    // 根据 hasUploadedImage 决定恢复文生视频还是图生视频偏好
+                // 新架构：图片/视频模型状态独立保存，切换模式无需重新恢复模型
+                // 仅在视频模式下且尚未选择模型时做初始化
+                if (newType === 'video' && !selectedVideoModelKey.value) {
                     const useImg2Vid = hasUploadedImage.value;
                     const list = useImg2Vid ? allImageToVideoModels.value : allTextToVideoModels.value;
-                    const category = useImg2Vid ? 'image_to_video' : 'text_to_video';
                     const storageKey = useImg2Vid ? 'marketing_selected_i2v_model' : 'marketing_selected_t2v_model';
-                    let m = null;
-                    try {
-                        if (userId.value && worldId.value) {
-                            const resp = await fetch(`/api/video-model?category=${category}&user_id=${encodeURIComponent(userId.value)}&world_id=${encodeURIComponent(worldId.value)}`, {
-                                headers: { 'Authorization': authToken.value, 'X-User-Id': userId.value }
-                            });
-                            if (!checkAuthResponse(resp)) return;
-                            if (resp.ok) {
-                                const data = await resp.json();
-                                if (data.success && data.current_task_id) {
-                                    const task = window.TaskConfig?.getTaskById ? window.TaskConfig.getTaskById(data.current_task_id) : null;
-                                    if (task && task.key) {
-                                        m = list.find(item => item.key === task.key || task.key.startsWith(item.key + '_'));
-                                    }
-                                }
-                            }
-                        }
-                    } catch (e) {
-                        console.warn('[mediaType] 从服务端获取视频模型偏好失败:', e);
-                    }
-                    if (!m) {
-                        const saved = localStorage.getItem(storageKey);
-                        m = (saved && list.find(item => item.name === saved)) || list[0];
-                    }
+                    const saved = localStorage.getItem(storageKey);
+                    const m = (saved && list.find(item => item.name === saved)) || list[0];
                     if (m) {
-                        selectedModel.value = m.name;
-                        selectedModelKey.value = m.key || '';
-                        selectedVideoModelKey.value = m.key || '';
                         selectedVideoModelName.value = m.name;
-                        if (useImg2Vid) {
-                            savedImg2VidModelKey.value = m.key || '';
-                            savedImg2VidModelName.value = m.name;
-                        }
+                        selectedVideoModelKey.value = m.key || '';
                     }
                 }
                 refreshModelSettings();
@@ -5905,10 +5953,8 @@
                         m = (saved && list.find(item => item.name === saved)) || list[0];
                     }
                     if (m) {
-                        selectedModel.value = m.name;
-                        selectedModelKey.value = m.key || '';
-                        selectedVideoModelKey.value = m.key || '';
                         selectedVideoModelName.value = m.name;
+                        selectedVideoModelKey.value = m.key || '';
                     }
                 } else {
                     // 没有图片了，切回文生视频模型偏好
@@ -5916,10 +5962,8 @@
                     const list = allTextToVideoModels.value;
                     const m = (saved && list.find(item => item.name === saved)) || list[0];
                     if (m) {
-                        selectedModel.value = m.name;
-                        selectedModelKey.value = m.key || '';
-                        selectedVideoModelKey.value = m.key || '';
                         selectedVideoModelName.value = m.name;
+                        selectedVideoModelKey.value = m.key || '';
                     }
                 }
                 refreshModelSettings();
@@ -5968,14 +6012,14 @@
             Vue.watch(selectedRatio, (newVal) => {
                 // 保存用户偏好到 localStorage
                 localStorage.setItem('marketing_selected_ratio', newVal);
-                if (selectedModelKey.value && userId.value && worldId.value) {
-                    const model = currentModels.value.find(m => m.key === selectedModelKey.value);
+                if (!isVideoMode.value && selectedImageModelKey.value && userId.value && worldId.value) {
+                    const model = allImageModels.value.find(m => m.key === selectedImageModelKey.value);
                     if (model) syncImageModelToBackend(model);
                 }
             });
             Vue.watch(selectedResolution, () => {
-                if (selectedModelKey.value && userId.value && worldId.value) {
-                    const model = currentModels.value.find(m => m.key === selectedModelKey.value);
+                if (!isVideoMode.value && selectedImageModelKey.value && userId.value && worldId.value) {
+                    const model = allImageModels.value.find(m => m.key === selectedImageModelKey.value);
                     if (model) syncImageModelToBackend(model);
                 }
             });
@@ -6027,6 +6071,7 @@
                 showRatioPanel,
                 mediaType,
                 selectedRatio,
+                selectRatio,
                 selectedModel,
                 selectedResolution,
                 currentModels,
@@ -6130,8 +6175,10 @@
                 // LLM 模型相关
                 allLLMModels,
                 selectedLLMModel,
+                selectedLLMModelKey,
                 showLLMModelSelect,
                 selectLLMModel,
+                getLLMModelSelectionKey,
                 loadLLMModels,
                 // Verification（ask_user 交互）
                 pendingVerificationId,
