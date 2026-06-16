@@ -765,6 +765,37 @@ const AdminApp = {
                 searchKeyword: '',
                 groupFilter: '',
                 typeFilter: ''
+            },
+
+            // 佣金管理
+            commission: {
+                list: [],
+                total: 0,
+                page: 1,
+                pageSize: 20,
+                loading: false,
+                statusFilter: null  // null=全部, 0=待审核, 1=已打款, 2=已驳回
+            },
+
+            // 佣金审核弹窗
+            commissionReviewModal: {
+                show: false,
+                action: '',  // 'approve' or 'reject'
+                withdrawNo: '',
+                amount: 0,
+                method: '',
+                account: '',
+                rejectReason: '',
+                loading: false
+            },
+
+            // 佣金比例上限
+            commissionMaxRate: 0.5,
+            commissionMaxRateModal: {
+                show: false,
+                newRate: 50,
+                loading: false,
+                affectedCount: null
             }
         };
     },
@@ -946,6 +977,10 @@ const AdminApp = {
                 video: this.t('category_video_desc'),
                 other: this.t('category_other_desc')
             };
+        },
+
+        commissionTotalPages() {
+            return Math.ceil(this.commission.total / this.commission.pageSize);
         }
     },
     
@@ -1141,6 +1176,11 @@ const AdminApp = {
                 this.loadModels();
             } else if (page === 'constants') {
                 this.loadConstants();
+            } else if (page === 'commission') {
+                if (!this.isCommunityEdition) {
+                    this.loadCommissionWithdrawals();
+                    this.loadCommissionMaxRate();
+                }
             }
         },
         
@@ -3327,6 +3367,176 @@ const AdminApp = {
                 }
             } catch (error) {
                 console.error('Mark all read failed:', error);
+            }
+        },
+
+        // ==================== 佣金管理 ====================
+
+        // 加载提现单列表
+        async loadCommissionWithdrawals() {
+            this.commission.loading = true;
+            try {
+                let url = `/api/admin/commission/withdrawals?page=${this.commission.page}&page_size=${this.commission.pageSize}`;
+                if (this.commission.statusFilter !== null) {
+                    url += `&status=${this.commission.statusFilter}`;
+                }
+                const response = await axios.get(url, {
+                    headers: { 'Authorization': `Bearer ${this.authToken}` }
+                });
+                if (response.data.code === 0) {
+                    const data = response.data.data;
+                    this.commission.list = data.withdrawals || [];
+                    this.commission.total = data.total || 0;
+                }
+            } catch (error) {
+                console.error('Load commission withdrawals failed:', error);
+                this.showToast(this.t('toast_commission_load_failed'), 'error');
+            } finally {
+                this.commission.loading = false;
+            }
+        },
+
+        // 切换状态筛选
+        setCommissionStatusFilter(status) {
+            this.commission.statusFilter = status;
+            this.commission.page = 1;
+            this.loadCommissionWithdrawals();
+        },
+
+        // 分页
+        goToCommissionPage(page) {
+            if (page < 1 || page > this.commissionTotalPages) return;
+            this.commission.page = page;
+            this.loadCommissionWithdrawals();
+        },
+
+        // 打开审核弹窗
+        openCommissionReviewModal(item, action) {
+            this.commissionReviewModal.show = true;
+            this.commissionReviewModal.action = action;
+            this.commissionReviewModal.withdrawNo = item.withdraw_no;
+            this.commissionReviewModal.amount = item.amount;
+            this.commissionReviewModal.method = item.method;
+            this.commissionReviewModal.account = this.getCommissionAccount(item);
+            this.commissionReviewModal.rejectReason = '';
+            this.commissionReviewModal.loading = false;
+        },
+
+        // 提交审核
+        async submitCommissionReview() {
+            this.commissionReviewModal.loading = true;
+            try {
+                const action = this.commissionReviewModal.action;
+                let url = `/api/admin/commission/withdraw/${this.commissionReviewModal.withdrawNo}/${action}`;
+                let config = { headers: { 'Authorization': `Bearer ${this.authToken}` } };
+
+                let response;
+                if (action === 'approve') {
+                    response = await axios.post(url, {}, config);
+                } else {
+                    // reject: 通过 query 参数传递驳回原因
+                    const reason = this.commissionReviewModal.rejectReason || '';
+                    response = await axios.post(url + (reason ? `?reject_reason=${encodeURIComponent(reason)}` : ''), {}, config);
+                }
+
+                if (response.data.code === 0) {
+                    this.showToast(
+                        action === 'approve' ? this.t('toast_commission_approve_success') : this.t('toast_commission_reject_success'),
+                        'success'
+                    );
+                    this.commissionReviewModal.show = false;
+                    this.loadCommissionWithdrawals();
+                } else {
+                    this.showToast(response.data.detail || this.t('toast_commission_action_failed'), 'error');
+                }
+            } catch (error) {
+                console.error('Commission review failed:', error);
+                this.showToast(error.response?.data?.detail || this.t('toast_commission_action_failed'), 'error');
+            } finally {
+                this.commissionReviewModal.loading = false;
+            }
+        },
+
+        // 获取提现方式文本
+        getCommissionMethodText(method) {
+            if (method === 'alipay') return this.t('commission_method_alipay');
+            if (method === 'bank') return this.t('commission_method_bank');
+            return method || '-';
+        },
+
+        // 获取状态文本
+        getCommissionStatusText(status) {
+            if (status === 0) return this.t('commission_status_pending');
+            if (status === 1) return this.t('commission_status_paid');
+            if (status === 2) return this.t('commission_status_rejected');
+            return '-';
+        },
+
+        // 获取收款账号展示
+        getCommissionAccount(item) {
+            if (item.method === 'alipay') {
+                return item.alipay_account || this.t('commission_no_account');
+            }
+            if (item.method === 'bank') {
+                const parts = [];
+                if (item.bank_card_no) parts.push(item.bank_card_no);
+                if (item.bank_account_name) parts.push(item.bank_account_name);
+                if (item.bank_name) parts.push(item.bank_name);
+                return parts.length > 0 ? parts.join(' / ') : this.t('commission_no_account');
+            }
+            return this.t('commission_no_account');
+        },
+
+        // ==================== 佣金比例上限 ====================
+
+        // 加载佣金比例上限
+        async loadCommissionMaxRate() {
+            try {
+                const response = await axios.get('/api/admin/commission/max-rate', {
+                    headers: { 'Authorization': `Bearer ${this.authToken}` }
+                });
+                if (response.data.code === 0) {
+                    this.commissionMaxRate = response.data.data.max_rate;
+                }
+            } catch (error) {
+                console.error('Load commission max rate failed:', error);
+                this.showToast(this.t('toast_max_rate_load_failed'), 'error');
+            }
+        },
+
+        // 打开修改上限弹窗
+        openCommissionMaxRateModal() {
+            this.commissionMaxRateModal.show = true;
+            this.commissionMaxRateModal.newRate = Math.round(this.commissionMaxRate * 100);
+            this.commissionMaxRateModal.affectedCount = null;
+            this.commissionMaxRateModal.loading = false;
+        },
+
+        // 提交修改上限
+        async submitCommissionMaxRate() {
+            const newRate = this.commissionMaxRateModal.newRate;
+            if (!newRate || newRate < 1 || newRate > 100) {
+                this.showToast('请输入 1-100 之间的整数', 'error');
+                return;
+            }
+
+            this.commissionMaxRateModal.loading = true;
+            try {
+                const response = await axios.put(`/api/admin/commission/max-rate?rate=${(newRate / 100).toFixed(2)}`, {}, {
+                    headers: { 'Authorization': `Bearer ${this.authToken}` }
+                });
+                if (response.data.code === 0) {
+                    this.commissionMaxRate = response.data.data.max_rate;
+                    this.commissionMaxRateModal.affectedCount = response.data.data.affected_count;
+                    this.showToast(this.t('toast_max_rate_updated'), 'success');
+                } else {
+                    this.showToast(response.data.detail || '设置失败', 'error');
+                }
+            } catch (error) {
+                console.error('Set commission max rate failed:', error);
+                this.showToast(error.response?.data?.detail || '设置失败', 'error');
+            } finally {
+                this.commissionMaxRateModal.loading = false;
             }
         }
     }

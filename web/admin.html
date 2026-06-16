@@ -11,8 +11,8 @@
     <script src="/i18n/i18n-dom.js?v=__VERSION__"></script>
     <link rel="stylesheet" href="/i18n/i18n-switcher.css?v=__VERSION__" />
     <script src="/i18n/i18n-switcher.js?v=__VERSION__"></script>
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="/js/vue.global.prod.js"></script>
+    <script src="/js/axios.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/l10n/zh.js"></script>
@@ -103,6 +103,14 @@
                         <span>{{ t('nav_constants') }}</span>
                     </a>
                 </li>
+                <li>
+                    <a href="#" :class="{ active: currentPage === 'commission' }" @click.prevent="switchPage('commission')">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span>{{ t('nav_commission') }}</span>
+                    </a>
+                </li>
             </ul>
         </aside>
 
@@ -118,6 +126,7 @@
                 <h2 v-else-if="currentPage === 'models'">{{ t('nav_models') }}</h2>
                 <h2 v-else-if="currentPage === 'notifications'">{{ t('nav_notifications') }}</h2>
                 <h2 v-else-if="currentPage === 'constants'">{{ t('nav_constants') }}</h2>
+                <h2 v-else-if="currentPage === 'commission'">{{ t('nav_commission') }}</h2>
 
                 <div class="admin-user">
                     <span class="admin-user-name">{{ maskedPhone }}</span>
@@ -1063,6 +1072,116 @@
                     </div>
                 </div>
             </section>
+
+            <!-- 佣金管理页面 -->
+            <section v-if="currentPage === 'commission'">
+                <!-- 社区版锁定提示 -->
+                <div v-if="isCommunityEdition" class="table-container" style="max-width: 600px; margin: 60px auto; text-align: center;">
+                    <div style="padding: 60px 30px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" style="width: 64px; height: 64px; margin: 0 auto 20px; display: block; color: #f59e0b;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                        <h3 style="color: #1e293b; margin-bottom: 12px;">{{ t('commission_locked_title') }}</h3>
+                        <p style="color: #64748b; font-size: 14px; line-height: 1.6;">{{ t('commission_locked_desc') }}</p>
+                    </div>
+                </div>
+
+                <!-- 商业版：佣金提现管理 -->
+                <div v-else class="table-container">
+                    <div class="table-header">
+                        <h3>{{ t('commission_title') }}</h3>
+                    </div>
+
+                    <!-- 佣金比例上限配置 -->
+                    <div style="margin-bottom: 20px; padding: 16px 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <div>
+                                <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">{{ t('commission_max_rate_title') }}</div>
+                                <div style="font-size: 13px; color: #64748b;">{{ t('commission_max_rate_desc') }}</div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 16px;">
+                                <div style="text-align: right;">
+                                    <div style="font-size: 12px; color: #94a3b8;">{{ t('commission_max_rate_current') }}</div>
+                                    <div style="font-size: 24px; font-weight: 700; color: #059669;">{{ (commissionMaxRate * 100).toFixed(0) }}%</div>
+                                </div>
+                                <button class="action-btn primary" @click="openCommissionMaxRateModal">{{ t('commission_max_rate_edit') }}</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 状态筛选 -->
+                    <div class="table-filters" style="margin-bottom: 16px;">
+                        <div style="display: flex; gap: 8px;">
+                            <button class="filter-btn" :class="{ active: commission.statusFilter === null }" @click="setCommissionStatusFilter(null)">{{ t('commission_status_all') }}</button>
+                            <button class="filter-btn" :class="{ active: commission.statusFilter === 0 }" @click="setCommissionStatusFilter(0)">{{ t('commission_status_pending') }}</button>
+                            <button class="filter-btn" :class="{ active: commission.statusFilter === 1 }" @click="setCommissionStatusFilter(1)">{{ t('commission_status_paid') }}</button>
+                            <button class="filter-btn" :class="{ active: commission.statusFilter === 2 }" @click="setCommissionStatusFilter(2)">{{ t('commission_status_rejected') }}</button>
+                        </div>
+                    </div>
+
+                    <!-- 加载中 -->
+                    <div v-if="commission.loading" class="loading">
+                        <div class="loading-spinner"></div>
+                        <p>{{ t('loading') }}</p>
+                    </div>
+
+                    <!-- 表格 -->
+                    <table v-else class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>{{ t('commission_col_no') }}</th>
+                                <th>{{ t('commission_col_inviter') }}</th>
+                                <th>{{ t('commission_col_amount') }}</th>
+                                <th>{{ t('commission_col_method') }}</th>
+                                <th>{{ t('commission_col_account') }}</th>
+                                <th>{{ t('commission_col_status') }}</th>
+                                <th>{{ t('commission_col_created') }}</th>
+                                <th>{{ t('commission_col_actions') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-if="commission.list.length === 0">
+                                <td colspan="8" style="text-align: center; color: #64748b;">{{ t('no_data') }}</td>
+                            </tr>
+                            <tr v-for="item in commission.list" :key="item.id">
+                                <td><code style="font-size: 12px;">{{ item.withdraw_no }}</code></td>
+                                <td>{{ item.inviter_id }}</td>
+                                <td style="font-weight: 600; color: #059669;">{{ item.amount != null ? '¥' + item.amount.toFixed(2) : '-' }}</td>
+                                <td>
+                                    <span class="status-badge" :class="item.method === 'alipay' ? 'active' : ''">
+                                        {{ getCommissionMethodText(item.method) }}
+                                    </span>
+                                </td>
+                                <td style="font-size: 12px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" :title="getCommissionAccount(item)">
+                                    {{ getCommissionAccount(item) }}
+                                </td>
+                                <td>
+                                    <span class="status-badge" :class="{ active: item.status === 1, pending: item.status === 0, inactive: item.status === 2 }">
+                                        {{ getCommissionStatusText(item.status) }}
+                                    </span>
+                                </td>
+                                <td>{{ formatDate(item.create_at) }}</td>
+                                <td>
+                                    <template v-if="item.status === 0">
+                                        <button class="action-btn success" @click="openCommissionReviewModal(item, 'approve')">{{ t('btn_commission_approve') }}</button>
+                                        <button class="action-btn danger" @click="openCommissionReviewModal(item, 'reject')">{{ t('btn_commission_reject') }}</button>
+                                    </template>
+                                    <span v-else style="color: #94a3b8; font-size: 12px;">-</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <!-- 分页 -->
+                    <div class="pagination" v-if="commission.total > 0">
+                        <button class="page-btn" @click="goToCommissionPage(1)" :disabled="commission.page === 1">{{ t('page_first') }}</button>
+                        <button class="page-btn" @click="goToCommissionPage(commission.page - 1)" :disabled="commission.page === 1">{{ t('page_prev') }}</button>
+                        <span class="page-info">{{ t('page_info', { current: commission.page, total: commissionTotalPages, count: commission.total }) }}</span>
+                        <button class="page-btn" @click="goToCommissionPage(commission.page + 1)" :disabled="commission.page >= commissionTotalPages">{{ t('page_next') }}</button>
+                        <button class="page-btn" @click="goToCommissionPage(commissionTotalPages)" :disabled="commission.page >= commissionTotalPages">{{ t('page_last') }}</button>
+                    </div>
+                </div>
+            </section>
         </main>
 
         <!-- 底部版本信息 -->
@@ -1584,6 +1703,90 @@
                     <button class="modal-btn cancel" @click="closeImplPowerModal">{{ t('cancel_btn') }}</button>
                     <button class="modal-btn confirm" @click="submitImplPower" :disabled="implPowerModal.loading">
                         {{ implPowerModal.loading ? t('btn_save_loading') : t('save_btn') }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 佣金审核弹窗 -->
+        <div class="modal-overlay" v-if="commissionReviewModal.show" @click.self="commissionReviewModal.show = false">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3>{{ commissionReviewModal.action === 'approve' ? t('btn_commission_approve') : t('modal_commission_reject_title') }}</h3>
+                    <button class="modal-close" @click="commissionReviewModal.show = false">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>{{ t('commission_col_no') }}</label>
+                        <input type="text" :value="commissionReviewModal.withdrawNo" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label>{{ t('commission_col_amount') }}</label>
+                        <input type="text" :value="commissionReviewModal.amount != null ? '¥' + commissionReviewModal.amount.toFixed(2) : '-'" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label>{{ t('commission_col_method') }}</label>
+                        <input type="text" :value="getCommissionMethodText(commissionReviewModal.method)" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label>{{ t('commission_col_account') }}</label>
+                        <input type="text" :value="commissionReviewModal.account" disabled>
+                    </div>
+                    <template v-if="commissionReviewModal.action === 'approve'">
+                        <div style="padding: 16px; background: #f0fdf4; border-radius: 8px; border-left: 4px solid #22c55e; margin-top: 8px;">
+                            <p style="margin: 0; color: #166534; font-size: 14px;">{{ t('modal_commission_approve_confirm') }}</p>
+                        </div>
+                    </template>
+                    <template v-else>
+                        <div class="form-group" style="margin-top: 8px;">
+                            <label>{{ t('modal_reject_reason_label') }}</label>
+                            <textarea v-model="commissionReviewModal.rejectReason" rows="3" :placeholder="t('modal_reject_reason_placeholder')"></textarea>
+                        </div>
+                    </template>
+                </div>
+                <div class="modal-footer">
+                    <button class="modal-btn cancel" @click="commissionReviewModal.show = false">{{ t('cancel_btn') }}</button>
+                    <button class="modal-btn confirm" :class="commissionReviewModal.action === 'reject' ? 'danger' : ''" @click="submitCommissionReview" :disabled="commissionReviewModal.loading">
+                        {{ commissionReviewModal.loading ? t('btn_submit_loading') : (commissionReviewModal.action === 'approve' ? t('btn_commission_approve') : t('btn_commission_reject')) }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 佣金比例上限修改弹窗 -->
+        <div class="modal-overlay" v-if="commissionMaxRateModal.show" @click.self="commissionMaxRateModal.show = false">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3>{{ t('commission_max_rate_edit') }}</h3>
+                    <button class="modal-close" @click="commissionMaxRateModal.show = false">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>{{ t('commission_max_rate_current') }}</label>
+                        <input type="text" :value="(commissionMaxRate * 100).toFixed(0) + '%'" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label>{{ t('commission_max_rate_new') }} <span style="color: red;">*</span></label>
+                        <input type="number" v-model.number="commissionMaxRateModal.newRate" min="1" max="100" step="1" placeholder="1-100">
+                        <p class="form-hint">{{ t('commission_max_rate_desc') }}</p>
+                    </div>
+                    <div style="padding: 12px 16px; background: #fffbeb; border-left: 4px solid #f59e0b; border-radius: 4px; margin-top: 8px;">
+                        <p style="margin: 0; color: #92400e; font-size: 13px;">⚠️ {{ t('commission_max_rate_warning') }}</p>
+                    </div>
+                    <!-- 修改结果显示 -->
+                    <div v-if="commissionMaxRateModal.affectedCount !== null" style="margin-top: 12px; padding: 12px 16px; background: #f0fdf4; border-left: 4px solid #22c55e; border-radius: 4px;">
+                        <p v-if="commissionMaxRateModal.affectedCount > 0" style="margin: 0; color: #166534; font-size: 13px;">
+                            ✅ {{ t('commission_max_rate_affected', { count: commissionMaxRateModal.affectedCount }) }}
+                        </p>
+                        <p v-else style="margin: 0; color: #166534; font-size: 13px;">
+                            ✅ {{ t('commission_max_rate_no_affected') }}
+                        </p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="modal-btn cancel" @click="commissionMaxRateModal.show = false">{{ t('close_btn') }}</button>
+                    <button class="modal-btn confirm" @click="submitCommissionMaxRate" :disabled="commissionMaxRateModal.loading">
+                        {{ commissionMaxRateModal.loading ? t('btn_submit_loading') : t('save_btn') }}
                     </button>
                 </div>
             </div>

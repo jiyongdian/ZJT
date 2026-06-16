@@ -2221,16 +2221,21 @@
             function pollAgentImageStatus(msgUid, projectIds, pollSessionId = currentSessionId.value) {
                 const errorKey = getTaskErrorKey('agent-image-status', projectIds);
                 const pollKey = getGenerationPollKey('image', projectIds, pollSessionId);
-                const interval = trackedSetInterval(async () => {
+                let interval = null;
+                let shouldContinuePolling = true;
+
+                const checkImageStatus = async () => {
                     if (currentSessionId.value !== pollSessionId) {
-                        trackedClearInterval(interval);
+                        shouldContinuePolling = false;
+                        if (interval) trackedClearInterval(interval);
                         activeGenerationPollKeys.delete(pollKey);
                         return;
                     }
 
                     const msgIdx = messages.value.findIndex(m => m._uid === msgUid);
                     if (msgIdx === -1) {
-                        trackedClearInterval(interval);
+                        shouldContinuePolling = false;
+                        if (interval) trackedClearInterval(interval);
                         activeGenerationPollKeys.delete(pollKey);
                         return;
                     }
@@ -2242,7 +2247,8 @@
                         resetTaskErrorCount(errorKey);
 
                         if (currentSessionId.value !== pollSessionId) {
-                            trackedClearInterval(interval);
+                            shouldContinuePolling = false;
+                            if (interval) trackedClearInterval(interval);
                             activeGenerationPollKeys.delete(pollKey);
                             return;
                         }
@@ -2257,7 +2263,8 @@
                             });
 
                             if (allDone) {
-                                trackedClearInterval(interval);
+                                shouldContinuePolling = false;
+                                if (interval) trackedClearInterval(interval);
                                 activeGenerationPollKeys.delete(pollKey);
                                 let finalContent = '';
                                 if (imageUrls.length > 0) {
@@ -2274,8 +2281,13 @@
                                     messages.value[currentMsgIdx].content = finalContent;
                                     scrollToBottom();
                                 }
-                                await appendMessageToBackend('assistant', finalContent, pollSessionId);
-                                await cleanPendingTasksFromHistory(pollSessionId);
+                                // 优先按 project_ids 在后端替换 pending 行，不依赖前端内存标记
+                                const replaced = await replacePendingTask(pollSessionId, 'image_task_submitted', projectIds, finalContent);
+                                if (!replaced) {
+                                    // 后端没有匹配的 pending 行，fallback 追加
+                                    await appendMessageToBackend('assistant', finalContent, pollSessionId);
+                                }
+                                await cleanPendingTasksFromHistory(pollSessionId, 'image_task_submitted', projectIds);
                             } else {
                                 const doneCount = tasks.filter(isGenerationSuccess).length;
                                 messages.value[msgIdx].content = window.t('image_generating_progress', { done: doneCount, total: tasks.length });
@@ -2286,6 +2298,7 @@
                         console.error('Agent 图片状态轮询错误:', err);
                         const failures = recordTaskError(errorKey);
                         if (failures >= MAX_CONSECUTIVE_TASK_ERRORS) {
+                            shouldContinuePolling = false;
                             activeGenerationPollKeys.delete(pollKey);
                             stopTaskAfterRepeatedErrors(
                                 errorKey,
@@ -2295,7 +2308,14 @@
                             );
                         }
                     }
-                }, 5000);
+                };
+
+                // 立即执行一次，再启动 interval
+                checkImageStatus().finally(() => {
+                    if (shouldContinuePolling) {
+                        interval = trackedSetInterval(checkImageStatus, 5000);
+                    }
+                });
             }
 
             // Agent 视频生成任务提交回调（SSE video_task_submitted 事件）
@@ -2386,8 +2406,14 @@
                                     messages.value[currentMsgIdx].content = finalContent;
                                     scrollToBottom();
                                 }
-                                await appendMessageToBackend('assistant', finalContent);
-                                await cleanPendingTasksFromHistory();
+                                // 查找该 project_ids 对应的 pending 消息，优先替换
+                                // 优先按 project_ids 在后端替换 pending 行，不依赖前端内存标记
+                                const replaced = await replacePendingTask(pollSessionId, 'video_task_submitted', projectIds, finalContent);
+                                if (!replaced) {
+                                    // 后端没有匹配的 pending 行，fallback 追加
+                                    await appendMessageToBackend('assistant', finalContent);
+                                }
+                                await cleanPendingTasksFromHistory(pollSessionId, 'video_task_submitted', projectIds);
                             } else {
                                 const doneCount = tasks.filter(isGenerationSuccess).length;
                                 messages.value[msgIdx].content = window.t('video_generating_progress', { done: doneCount, total: tasks.length });
@@ -3222,11 +3248,13 @@
 
             function parseHistoryMessage(h) {
                 // 检测 __PENDING_TASK__ 标记（后端保存的待处理任务）
-                const rawContent = typeof h.content === 'string' ? h.content : '';
+                // content 可能是字符串或 { text: "..." } 对象
+                const rawContent = typeof h.content === 'string' ? h.content : (h.content?.text || '');
                 const pendingMatch = rawContent.match(/^__PENDING_TASK__:(image_task_submitted|video_task_submitted):(.+)$/);
                 if (pendingMatch) {
                     return {
                         _uid: generateMsgUid(),
+                        _dbMessageId: h.message_id || null,  // 保存数据库消息 ID，用于后续替换
                         role: 'system',  // 不直接显示
                         content: rawContent,
                         timestamp: h.timestamp,
@@ -3375,7 +3403,7 @@
             // 追加消息到后端
             async function appendMessageToBackend(role, content, sessionId = currentSessionId.value) {
                 if (!sessionId) return;
-                
+
                 try {
                     const response = await fetch(`/api/session/${sessionId}/message`, {
                         method: 'POST',
@@ -3389,7 +3417,7 @@
                             content: content || ''
                         })
                     });
-                    
+
                     const data = await response.json();
                     if (!data.success) {
                         console.error('追加消息到后端失败:', data.error);
@@ -3399,24 +3427,76 @@
                 }
             }
 
-            // 清理对话历史中的 __PENDING_TASK__ 标记
-            async function cleanPendingTasksFromHistory(sessionId = currentSessionId.value) {
+            // 清理对话历史中的 __PENDING_TASK__ 标记（支持精确清理）
+            async function cleanPendingTasksFromHistory(sessionId = currentSessionId.value, taskType = null, projectIds = null) {
                 if (!sessionId) return;
                 try {
+                    const body = {};
+                    if (taskType) body.task_type = taskType;
+                    if (projectIds) body.project_ids = projectIds;
+
                     await fetch(`/api/session/${sessionId}/clean-pending-tasks`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                             'Authorization': authToken.value,
                             'X-User-Id': userId.value
-                        }
+                        },
+                        body: JSON.stringify(body)
                     });
                 } catch (e) {
                     console.error('清理 pending task 标记失败:', e);
                 }
             }
 
-            // 构建图片/视频结果内容
+            // 更新后端消息内容（用于 pending → 结果替换）
+            async function updateMessageContent(sessionId, messageId, content, messageType) {
+                if (!sessionId || !messageId) return false;
+                try {
+                    const body = { content };
+                    if (messageType) body.message_type = messageType;
+                    const res = await fetch(`/api/session/${sessionId}/message/${messageId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': authToken.value,
+                            'X-User-Id': userId.value
+                        },
+                        body: JSON.stringify(body)
+                    });
+                    const data = await res.json();
+                    return data.success;
+                } catch (e) {
+                    console.error('更新消息内容失败:', e);
+                    return false;
+                }
+            }
+
+            // 按 task_type + project_ids 替换后端 pending_task 消息（不依赖前端内存标记）
+            async function replacePendingTask(sessionId, taskType, projectIds, content) {
+                if (!sessionId || !taskType || !projectIds || !content) return false;
+                try {
+                    const res = await fetch(`/api/session/${sessionId}/replace-pending-task`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': authToken.value,
+                            'X-User-Id': userId.value
+                        },
+                        body: JSON.stringify({
+                            task_type: taskType,
+                            project_ids: projectIds,
+                            content: content
+                        })
+                    });
+                    const data = await res.json();
+                    return data.success && data.replaced > 0;
+                } catch (e) {
+                    console.error('替换 pending task 失败:', e);
+                    return false;
+                }
+            }
+
             function buildResultContent(type, tasks) {
                 const urls = [];
                 tasks.forEach(task => {
@@ -3454,8 +3534,13 @@
                             msg.role = 'ai';
                             msg.content = content;
                             msg._isPendingTask = false;
-                            await appendMessageToBackend('assistant', content);
-                            await cleanPendingTasksFromHistory();
+                            // 优先按 project_ids 在后端替换 pending 行
+                            const taskTypeKey = msg._taskType === 'image' ? 'image_task_submitted' : 'video_task_submitted';
+                            const replaced = await replacePendingTask(currentSessionId.value, taskTypeKey, msg._projectIds, content);
+                            if (!replaced) {
+                                await appendMessageToBackend('assistant', content);
+                            }
+                            await cleanPendingTasksFromHistory(currentSessionId.value, taskTypeKey, msg._projectIds);
                         } else {
                             // 任务仍在运行：恢复轮询
                             msg.role = 'ai';

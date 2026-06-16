@@ -336,6 +336,59 @@ class ChatMessagesModel:
         )
 
     @staticmethod
+    def update_content(message_id: str, content: str, message_type: str = None, session_id: str = None) -> int:
+        """更新指定消息的内容和类型（用于 pending → 结果替换）
+
+        Args:
+            message_id: 消息唯一标识
+            content: 新内容
+            message_type: 新消息类型（可选）
+            session_id: 会话 ID，传入时会校验消息归属，防止跨会话误更新
+        """
+        session_condition = " AND session_id = %s" if session_id else ""
+
+        if message_type:
+            sql = f"""
+                UPDATE `chat_messages`
+                SET content = %s, message_type = %s
+                WHERE message_id = %s{session_condition}
+            """
+            params = [content, message_type, message_id]
+        else:
+            sql = f"""
+                UPDATE `chat_messages`
+                SET content = %s
+                WHERE message_id = %s{session_condition}
+            """
+            params = [content, message_id]
+
+        if session_id:
+            params.append(session_id)
+
+        return execute_update(sql, tuple(params))
+
+    @staticmethod
+    def replace_pending_task(session_id: str, event_type: str, project_ids: list, new_content: str) -> int:
+        """按 session_id + event_type + project_ids 查找 pending_task 消息并替换内容和类型。
+
+        用于轮询完成时将后端 pending 行直接更新为结果，不依赖前端内存标记。
+        返回受影响行数。
+        """
+        # 构建匹配的 content 前缀
+        import json as _json
+        target_content = f'__PENDING_TASK__:{event_type}:{_json.dumps(project_ids)}'
+
+        sql = """
+            UPDATE `chat_messages`
+            SET content = %s, message_type = 'text'
+            WHERE session_id = %s
+              AND message_type = 'pending_task'
+              AND context_state = 'active'
+              AND content = %s
+        """
+        return execute_update(sql, (new_content, session_id, target_content))
+
+    @staticmethod
     def count_for_session(session_id: str) -> int:
         """Count messages for a session"""
         row = execute_query(
