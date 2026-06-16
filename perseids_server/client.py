@@ -66,8 +66,8 @@ def make_perseids_request(endpoint=None, data=None, method='POST', headers=None)
                 return False, '无效的认证信息', {}
             result = ComputingPowerService.get_computing_power_logs(
                 user_id=user_id,
-                limit=payload.get('page_size', 20),
-                offset=(payload.get('page', 1) - 1) * payload.get('page_size', 20),
+                limit=payload.get('limit', 20),
+                offset=payload.get('offset', 0),
                 behavior=payload.get('behavior')
             )
             return result.get('success', False), result.get('message', ''), result.get('data', {})
@@ -163,6 +163,24 @@ def make_perseids_request(endpoint=None, data=None, method='POST', headers=None)
                 computing_power=payload.get('computing_power', 0)
             )
             return result.get('success', False), result.get('message', ''), {'granted_computing_power': result.get('granted_computing_power')}
+
+        elif endpoint == 'commission/recharge_grants':
+            # 查询当前用户（被邀请人）充值各套餐的到账算力（已扣邀请人佣金）。
+            try:
+                from enterprise.services.commission_service import CommissionService
+            except ImportError:
+                # 社区版无 enterprise：返回全额（不抽佣）
+                full = {pkg['package_id']: pkg['computing_power']
+                        for pkg in __import__('config.constant', fromlist=['RECHARGE_PACKAGES']).RECHARGE_PACKAGES}
+                return True, '社区版不抽佣', {'grants': full, 'rate': 0.0}
+            user_id = AuthService.verify_token(token)
+            if not user_id:
+                return False, '无效的认证信息', {}
+            result = CommissionService.get_recharge_grants(user_id)
+            return result.get('success', False), result.get('message', ''), {
+                'grants': result.get('grants', {}),
+                'rate': result.get('rate', 0.0)
+            }
 
         else:
             logger.warning(f"未知的endpoint: {endpoint}")

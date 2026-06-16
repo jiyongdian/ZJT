@@ -4450,13 +4450,30 @@ async def get_recharge_packages(request: Request, auth_token: str):
         has_completed_first_recharge = await _has_completed_first_recharge(auth_token)
 
         # 如果用户已经充值过，过滤掉首充福利套餐（第一个套餐）
-        packages = RECHARGE_PACKAGES.copy()
+        # 用 dict(pkg) 浅拷贝每个套餐，避免污染模块级常量 RECHARGE_PACKAGES
+        packages = [dict(pkg) for pkg in RECHARGE_PACKAGES]
         if has_completed_first_recharge:
             packages = [pkg for pkg in packages if pkg.get("package_id") != 1]
             logger.info(f"已经首充，过滤掉首充福利套餐")
         else:
             logger.info(f"是首充用户，显示所有套餐")
-        
+
+        # 计算扣邀请佣金后的实际到账算力（针对当前用户；社区版/无邀请人/首充=>全额）
+        grants = {}
+        try:
+            g_ok, g_msg, g_data = await async_make_perseids_request(
+                endpoint='commission/recharge_grants',
+                method='POST',
+                headers={'Authorization': f'Bearer {auth_token}'}
+            )
+            if g_ok and g_data:
+                grants = g_data.get('grants', {})
+        except Exception as e:
+            logger.warning(f"Failed to get commission recharge grants: {e}")
+        for pkg in packages:
+            pid = pkg.get("package_id")
+            pkg["granted_computing_power"] = grants.get(pid, pkg["computing_power"])
+
         return JSONResponse({
             "success": True,
             "packages": packages

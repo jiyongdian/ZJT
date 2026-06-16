@@ -22,6 +22,11 @@ class CommissionWithdraw:
         self.withdraw_no = kwargs.get('withdraw_no')
         self.inviter_id = kwargs.get('inviter_id')
         self.status = kwargs.get('status', 0)
+        self.method = kwargs.get('method', 'alipay')  # alipay-支付宝 bank-银行卡
+        self.alipay_account = kwargs.get('alipay_account')
+        self.bank_card_no = kwargs.get('bank_card_no')
+        self.bank_account_name = kwargs.get('bank_account_name')
+        self.bank_name = kwargs.get('bank_name')
         self.apply_note = kwargs.get('apply_note')
         self.reject_reason = kwargs.get('reject_reason')
         self.reviewer_id = kwargs.get('reviewer_id')
@@ -40,6 +45,11 @@ class CommissionWithdraw:
             'inviter_id': self.inviter_id,
             'amount': float(self.amount) if self.amount is not None else None,
             'status': self.status,
+            'method': self.method,
+            'alipay_account': self.alipay_account,
+            'bank_card_no': self.bank_card_no,
+            'bank_account_name': self.bank_account_name,
+            'bank_name': self.bank_name,
             'apply_note': self.apply_note,
             'reject_reason': self.reject_reason,
             'reviewer_id': self.reviewer_id,
@@ -59,7 +69,15 @@ class CommissionWithdrawModel:
     STATUS_REJECTED = 2   # 已驳回
 
     @staticmethod
-    def create(withdraw_no: str, inviter_id: int, apply_note: Optional[str] = None) -> int:
+    def create(
+        withdraw_no: str, inviter_id: int,
+        method: str = 'alipay',
+        alipay_account: Optional[str] = None,
+        bank_card_no: Optional[str] = None,
+        bank_account_name: Optional[str] = None,
+        bank_name: Optional[str] = None,
+        apply_note: Optional[str] = None
+    ) -> int:
         """
         创建提现申请单（status=待审核）
 
@@ -67,13 +85,17 @@ class CommissionWithdrawModel:
             Inserted record ID
         """
         sql = """
-            INSERT INTO commission_withdraw (withdraw_no, inviter_id, status, apply_note)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO commission_withdraw
+            (withdraw_no, inviter_id, status, method, alipay_account,
+             bank_card_no, bank_account_name, bank_name, apply_note)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         try:
             wid = execute_insert(sql, (
                 withdraw_no, inviter_id,
-                CommissionWithdrawModel.STATUS_PENDING, apply_note
+                CommissionWithdrawModel.STATUS_PENDING, method,
+                alipay_account, bank_card_no, bank_account_name, bank_name,
+                apply_note
             ))
             logger.info(f"Created commission withdraw: no={withdraw_no}, inviter={inviter_id}")
             return wid
@@ -197,6 +219,11 @@ CREATE TABLE IF NOT EXISTS `commission_withdraw` (
   `withdraw_no` varchar(64) NOT NULL COMMENT '提现单号',
   `inviter_id` int NOT NULL COMMENT '申请提现的邀请人ID',
   `status` tinyint NOT NULL DEFAULT 0 COMMENT '0-待审核 1-已打款 2-已驳回',
+  `method` varchar(16) NOT NULL DEFAULT 'alipay' COMMENT '提现方式: alipay-支付宝 bank-银行卡',
+  `alipay_account` varchar(128) DEFAULT NULL COMMENT '支付宝账号',
+  `bank_card_no` varchar(64) DEFAULT NULL COMMENT '银行卡号',
+  `bank_account_name` varchar(64) DEFAULT NULL COMMENT '银行开户姓名',
+  `bank_name` varchar(128) DEFAULT NULL COMMENT '开户银行',
   `apply_note` varchar(500) DEFAULT NULL,
   `reject_reason` varchar(500) DEFAULT NULL,
   `reviewer_id` int DEFAULT NULL COMMENT '审核管理员ID',

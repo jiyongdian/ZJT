@@ -211,3 +211,71 @@ def test_power_logs_empty_state(browser, auth_token, user_id, base_url):
 
     p.close()
     context.close()
+
+
+# ═══════════════════════════════════════════════════════════════
+# 分页后端验证（真实 API，不 mock）
+# ═══════════════════════════════════════════════════════════════
+
+
+@pytest.mark.p0
+@pytest.mark.computing_power
+def test_power_logs_pagination_returns_different_pages(api_client):
+    """cpl_007 - 分页接口第1页和第2页返回不同数据。
+
+    验证后端 offset 计算正确（此前 client.py 用不存在的字段重新计算
+    offset 导致恒为 0，永远返回第一页）。
+    """
+    # 请求第1页
+    resp1 = api_client.get(
+        "/api/user/computing_power_logs",
+        params={"page": 1, "page_size": 20},
+    )
+    assert resp1.status_code == 200, f"第1页请求失败: {resp1.status_code}"
+    data1 = resp1.json()
+    assert data1["success"] is True, f"第1页返回失败: {data1.get('message')}"
+
+    total = data1["data"].get("total", 0)
+    if total <= 20:
+        pytest.skip(f"日志仅 {total} 条，不足一页，无法验证分页")
+
+    # 请求第2页
+    resp2 = api_client.get(
+        "/api/user/computing_power_logs",
+        params={"page": 2, "page_size": 20},
+    )
+    assert resp2.status_code == 200, f"第2页请求失败: {resp2.status_code}"
+    data2 = resp2.json()
+    assert data2["success"] is True, f"第2页返回失败: {data2.get('message')}"
+
+    logs1 = data1["data"].get("logs", [])
+    logs2 = data2["data"].get("logs", [])
+    assert len(logs1) > 0, "第1页不应为空"
+    assert len(logs2) > 0, "第2页不应为空"
+
+    ids1 = {log["id"] for log in logs1}
+    ids2 = {log["id"] for log in logs2}
+    assert ids1.isdisjoint(ids2), (
+        f"第1页和第2页的日志ID不应重复，"
+        f"重复ID: {ids1 & ids2}（说明 offset 恒为 0，始终返回第一页）"
+    )
+
+
+@pytest.mark.p1
+@pytest.mark.computing_power
+def test_power_logs_pagination_with_behavior_filter(api_client):
+    """cpl_008 - 带 behavior 筛选的分页也应正确工作。"""
+    for behavior in ("increase", "deduct"):
+        resp = api_client.get(
+            "/api/user/computing_power_logs",
+            params={"page": 1, "page_size": 10, "behavior": behavior},
+        )
+        assert resp.status_code == 200, f"behavior={behavior} 请求失败: {resp.status_code}"
+        data = resp.json()
+        assert data["success"] is True, f"behavior={behavior} 返回失败: {data.get('message')}"
+
+        # 验证筛选结果的 behavior 类型一致
+        for log in data["data"].get("logs", []):
+            assert log["behavior"] == behavior, (
+                f"筛选 behavior={behavior} 但返回了 behavior={log['behavior']} 的日志"
+            )

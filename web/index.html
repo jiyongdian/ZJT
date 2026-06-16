@@ -514,38 +514,175 @@
     
     <!-- Invite Code Modal -->
     <div class="modal-overlay" v-if="showInviteModal" @click.self="showInviteModal = false">
-      <div class="modal" style="position: relative; max-width: 500px;">
+      <div class="modal invite-modal">
         <button class="modal-close" @click="showInviteModal = false">×</button>
-        <div class="modal-title">我的邀请码</div>
-        <div style="padding: 20px;">
-          <div class="invite-code-display">
-            <div class="invite-code-label">邀请码</div>
-            <div class="invite-code-value">{{ inviteCode || '加载中...' }}</div>
+        <div class="invite-modal-header">
+          <div>
+            <div class="invite-modal-eyebrow">邀请中心</div>
+            <div class="invite-modal-title">我的邀请码</div>
           </div>
-          
-          <!-- 邀请统计信息 -->
-          <div class="invite-stats" v-if="invitationStats">
-            <div class="stats-row">
-              <div class="stat-item">
-                <div class="stat-label">已邀请人数</div>
-                <div class="stat-value">{{ invitationStats.count || 0 }} 人</div>
+        </div>
+
+        <div class="invite-modal-body">
+          <div class="invite-user-card">
+            <div class="invite-user-avatar">
+              {{ (maskedPhone || (userEmail ? userEmail[0].toUpperCase() : 'U'))[0] }}
+            </div>
+            <div class="invite-user-info">
+              <div class="invite-user-name">
+                {{ userPhone ? maskedPhone : (userEmail ? maskEmail(userEmail) : '未登录') }}
               </div>
-              <div class="stat-item">
-                <div class="stat-label">获得算力</div>
-                <div class="stat-value">{{ invitationStats.total_power || 0 }} 点</div>
+              <div class="invite-user-meta" v-if="userPhone && userEmail">
+                {{ maskEmail(userEmail) }}
               </div>
             </div>
           </div>
-          
-          <div class="invite-description">
-            <div class="invite-icon">🎁</div>
-            <div class="invite-text">
-              <strong>邀请好友，赚取算力！</strong>
-              <p>每成功邀请一个用户注册并登录，您将获得 <span class="highlight">75 算力</span> 奖励</p>
+
+          <div class="invite-pass">
+            <div class="invite-pass-label">专属邀请码</div>
+            <div class="invite-pass-code">{{ inviteCode || '加载中...' }}</div>
+            <div class="invite-pass-note">分享链接后，好友注册并登录即可计入邀请奖励</div>
+          </div>
+
+          <div class="invite-stat-grid">
+            <div class="invite-stat-card">
+              <div class="invite-stat-label">已邀请</div>
+              <div class="invite-stat-value">{{ invitationStats && invitationStats.count || 0 }}<span>人</span></div>
+            </div>
+            <div class="invite-stat-card">
+              <div class="invite-stat-label">获得算力</div>
+              <div class="invite-stat-value">{{ invitationStats && invitationStats.total_power || 0 }}<span>点</span></div>
             </div>
           </div>
-          <div style="margin-top: 20px;">
-            <button class="btn" style="width: 100%;" @click="copyInviteCode">复制邀请码</button>
+
+          <div class="invite-reward-strip">
+            <span class="invite-reward-mark">+75</span>
+            <div>
+              <div class="invite-reward-title">邀请好友，赚取算力</div>
+              <div class="invite-reward-desc">每成功邀请一个用户注册并登录，您将获得 <strong>75 算力</strong> 奖励</div>
+            </div>
+          </div>
+
+          <button class="btn invite-copy-btn" @click="copyInviteCode">复制邀请链接</button>
+
+          <!-- 佣金中心（商业版，社区版自动隐藏） -->
+          <div v-if="showCommission" class="commission-panel">
+            <div class="commission-divider">
+              <span>佣金中心</span>
+            </div>
+
+            <!-- 余额卡 -->
+            <div class="commission-balance-card">
+              <div class="commission-balance-main">
+                <span>可提现佣金</span>
+                <strong>¥{{ Number(commissionSummary.available || 0).toFixed(2) }}</strong>
+              </div>
+              <div class="commission-mini-grid">
+                <div>
+                  <span>累计</span>
+                  <strong>¥{{ Number(commissionSummary.total || 0).toFixed(2) }}</strong>
+                </div>
+                <div>
+                  <span>冻结</span>
+                  <strong>¥{{ Number(commissionSummary.frozen || 0).toFixed(2) }}</strong>
+                </div>
+                <div>
+                  <span>已提现</span>
+                  <strong>¥{{ Number(commissionSummary.withdrawn || 0).toFixed(2) }}</strong>
+                </div>
+              </div>
+            </div>
+
+            <!-- 提现按钮 / 提现表单 -->
+            <div v-if="!showWithdrawForm">
+              <button class="btn commission-withdraw-btn"
+                      :disabled="Number(commissionSummary.available || 0) < 10"
+                      @click="openWithdrawForm">
+                {{ Number(commissionSummary.available || 0) >= 10 ? '申请全额提现' : '满 ¥10 可提现' }}
+              </button>
+            </div>
+            <div v-else class="commission-withdraw-form">
+              <div class="commission-section-head">
+                <span>提现 ¥{{ Number(commissionSummary.available || 0).toFixed(2) }}</span>
+                <button type="button" class="commission-link-btn" @click="showWithdrawForm = false">取消</button>
+              </div>
+              <!-- 提现方式切换 -->
+              <div class="commission-method-tabs">
+                <button type="button" @click="withdrawForm.method = 'alipay'" :class="{ active: withdrawForm.method === 'alipay' }">支付宝</button>
+                <button type="button" @click="withdrawForm.method = 'bank'" :class="{ active: withdrawForm.method === 'bank' }">银行卡</button>
+              </div>
+              <!-- 支付宝字段 -->
+              <div v-if="withdrawForm.method === 'alipay'" class="commission-field-group">
+                <input class="input" v-model="withdrawForm.alipay_account" placeholder="支付宝账号（手机号/邮箱）" />
+              </div>
+              <!-- 银行卡字段 -->
+              <div v-if="withdrawForm.method === 'bank'" class="commission-field-group">
+                <input class="input" v-model="withdrawForm.bank_account_name" placeholder="开户姓名" />
+                <input class="input" v-model="withdrawForm.bank_card_no" placeholder="银行卡号" />
+                <input class="input" v-model="withdrawForm.bank_name" placeholder="开户银行（如：中国工商银行）" />
+              </div>
+              <input class="input" v-model="withdrawForm.apply_note" placeholder="备注（选填）" />
+              <button class="btn commission-confirm-btn" :disabled="commissionWithdrawing" @click="submitWithdraw">
+                {{ commissionWithdrawing ? '处理中...' : '确认提现' }}
+              </button>
+            </div>
+
+            <!-- 抽佣比例 -->
+            <div class="commission-rate-card">
+              <div class="commission-section-head">
+                <span>我的抽佣比例</span>
+                <strong>{{ commissionRateInput }}%</strong>
+              </div>
+              <input class="commission-rate-range" type="range" min="0" max="50" step="1" v-model.number="commissionRateInput" />
+              <div class="commission-hint">
+                你邀请的用户充值时，按此比例给你抽佣（0%=关闭，范围 0%~50%）
+              </div>
+              <button class="btn secondary commission-save-btn" :disabled="commissionSaving" @click="saveCommissionRate">
+                {{ commissionSaving ? '保存中...' : '保存比例' }}
+              </button>
+            </div>
+
+            <!-- 佣金明细 -->
+            <div class="commission-records">
+              <div class="commission-record-title">佣金明细</div>
+              <div v-if="!commissionRecords || commissionRecords.length === 0" class="commission-empty">暂无佣金记录</div>
+              <div v-else class="commission-record-list">
+                <div v-for="r in commissionRecords" :key="r.id" class="commission-record-item">
+                  <div>
+                    <div class="commission-record-user">{{ r.invitee_phone || ('用户' + r.invitee_id) }}</div>
+                    <div class="commission-record-time">{{ r.create_at }}</div>
+                  </div>
+                  <div class="commission-record-amount">+¥{{ Number(r.commission_amount || 0).toFixed(2) }}</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 提现记录 -->
+            <div class="commission-records">
+              <div class="commission-record-title">提现记录</div>
+              <div v-if="!commissionWithdrawals || commissionWithdrawals.length === 0" class="commission-empty">暂无提现记录</div>
+              <div v-else class="commission-record-list">
+                <div v-for="w in commissionWithdrawals" :key="w.id" class="commission-record-item" style="flex-direction: column; align-items: flex-start; gap: 6px;">
+                  <div style="display: flex; justify-content: space-between; width: 100%;">
+                    <div>
+                      <div class="commission-record-user">
+                        <span :style="{ color: w.status === 1 ? '#059669' : w.status === 2 ? '#dc2626' : '#d97706' }">
+                          {{ w.status === 0 ? '待审核' : w.status === 1 ? '已打款' : '已驳回' }}
+                        </span>
+                        <span style="margin-left: 8px; font-size: 11px; color: #94a3b8;">{{ w.withdraw_no }}</span>
+                      </div>
+                      <div class="commission-record-time">{{ w.create_at }}</div>
+                    </div>
+                    <div class="commission-record-amount" :style="{ color: w.status === 2 ? '#dc2626' : '#059669' }">
+                      ¥{{ Number(w.amount || 0).toFixed(2) }}
+                    </div>
+                  </div>
+                  <div v-if="w.status === 2 && w.reject_reason" style="width: 100%; padding: 8px 10px; background: #fef2f2; border-radius: 6px; border-left: 3px solid #fca5a5;">
+                    <div style="font-size: 12px; color: #991b1b;">驳回原因：{{ w.reject_reason }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -592,11 +729,11 @@
               <div class="package-header">
                 <div class="package-title-section">
                   <span class="package-name">{{ pkg.description }}</span>
-                  <span class="package-computing-power">{{ pkg.computing_power }} 算力</span>
+                  <span class="package-computing-power">{{ pkg.granted_computing_power || pkg.computing_power }} 算力</span>
                 </div>
                 <div class="package-price-section">
                   <span class="package-price">¥{{ pkg.price }}</span>
-                  <span class="package-unit-price">{{ (pkg.price / pkg.computing_power * 100).toFixed(2) }}元/百算力</span>
+                  <span class="package-unit-price">{{ (pkg.price / (pkg.granted_computing_power || pkg.computing_power) * 100).toFixed(2) }}元/百算力</span>
                 </div>
               </div>
               <div class="package-footer">
@@ -617,7 +754,7 @@
               {{ selectedPackage.description }}
             </div>
             <div style="font-size: 16px; color: var(--muted);">
-              {{ selectedPackage.computing_power }} 算力 - ¥{{ selectedPackage.price }}
+              {{ selectedPackage.granted_computing_power || selectedPackage.computing_power }} 算力 - ¥{{ selectedPackage.price }}
             </div>
           </div>
           
@@ -7253,6 +7390,18 @@
       inviteCode: '',
       computingPower: null,
       invitationStats: null,
+      // 佣金中心（商业版；社区版接口403自动隐藏）
+      showCommission: false,
+      commissionSummary: { available: 0, frozen: 0, withdrawn: 0, total: 0 },
+      commissionRate: 0,
+      commissionRateInput: 0,
+      commissionRecords: [],
+      commissionWithdrawals: [],
+      commissionSaving: false,
+      // 提现表单
+      showWithdrawForm: false,
+      withdrawForm: { method: 'alipay', alipay_account: '', bank_card_no: '', bank_account_name: '', bank_name: '', apply_note: '' },
+      commissionWithdrawing: false,
       showLoginModal: false,
       showInviteModal: false,
       showComputingPowerLogsModal: false,
@@ -7417,9 +7566,15 @@
         this.userPhone = localStorage.getItem('phone') || '';
         this.userEmail = localStorage.getItem('email') || '';
         this.userId = localStorage.getItem('user_id') || '';
-        this.inviteCode = localStorage.getItem('invite_code') || '';
+        // URL 带的邀请码优先，localStorage 仅兜底（避免未登录时被空值覆盖、丢失 URL 邀请码）
+        this.inviteCode = this.inviteCode || localStorage.getItem('invite_code') || '';
       }
-      
+
+      // URL/本地存储带有的邀请码，自动代入注册表单（支持 ?invite_code=xxx 打开即带入）
+      if (this.inviteCode) {
+        this.registerForm.inviteCode = this.inviteCode;
+      }
+
       // 尝试从localStorage恢复openid
       this.wechatOpenid = localStorage.getItem('wechat_openid') || '';
 
@@ -7595,7 +7750,7 @@
         this.registerForm.email = '';
         this.registerForm.code = '';
         this.registerForm.password = '';
-        this.registerForm.inviteCode = '';
+        this.registerForm.inviteCode = this.inviteCode || '';
         this.registerForm.termsAgreed = false;
         this.registerType = 'phone';
         this.resetForm.phone = '';
@@ -8448,6 +8603,143 @@
           this.invitationStats = null;
         }
       },
+
+      // ===== 佣金中心（商业版）=====
+      async fetchCommissionInfo() {
+        if (!this.authToken) return;
+        await Promise.all([
+          this.fetchCommissionSummary(),
+          this.fetchCommissionRate(),
+          this.fetchCommissionRecords(),
+          this.fetchCommissionWithdrawals()
+        ]);
+      },
+
+      async fetchCommissionSummary() {
+        if (!this.authToken) return;
+        try {
+          const response = await axios.get('/api/commission/summary', {
+            headers: { 'Authorization': `Bearer ${this.authToken}` }
+          });
+          if (response.data.code === 0) {
+            this.commissionSummary = response.data.data;
+            this.showCommission = true;
+          } else {
+            this.showCommission = false;
+          }
+        } catch (error) {
+          // 社区版/未启用 -> 403，隐藏佣金区块
+          this.showCommission = false;
+        }
+      },
+
+      async fetchCommissionRecords() {
+        if (!this.authToken) return;
+        try {
+          const response = await axios.get('/api/commission/records?page=1&page_size=20', {
+            headers: { 'Authorization': `Bearer ${this.authToken}` }
+          });
+          if (response.data.code === 0) {
+            this.commissionRecords = (response.data.data && response.data.data.records) || [];
+          }
+        } catch (error) {
+          // 忽略
+        }
+      },
+
+      async fetchCommissionWithdrawals() {
+        if (!this.authToken) return;
+        try {
+          const response = await axios.get('/api/commission/withdrawals?page=1&page_size=20', {
+            headers: { 'Authorization': `Bearer ${this.authToken}` }
+          });
+          if (response.data.code === 0) {
+            this.commissionWithdrawals = (response.data.data && response.data.data.withdrawals) || [];
+          }
+        } catch (error) {
+          // 忽略
+        }
+      },
+
+      async fetchCommissionRate() {
+        if (!this.authToken) return;
+        try {
+          const response = await axios.get('/api/commission/rate', {
+            headers: { 'Authorization': `Bearer ${this.authToken}` }
+          });
+          if (response.data.code === 0) {
+            this.commissionRate = response.data.data.rate || 0;
+            this.commissionRateInput = Math.round(this.commissionRate * 100);
+          }
+        } catch (error) {
+          // 忽略
+        }
+      },
+
+      async saveCommissionRate() {
+        if (!this.authToken) return;
+        this.commissionSaving = true;
+        try {
+          const rate = (Number(this.commissionRateInput) / 100).toFixed(2);
+          const response = await axios.put('/api/commission/rate?rate=' + rate, null, {
+            headers: { 'Authorization': `Bearer ${this.authToken}` }
+          });
+          if (response.data.code === 0) {
+            this.commissionRate = response.data.data.rate;
+            this.commissionRateInput = Math.round(this.commissionRate * 100);
+            alert('佣金比例已保存：' + this.commissionRateInput + '%');
+          } else {
+            alert(response.data.detail || response.data.message || '保存失败');
+          }
+        } catch (error) {
+          alert(error?.response?.data?.detail || '保存失败');
+        } finally {
+          this.commissionSaving = false;
+        }
+      },
+
+      openWithdrawForm() {
+        const available = Number(this.commissionSummary.available || 0);
+        if (available < 10) {
+          alert('可提现佣金不满 ¥10，暂无法提现');
+          return;
+        }
+        this.showWithdrawForm = true;
+      },
+
+      async submitWithdraw() {
+        if (!this.authToken) return;
+        const f = this.withdrawForm;
+        // 前端基础校验（后端也会校验）
+        if (f.method === 'alipay' && !f.alipay_account) { alert('请填写支付宝账号'); return; }
+        if (f.method === 'bank' && !(f.bank_card_no && f.bank_account_name && f.bank_name)) {
+          alert('请完整填写银行卡号、开户姓名、开户银行'); return;
+        }
+        const available = Number(this.commissionSummary.available || 0);
+        if (!confirm('确认提现 ¥' + available.toFixed(2) + ' 到您填写的'
+          + (f.method === 'alipay' ? '支付宝' : '银行卡') + '？\n申请后进入管理员审核。')) return;
+        this.commissionWithdrawing = true;
+        try {
+          const response = await axios.post('/api/commission/withdraw', f, {
+            headers: { 'Authorization': `Bearer ${this.authToken}` }
+          });
+          if (response.data.code === 0) {
+            alert('提现申请已提交，单号：' + response.data.data.withdraw_no +
+                  '，金额 ¥' + Number(response.data.data.amount).toFixed(2) + '，等待审核。');
+            this.showWithdrawForm = false;
+            // 重置表单
+            this.withdrawForm = { method: 'alipay', alipay_account: '', bank_card_no: '', bank_account_name: '', bank_name: '', apply_note: '' };
+            this.fetchCommissionSummary();
+            this.fetchCommissionWithdrawals();
+          } else {
+            alert(response.data.detail || response.data.message || '提现失败');
+          }
+        } catch (error) {
+          alert(error?.response?.data?.detail || '提现失败');
+        } finally {
+          this.commissionWithdrawing = false;
+        }
+      },
       
       async sendResetCode() {
         this.resetError = '';
@@ -8617,6 +8909,7 @@
       openInviteModal() {
         this.showInviteModal = true;
         this.fetchInvitationInfo();
+        this.fetchCommissionInfo();
       },
       
       openComputingPowerLogs() {
@@ -8629,16 +8922,28 @@
         this.showComputingPowerLogsModal = true;
       },
       
+      buildInviteShareText() {
+        // 拼接待 host 的注册链接：对方点击即可带邀请码注册。
+        // 使用运行时访问地址(window.location.origin)作为 host——即 config 中 server.host 对应的前端可达地址，
+        // 比 config 示例值(可能为 localhost)更可靠。
+        const origin = window.location.origin;
+        const path = window.location.pathname || '/';
+        const base = origin + path;
+        const url = base + (base.indexOf('?') >= 0 ? '&' : '?') + 'invite_code=' + encodeURIComponent(this.inviteCode);
+        return '邀请你加入智剧通，点击链接直接注册：' + url;
+      },
+
       copyInviteCode() {
         if (!this.inviteCode) {
           alert('邀请码加载中，请稍后再试');
           return;
         }
-        
+
+        const textToCopy = this.buildInviteShareText();
         // 使用 Clipboard API 复制
         if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(this.inviteCode).then(() => {
-            console.log('邀请码已复制到剪贴板！');
+          navigator.clipboard.writeText(textToCopy).then(() => {
+            alert('邀请链接已复制，快发送给好友吧！');
           }).catch(err => {
             console.error('复制失败:', err);
             this.fallbackCopy();
@@ -8647,21 +8952,22 @@
           this.fallbackCopy();
         }
       },
-      
+
       fallbackCopy() {
         // 降级方案：创建临时 textarea 元素
+        const textToCopy = this.buildInviteShareText();
         const textarea = document.createElement('textarea');
-        textarea.value = this.inviteCode;
+        textarea.value = textToCopy;
         textarea.style.position = 'fixed';
         textarea.style.opacity = '0';
         document.body.appendChild(textarea);
         textarea.select();
         try {
           document.execCommand('copy');
-          console.log('邀请码已复制到剪贴板！');
+          alert('邀请链接已复制，快发送给好友吧！');
         } catch (err) {
           console.error('复制失败:', err);
-          alert('复制失败，请手动复制邀请码：' + this.inviteCode);
+          alert('复制失败，请手动复制：' + textToCopy);
         }
         document.body.removeChild(textarea);
       },

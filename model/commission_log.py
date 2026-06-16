@@ -18,6 +18,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _mask_phone(phone) -> Optional[str]:
+    """手机号脱敏（138****0000），用于佣金明细展示"""
+    if not phone:
+        return None
+    p = str(phone)
+    return p[:3] + '****' + p[-4:] if len(p) >= 7 else p
+
+
 class CommissionLog:
     """CommissionLog model class - 邀请佣金明细（账本）"""
 
@@ -36,6 +44,7 @@ class CommissionLog:
         self.status = kwargs.get('status', 0)
         self.note = kwargs.get('note')
         self.create_at = kwargs.get('create_at')
+        self.invitee_phone = kwargs.get('invitee_phone')  # JOIN users 得到（明细展示用）
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
@@ -54,6 +63,7 @@ class CommissionLog:
             'status': self.status,
             'note': self.note,
             'create_at': self.create_at.isoformat() if self.create_at else None,
+            'invitee_phone': _mask_phone(self.invitee_phone),
         }
 
 
@@ -177,11 +187,13 @@ class CommissionLogModel:
 
     @staticmethod
     def list_by_inviter(inviter_id: int, limit: int = 20, offset: int = 0) -> List[CommissionLog]:
-        """根据邀请人ID分页获取佣金明细"""
+        """根据邀请人ID分页获取佣金明细（JOIN users 带出被邀请人手机号）"""
         sql = """
-            SELECT * FROM commission_log
-            WHERE inviter_id = %s
-            ORDER BY create_at DESC
+            SELECT cl.*, u.phone AS invitee_phone
+            FROM commission_log cl
+            LEFT JOIN users u ON cl.invitee_id = u.id
+            WHERE cl.inviter_id = %s
+            ORDER BY cl.create_at DESC
             LIMIT %s OFFSET %s
         """
         try:

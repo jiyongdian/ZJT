@@ -596,99 +596,492 @@ header {
   color: var(--primary);
 }
 
-.invite-code-display {
-  background: #0b1220;
-  border: 2px dashed var(--primary);
-  border-radius: 12px;
-  padding: 20px;
-  text-align: center;
-  margin-bottom: 20px;
+.invite-modal {
+  position: relative;
+  max-width: 500px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 0;
+  background:
+    linear-gradient(135deg, rgba(34, 197, 94, 0.12), transparent 34%),
+    linear-gradient(180deg, #111827 0%, #0f172a 100%);
 }
 
-.invite-code-label {
-  font-size: 13px;
+.invite-modal::-webkit-scrollbar {
+  display: none;
+}
+
+.invite-modal-header {
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.invite-modal-eyebrow {
+  color: #7dd3fc;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.invite-modal-title {
+  color: #f8fafc;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.invite-modal-body {
+  padding: 20px 24px 24px;
+}
+
+.invite-user-card,
+.invite-stat-card,
+.commission-balance-card,
+.commission-withdraw-form,
+.commission-rate-card,
+.commission-record-item {
+  background: rgba(15, 23, 42, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.invite-user-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.invite-user-avatar {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  color: #052e16;
+  font-weight: 800;
+  background: var(--primary);
+}
+
+.invite-user-info {
+  min-width: 0;
+}
+
+.invite-user-name {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.invite-user-meta {
   color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.invite-pass {
+  position: relative;
+  overflow: hidden;
+  text-align: center;
+  padding: 18px 18px 16px;
+  margin-bottom: 14px;
+  border: 1px solid rgba(34, 197, 94, 0.32);
+  border-radius: 12px;
+  background:
+    linear-gradient(90deg, rgba(34, 197, 94, 0.11), transparent 34%, rgba(14, 165, 233, 0.08)),
+    rgba(11, 18, 32, 0.9);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 12px 28px rgba(0, 0, 0, 0.28);
+}
+
+.invite-pass::before,
+.invite-pass::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #0d1422;
+  transform: translateY(-50%);
+}
+
+.invite-pass::before {
+  left: -11px;
+}
+
+.invite-pass::after {
+  right: -11px;
+}
+
+.invite-pass-label {
+  color: #a7f3d0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   margin-bottom: 8px;
 }
 
-.invite-code-value {
-  font-size: 48px;
-  font-weight: 700;
+.invite-pass-code {
   color: var(--primary);
-  letter-spacing: 6px;
-  font-family: 'Courier New', monospace;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: clamp(26px, 7vw, 38px);
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+  text-indent: 0.22em;
+}
+
+.invite-pass-note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 10px;
+}
+
+.invite-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.invite-stat-card {
+  position: relative;
+  border-radius: 12px;
+  padding: 13px;
   text-align: center;
 }
 
-.invite-description {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-  background: rgba(34, 197, 94, 0.1);
-  border: 1px solid rgba(34, 197, 94, 0.3);
-  border-radius: 10px;
-  padding: 16px;
+.invite-stat-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 5px;
 }
 
-.invite-icon {
-  font-size: 32px;
+.invite-stat-value {
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.invite-stat-value span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  margin-left: 4px;
+}
+
+.invite-reward-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid rgba(34, 197, 94, 0.26);
+  border-radius: 12px;
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.invite-reward-mark {
+  flex: 0 0 auto;
+  min-width: 48px;
+  padding: 7px 8px;
+  border-radius: 10px;
+  color: #052e16;
+  background: var(--primary);
+  font-weight: 900;
+  text-align: center;
+}
+
+.invite-reward-title {
+  color: #bbf7d0;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.invite-reward-desc {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 2px;
+}
+
+.invite-reward-desc strong {
+  color: var(--primary);
+}
+
+.invite-copy-btn,
+.commission-withdraw-btn,
+.commission-confirm-btn,
+.commission-save-btn {
+  width: 100%;
+}
+
+.invite-copy-btn {
+  padding: 13px;
+  border-radius: 12px;
+  font-size: 15px;
+}
+
+.commission-panel {
+  margin-top: 22px;
+}
+
+.commission-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.commission-divider::before,
+.commission-divider::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: rgba(203, 213, 225, 0.35);
+}
+
+.commission-balance-card,
+.commission-withdraw-form,
+.commission-rate-card {
+  border-radius: 12px;
+  padding: 15px;
+  margin-bottom: 14px;
+}
+
+.commission-balance-main,
+.commission-section-head,
+.commission-record-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.commission-balance-main {
+  margin-bottom: 12px;
+}
+
+.commission-balance-main span,
+.commission-section-head span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.commission-balance-main strong {
+  color: #f59e0b;
+  font-size: 28px;
   line-height: 1;
 }
 
-.invite-text {
-  flex: 1;
+.commission-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
 }
 
-.invite-text strong {
-  display: block;
-  font-size: 16px;
-  color: var(--text);
-  margin-bottom: 8px;
-}
-
-.invite-text p {
-  margin: 0;
-  font-size: 14px;
-  color: var(--muted);
-  line-height: 1.6;
-}
-
-.invite-text .highlight {
-  color: var(--primary);
-  font-weight: 700;
-  font-size: 16px;
-}
-
-/* Invite Stats */
-.invite-stats {
-  margin: 20px 0;
-  padding: 16px;
-  background: rgba(34, 197, 94, 0.08);
-  border-radius: 10px;
-  border: 1px solid rgba(34, 197, 94, 0.2);
-}
-
-.stats-row {
-  display: flex;
-  gap: 20px;
-  justify-content: space-around;
-}
-
-.stat-item {
-  flex: 1;
+.commission-mini-grid div {
   text-align: center;
 }
 
-.stat-label {
-  font-size: 13px;
+.commission-mini-grid span,
+.commission-record-time {
+  display: block;
   color: var(--muted);
-  margin-bottom: 8px;
+  font-size: 11px;
 }
 
-.stat-value {
-  font-size: 24px;
+.commission-mini-grid strong {
+  display: block;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+  margin-top: 3px;
+}
+
+.commission-withdraw-btn {
+  margin-bottom: 16px;
+}
+
+.commission-link-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 0;
+}
+
+.commission-link-btn:hover {
+  color: var(--text);
+}
+
+.commission-method-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.commission-method-tabs button {
+  padding: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 10px;
+  background: rgba(11, 18, 32, 0.75);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
   font-weight: 700;
-  color: var(--primary);
+}
+
+.commission-method-tabs button.active {
+  border-color: #22c55e;
+  background: rgba(34, 197, 94, 0.14);
+  color: #bbf7d0;
+}
+
+.commission-field-group {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.commission-withdraw-form .input {
+  background: #0b1220;
+  color: var(--text);
+  border-color: #1e293b;
+  margin-bottom: 10px;
+}
+
+.commission-confirm-btn {
+  margin-top: 0;
+}
+
+.commission-section-head strong {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  color: #bbf7d0;
+  background: rgba(34, 197, 94, 0.14);
+  font-size: 13px;
+}
+
+.commission-rate-range {
+  width: 100%;
+  margin: 10px 0 6px;
+  accent-color: #22c55e;
+}
+
+.commission-hint {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.commission-save-btn {
+  color: #bbf7d0;
+  border: 1px solid #22c55e;
+  background: rgba(11, 18, 32, 0.75);
+}
+
+.commission-record-title {
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  margin-bottom: 9px;
+}
+
+.commission-empty {
+  color: #94a3b8;
+  font-size: 12px;
+  padding: 8px 0;
+}
+
+.commission-record-list {
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding-right: 2px;
+}
+
+.commission-record-list::-webkit-scrollbar {
+  display: none;
+}
+
+.commission-record-item {
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+}
+
+.commission-record-user {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.commission-record-time {
+  margin-top: 2px;
+}
+
+.commission-record-amount {
+  color: #16a34a;
+  flex: 0 0 auto;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+@media (max-width: 520px) {
+  .invite-modal {
+    width: calc(100% - 20px);
+  }
+
+  .invite-modal-header,
+  .invite-modal-body {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .invite-pass-code {
+    letter-spacing: 0.14em;
+    text-indent: 0.14em;
+  }
+
+  .commission-balance-main {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
 }
 
 /* Invite Tip in Register Form */
