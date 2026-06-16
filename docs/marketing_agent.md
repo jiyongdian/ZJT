@@ -422,6 +422,23 @@ Agent 模式下，`image_preferences.ratio`、`image_preferences.resolution` 会
 | `/api/recharge/packages` | GET | 获取充值套餐列表 |
 | `/api/recharge/wechat-pay` | POST | 创建微信支付订单 |
 
+## 认证与登录跳转
+
+### 登录状态检查
+
+页面初始化时检查 `localStorage` 中的 `user_id` 和 `auth_token`，如果缺失则自动跳转到登录页面。
+
+### 401 自动跳转
+
+所有带 `Authorization` 头的 API 请求均通过 `checkAuthResponse()` 函数统一检查 HTTP 状态码。当后端返回 `401`（未授权/token 过期）时，自动跳转到登录页面并携带当前页面路径，登录成功后可跳回原页面。
+
+跳转目标格式：`/index.html?redirect_url={当前页面路径}`
+
+`index.html` 已内置 `redirect_url` 参数支持：
+1. 解析 `redirect_url` 参数并保存到 `localStorage` 的 `redirect_after_login`
+2. 未登录时自动弹出登录窗口
+3. 登录成功后检查 `redirect_after_login`，存在则跳转到指定路径
+
 ### 世界观
 
 | 端点 | 方法 | 说明 |

@@ -1258,6 +1258,7 @@
                     const response = await fetch('/api/user/computing_power', {
                         headers: { 'Authorization': `Bearer ${authToken.value}` }
                     });
+                    if (!checkAuthResponse(response)) return;
                     const data = await response.json();
                     if (data.success) {
                         const power = data.data?.computing_power || 0;
@@ -1342,6 +1343,7 @@
                 rechargeState.value = 'loading';
                 try {
                     const response = await fetch(`/api/recharge/packages?auth_token=${encodeURIComponent(authToken.value)}`);
+                    if (!checkAuthResponse(response)) return;
                     const data = await response.json();
                     rechargePackages.value = data.packages || [];
                     rechargeState.value = 'packages';
@@ -1385,6 +1387,7 @@
                         })
                     });
 
+                    if (!checkAuthResponse(response)) return;
                     const data = await response.json();
                     if (data.code_url) {
                         qrCodeUrl.value = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(data.code_url)}`;
@@ -1627,6 +1630,22 @@
                 setTimeout(() => { errorMessage.value = ''; }, 5000);
             }
 
+            // 跳转到登录页面，带上当前页面路径以便登录后跳回
+            function redirectToLogin() {
+                const currentPath = window.location.pathname + window.location.search;
+                const redirectUrl = encodeURIComponent(currentPath);
+                window.location.href = `/index.html?login=1&redirect_url=${redirectUrl}`;
+            }
+
+            // 检查 API 响应是否为认证失败（401），如果是则跳转到登录页面
+            function checkAuthResponse(response) {
+                if (response.status === 401) {
+                    redirectToLogin();
+                    return false;
+                }
+                return true;
+            }
+
             // 格式化时间
             function formatTime(timestamp) {
                 if (!timestamp) return '';
@@ -1807,6 +1826,7 @@
                             'X-User-Id': userId.value
                         }
                     });
+                    if (!checkAuthResponse(response)) return [];
                     const data = await response.json();
                     if (data.code === 0 || data.success) {
                         return data.data?.data || data.worlds || [];
@@ -1830,6 +1850,7 @@
                         },
                         body: JSON.stringify({ name, description })
                     });
+                    if (!checkAuthResponse(response)) return null;
                     const data = await response.json();
                     if (data.code === 0 || data.success) {
                         return data.data;
@@ -1854,6 +1875,7 @@
                             session_type: 2
                         })
                     });
+                    if (!checkAuthResponse(response)) return null;
                     const data = await response.json();
                     if (data.success) {
                         const sid = data.session_id;
@@ -1885,6 +1907,7 @@
                             'X-User-Id': userId.value
                         }
                     });
+                    if (!checkAuthResponse(response)) return [];
                     const data = await response.json();
                     if (data.code === 0 || data.success) {
                         return data.history || [];
@@ -2811,6 +2834,7 @@
                     });
                     clearTimeout(timeoutId);
 
+                    if (!checkAuthResponse(taskResponse)) return;
                     const taskData = await taskResponse.json();
                     if (!taskResponse.ok || !taskData.success) {
                         if (taskData.error?.includes('算力') || taskData.message?.includes('算力')) {
@@ -3166,6 +3190,7 @@
                         })
                     });
 
+                    if (!checkAuthResponse(response)) return;
                     let data = {};
                     try {
                         data = await response.json();
@@ -3418,6 +3443,7 @@
                         })
                     });
 
+                    if (!checkAuthResponse(response)) return;
                     const data = await response.json();
                     if (!data.success) {
                         console.error('追加消息到后端失败:', data.error);
@@ -3464,6 +3490,7 @@
                         },
                         body: JSON.stringify(body)
                     });
+                    if (!checkAuthResponse(res)) return false;
                     const data = await res.json();
                     return data.success;
                 } catch (e) {
@@ -3489,6 +3516,7 @@
                             content: content
                         })
                     });
+                    if (!checkAuthResponse(res)) return false;
                     const data = await res.json();
                     return data.success && data.replaced > 0;
                 } catch (e) {
@@ -3599,6 +3627,7 @@
                 if (activeTaskId) {
                     try {
                         const statusRes = await fetch(`/api/task/${activeTaskId}/status`);
+                        if (!checkAuthResponse(statusRes)) return;
                         const statusData = await statusRes.json();
                         const taskStatus = statusData.success && statusData.task ? statusData.task.status : null;
                         if (taskStatus === 'running' || taskStatus === 'pending' || taskStatus === 'waiting_human') {
@@ -3660,6 +3689,7 @@
                             'X-User-Id': userId.value
                         }
                     });
+                    if (!checkAuthResponse(response)) return [];
                     const data = await response.json();
                     if (data.success && data.sessions) {
                         sessions.value = data.sessions.map(s => ({
@@ -3721,6 +3751,7 @@
                             'X-User-Id': userId.value
                         }
                     });
+                    if (!checkAuthResponse(response)) return;
                     const data = await response.json();
                     if (data.success) {
                         sessions.value = sessions.value.filter(s => s.id !== sessionId);
@@ -3769,6 +3800,7 @@
                         },
                         body: JSON.stringify({ title: newTitle })
                     });
+                    if (!checkAuthResponse(response)) return;
                     const data = await response.json();
                     if (data.success) {
                         session.title = newTitle.length > 20 ? newTitle.slice(0, 20) + '...' : newTitle;
@@ -3827,7 +3859,7 @@
 
                 if (!userId.value || !authToken.value) {
                     isInitializing.value = false;
-                    showError(window.t('please_login'));
+                    redirectToLogin();
                     return;
                 }
 
@@ -3866,6 +3898,7 @@
                 if (currentSessionId.value) {
                     try {
                         const taskRes = await fetch(`/api/session/${currentSessionId.value}/latest-task`);
+                        if (!checkAuthResponse(taskRes)) return;
                         const taskData = await taskRes.json();
                         if (taskData.success && taskData.task) {
                             const taskStatus = taskData.task.status;
@@ -3994,6 +4027,7 @@
                                 const resp = await fetch(`/api/video-model?category=text_to_video&user_id=${encodeURIComponent(userId.value)}&world_id=${encodeURIComponent(worldId.value)}`, {
                                     headers: { 'Authorization': authToken.value, 'X-User-Id': userId.value }
                                 });
+                                if (!checkAuthResponse(resp)) return;
                                 if (resp.ok) {
                                     const data = await resp.json();
                                     if (data.success && data.current_task_id) {
@@ -4034,6 +4068,7 @@
                                 const resp = await fetch(`/api/video-model?category=image_to_video&user_id=${encodeURIComponent(userId.value)}&world_id=${encodeURIComponent(worldId.value)}`, {
                                     headers: { 'Authorization': authToken.value, 'X-User-Id': userId.value }
                                 });
+                                if (!checkAuthResponse(resp)) return;
                                 if (resp.ok) {
                                     const data = await resp.json();
                                     if (data.success && data.current_task_id) {
@@ -4540,6 +4575,7 @@
                         method: 'POST',
                         body: formData
                     });
+                    if (!checkAuthResponse(resp)) return;
                     const data = await resp.json();
                     if (data.success && data.url) {
                         imgItem.serverUrl = data.url;
@@ -4685,6 +4721,7 @@
                         method: 'POST',
                         body: formData
                     });
+                    if (!checkAuthResponse(resp)) return;
                     const data = await resp.json();
                     if (data.success && data.url) {
                         audioItem.serverUrl = data.url;
@@ -4797,6 +4834,7 @@
                         method: 'POST',
                         body: formData
                     });
+                    if (!checkAuthResponse(resp)) return;
                     const data = await resp.json();
                     if (data.success && data.url) {
                         vidItem.serverUrl = data.url;
@@ -5643,7 +5681,7 @@
                     // 解析分辨率为后端格式（auto 不传）
                     const sizeMap = { '1K': '1K', [window.t('resolution_2k')]: '2K', [window.t('resolution_4k')]: '4K' };
                     const resolvedResolution = selectedResolution.value === 'auto' ? null : (sizeMap[selectedResolution.value] || selectedResolution.value);
-                    await fetch('/api/text-to-image-model', {
+                    const resp = await fetch('/api/text-to-image-model', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -5659,6 +5697,7 @@
                             resolution: resolvedResolution
                         })
                     });
+                    if (!checkAuthResponse(resp)) return;
                     console.log('[图片偏好] 已同步到后端:', model.name, 'task_id:', taskId, 'ratio:', selectedRatio.value);
                 } catch (e) {
                     console.warn('[图片模型] 同步失败:', e);
@@ -5674,7 +5713,7 @@
                         ? window.TaskConfig.getTaskIdByKey(model.key, category)
                         : null;
                     if (!taskId || !userId.value || !worldId.value) return;
-                    await fetch('/api/video-model', {
+                    const resp = await fetch('/api/video-model', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -5689,6 +5728,7 @@
                             category: category
                         })
                     });
+                    if (!checkAuthResponse(resp)) return;
                     console.log('[视频偏好] 已同步到后端:', model.name, 'task_id:', taskId, 'category:', category);
                 } catch (e) {
                     console.warn('[视频模型] 同步失败:', e);
@@ -5794,6 +5834,7 @@
                             const resp = await fetch(`/api/video-model?category=${category}&user_id=${encodeURIComponent(userId.value)}&world_id=${encodeURIComponent(worldId.value)}`, {
                                 headers: { 'Authorization': authToken.value, 'X-User-Id': userId.value }
                             });
+                            if (!checkAuthResponse(resp)) return;
                             if (resp.ok) {
                                 const data = await resp.json();
                                 if (data.success && data.current_task_id) {
@@ -5838,6 +5879,7 @@
                             const resp = await fetch(`/api/video-model?category=image_to_video&user_id=${encodeURIComponent(userId.value)}&world_id=${encodeURIComponent(worldId.value)}`, {
                                 headers: { 'Authorization': authToken.value, 'X-User-Id': userId.value }
                             });
+                            if (!checkAuthResponse(resp)) return;
                             if (resp.ok) {
                                 const data = await resp.json();
                                 if (data.success && data.current_task_id) {
