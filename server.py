@@ -23,6 +23,7 @@ from urllib.parse import urlparse
 from pydantic import BaseModel
 from api.clients.runninghub_client import RunningHubClient, TaskStatus, run_ai_app_task
 from config.config_util import resolve_bin_path
+from config.version import get_app_version
 from perseids_server.client import make_perseids_request, get_device_uuid, async_make_perseids_request, async_call_external_auth_server
 from model import AIToolsModel, VideoWorkflowModel,TasksModel, AIAudioModel, PaymentOrdersModel
 from model.users import UsersModel
@@ -202,26 +203,9 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_DIR = get_upload_dir()
 CHECK_AUTH_TOKEN = True
 
-# 前端静态资源版本号 - 从 pyproject.toml 读取版本号并生成 hash
+# 前端静态资源版本号 - 直接使用 pyproject.toml 中的版本号（如 1.9.2）
 # 上线时更新 pyproject.toml 中的 version 即可使浏览器缓存失效
-def _get_static_version() -> str:
-    """从 pyproject.toml 读取版本号并生成短 hash"""
-    pyproject_path = os.path.join(APP_DIR, "pyproject.toml")
-    try:
-        with open(pyproject_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        # 使用正则提取 version = "x.y.z"
-        match = re.search(r'version\s*=\s*"([^"]+)"', content)
-        if match:
-            version = match.group(1)
-            # 生成 8 位 hash
-            hash_str = hashlib.md5(version.encode()).hexdigest()[:8]
-            return hash_str
-    except Exception as e:
-        logging.warning(f"无法读取 pyproject.toml 版本号: {e}")
-    return "00000000"
-
-STATIC_VERSION = _get_static_version()
+STATIC_VERSION = get_app_version()
 
 # 缓存已处理的 HTML 内容，避免每次请求都重新处理
 _PROCESSED_HTML_CACHE = {}
@@ -239,6 +223,12 @@ def _get_processed_html(file_path: str) -> bytes:
 
     with open(file_path, 'r', encoding='utf-8') as f:
         content = f.read()
+
+    # 始终将 HTML 中显式书写的 __VERSION__ 占位符替换为真实版本号（来自 pyproject.toml）
+    # 无论是否开启 cache_bust 都必须解析，否则在开发模式（cache_bust 关闭）下
+    # 会原样输出 "?v=__VERSION__" 这样的占位字符串
+    if "__VERSION__" in content:
+        content = content.replace("__VERSION__", STATIC_VERSION)
 
     # 检查是否启用了缓存失效功能
     if CACHE_BUST_ENABLED:
