@@ -873,6 +873,7 @@
             const MAX_CONSECUTIVE_TASK_ERRORS = 3;
             const taskErrorCounts = new Map();
             const activeGenerationPollKeys = new Set();
+            const directGenerationTasks = new Map();
 
             function generateMsgUid() {
                 return `msg_${Date.now()}_${msgUidCounter++}`;
@@ -894,6 +895,7 @@
                 activeIntervals.clear();
                 taskErrorCounts.clear();
                 activeGenerationPollKeys.clear();
+                directGenerationTasks.clear();
             }
 
             function getTaskErrorKey(type, ids) {
@@ -927,6 +929,43 @@
             function getGenerationPollKey(type, ids, sessionId = currentSessionId.value) {
                 const raw = Array.isArray(ids) ? ids.join(',') : String(ids || '');
                 return `${sessionId || 'no-session'}:${type}:${raw}`;
+            }
+
+            function normalizeProjectIds(projectIds) {
+                return Array.isArray(projectIds)
+                    ? projectIds.map(String).filter(Boolean)
+                    : String(projectIds || '').split(',').map(id => id.trim()).filter(Boolean);
+            }
+
+            function createDirectGenerationTask(type, projectIds, msgUid, sessionId = currentSessionId.value) {
+                const normalizedProjectIds = normalizeProjectIds(projectIds);
+                const task = {
+                    type,
+                    projectIds: normalizedProjectIds,
+                    msgUid,
+                    sessionId,
+                    pollKey: getGenerationPollKey(`direct-${type}`, normalizedProjectIds, sessionId),
+                    intervalId: null
+                };
+                directGenerationTasks.set(task.pollKey, task);
+                return task;
+            }
+
+            function clearDirectGenerationTask(taskOrKey) {
+                const task = typeof taskOrKey === 'string' ? directGenerationTasks.get(taskOrKey) : taskOrKey;
+                if (!task) return;
+                if (task.intervalId) {
+                    trackedClearInterval(task.intervalId);
+                    task.intervalId = null;
+                }
+                directGenerationTasks.delete(task.pollKey);
+                resetTaskErrorCount(getTaskErrorKey(`${task.type}-status`, task.projectIds));
+            }
+
+            function clearDirectGenerationTasksByType(type) {
+                Array.from(directGenerationTasks.values())
+                    .filter(task => task.type === type)
+                    .forEach(clearDirectGenerationTask);
             }
 
             function normalizeGenerationStatus(status) {
@@ -977,6 +1016,89 @@
                 return urls;
             }
 
+            function getUrlPath(url) {
+                return String(url || '').split('#')[0].split('?')[0].toLowerCase();
+            }
+
+            function isImageResultUrl(url) {
+                return /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/.test(getUrlPath(url));
+            }
+
+            function isVideoResultUrl(url) {
+                return /\.(mp4|webm|mov|avi|mkv)$/.test(getUrlPath(url));
+            }
+
+            function hasKnownMediaExtension(url) {
+                return isImageResultUrl(url) || isVideoResultUrl(url);
+            }
+
+            function filterGenerationUrlsByType(urls, type) {
+                return urls.filter(url => {
+                    if (type === 'image') {
+                        return !isVideoResultUrl(url) && (isImageResultUrl(url) || !hasKnownMediaExtension(url));
+                    }
+                    if (type === 'video') {
+                        return !isImageResultUrl(url) && (isVideoResultUrl(url) || !hasKnownMediaExtension(url));
+                    }
+                    return true;
+                });
+            }
+
+            function collectGenerationUrlsByType(tasks, type) {
+                const urls = [];
+                tasks.forEach(task => {
+                    collectGenerationUrls(task).forEach(url => {
+                        if (!urls.includes(url)) urls.push(url);
+                    });
+                });
+                return filterGenerationUrlsByType(urls, type);
+            }
+
+            function buildGeneratedMediaHtml(type, urls) {
+                if (type === 'image') {
+                    return urls.map(url =>
+                        `<div class="generated-image-wrapper" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${url}'"><img src="${url}" class="generated-image" alt="${window.t('generated_result_alt')}"></div>`
+                    ).join('');
+                }
+                if (type === 'video') {
+                    return urls.map(url =>
+                        `<video src="${url}" controls style="max-width:100%;max-height:400px;border-radius:8px;margin:8px 0;"></video>`
+                    ).join('');
+                }
+                return '';
+            }
+
+            function buildGeneratedTaskContent(type, tasks) {
+                const urls = collectGenerationUrlsByType(tasks, type);
+                if (urls.length === 0) {
+                    return type === 'image' ? window.t('image_generation_failed') : window.t('video_generation_failed');
+                }
+                if (type === 'image') {
+                    const html = buildGeneratedMediaHtml('image', urls);
+                    return window.t('image_generated') + '\n\n' + html;
+                }
+                const html = buildGeneratedMediaHtml('video', urls);
+                return window.t('video_generated') + '\n\n' + html;
+            }
+
+            async function persistDirectGenerationResult(task, finalContent) {
+                if (task.type === 'image') {
+                    const replaced = await replacePendingTask(task.sessionId, 'image_task_submitted', task.projectIds, finalContent);
+                    if (!replaced) {
+                        await appendMessageToBackend('assistant', finalContent, task.sessionId);
+                    }
+                    await cleanPendingTasksFromHistory(task.sessionId, 'image_task_submitted', task.projectIds);
+                    return;
+                }
+                if (task.type === 'video') {
+                    const replaced = await replacePendingTask(task.sessionId, 'video_task_submitted', task.projectIds, finalContent);
+                    if (!replaced) {
+                        await appendMessageToBackend('assistant', finalContent, task.sessionId);
+                    }
+                    await cleanPendingTasksFromHistory(task.sessionId, 'video_task_submitted', task.projectIds);
+                }
+            }
+
             function extractProjectIdsFromText(text) {
                 if (!text || typeof text !== 'string') return [];
                 const match = text.match(/project_ids?[\s\S]{0,40}?\[([^\]]+)\]/i);
@@ -997,8 +1119,14 @@
                 return ids;
             }
 
+            function isVideoTaskSummaryText(text) {
+                if (!text || typeof text !== 'string') return false;
+                return /(视频|video|图生视频|文生视频|image_to_video|text_to_video|视频参数|视频模型|时长|duration_seconds|first_last_frame|multi_reference)/i.test(text);
+            }
+
             function maybeRecoverImageTaskFromAssistantText(text) {
                 if (!text || typeof text !== 'string') return;
+                if (isVideoTaskSummaryText(text)) return;
                 if (!/(图片|图像|image)/i.test(text)) return;
                 const projectIds = extractProjectIdsFromText(text);
                 if (projectIds.length === 0) return;
@@ -1046,8 +1174,8 @@
             function recoverVideoTasksFromAssistantMessages() {
                 messages.value.forEach(msg => {
                     if (msg.role === 'ai' && !msg._isPendingTask) {
-                        maybeRecoverImageTaskFromAssistantText(msg.content || '');
                         maybeRecoverVideoTaskFromAssistantText(msg.content || '');
+                        maybeRecoverImageTaskFromAssistantText(msg.content || '');
                     }
                 });
             }
@@ -2075,6 +2203,7 @@
             // 发送图片生成/编辑请求
             async function sendImageRequest(prompt) {
                 isLoading.value = true;
+                const requestSessionId = currentSessionId.value;
                 imageResults.value = [];
                 imageStatus.value = 'submitted';
 
@@ -2129,7 +2258,8 @@
                         headers: { 'Content-Type': 'multipart/form-data' }
                     });
 
-                    imageProjectIds.value = res.data.project_ids || [];
+                    const submittedProjectIds = res.data.project_ids || [];
+                    imageProjectIds.value = submittedProjectIds;
                     imageStatus.value = res.data.status || 'submitted';
 
                     // 更新会话 title
@@ -2146,8 +2276,8 @@
                     scrollToBottom();
 
                     // 保存 pending task 标记到后端历史，并启动轮询
-                    await appendMessageToBackend('assistant', '__PENDING_TASK__:image_task_submitted:' + JSON.stringify(imageProjectIds.value));
-                    startImageStatusCheck(msgUid);
+                    await appendMessageToBackend('assistant', '__PENDING_TASK__:image_task_submitted:' + JSON.stringify(submittedProjectIds), requestSessionId);
+                    startImageStatusCheck(msgUid, submittedProjectIds, requestSessionId);
 
                 } catch (e) {
                     showError(e.message || window.t('image_generation_request_failed'));
@@ -2163,7 +2293,83 @@
             }
 
             // 轮询图片生成状态
+            async function checkDirectGenerationStatus(task) {
+                if (!task || !task.projectIds || task.projectIds.length === 0) return;
+                if (currentSessionId.value !== task.sessionId) {
+                    clearDirectGenerationTask(task);
+                    return;
+                }
+                const errorKey = getTaskErrorKey(`${task.type}-status`, task.projectIds);
+
+                const msgIdx = messages.value.findIndex(m => m._uid === task.msgUid);
+                if (msgIdx === -1) {
+                    clearDirectGenerationTask(task);
+                    return;
+                }
+
+                try {
+                    const params = authToken.value ? { auth_token: authToken.value } : {};
+                    const projectIdsStr = task.projectIds.join(',');
+                    const res = await axios.get(`/api/get-status/${projectIdsStr}`, { params });
+                    resetTaskErrorCount(errorKey);
+
+                    if (res.data.tasks) {
+                        const tasks = res.data.tasks;
+                        const allSuccess = tasks.every(isGenerationSuccess);
+                        const anyFailed = tasks.some(isGenerationFailed);
+                        const anyRunning = tasks.some(t => !isGenerationTerminal(t));
+                        const resultUrls = collectGenerationUrlsByType(tasks, task.type);
+                        const resultRows = resultUrls.map(url => ({ result_url: url }));
+
+                        if (task.type === 'image') imageResults.value = resultRows;
+                        if (task.type === 'video') videoResults.value = resultRows;
+
+                        if (allSuccess) {
+                            if (task.type === 'image') imageStatus.value = 'SUCCESS';
+                            if (task.type === 'video') videoStatus.value = 'SUCCESS';
+                            clearDirectGenerationTask(task);
+                            const finalContent = buildGeneratedTaskContent(task.type, tasks);
+                            const currentMsgIdx = messages.value.findIndex(m => m._uid === task.msgUid);
+                            if (currentMsgIdx !== -1) {
+                                messages.value[currentMsgIdx].content = finalContent;
+                                scrollToBottom();
+                            }
+                            await persistDirectGenerationResult(task, finalContent);
+                        } else if (anyFailed && !anyRunning) {
+                            if (task.type === 'image') imageStatus.value = 'FAILED';
+                            if (task.type === 'video') videoStatus.value = 'FAILED';
+                            clearDirectGenerationTask(task);
+                            const finalContent = task.type === 'image'
+                                ? window.t('image_generation_failed')
+                                : window.t('video_generation_failed');
+                            const currentMsgIdx = messages.value.findIndex(m => m._uid === task.msgUid);
+                            if (currentMsgIdx !== -1) {
+                                messages.value[currentMsgIdx].content = finalContent;
+                                scrollToBottom();
+                            }
+                            await persistDirectGenerationResult(task, finalContent);
+                        }
+                    }
+                } catch (err) {
+                    console.error('generation status polling error:', err);
+                    const failures = recordTaskError(errorKey);
+                    if (failures >= MAX_CONSECUTIVE_TASK_ERRORS) {
+                        clearDirectGenerationTask(task);
+                        const currentMsgIdx = messages.value.findIndex(m => m._uid === task.msgUid);
+                        if (currentMsgIdx !== -1) {
+                            messages.value[currentMsgIdx].content = window.t('request_timeout') || '请求超时，请稍后重试。';
+                            scrollToBottom();
+                        }
+                        resetTaskErrorCount(errorKey);
+                    }
+                }
+            }
+
             async function checkImageStatus(msgUid) {
+                if (msgUid && msgUid.projectIds) {
+                    const task = msgUid;
+                    if (task.projectIds) return checkDirectGenerationStatus(task);
+                }
                 if (!imageProjectIds.value || imageProjectIds.value.length === 0) return;
                 const errorKey = getTaskErrorKey('image-status', imageProjectIds.value);
 
@@ -2235,11 +2441,13 @@
                 }
             }
 
-            function startImageStatusCheck(msgUid) {
-                clearImageStatusCheck();
-                imageStatusInterval.value = trackedSetInterval(() => {
-                    checkImageStatus(msgUid);
+            function startImageStatusCheck(msgUid, projectIds = imageProjectIds.value, sessionId = currentSessionId.value) {
+                const task = createDirectGenerationTask('image', projectIds, msgUid, sessionId);
+                task.intervalId = trackedSetInterval(() => {
+                    checkImageStatus(task);
                 }, 5000);
+                imageStatusInterval.value = task.intervalId;
+                checkImageStatus(task);
             }
 
             function clearImageStatusCheck() {
@@ -2247,6 +2455,7 @@
                     trackedClearInterval(imageStatusInterval.value);
                     imageStatusInterval.value = null;
                 }
+                clearDirectGenerationTasksByType('image');
             }
 
             // Agent 图片任务提交后，前端轮询状态
@@ -2497,6 +2706,7 @@
             // 发送视频生成请求
             async function sendVideoRequest(prompt) {
                 isLoading.value = true;
+                const requestSessionId = currentSessionId.value;
                 videoResults.value = [];
                 videoStatus.value = 'submitted';
 
@@ -2604,7 +2814,8 @@
                         headers: { 'Content-Type': 'multipart/form-data' }
                     });
 
-                    videoProjectIds.value = res.data.project_ids || [];
+                    const submittedProjectIds = res.data.project_ids || [];
+                    videoProjectIds.value = submittedProjectIds;
                     videoStatus.value = res.data.status || 'submitted';
 
                     // 更新会话 title
@@ -2621,8 +2832,8 @@
                     scrollToBottom();
 
                     // 保存 pending task 标记到后端历史，并启动轮询
-                    await appendMessageToBackend('assistant', '__PENDING_TASK__:video_task_submitted:' + JSON.stringify(videoProjectIds.value));
-                    startVideoStatusCheck(msgUid);
+                    await appendMessageToBackend('assistant', '__PENDING_TASK__:video_task_submitted:' + JSON.stringify(submittedProjectIds), requestSessionId);
+                    startVideoStatusCheck(msgUid, submittedProjectIds, requestSessionId);
 
                 } catch (e) {
                     showError(e.message || window.t('video_generation_request_failed'));
@@ -2640,6 +2851,10 @@
             }
 
             async function checkVideoStatus(msgUid) {
+                if (msgUid && msgUid.projectIds) {
+                    const task = msgUid;
+                    if (task.projectIds) return checkDirectGenerationStatus(task);
+                }
                 if (!videoProjectIds.value || videoProjectIds.value.length === 0) return;
                 const errorKey = getTaskErrorKey('video-status', videoProjectIds.value);
 
@@ -2712,11 +2927,13 @@
                 }
             }
 
-            function startVideoStatusCheck(msgUid) {
-                clearVideoStatusCheck();
-                videoStatusInterval.value = trackedSetInterval(() => {
-                    checkVideoStatus(msgUid);
+            function startVideoStatusCheck(msgUid, projectIds = videoProjectIds.value, sessionId = currentSessionId.value) {
+                const task = createDirectGenerationTask('video', projectIds, msgUid, sessionId);
+                task.intervalId = trackedSetInterval(() => {
+                    checkVideoStatus(task);
                 }, 10000);
+                videoStatusInterval.value = task.intervalId;
+                checkVideoStatus(task);
             }
 
             function clearVideoStatusCheck() {
@@ -2724,6 +2941,7 @@
                     trackedClearInterval(videoStatusInterval.value);
                     videoStatusInterval.value = null;
                 }
+                clearDirectGenerationTasksByType('video');
             }
 
             // 继续按钮
@@ -2982,8 +3200,8 @@
                                 const uid = ensurePlaceholder();
                                 const idx = findMsgByIdx(uid);
                                 if (idx !== -1) messages.value[idx].content = fullContent;
-                                maybeRecoverImageTaskFromAssistantText(data.content || '');
                                 maybeRecoverVideoTaskFromAssistantText(data.content || '');
+                                maybeRecoverImageTaskFromAssistantText(data.content || '');
                                 scrollToBottom();
                             } else if (data.type === 'status') {
                                 // 状态更新，可忽略
@@ -3555,6 +3773,7 @@
             }
 
             function buildResultContent(type, tasks) {
+                return buildGeneratedTaskContent(type, tasks);
                 const urls = [];
                 tasks.forEach(task => {
                     collectGenerationUrls(task).forEach(url => urls.push(url));

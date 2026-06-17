@@ -4029,6 +4029,8 @@
                 <div style="display: flex; gap: 16px; font-size: 13px; color: var(--muted); margin-bottom: 8px;">
                   <span>{{ $t('type_label') }}: {{ $t('text_to_image') }}</span>
                   <span>{{ $t('aspect_ratio_label') }}: {{ getAspectRatioLabel(item.ratio) }}</span>
+                  <span v-if="item.model_name">{{ $t('model') }}: {{ item.model_name }}</span>
+                  <span v-if="item.implementation_name">{{ $t('driver') }}: {{ item.implementation_name }}</span>
                   <span>{{ $t('created_at') }}: {{ item.create_time ? new Date(item.create_time).toLocaleString('zh-CN') : $t('unknown') }}</span>
                 </div>
                 <div v-if="item.result_url" style="margin-top: 8px;">
