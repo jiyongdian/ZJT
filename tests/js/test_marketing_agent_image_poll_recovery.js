@@ -33,6 +33,23 @@ assert.equal(
   'image task submitted handler should dedupe active image polling'
 );
 
+const imageRecoveryStart = html.indexOf('function maybeRecoverImageTaskFromAssistantText');
+const imageRecoveryEnd = html.indexOf('function hasGeneratedImageResult', imageRecoveryStart);
+assert.notEqual(imageRecoveryStart, -1, 'image task text recovery function should exist');
+assert.notEqual(imageRecoveryEnd, -1, 'image result checker should follow image recovery function');
+const imageRecovery = html.slice(imageRecoveryStart, imageRecoveryEnd);
+assert.equal(
+  imageRecovery.includes('if (isVideoTaskSummaryText(text)) return;'),
+  true,
+  'image fallback recovery must ignore video summaries that mention image_mode or 图片模式'
+);
+
+assert.equal(
+  html.includes('function isVideoTaskSummaryText'),
+  true,
+  'marketing agent should classify video task summaries before image fallback recovery'
+);
+
 const imagePollStart = html.indexOf('function pollAgentImageStatus');
 assert.notEqual(imagePollStart, -1, 'image status polling function should exist');
 const imagePollEnd = html.indexOf('function handleVideoTaskSubmitted', imagePollStart);

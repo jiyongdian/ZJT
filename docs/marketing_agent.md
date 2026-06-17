@@ -180,10 +180,14 @@ Agent 提交图片/视频生成任务后，前端通过 `setInterval` 轮询 `GE
 - 视频轮询间隔：10 秒（启动后立即查询一次）
 - 任务完成后将结果（图片/视频 URL）渲染到消息气泡中
 - 使用 `sessionTaskRegistry` 注册表跟踪所有活跃任务，支持会话切换后恢复
+- 直接图片/视频生成使用 `directGenerationTasks` 为每次提交创建独立任务实例，实例内绑定 `type`、`project_ids`、`msgUid`、`sessionId` 和 `intervalId`。轮询只读取实例内的 `projectIds`，避免多轮对话中后提交的图片任务覆盖先提交的视频任务。
+- 直接生成任务完成后优先调用 `replacePendingTask(sessionId, task_type, project_ids, content)` 精确替换原 `__PENDING_TASK__` 历史行；只有匹配失败时才 fallback 追加 assistant 消息，且追加到任务所属的原 session。
+- 生成结果统一通过媒体类型过滤后渲染：图片结果会排除 `.mp4/.webm/.mov/.avi/.mkv`，视频结果会排除图片扩展名，避免视频 URL 被 `<img class="generated-image">` 包裹。
 - `GET /api/get-status/{project_ids}` 对 CDN 结果采用 CDN 优先策略；如果生成任务已完成但 CDN 仍处于 pending，会先返回本地 `result_url` 作为 `file_url`，并附带 `cdn_status: "pending"`，避免聊天框一直显示生成中
 - 前端轮询统一识别 `SUCCESS`/`COMPLETED`/`DONE` 等完成状态，并从 task 本身和 `results[]` 中提取 `file_url`、`result_url`、`video_url`、`image_url`、`output_url`、`download_url` 等字段
 - 如果 `video_task_submitted` SSE 事件缺失，但专家工作总结中包含 `project_ids: [...]` 且文本语义为视频任务，前端会自动补启动视频轮询；加载历史会话时也会执行同样的兜底恢复
 - 如果 `image_task_submitted` SSE 事件缺失，但专家回复中包含 `project_ids: [...]` 或 `项目ID: 744` 这类图片任务标识，前端会自动补启动图片轮询；图片轮询会绑定触发时的会话，避免切换会话后把结果写入当前对话
+- 文本兜底恢复会优先识别视频摘要，包含“视频参数”“图生视频”“文生视频”“时长”“first_last_frame”“multi_reference”等视频信号的工作总结不会再触发图片轮询，避免“图片模式 first_last_frame”被误判为图片生成任务
 - Agent 图片/视频轮询启动后均立即查询一次状态，已完成的任务可直接渲染结果，不必等待第一个轮询周期
 - 视频兜底恢复按会话绑定轮询结果，异步返回时如果用户已切换到其他会话，不会把结果写入当前对话；历史加载时会过滤空 AI 气泡和重复的视频结果，避免切换会话后重复显示
 
@@ -194,7 +198,7 @@ Agent 提交图片/视频生成任务后，前端通过 `setInterval` 轮询 `GE
 1. **`__PENDING_TASK__` 标记**：后端在 `chat_messages` 表中保存 `__PENDING_TASK__:{type}:{project_ids}` 标记（`message_type='pending_task'`）
 2. **`recoverPendingTasks()`**：加载历史消息后检测标记，轮询任务状态；完成时优先替换 pending 消息（通过 `PUT /session/{id}/message/{message_id}`），替换失败则 fallback 追加新消息
 3. **`sessionActiveTaskId` 注册表**：记录每个 session 的活跃 Agent task_id，切换回来时检查任务状态并重连 SSE
-4. **`sessionTaskRegistry` 注册表**：内存中跟踪图片/视频生成任务的 project_ids，支持会话内切换恢复
+4. **`directGenerationTasks` / Agent 轮询注册表**：直接生成任务在内存中按任务实例跟踪 project_ids；Agent 图片/视频轮询按 `sessionId:type:project_ids` 去重，支持会话内恢复和并发任务隔离
 5. **并发安全**：`clean-pending-tasks` 支持按 `task_type` + `project_ids` 精确清理，并发任务互不影响
 
 ### 模型选择
