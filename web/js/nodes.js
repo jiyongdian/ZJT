@@ -810,7 +810,7 @@
 
     function openVideoModal(src){
       if(!src) return;
-      videoModalPlayer.src = src;
+      videoModalPlayer.src = proxyDownloadUrl(src);
       videoModal.classList.add('show');
       videoModal.setAttribute('aria-hidden', 'false');
       const p = videoModalPlayer.play();
