@@ -33,7 +33,7 @@ _DRIVER_MAP = {
 class PipelineDriverFactory:
     """Pipeline 驱动工厂"""
 
-    _SEEDANCE_IMAGE_FACE_MASK_KEYS = {
+    _SEEDANCE_FACE_MASK_KEYS = {
         DriverKey.SEEDANCE_2_0_IMAGE_TO_VIDEO,
         DriverKey.SEEDANCE_2_0_FAST_IMAGE_TO_VIDEO,
     }
@@ -110,24 +110,26 @@ class PipelineDriverFactory:
 
     @classmethod
     def _build_seedance_param_prepare_steps(cls, ai_tool) -> List[Dict[str, Any]]:
-        """根据 Seedance 输入构建图片/视频预处理步骤配置。"""
+        """根据 Seedance 输入构建图片/视频人脸遮盖预处理步骤配置。
+
+        受 pipeline.seedance_face_mask_enabled 总开关控制，关闭后图片和视频遮盖步骤均不创建。
+        """
         step_configs: List[Dict[str, Any]] = []
 
-        video_paths = cls._split_paths(getattr(ai_tool, 'video_path', None))
-        for video_path in video_paths:
+        face_mask_enabled = get_dynamic_config_value(
+            'pipeline',
+            'seedance_face_mask_enabled',
+            default=True
+        )
+        if not face_mask_enabled:
+            return step_configs
+
+        for video_path in cls._split_paths(getattr(ai_tool, 'video_path', None)):
             step_configs.append({
                 'step_type': PipelineStepType.FACE_MASK,
                 'params': {'video_path': video_path},
                 'target': video_path,
             })
-
-        image_face_mask_enabled = get_dynamic_config_value(
-            'pipeline',
-            'seedance_image_face_mask_enabled',
-            default=True
-        )
-        if not image_face_mask_enabled:
-            return step_configs
 
         for idx, image_path in enumerate(cls._split_paths(getattr(ai_tool, 'image_path', None))):
             step_configs.append({
@@ -174,8 +176,8 @@ class PipelineDriverFactory:
             return []
 
         rule = cls._PARAM_PREPARE_RULES.get(task_config.key)
-        is_seedance_image_face_mask = task_config.key in cls._SEEDANCE_IMAGE_FACE_MASK_KEYS
-        if not rule and not is_seedance_image_face_mask:
+        is_seedance_face_mask = task_config.key in cls._SEEDANCE_FACE_MASK_KEYS
+        if not rule and not is_seedance_face_mask:
             return []
 
         # 获取 ai_tool 对象用于条件判断
@@ -183,7 +185,7 @@ class PipelineDriverFactory:
         if not ai_tool:
             return []
 
-        if is_seedance_image_face_mask:
+        if is_seedance_face_mask:
             step_configs = cls._build_seedance_param_prepare_steps(ai_tool)
         elif rule and rule['condition'](ai_tool):
             step_configs = [
