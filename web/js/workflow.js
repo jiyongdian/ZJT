@@ -2134,6 +2134,10 @@
         node.data.noBgMusic = nodeData.data.noBgMusic !== undefined ? nodeData.data.noBgMusic : true;
         node.data.splitMultiDialogue = nodeData.data.splitMultiDialogue !== undefined ? nodeData.data.splitMultiDialogue : false;
         node.data.narrationAsDialogue = nodeData.data.narrationAsDialogue !== undefined ? nodeData.data.narrationAsDialogue : false;
+        // 恢复语言设置（兼容旧数据：旧的 language 字段作为两个新字段的默认值）
+        const legacyLanguage = nodeData.data.language || '';
+        node.data.dialogueLanguage = nodeData.data.dialogueLanguage !== undefined ? nodeData.data.dialogueLanguage : legacyLanguage;
+        node.data.promptLanguage = nodeData.data.promptLanguage !== undefined ? nodeData.data.promptLanguage : legacyLanguage;
         // 恢复模型相关字段（防止被 createScriptNode 的默认值覆盖）
         if(nodeData.data.videoModel) node.data.videoModel = nodeData.data.videoModel;
         if(nodeData.data.gridModel) node.data.gridModel = nodeData.data.gridModel;
@@ -2183,6 +2187,31 @@
           if(splitModelEl && node.data.splitModel){
             ensureSelectHasSavedOption(splitModelEl, node.data.splitModel);
             splitModelEl.value = node.data.splitModel;
+          }
+
+          // 恢复语言选择器的UI显示
+          const presetLanguageValues = ['', 'English', 'Deutsch', 'Français', 'Русский'];
+          const dialogueLangSelect = el.querySelector('.script-dialogue-language');
+          const dialogueLangCustom = el.querySelector('.script-dialogue-language-custom');
+          if(dialogueLangSelect && node.data.dialogueLanguage) {
+            if(presetLanguageValues.includes(node.data.dialogueLanguage)) {
+              dialogueLangSelect.value = node.data.dialogueLanguage;
+              if(dialogueLangCustom) dialogueLangCustom.style.display = 'none';
+            } else {
+              dialogueLangSelect.value = '__custom__';
+              if(dialogueLangCustom) { dialogueLangCustom.style.display = 'block'; dialogueLangCustom.value = node.data.dialogueLanguage; }
+            }
+          }
+          const promptLangSelect = el.querySelector('.script-prompt-language');
+          const promptLangCustom = el.querySelector('.script-prompt-language-custom');
+          if(promptLangSelect && node.data.promptLanguage) {
+            if(presetLanguageValues.includes(node.data.promptLanguage)) {
+              promptLangSelect.value = node.data.promptLanguage;
+              if(promptLangCustom) promptLangCustom.style.display = 'none';
+            } else {
+              promptLangSelect.value = '__custom__';
+              if(promptLangCustom) { promptLangCustom.style.display = 'block'; promptLangCustom.value = node.data.promptLanguage; }
+            }
           }
 
           if(node.data.scriptContent && node.data.scriptContent.trim().length > 0){

@@ -344,6 +344,8 @@
   "script_loading": "加载中...",
   "script_video_model_label": "视频生成模型",
   "script_output_language_label": "输出语言",
+  "script_dialogue_language_label": "对话语言",
+  "script_prompt_language_label": "提示词语言",
   "script_language_default": "中文（默认）",
   "script_language_custom": "自定义语言...",
   "script_force_medium_shot": "对话禁止全景",

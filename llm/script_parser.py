@@ -455,6 +455,8 @@ async def parse_script_to_shots(
     split_multi_dialogue: bool = False,
     narration_as_dialogue: bool = False,
     language: Optional[str] = None,
+    dialogue_language: Optional[str] = None,
+    prompt_language: Optional[str] = None,
     auth_token: Optional[str] = None,
     vendor_id: Optional[int] = None,
     model_id: Optional[int] = None
@@ -472,7 +474,9 @@ async def parse_script_to_shots(
         no_bg_music: 是否不生成背景音乐，默认False
         split_multi_dialogue: 是否将多人对话镜头拆分为单人对话镜头，默认False
         narration_as_dialogue: 是否为解说剧模式（先将对话剧本转为纯旁白剧本，再解析），默认False
-        language: 解析结果输出语言（如'中文'、'English'、'Deutsch'等），为空则默认中文
+        language: 解析结果输出语言（如'中文'、'English'、'Deutsch'等），为空则默认中文（兼容旧版，新版优先使用dialogue_language和prompt_language）
+        dialogue_language: 对话文本输出语言（dialogue.text等），为空则回退到language
+        prompt_language: 描述性文本输出语言（description、action等），为空则回退到language
         auth_token: 认证token
         vendor_id: 商家ID
         model_id: 模型ID
@@ -632,7 +636,7 @@ async def parse_script_to_shots(
 
         # 构建特殊要求文本
         special_requirements = ""
-        logger.info(f"Script parser parameters - force_medium_shot: {force_medium_shot}, no_bg_music: {no_bg_music}, split_multi_dialogue: {split_multi_dialogue}, narration_as_dialogue: {narration_as_dialogue}, language: {language}")
+        logger.info(f"Script parser parameters - force_medium_shot: {force_medium_shot}, no_bg_music: {no_bg_music}, split_multi_dialogue: {split_multi_dialogue}, narration_as_dialogue: {narration_as_dialogue}, language: {language}, dialogue_language: {dialogue_language}, prompt_language: {prompt_language}")
         
         if force_medium_shot:
             special_requirements += """
@@ -749,6 +753,11 @@ async def parse_script_to_shots(
   * dialogue格式：{"character_id": "char_narrator", "character_name": "【【旁白】】", "text": "旁白内容"}
   * 旁白对话应该与画面描述相匹配，增强叙事效果
   
+- **【解说模式建议 - 鼓励每个镜头都有旁白台词】：**
+  * 当开启"解说剧（仅旁白说话）"模式时，**鼓励每一个分镜(shot)的dialogue数组中包含旁白台词**
+  * 如果原剧本中某个画面没有对应的旁白文本，建议根据该画面的内容自行撰写一段旁白台词
+  * 旁白台词应该自然地描述画面内容、补充背景信息或推动叙事
+  
 - **示例：**
   * 原剧本：
     ```
@@ -785,14 +794,49 @@ async def parse_script_to_shots(
             'Français': 'Français（法语）',
             'Русский': 'Русский（俄语）',
         }
-        if language and language.strip():
-            lang_name = language.strip()
-            lang_display = LANGUAGE_MAP.get(lang_name, lang_name)
-            special_requirements += f"""
+
+        # 兼容旧版：如果新参数为空，回退到 language
+        effective_dialogue_lang = (dialogue_language or '').strip() or (language or '').strip()
+        effective_prompt_lang = (prompt_language or '').strip() or (language or '').strip()
+
+        def _lang_display(name: str) -> str:
+            return LANGUAGE_MAP.get(name, name) if name else ''
+
+        dlg_display = _lang_display(effective_dialogue_lang)
+        prmpt_display = _lang_display(effective_prompt_lang)
+
+        if dlg_display and prmpt_display:
+            if effective_dialogue_lang == effective_prompt_lang:
+                # 两种语言相同，合并输出
+                special_requirements += f"""
 **【输出语言要求 - 极其重要】**
-- **所有文本字段（description、opening_frame_description、scene_detail、action、dialogue.text、mood、environment_sound、background_music、audio_notes、characters的description等）必须使用{lang_display}输出**
+- **所有文本字段（description、opening_frame_description、scene_detail、action、dialogue.text、mood、environment_sound、background_music、audio_notes、characters的description等）必须使用{dlg_display}输出**
 - JSON的key（字段名）保持英文不变，只翻译value中的文本内容
-- 确保翻译自然流畅，符合{lang_display}的表达习惯
+- 确保翻译自然流畅，符合{dlg_display}的表达习惯
+
+"""
+            else:
+                # 两种语言不同，分别指定
+                special_requirements += f"""
+**【输出语言要求 - 极其重要】**
+- **对话字段**（dialogue.text）必须使用 **{dlg_display}** 输出
+- **描述性字段**（description、opening_frame_description、scene_detail、action、mood、environment_sound、background_music、audio_notes、characters的description等）必须使用 **{prmpt_display}** 输出
+- JSON的key（字段名）保持英文不变，只翻译value中的文本内容
+- 确保各语言翻译自然流畅，符合对应语言的表达习惯
+
+"""
+        elif dlg_display:
+            special_requirements += f"""
+**【对话语言要求】**
+- **对话字段**（dialogue.text）必须使用 **{dlg_display}** 输出
+- 描述性字段保持原文语言
+
+"""
+        elif prmpt_display:
+            special_requirements += f"""
+**【提示词语言要求】**
+- **描述性字段**（description、opening_frame_description、scene_detail、action、mood、environment_sound、background_music、audio_notes、characters的description等）必须使用 **{prmpt_display}** 输出
+- 对话字段保持原文语言
 
 """
 
@@ -1019,6 +1063,38 @@ JSON格式示例：
         missing_keys = [key for key in required_keys if key not in parsed_data]
         if missing_keys:
             raise Exception(f"返回的JSON缺少必需字段: {', '.join(missing_keys)}")
+        
+        # 解说模式后处理：确保每个分镜都有旁白台词
+        if narration_as_dialogue:
+            shots_without_narration = 0
+            for group in parsed_data.get("shot_groups", []):
+                for shot in group.get("shots", []):
+                    dialogues = shot.get("dialogue", [])
+                    has_narration = any(
+                        d.get("character_id") == "char_narrator" or
+                        d.get("character_name", "").startswith("【【旁白】】")
+                        for d in dialogues
+                    )
+                    if not has_narration:
+                        shots_without_narration += 1
+                        # 根据画面描述生成兜底旁白台词
+                        desc = shot.get("description", "") or shot.get("opening_frame_description", "") or "画面展示"
+                        fallback_text = f"{desc}"
+                        dialogues.append({
+                            "character_id": "char_narrator",
+                            "character_name": "【【旁白】】",
+                            "text": fallback_text
+                        })
+                        shot["dialogue"] = dialogues
+                        # 确保 characters_present 包含旁白角色
+                        chars_present = shot.get("characters_present", [])
+                        if "char_narrator" not in chars_present:
+                            chars_present.append("char_narrator")
+                            shot["characters_present"] = chars_present
+            if shots_without_narration > 0:
+                logger.warning(f"解说模式后处理：为 {shots_without_narration} 个缺少旁白台词的分镜添加了兜底旁白")
+                _save_log_file(log_dir, f"script_parser_{timestamp}_narration_fallback.txt",
+                              f"为 {shots_without_narration} 个分镜添加了兜底旁白台词")
         
         # 重新组合分镜组，确保每组不超过max_group_duration秒
         parsed_data = reorganize_shot_groups(parsed_data, max_group_duration, log_dir, timestamp)

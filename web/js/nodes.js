@@ -5962,8 +5962,8 @@
               <select class="script-video-model" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;"></select>
             </div>
             <div class="field field-always-visible">
-              <div class="label" data-i18n="script_output_language_label">${window.t ? window.t('script_output_language_label') : '输出语言'}</div>
-              <select class="script-language" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;">
+              <div class="label" data-i18n="script_dialogue_language_label">${window.t ? window.t('script_dialogue_language_label') : '对话语言'}</div>
+              <select class="script-dialogue-language" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;">
                 <option value="" data-i18n="script_language_default">${window.t ? window.t('script_language_default') : '中文（默认）'}</option>
                 <option value="English">English</option>
                 <option value="Deutsch">Deutsch</option>
@@ -5971,7 +5971,19 @@
                 <option value="Русский">Русский</option>
                 <option value="__custom__" data-i18n="script_language_custom">${window.t ? window.t('script_language_custom') : '自定义语言...'}</option>
               </select>
-              <input type="text" class="script-language-custom" placeholder="${window.t ? window.t('script_language_custom') : '或输入自定义语言...'}" style="display: none; width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white; margin-top: 4px;" />
+              <input type="text" class="script-dialogue-language-custom" placeholder="${window.t ? window.t('script_language_custom') : '或输入自定义语言...'}" style="display: none; width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white; margin-top: 4px;" />
+            </div>
+            <div class="field field-always-visible">
+              <div class="label" data-i18n="script_prompt_language_label">${window.t ? window.t('script_prompt_language_label') : '提示词语言'}</div>
+              <select class="script-prompt-language" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;">
+                <option value="" data-i18n="script_language_default">${window.t ? window.t('script_language_default') : '中文（默认）'}</option>
+                <option value="English">English</option>
+                <option value="Deutsch">Deutsch</option>
+                <option value="Français">Français</option>
+                <option value="Русский">Русский</option>
+                <option value="__custom__" data-i18n="script_language_custom">${window.t ? window.t('script_language_custom') : '自定义语言...'}</option>
+              </select>
+              <input type="text" class="script-prompt-language-custom" placeholder="${window.t ? window.t('script_language_custom') : '或输入自定义语言...'}" style="display: none; width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white; margin-top: 4px;" />
             </div>
             <div class="script-checkbox-group">
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
@@ -6032,8 +6044,10 @@
       const noBgMusicEl = el.querySelector('.script-no-bg-music');
       const splitMultiDialogueEl = el.querySelector('.script-split-multi-dialogue');
       const narrationAsDialogueEl = el.querySelector('.script-narration-as-dialogue');
-      const languageSelectEl = el.querySelector('.script-language');
-      const languageCustomEl = el.querySelector('.script-language-custom');
+      const dialogueLanguageSelectEl = el.querySelector('.script-dialogue-language');
+      const dialogueLanguageCustomEl = el.querySelector('.script-dialogue-language-custom');
+      const promptLanguageSelectEl = el.querySelector('.script-prompt-language');
+      const promptLanguageCustomEl = el.querySelector('.script-prompt-language-custom');
       const infoField = el.querySelector('.script-info-field');
       const nameEl = el.querySelector('.script-name');
       const lengthEl = el.querySelector('.script-length');
@@ -6421,7 +6435,8 @@
       if(node.data.noBgMusic === undefined) node.data.noBgMusic = true;
       if(node.data.splitMultiDialogue === undefined) node.data.splitMultiDialogue = false;
       if(node.data.narrationAsDialogue === undefined) node.data.narrationAsDialogue = false;
-      if(!node.data.language) node.data.language = '';
+      if(!node.data.dialogueLanguage) node.data.dialogueLanguage = node.data.language || '';
+      if(!node.data.promptLanguage) node.data.promptLanguage = node.data.language || '';
       if(!node.data.gridModel) node.data.gridModel = 'auto';
       if(!node.data.splitModelVendorId) node.data.splitModelVendorId = '';
       if(!node.data.splitModelVendorName) node.data.splitModelVendorName = '';
@@ -6516,59 +6531,62 @@
         node.data.narrationAsDialogue = narrationAsDialogueEl.checked;
       });
 
-      // 语言选择监听
-      if(languageSelectEl) {
-        languageSelectEl.addEventListener('change', () => {
-          if(languageSelectEl.value === '__custom__') {
-            languageCustomEl.style.display = 'block';
-            languageCustomEl.focus();
-            node.data.language = languageCustomEl.value;
+      // 语言选择监听 - 对话语言
+      function bindLanguageSelect(selectEl, customEl, dataKey) {
+        if(!selectEl) return;
+        selectEl.addEventListener('change', () => {
+          if(selectEl.value === '__custom__') {
+            customEl.style.display = 'block';
+            customEl.focus();
+            node.data[dataKey] = customEl.value;
           } else {
-            languageCustomEl.style.display = 'none';
-            node.data.language = languageSelectEl.value;
+            customEl.style.display = 'none';
+            node.data[dataKey] = selectEl.value;
           }
         });
-        languageCustomEl.addEventListener('input', () => {
-          node.data.language = languageCustomEl.value;
+        customEl.addEventListener('input', () => {
+          node.data[dataKey] = customEl.value;
         });
         // 恢复之前的选择
-        if(node.data.language) {
+        if(node.data[dataKey]) {
           const presetValues = ['', 'English', 'Deutsch', 'Français', 'Русский'];
-          if(presetValues.includes(node.data.language)) {
-            languageSelectEl.value = node.data.language;
-            languageCustomEl.style.display = 'none';
+          if(presetValues.includes(node.data[dataKey])) {
+            selectEl.value = node.data[dataKey];
+            customEl.style.display = 'none';
           } else {
-            languageSelectEl.value = '__custom__';
-            languageCustomEl.style.display = 'block';
-            languageCustomEl.value = node.data.language;
+            selectEl.value = '__custom__';
+            customEl.style.display = 'block';
+            customEl.value = node.data[dataKey];
           }
         }
+      }
+      bindLanguageSelect(dialogueLanguageSelectEl, dialogueLanguageCustomEl, 'dialogueLanguage');
+      bindLanguageSelect(promptLanguageSelectEl, promptLanguageCustomEl, 'promptLanguage');
 
-        // 监听右上角语言切换，联动更新剧本输出语言
-        if(window.ZJTi18n) {
-          window.ZJTi18n.on('locale-changed', ({ locale }) => {
-            // 根据界面语言自动设置剧本输出语言
-            const localeToLanguage = {
-              'en': 'English',
-              'zh-CN': ''
-            };
-            const newLanguage = localeToLanguage[locale];
-            if(newLanguage !== undefined) {
-              // 更新节点数据
-              node.data.language = newLanguage;
-              // 更新下拉框显示
-              const presetValues = ['', 'English', 'Deutsch', 'Français', 'Русский'];
-              if(presetValues.includes(newLanguage)) {
-                languageSelectEl.value = newLanguage;
-                languageCustomEl.style.display = 'none';
-              } else {
-                languageSelectEl.value = '__custom__';
-                languageCustomEl.style.display = 'block';
-                languageCustomEl.value = newLanguage;
-              }
+      // 监听右上角语言切换，联动更新剧本提示词语言
+      if(window.ZJTi18n && promptLanguageSelectEl) {
+        window.ZJTi18n.on('locale-changed', ({ locale }) => {
+          // 根据界面语言自动设置提示词语言
+          const localeToLanguage = {
+            'en': 'English',
+            'zh-CN': ''
+          };
+          const newLanguage = localeToLanguage[locale];
+          if(newLanguage !== undefined) {
+            // 更新节点数据
+            node.data.promptLanguage = newLanguage;
+            // 更新下拉框显示
+            const presetValues = ['', 'English', 'Deutsch', 'Français', 'Русский'];
+            if(presetValues.includes(newLanguage)) {
+              promptLanguageSelectEl.value = newLanguage;
+              promptLanguageCustomEl.style.display = 'none';
+            } else {
+              promptLanguageSelectEl.value = '__custom__';
+              promptLanguageCustomEl.style.display = 'block';
+              promptLanguageCustomEl.value = newLanguage;
             }
-          });
-        }
+          }
+        });
       }
 
       // 宫格模型选择监听
@@ -6688,7 +6706,8 @@
               no_bg_music: node.data.noBgMusic || false,
               split_multi_dialogue: node.data.splitMultiDialogue || false,
               narration_as_dialogue: node.data.narrationAsDialogue || false,
-              language: node.data.language || '',
+              dialogue_language: node.data.dialogueLanguage || '',
+              prompt_language: node.data.promptLanguage || '',
               model: node.data.splitModel || 'gemini-3-flash-preview',
               model_id: node.data.splitModelId || '',
               vendor_id: node.data.splitModelVendorId || ''
@@ -7167,7 +7186,8 @@
               no_bg_music: node.data.noBgMusic || false,
               split_multi_dialogue: node.data.splitMultiDialogue || false,
               narration_as_dialogue: node.data.narrationAsDialogue || false,
-              language: node.data.language || '',
+              dialogue_language: node.data.dialogueLanguage || '',
+              prompt_language: node.data.promptLanguage || '',
               model: node.data.splitModel || 'gemini-3-flash-preview',
               model_id: node.data.splitModelId || '',
               vendor_id: node.data.splitModelVendorId || ''
