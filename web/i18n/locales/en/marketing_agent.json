@@ -189,6 +189,7 @@
   "video_upload_failed_delete": "Video upload failed. Please delete failed videos and re-upload.",
   "video_processing_timeout": "Video processing timeout. Please try again later.",
   "video_not_ready": "Video upload not complete. Please try again later.",
+  "audio_not_ready": "Audio upload not complete. Please try again later.",
   "image_mode_only_images": "Only image files can be uploaded in image generation mode",
   "audio_size_limit": "Audio size cannot exceed 20MB",
   "audio_processing_failed": "Audio processing failed. Please re-upload.",

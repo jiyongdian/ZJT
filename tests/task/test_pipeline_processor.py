@@ -23,6 +23,7 @@ for _mod in [
     'model.runninghub_slots',
     'task.pipeline_drivers.base_pipeline_driver',
     'task.pipeline_drivers.face_mask_driver',
+    'task.pipeline_drivers.image_face_mask_driver',
     'task.pipeline_drivers.implementation_retry_driver',
     'task.pipeline_drivers',
     'task.pipeline_processor',
@@ -113,6 +114,7 @@ class TestPipelineProcessorApplyResults(unittest.TestCase):
         step.status = status
         step.step_type = step_type
         step.result_url = result_url
+        step.get_params_dict.return_value = {}
         return step
 
     @patch('task.pipeline_processor.AIToolsModel')
@@ -224,6 +226,50 @@ class TestPipelineProcessorApplyResults(unittest.TestCase):
 
         MockAITools.update.assert_called_once_with(
             10, video_path='/path/to/masked.mp4'
+        )
+
+    @patch('task.pipeline_processor.AIToolsModel')
+    @patch('task.pipeline_processor.PipelineStepModel')
+    def test_image_face_mask_applies_image_path_by_index(self, MockStepModel, MockAITools):
+        """已完成的 image_face_mask 步骤按 index 替换 image_path 中的图片"""
+        ai_tool = self._make_ai_tool(ai_tool_id=10)
+        ai_tool.image_path = 'first.png,last.png'
+        ai_tool.reference_images = None
+        from model import PipelineStepStatus
+        completed_step = self._make_step(
+            status=PipelineStepStatus.COMPLETED,
+            step_type='image_face_mask',
+            result_url='/upload/cache/masked_first.png'
+        )
+        completed_step.get_params_dict.return_value = {'field': 'image_path', 'index': 0}
+        MockStepModel.get_by_ai_tool_and_stage.return_value = [completed_step]
+
+        PipelineProcessor.apply_results(ai_tool, 'param_prepare')
+
+        MockAITools.update.assert_called_once_with(
+            10, image_path='/upload/cache/masked_first.png,last.png'
+        )
+
+    @patch('task.pipeline_processor.AIToolsModel')
+    @patch('task.pipeline_processor.PipelineStepModel')
+    def test_image_face_mask_applies_reference_images_by_index(self, MockStepModel, MockAITools):
+        """已完成的 image_face_mask 步骤按 index 替换 reference_images JSON 数组"""
+        ai_tool = self._make_ai_tool(ai_tool_id=10)
+        ai_tool.image_path = None
+        ai_tool.reference_images = '["ref1.png", "ref2.png"]'
+        from model import PipelineStepStatus
+        completed_step = self._make_step(
+            status=PipelineStepStatus.COMPLETED,
+            step_type='image_face_mask',
+            result_url='/upload/cache/masked_ref2.png'
+        )
+        completed_step.get_params_dict.return_value = {'field': 'reference_images', 'index': 1}
+        MockStepModel.get_by_ai_tool_and_stage.return_value = [completed_step]
+
+        PipelineProcessor.apply_results(ai_tool, 'param_prepare')
+
+        MockAITools.update.assert_called_once_with(
+            10, reference_images='["ref1.png", "/upload/cache/masked_ref2.png"]'
         )
 
 

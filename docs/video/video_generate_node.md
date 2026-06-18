@@ -60,6 +60,13 @@ task_id 通过 `TaskConfig.getTaskIdByKey(model, 'text_to_video')` 获取。
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `node.data.imageMode` | `'first_last_frame'` / `'multi_reference'` / `'text_to_video'` | 图片模式 |
+| `node.data.videoUrls` | `Array<{name, url}>` | 通过上传或视频节点连线添加的参考视频列表 |
+
+## 端口与国际化
+
+- 生视频节点标题、图片模式标签和模式选项都通过 `video_workflow` i18n key 渲染；工作流重新加载早于 i18n 初始化时，节点 DOM 会在 `ZJTi18nDOM.scanDOM()` 后自动刷新为当前语言。
+- 输出端口连接到视频节点，用于把生视频结果写入视频节点。
+- 视频节点输出端口可连接到生视频节点的参考视频端口，连接成功后写入 `node.data.videoUrls`，并在重新加载工作流后恢复。
 
 ## 向后兼容
 

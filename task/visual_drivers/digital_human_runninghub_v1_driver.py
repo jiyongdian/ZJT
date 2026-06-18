@@ -3,10 +3,12 @@ Digital Human RunningHub v1 版本驱动实现
 """
 from typing import Dict, Any, Optional
 import traceback
+from urllib.parse import urlparse
 from .base_video_driver import BaseVideoDriver
 from config.config_util import get_config, get_dynamic_config_value
 from utils.sentry_util import SentryUtil, AlertLevel
 from utils.file_storage import RunningHubFileStorage
+from utils.network_utils import is_local_path
 
 
 class DigitalHumanRunninghubV1Driver(BaseVideoDriver):
@@ -56,6 +58,23 @@ class DigitalHumanRunninghubV1Driver(BaseVideoDriver):
             level=AlertLevel.ERROR,
             context=context
         )
+
+    @staticmethod
+    def _is_runninghub_media_key(value: str) -> bool:
+        """判断是否已经是 RunningHub media/upload 返回的 fileName。"""
+        if not value:
+            return False
+        parsed = urlparse(value)
+        if parsed.scheme:
+            return False
+        normalized = value.replace("\\", "/").lstrip("/")
+        return normalized.startswith("openapi/")
+
+    def _should_upload_audio_to_runninghub(self, audio_url: str) -> bool:
+        """RunningHub 不能访问本地/内网 URL，提交前必须转成 fileName。"""
+        if not audio_url or self._is_runninghub_media_key(audio_url):
+            return False
+        return is_local_path(audio_url)
     
     def _validate_submit_response(self, result: Any) -> tuple[bool, Optional[str]]:
         """
@@ -155,15 +174,15 @@ class DigitalHumanRunninghubV1Driver(BaseVideoDriver):
         # 从 extra_config 中获取 audio_url
         audio_url = ai_tool.message or ""
 
-        # 处理音频路径 - 如果是本地环境，上传到 RunningHub
-        if self._is_local and audio_url:
-            self.logger.info(f"本地环境检测到音频路径，准备上传到 RunningHub: {audio_url}")
+        # 处理音频路径：RunningHub 不能访问 localhost/内网/本地路径，必须先上传成 fileName。
+        if self._should_upload_audio_to_runninghub(audio_url):
+            self.logger.info(f"检测到 RunningHub 不可直接访问的音频路径，准备上传: {audio_url}")
             result = await self._storage.upload_file("", audio_url)
             if result.success:
                 audio_url = result.key
                 self.logger.info(f"音频上传完成，使用 fileName: {audio_url}")
             else:
-                self.logger.warning(f"音频上传失败: {result.error}")
+                raise RuntimeError(f"音频上传到 RunningHub 失败: {result.error}")
 
         # 处理图片路径 - 上传到 RunningHub 图床（RunningHub AI-App 需要图床 URL）
         image_path = ai_tool.image_path

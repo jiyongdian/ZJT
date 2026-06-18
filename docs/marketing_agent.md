@@ -558,7 +558,14 @@ Agent 模式的消息通过 PM Agent（`pm_agent.py`）处理：
 
 - PM Agent 根据用户意图委托专家（如 `marketing-image` 专家生图）
 - 专家返回结果后，PM Agent 自动提取图片 URL 并注入对话历史（多模态消息）
+- PM Agent 通过 `call_agent` 委托专家时会透传本次任务的 `image_urls`、`audio_urls`、`video_urls`；专家会以 `[图片N]`、`[音频N]`、`[视频N]` 标签注入上下文，避免数字人等任务只知道"用户已提供音频"但拿不到真实 URL
+- Agent 前端发送任务前会等待音频上传完成，并只把真实 HTTP 音频 URL 写入 `audio_urls`；上传完成后会同步更新 `mediaItems.serverUrl` 和 `mediaItems.fileUrl`
+- 数字人 RunningHub v1 驱动提交 node 185 的音频前会检查音频地址：`localhost`、内网地址和本地文件路径会先上传到 RunningHub 文件存储，并改用返回的 `openapi/...` fileName；已经是 `openapi/...` 的 RunningHub 文件名会直接复用，公网 URL 保持原值
 - 通过 `ask_user` 工具实现向用户提问的交互
+- 专家通过 `script_writer_core/config/agents_config.json` 中的 `expert_type` 声明所属模式；剧本 PM 只允许 `script` 类型专家，营销 PM 只允许 `marketing` 类型专家
+- `call_agent.AgentName` 的工具枚举会按当前 PM 的 `allowed_expert_types` 动态过滤，`_handle_agent_call()` 也会做后端校验，避免营销模式误调用剧本专家或反向串线
+- 营销视频克隆必须走 `sop-video-clone` 并委托 `marketing-video`；数字人口播必须走 `sop-digital-human` 并委托 `digital-human-creator`，且数字人专家必须实际调用 `generate_digital_human` 并返回非空 `project_ids` 才算提交成功
+- 数字人口播缺少用户音频时，专家应调用通用 `generate_reference_audio` 生成参考音频；数字人专家不暴露角色耦合的 `generate_character_reference_audio`
 
 ### 用户偏好同步
 

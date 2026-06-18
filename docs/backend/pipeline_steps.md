@@ -5,7 +5,7 @@
 Pipeline Steps（流水线步骤）是 `ai_tools` 处理流程的扩展机制，支持在任务提交前和执行结束后插入可异步处理的子步骤。
 
 两个核心阶段：
-- **param_prepare**（参数预处理）：在任务提交到外部 API 之前，对输入数据进行预处理（如 Seedance 2.0 视频人脸遮盖）
+- **param_prepare**（参数预处理）：在任务提交到外部 API 之前，对输入数据进行预处理（如 Seedance 2.0 视频/图片人脸遮盖）
 - **before_finish**（结束前处理）：任务失败后，自动切换不同供应商重试
 
 ## 状态机
@@ -75,7 +75,7 @@ Pipeline Steps（流水线步骤）是 `ai_tools` 处理流程的扩展机制，
 | id | int | 主键 |
 | ai_tool_id | int | 关联 ai_tools.id |
 | stage | varchar(32) | 阶段：`param_prepare` / `before_finish` |
-| step_type | varchar(64) | 步骤类型：`face_mask` / `implementation_retry` |
+| step_type | varchar(64) | 步骤类型：`face_mask` / `image_face_mask` / `implementation_retry` |
 | step_order | int | 同阶段内执行顺序（0 起始） |
 | status | tinyint | 步骤状态 |
 | params | json | 步骤参数 |
@@ -94,6 +94,8 @@ Pipeline Steps（流水线步骤）是 `ai_tools` 处理流程的扩展机制，
 
 **触发条件**：Seedance 2.0 / 2.0 Fast 任务类型 + 有 video_path 输入
 
+**遮盖语义**：单帧 ComfyUI 工作流 `人脸识别_单帧.json` 不再在检测前 resize，YOLOv8 的 `BBOX Detector (combined)` 直接在原图上生成整图尺寸的 bbox 矩形 mask，再通过 `8x8` 黑色图像按 mask 拉伸合成回原图。遮盖区域以检测框 `x1/y1/x2/y2` 为基础，并使用 `dilation=128` 增加安全边距，补偿 YOLO face bbox 在侧脸、头发遮挡、扇子遮挡、局部置信度偏高时只框住人脸核心区域的问题；它不是 SEGS 裁剪图或人脸轮廓分割区域，避免出现纯黑背景里残留脸部裁剪图的结果。
+
 **处理流程**：
 1. FaceMaskPipelineDriver 调用 RunningHubFaceMaskDriver.submit_with_slot_management()
 2. 创建 async_task 记录（implementation=RUNNINGHUB_FACE_MASK）
@@ -102,6 +104,24 @@ Pipeline Steps（流水线步骤）是 `ai_tools` 处理流程的扩展机制，
 5. process_runninghub_async_tasks() 轮询 async_task 状态
 6. 完成后将遮盖后的视频 URL 写入 step.result_data
 7. PipelineProcessor 将结果应用回 ai_tools.video_path
+
+### image_face_mask（图片人脸遮盖）
+
+用于 `param_prepare` 阶段，在 Seedance 2.0 / 2.0 Fast 的图生视频任务提交前，对 `image_path` 和 `reference_images` 中的图片做人脸矩形黑块遮盖。
+
+**触发条件**：Seedance 2.0 / 2.0 Fast 任务类型 + `pipeline.seedance_image_face_mask_enabled=true` + 有 `image_path` 或 `reference_images` 输入
+
+**配置开关**：`pipeline.seedance_image_face_mask_enabled`，默认 `true`。关闭后只保留原有 `video_path` 的 `face_mask` 预处理，不再创建图片遮盖步骤。
+
+**RunningHub 工作流**：调用 RunningHub AI App `2067560129192620033`，将输入图片上传后映射到节点 `3` 的 `image` 字段。工作流返回遮盖后的 png 结果，系统会先下载到本地 `upload/cache`，避免直接依赖 RunningHub 24 小时临时 URL。
+
+**处理流程**：
+1. ImageFaceMaskPipelineDriver 调用 RunningHubImageFaceMaskDriver.submit_with_slot_management()
+2. 创建 async_task 记录（implementation=RUNNINGHUB_IMAGE_FACE_MASK）
+3. 槽位满时自动安排重试（指数退避：30s → 60s → 120s → 300s）
+4. process_runninghub_async_tasks() 轮询 RunningHub v2 任务状态
+5. 完成后下载并缓存遮盖后的图片，将本地相对路径写入 step.result_data
+6. PipelineProcessor 根据 step.params 中的 `field` 和 `index` 回写 `ai_tools.image_path` 或 `ai_tools.reference_images`
 
 ### implementation_retry（实现方重试）
 
@@ -128,6 +148,7 @@ task/
     __init__.py                  # 驱动工厂 + 步骤创建规则
     base_pipeline_driver.py      # 驱动抽象基类
     face_mask_driver.py          # 人脸遮盖驱动
+    image_face_mask_driver.py    # 图片人脸遮盖驱动
     implementation_retry_driver.py  # 供应商重试驱动
 ```
 

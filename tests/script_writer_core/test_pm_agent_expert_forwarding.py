@@ -69,3 +69,45 @@ def test_handle_agent_call_pushes_expert_text_once_for_frontend_visibility():
     message_calls = [call for call in task_manager.push_message.call_args_list if call.args[1] == "message"]
     assert message_calls[0].args[2]["content"].startswith("### 图片内容分析")
     assert agent.completed_tasks[0]["result"]["result"].startswith("### 图片内容分析")
+
+
+def test_handle_agent_call_forwards_all_media_urls_to_expert():
+    task_manager = MagicMock()
+    agent = _create_pm_agent(task_manager)
+    task = AgentTask(
+        task_id="task-1",
+        session_id="session-1",
+        user_message="make digital human",
+        user_id="1",
+        world_id="1",
+        auth_token="token",
+        vendor_id=1,
+        model_id=1,
+        image_urls=["http://localhost/image.png"],
+        audio_urls=["http://localhost/audio.mp3"],
+        video_urls=["http://localhost/video.mp4"],
+    )
+    agent.agents_config["expert_agents"]["image-understanding"]["expert_type"] = "marketing"
+    agent.allowed_expert_types = ["marketing"]
+
+    with patch("script_writer_core.agents.pm_agent.ExpertAgent") as expert_cls:
+        expert = expert_cls.return_value
+        expert.execute_task.return_value = {
+            "success": True,
+            "result": "ok",
+            "project_ids": [],
+        }
+
+        agent._handle_agent_call(
+            {
+                "AgentName": "image-understanding",
+                "task_description": "analyze",
+            },
+            task,
+            {},
+        )
+
+    expert_task = expert.execute_task.call_args.args[0]
+    assert expert_task["image_urls"] == ["http://localhost/image.png"]
+    assert expert_task["audio_urls"] == ["http://localhost/audio.mp3"]
+    assert expert_task["video_urls"] == ["http://localhost/video.mp4"]

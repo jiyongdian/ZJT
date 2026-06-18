@@ -196,18 +196,6 @@
       addMenu.classList.remove('show');
     });
 
-    document.getElementById('menuAddShotGroup').addEventListener('click', () => {
-      const shotGroupData = {
-        group_id: `grp_${Date.now()}`,
-        group_name: '新分镜组',
-        shots: []
-      };
-      const nodeId = createShotGroupNode(shotGroupData, null);
-      renderMinimap();
-      addMenu.classList.remove('show');
-      startNodePlacing(nodeId);
-    });
-
     document.getElementById('menuAddTextToSpeech').addEventListener('click', () => {
       const nodeId = createTextToSpeechNode();
       renderMinimap();
@@ -986,7 +974,7 @@
             let nearestVideoDist = PROXIMITY_DIST;
             let nearestVideoRefDist = PROXIMITY_DIST;
             for(const node of state.nodes){
-              const toEl = canvasEl.querySelector(`.node[data-node-id=”${node.id}”]`);
+              const toEl = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
               if(!toEl) continue;
               // 对话组节点的视频输入端口
               if(node.type === 'dialogue_group'){
@@ -1059,7 +1047,7 @@
             } else {
               const hasDisabledPort = state.nodes.some(node => {
                 if(node.type !== 'dialogue_group') return false;
-                const toEl = canvasEl.querySelector(`.node[data-node-id=”${node.id}”]`);
+                const toEl = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
                 if(!toEl) return false;
                 const portEl = toEl.querySelector('.port.video-input-port');
                 return portEl && portEl.classList.contains('disabled');

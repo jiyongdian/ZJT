@@ -11,6 +11,7 @@ from config.constant import (
 from config.config_util import get_config
 import logging
 import os
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -191,22 +192,88 @@ class AIToolsModel:
                 ai_tool_id = execute_insert_in_transaction(conn, sql, params)
                 logger.info(f"Created AI tool record with ID: {ai_tool_id}")
 
-                # 为每个视频路径创建 face_mask pipeline step（仅商业版）
-                if video_path:
-                    from config.constant import Edition
-                    if not Edition.is_community():
+                # 创建 Seedance 2.0 前置处理步骤（仅商业版）
+                from config.constant import Edition
+                if not Edition.is_community():
+                    step_order = 0
+
+                    if video_path:
                         video_paths = [v.strip() for v in video_path.split(",") if v.strip()]
-                        for idx, single_video_path in enumerate(video_paths):
+                        for single_video_path in video_paths:
                             PipelineStepModel.create_in_transaction(
                                 conn,
                                 ai_tool_id=ai_tool_id,
                                 stage=PipelineStage.PARAM_PREPARE,
                                 step_type=PipelineStepType.FACE_MASK,
-                                step_order=idx,
+                                step_order=step_order,
                                 params={'video_path': single_video_path},
                                 target=single_video_path
                             )
+                            step_order += 1
                         logger.info(f"Created {len(video_paths)} face_mask pipeline steps for ai_tool {ai_tool_id}")
+
+                    from config.config_util import get_dynamic_config_value
+                    image_face_mask_enabled = get_dynamic_config_value(
+                        'pipeline',
+                        'seedance_image_face_mask_enabled',
+                        default=True
+                    )
+                    if image_face_mask_enabled:
+                        image_paths = [v.strip() for v in image_path.split(",") if v.strip()] if image_path else []
+                        created_image_steps = 0
+                        for idx, single_image_path in enumerate(image_paths):
+                            PipelineStepModel.create_in_transaction(
+                                conn,
+                                ai_tool_id=ai_tool_id,
+                                stage=PipelineStage.PARAM_PREPARE,
+                                step_type=PipelineStepType.IMAGE_FACE_MASK,
+                                step_order=step_order,
+                                params={
+                                    'image_path': single_image_path,
+                                    'field': 'image_path',
+                                    'index': idx,
+                                },
+                                target=single_image_path
+                            )
+                            step_order += 1
+                            created_image_steps += 1
+
+                        reference_image_paths = []
+                        if reference_images:
+                            try:
+                                parsed_reference_images = json.loads(reference_images) if isinstance(reference_images, str) else reference_images
+                                if isinstance(parsed_reference_images, list):
+                                    reference_image_paths = [
+                                        str(item).strip()
+                                        for item in parsed_reference_images
+                                        if str(item).strip()
+                                    ]
+                            except json.JSONDecodeError:
+                                reference_image_paths = [
+                                    item.strip()
+                                    for item in reference_images.split(",")
+                                    if item.strip()
+                                ]
+
+                        for idx, single_image_path in enumerate(reference_image_paths):
+                            PipelineStepModel.create_in_transaction(
+                                conn,
+                                ai_tool_id=ai_tool_id,
+                                stage=PipelineStage.PARAM_PREPARE,
+                                step_type=PipelineStepType.IMAGE_FACE_MASK,
+                                step_order=step_order,
+                                params={
+                                    'image_path': single_image_path,
+                                    'field': 'reference_images',
+                                    'index': idx,
+                                },
+                                target=single_image_path
+                            )
+                            step_order += 1
+                            created_image_steps += 1
+
+                        if created_image_steps:
+                            logger.info(f"Created {created_image_steps} image_face_mask pipeline steps for ai_tool {ai_tool_id}")
 
                 return ai_tool_id
         except Exception as e:
