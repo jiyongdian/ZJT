@@ -5841,7 +5841,9 @@ async def parse_script(
         no_bg_music = body.get('no_bg_music', False)
         split_multi_dialogue = body.get('split_multi_dialogue', False)
         narration_as_dialogue = body.get('narration_as_dialogue', False)
-        language = body.get('language', '')
+        language = body.get('language', '')  # 兼容旧版单一语言参数
+        dialogue_language = body.get('dialogue_language', '') or language
+        prompt_language = body.get('prompt_language', '') or language
         model = body.get('model', 'gemini-3-flash-preview')
         model_id = body.get('model_id', '')
         vendor_id = body.get('vendor_id', None)
@@ -5913,6 +5915,8 @@ async def parse_script(
             split_multi_dialogue=split_multi_dialogue,
             narration_as_dialogue=narration_as_dialogue,
             language=language,
+            dialogue_language=dialogue_language,
+            prompt_language=prompt_language,
             auth_token=auth_token,
             vendor_id=real_vendor_id,
             model_id=int(model_id) if model_id else 1

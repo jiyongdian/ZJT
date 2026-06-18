@@ -344,6 +344,8 @@
   "script_loading": "Loading...",
   "script_video_model_label": "Video Generation Model",
   "script_output_language_label": "Output Language",
+  "script_dialogue_language_label": "Dialogue Language",
+  "script_prompt_language_label": "Prompt Language",
   "script_language_default": "Chinese (Default)",
   "script_language_custom": "Custom Language...",
   "script_force_medium_shot": "Disable Wide Shots in Dialogue",
