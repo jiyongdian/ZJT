@@ -3640,6 +3640,38 @@ def generate_digital_human(
         if not image_url or not isinstance(image_url, str):
             return {'success': False, 'error': '图片URL不能为空且必须是字符串'}
 
+        # 校验 image_url 格式：必须是有效路径或URL
+        image_url = image_url.strip()
+        _is_valid_image_path = (
+            image_url.startswith('/') or
+            image_url.startswith('upload/') or
+            image_url.startswith('http://') or
+            image_url.startswith('https://') or
+            (len(image_url) > 2 and image_url[1] == ':')
+        )
+        if not _is_valid_image_path:
+            # 尝试从中提取 project_id 并查数据库获取真实图片 URL
+            _match = re.search(r'(\d+)', image_url)
+            _resolved = False
+            if _match:
+                try:
+                    from model.ai_tools import AIToolsModel
+                    _project_id_num = int(_match.group(1))
+                    _ai_tool_record = AIToolsModel.get_by_id(_project_id_num)
+                    if _ai_tool_record and _ai_tool_record.result_url:
+                        logger.info(f"generate_digital_human: 自动解析 '{image_url}' -> project {_project_id_num} -> {_ai_tool_record.result_url}")
+                        image_url = _ai_tool_record.result_url
+                        _resolved = True
+                except Exception as e:
+                    logger.warning(f"generate_digital_human: 尝试解析 project_id 失败: {e}")
+            if not _resolved:
+                return {
+                    'success': False,
+                    'error': f'image_url "{image_url}" 不是有效的图片路径。'
+                             f'请传入真实的图片URL（如 /upload/generated/image/774.png），'
+                             f'而不是引用描述。可调用 check_image_status 获取真实图片URL。'
+                }
+
         if not text or not isinstance(text, str):
             return {'success': False, 'error': '文本内容不能为空且必须是字符串'}
 

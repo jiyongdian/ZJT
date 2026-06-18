@@ -193,7 +193,7 @@ class DigitalHumanRunninghubV1Driver(BaseVideoDriver):
                 image_path = result.url if result.url else result.key
                 self.logger.info(f"图片上传完成，使用 URL: {image_path}")
             else:
-                self.logger.warning(f"图片上传失败: {result.error}")
+                raise RuntimeError(f"图片上传到 RunningHub 失败: {result.error}")
 
         # Map aspect_ratio to value
         ratio_map = {
