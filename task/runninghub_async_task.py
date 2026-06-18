@@ -5,6 +5,7 @@ RunningHub 异步任务处理
 使用通用 async_tasks 表，通过 implementation 字段区分不同的任务类型：
 - RUNNINGHUB_AUDIO: 音频生成
 - RUNNINGHUB_FACE_MASK: 人脸遮盖视频生成
+- RUNNINGHUB_IMAGE_FACE_MASK: 人脸遮盖图片生成
 """
 import asyncio
 import logging
@@ -16,12 +17,14 @@ from model.runninghub_slots import RunningHubSlot
 from config.unified_config import AsyncTaskImplementationId
 from task.async_drivers.runninghub_audio_driver import RunningHubAudioDriver
 from task.async_drivers.runninghub_face_mask_driver import RunningHubFaceMaskDriver
+from task.async_drivers.runninghub_image_face_mask_driver import RunningHubImageFaceMaskDriver
 
 logger = logging.getLogger(__name__)
 
 DRIVER_MAP = {
     AsyncTaskImplementationId.RUNNINGHUB_AUDIO: RunningHubAudioDriver,
     AsyncTaskImplementationId.RUNNINGHUB_FACE_MASK: RunningHubFaceMaskDriver,
+    AsyncTaskImplementationId.RUNNINGHUB_IMAGE_FACE_MASK: RunningHubImageFaceMaskDriver,
 }
 
 
@@ -229,14 +232,53 @@ def _handle_face_mask_task_success(task: Any, result_url: str):
         return None
 
 
+def _handle_image_face_mask_task_success(task: Any, result_url: str):
+    """
+    处理图片人脸遮盖任务成功的情况：
+    1. 下载 RunningHub 返回的图片到本地缓存
+    2. 返回本地相对路径（供 pipeline_processor 写入 step.result_url）
+
+    Args:
+        task: AsyncTask 对象
+        result_url: RunningHub 远程图片 URL
+
+    Returns:
+        本地相对路径（无前导 /），失败返回 None
+    """
+    try:
+        from utils.media_cache import download_and_cache
+
+        loop = asyncio.new_event_loop()
+        try:
+            local_url = loop.run_until_complete(
+                download_and_cache(result_url, task.id, "image")
+            )
+        finally:
+            loop.close()
+
+        if not local_url:
+            logger.error(f"下载图片人脸遮盖结果失败: {result_url}")
+            return None
+
+        rel_path = local_url.lstrip("/")
+        logger.info(f"图片人脸遮盖结果缓存成功: /{rel_path}")
+        return rel_path
+
+    except Exception as e:
+        logger.error(f"处理图片人脸遮盖结果失败: {e}", exc_info=True)
+        return None
+
+
 SUCCESS_HANDLER_MAP = {
     AsyncTaskImplementationId.RUNNINGHUB_AUDIO: _handle_audio_task_success,
     AsyncTaskImplementationId.RUNNINGHUB_FACE_MASK: _handle_face_mask_task_success,
+    AsyncTaskImplementationId.RUNNINGHUB_IMAGE_FACE_MASK: _handle_image_face_mask_task_success,
 }
 
 # 后处理必须成功的实现方列表。如果 success_handler 返回 None，任务应标记为 FAILED。
 POST_PROCESSING_REQUIRED = {
     AsyncTaskImplementationId.RUNNINGHUB_FACE_MASK: True,
+    AsyncTaskImplementationId.RUNNINGHUB_IMAGE_FACE_MASK: True,
 }
 
 

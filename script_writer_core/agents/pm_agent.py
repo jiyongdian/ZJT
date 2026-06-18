@@ -67,6 +67,7 @@ class PMAgent(BaseAgent, AskUserMixin):
         self.file_manager = file_manager
         self.tool_executor = tool_executor
         self.agents_config = agents_config
+        self.allowed_expert_types = agents_config.get("pm_agent", {}).get("allowed_expert_types")
         self.user_id = user_id
         self.world_id = world_id
         self.auth_token = auth_token
@@ -599,6 +600,15 @@ class PMAgent(BaseAgent, AskUserMixin):
         if skill_name not in self.agents_config["expert_agents"]:
             return {"error": f"未知的专家技能: {skill_name}"}
 
+        if not self._is_expert_allowed(skill_name):
+            allowed_types = ", ".join(self.allowed_expert_types or [])
+            return {
+                "error": (
+                    f"不允许调用专家 {skill_name}。"
+                    f"当前 PM 仅允许调用类型: {allowed_types or '未限制'}"
+                )
+            }
+
         logger.info(f"{self.agent_id}: Dispatching task to expert {skill_name}")
 
         self.task_manager.push_message(task.task_id, 'progress', {
@@ -647,8 +657,10 @@ class PMAgent(BaseAgent, AskUserMixin):
         pm_ask_user_history = self._extract_ask_user_qa()
         merged_history = llm_history + pm_ask_user_history
 
-        # 自动提取当前任务中的图片 URL，注入到专家上下文
+        # 自动提取当前任务中的媒体 URL，注入到专家上下文
         image_urls_for_expert = task.image_urls or []
+        audio_urls_for_expert = task.audio_urls or []
+        video_urls_for_expert = task.video_urls or []
 
         expert_task = {
             "session_id": task.task_id,
@@ -657,7 +669,9 @@ class PMAgent(BaseAgent, AskUserMixin):
             "description": tool_args.get("task_description", "执行任务"),
             "pm_context": context,
             "conversation_history": merged_history,
-            "image_urls": image_urls_for_expert
+            "image_urls": image_urls_for_expert,
+            "audio_urls": audio_urls_for_expert,
+            "video_urls": video_urls_for_expert
         }
 
         result = expert.execute_task(expert_task)
@@ -1331,6 +1345,7 @@ class PMAgent(BaseAgent, AskUserMixin):
 
     def _get_tool_definitions(self) -> List[Dict[str, Any]]:
         """获取工具定义"""
+        allowed_experts = self._get_allowed_expert_names()
         # 1. 核心 PM 工具定义
         pm_tools = [
             {
@@ -1343,7 +1358,7 @@ class PMAgent(BaseAgent, AskUserMixin):
                         "properties": {
                             "AgentName": {
                                 "type": "string",
-                                "enum": list(self.agents_config["expert_agents"].keys()),
+                                "enum": allowed_experts,
                                 "description": "要调用的专家智能体名称（如 story-writer, character-creator 等）"
                             },
                             "task_description": {
@@ -1393,6 +1408,27 @@ class PMAgent(BaseAgent, AskUserMixin):
             pm_tools.append(LOAD_SOP_TOOL_DEFINITION)
 
         return pm_tools
+
+    def _get_allowed_expert_names(self) -> List[str]:
+        """根据当前 PM 允许的 expert_type 返回可调用专家列表。"""
+        expert_agents = self.agents_config.get("expert_agents", {})
+        if not self.allowed_expert_types:
+            return list(expert_agents.keys())
+
+        allowed_types = set(self.allowed_expert_types)
+        return sorted(
+            name
+            for name, config in expert_agents.items()
+            if config.get("expert_type") in allowed_types
+        )
+
+    def _is_expert_allowed(self, skill_name: str) -> bool:
+        """校验当前 PM 是否允许调用指定专家。"""
+        if not self.allowed_expert_types:
+            return True
+
+        expert_config = self.agents_config.get("expert_agents", {}).get(skill_name, {})
+        return expert_config.get("expert_type") in set(self.allowed_expert_types)
 
     def should_stop(self) -> tuple[bool, str]:
         """检查是否需要停止"""

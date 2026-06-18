@@ -787,6 +787,7 @@
         if (!el) return;
 
         const modelEl = el.querySelector('.shot-group-model');
+        const gridModelEl = el.querySelector('.shot-group-grid-model');
         const videoModelEl = el.querySelector('.shot-group-video-model');
 
         // 刷新生图模型
@@ -801,10 +802,31 @@
               if (opt.value === node.data.model) optEl.selected = true;
               modelEl.appendChild(optEl);
             });
-            // 如果当前值不在选项中，更新为第一个选项
+            // 如果当前值不在选项中，优先使用 GPT Image 2
             if (!imageOptions.find(o => o.value === node.data.model)) {
-              node.data.model = imageOptions[0].value;
+              node.data.model = imageOptions.find(o => o.value === 'gpt-image-2')?.value || imageOptions[0].value;
               modelEl.value = node.data.model;
+            }
+          }
+        }
+
+        // 刷新宫格生图模型，旧工作流中的 auto 智能模式迁移到 GPT Image 2
+        if (gridModelEl && window.TaskConfig) {
+          const gridOptions = window.TaskConfig
+            .getModelOptionsForCategory('image_edit')
+            .filter(opt => opt.supportsGridImage);
+          if (gridOptions.length > 0) {
+            gridModelEl.innerHTML = '';
+            gridOptions.forEach(opt => {
+              const optEl = document.createElement('option');
+              optEl.value = opt.value;
+              optEl.textContent = opt.label;
+              if (opt.value === node.data.gridModel) optEl.selected = true;
+              gridModelEl.appendChild(optEl);
+            });
+            if (!node.data.gridModel || node.data.gridModel === 'auto' || !gridOptions.find(o => o.value === node.data.gridModel)) {
+              node.data.gridModel = gridOptions.find(o => o.value === 'gpt-image-2')?.value || gridOptions[0].value;
+              gridModelEl.value = node.data.gridModel;
             }
           }
         }
@@ -866,9 +888,9 @@
               if (opt.value === currentModel) optEl.selected = true;
               modelEl.appendChild(optEl);
             });
-            // 如果当前值不在选项中，更新为第一个选项
+            // 如果当前值不在选项中，优先使用 GPT Image 2
             if (!imageOptions.find(o => o.value === currentModel)) {
-              node.data.model = imageOptions[0].value;
+              node.data.model = imageOptions.find(o => o.value === 'gpt-image-2')?.value || imageOptions[0].value;
               modelEl.value = node.data.model;
             }
           }
@@ -2140,7 +2162,7 @@
         node.data.promptLanguage = nodeData.data.promptLanguage !== undefined ? nodeData.data.promptLanguage : legacyLanguage;
         // 恢复模型相关字段（防止被 createScriptNode 的默认值覆盖）
         if(nodeData.data.videoModel) node.data.videoModel = nodeData.data.videoModel;
-        if(nodeData.data.gridModel) node.data.gridModel = nodeData.data.gridModel;
+        if(nodeData.data.gridModel) node.data.gridModel = nodeData.data.gridModel === 'auto' ? 'gpt-image-2' : nodeData.data.gridModel;
         if(nodeData.data.gridLayout) node.data.gridLayout = nodeData.data.gridLayout;
         if(nodeData.data.splitModel) node.data.splitModel = nodeData.data.splitModel;
         if(nodeData.data.splitModelId) node.data.splitModelId = nodeData.data.splitModelId;

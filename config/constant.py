@@ -553,6 +553,14 @@ class MediaConstants:
     VIDEO_COMPRESS_THRESHOLD_MB = 10    # 超过此大小的视频触发前端压缩
 
 
+class RunningHubImageFaceMaskConstants:
+    """RunningHub 图片人脸遮盖工作流常量"""
+    APP_ID = "2067560129192620033"
+    IMAGE_NODE_ID = "3"
+    IMAGE_FIELD_NAME = "image"
+    FINAL_STATUSES = ("SUCCESS", "FAILED", "ERROR", "CANCELED", "CANCELLED")
+
+
 # ============ 剪映（CapCut）草稿导出常量 ============
 # 画布比例 → 分辨率（宽, 高）映射，未知比例回退 JIANYING_DEFAULT_RATIO
 JIANYING_RATIO_RESOLUTION = {

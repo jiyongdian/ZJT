@@ -34,6 +34,7 @@ _reloaded_modules = [
     'model.ai_tool_pipeline_steps', 'model.ai_tools', 'model.runninghub_slots',
     'task.pipeline_drivers.base_pipeline_driver',
     'task.pipeline_drivers.face_mask_driver',
+    'task.pipeline_drivers.image_face_mask_driver',
     'task.pipeline_drivers.implementation_retry_driver',
     'task.pipeline_drivers',
 ]
@@ -43,6 +44,7 @@ for _mod in _reloaded_modules:
 
 from task.pipeline_drivers import PipelineDriverFactory
 from task.pipeline_drivers.face_mask_driver import FaceMaskPipelineDriver
+from task.pipeline_drivers.image_face_mask_driver import ImageFaceMaskPipelineDriver
 from task.pipeline_drivers.implementation_retry_driver import ImplementationRetryPipelineDriver
 
 # 恢复所有被 mock 的 sys.modules 条目，防止污染后续测试
@@ -65,13 +67,19 @@ class TestPipelineDriverFactoryCreateDriver(unittest.TestCase):
         """face_mask 类型应返回 FaceMaskPipelineDriver 实例"""
         driver = PipelineDriverFactory.create_driver('face_mask')
         self.assertIsNotNone(driver)
-        self.assertIsInstance(driver, FaceMaskPipelineDriver)
+        self.assertEqual(driver.__class__.__name__, FaceMaskPipelineDriver.__name__)
 
     def test_implementation_retry_returns_driver(self):
         """implementation_retry 类型应返回 ImplementationRetryPipelineDriver 实例"""
         driver = PipelineDriverFactory.create_driver('implementation_retry')
         self.assertIsNotNone(driver)
-        self.assertIsInstance(driver, ImplementationRetryPipelineDriver)
+        self.assertEqual(driver.__class__.__name__, ImplementationRetryPipelineDriver.__name__)
+
+    def test_image_face_mask_returns_driver(self):
+        """image_face_mask 类型应返回 ImageFaceMaskPipelineDriver 实例"""
+        driver = PipelineDriverFactory.create_driver('image_face_mask')
+        self.assertIsNotNone(driver)
+        self.assertEqual(driver.__class__.__name__, ImageFaceMaskPipelineDriver.__name__)
 
     def test_unknown_type_returns_none(self):
         """未知类型应返回 None"""
@@ -195,8 +203,9 @@ class TestImplementationRetryPipelineDriverExecute(unittest.TestCase):
         self.assertIn('未知的实现方', result['error'])
 
     @patch('task.pipeline_drivers.implementation_retry_driver.get_implementation_id', return_value=2)
+    @patch('task.pipeline_drivers.implementation_retry_driver.TasksModel')
     @patch('task.pipeline_drivers.implementation_retry_driver.AIToolsModel')
-    def test_success_updates_ai_tool(self, MockAIToolsModel, mock_get_id):
+    def test_success_updates_ai_tool(self, MockAIToolsModel, MockTasksModel, mock_get_id):
         """成功时更新 ai_tools 并返回成功结果"""
         self.step.get_params_dict.return_value = {'target_implementation': 'kling_duomi_v1'}
 
@@ -206,10 +215,12 @@ class TestImplementationRetryPipelineDriverExecute(unittest.TestCase):
         self.assertIn('result_data', result)
         self.assertEqual(result['result_data']['new_implementation_name'], 'kling_duomi_v1')
         MockAIToolsModel.update.assert_called_once()
+        MockTasksModel.update_by_task_id.assert_called_once()
 
     @patch('task.pipeline_drivers.implementation_retry_driver.get_implementation_id', return_value=2)
+    @patch('task.pipeline_drivers.implementation_retry_driver.TasksModel')
     @patch('task.pipeline_drivers.implementation_retry_driver.AIToolsModel')
-    def test_success_result_data_contains_old_and_new(self, MockAIToolsModel, mock_get_id):
+    def test_success_result_data_contains_old_and_new(self, MockAIToolsModel, MockTasksModel, mock_get_id):
         """成功返回的 result_data 应包含新旧实现方信息"""
         self.ai_tool.implementation = 1
         self.step.get_params_dict.return_value = {'target_implementation': 'kling_duomi_v1'}
@@ -270,6 +281,99 @@ class TestCreateParamPrepareSteps(unittest.TestCase):
 
         result = PipelineDriverFactory.create_param_prepare_steps(ai_tool_id=999, ai_tool_type=1)
         self.assertEqual(result, [])
+
+    @patch('task.pipeline_drivers.get_dynamic_config_value')
+    @patch('task.pipeline_drivers.PipelineStepModel')
+    @patch('task.pipeline_drivers.AIToolsModel')
+    @patch('task.pipeline_drivers.UnifiedConfigRegistry')
+    def test_seedance_image_path_creates_image_face_mask_steps(
+        self, MockRegistry, MockAITools, MockStepModel, mock_config
+    ):
+        """Seedance 2.0 的 image_path 首尾帧应创建 image_face_mask 步骤"""
+        mock_task_config = MagicMock()
+        mock_task_config.key = 'seedance_2_0_image_to_video'
+        MockRegistry.get_by_id.return_value = mock_task_config
+        mock_ai_tool = MagicMock()
+        mock_ai_tool.image_path = 'first.png,last.png'
+        mock_ai_tool.reference_images = None
+        mock_ai_tool.video_path = None
+        MockAITools.get_by_id.return_value = mock_ai_tool
+        mock_config.side_effect = (
+            lambda section, key, default=None:
+            True if (section, key) == ('pipeline', 'seedance_image_face_mask_enabled') else default
+        )
+        MockStepModel.create.side_effect = [101, 102]
+
+        result = PipelineDriverFactory.create_param_prepare_steps(ai_tool_id=9, ai_tool_type=23)
+
+        self.assertEqual(result, [101, 102])
+        self.assertEqual(MockStepModel.create.call_count, 2)
+        first_call = MockStepModel.create.call_args_list[0].kwargs
+        second_call = MockStepModel.create.call_args_list[1].kwargs
+        self.assertEqual(first_call['step_type'], 'image_face_mask')
+        self.assertEqual(first_call['params']['image_path'], 'first.png')
+        self.assertEqual(first_call['params']['field'], 'image_path')
+        self.assertEqual(first_call['params']['index'], 0)
+        self.assertEqual(first_call['target'], 'first.png')
+        self.assertEqual(second_call['params']['image_path'], 'last.png')
+        self.assertEqual(second_call['params']['index'], 1)
+
+    @patch('task.pipeline_drivers.get_dynamic_config_value')
+    @patch('task.pipeline_drivers.PipelineStepModel')
+    @patch('task.pipeline_drivers.AIToolsModel')
+    @patch('task.pipeline_drivers.UnifiedConfigRegistry')
+    def test_seedance_reference_images_creates_image_face_mask_steps(
+        self, MockRegistry, MockAITools, MockStepModel, mock_config
+    ):
+        """Seedance 2.0 Fast 的 reference_images 应创建 image_face_mask 步骤"""
+        mock_task_config = MagicMock()
+        mock_task_config.key = 'seedance_2_0_fast_image_to_video'
+        MockRegistry.get_by_id.return_value = mock_task_config
+        mock_ai_tool = MagicMock()
+        mock_ai_tool.image_path = None
+        mock_ai_tool.reference_images = '["ref1.png", "ref2.png"]'
+        mock_ai_tool.video_path = None
+        MockAITools.get_by_id.return_value = mock_ai_tool
+        mock_config.side_effect = (
+            lambda section, key, default=None:
+            True if (section, key) == ('pipeline', 'seedance_image_face_mask_enabled') else default
+        )
+        MockStepModel.create.side_effect = [201, 202]
+
+        result = PipelineDriverFactory.create_param_prepare_steps(ai_tool_id=10, ai_tool_type=22)
+
+        self.assertEqual(result, [201, 202])
+        first_call = MockStepModel.create.call_args_list[0].kwargs
+        self.assertEqual(first_call['step_type'], 'image_face_mask')
+        self.assertEqual(first_call['params']['field'], 'reference_images')
+        self.assertEqual(first_call['params']['index'], 0)
+        self.assertEqual(first_call['target'], 'ref1.png')
+
+    @patch('task.pipeline_drivers.get_dynamic_config_value')
+    @patch('task.pipeline_drivers.PipelineStepModel')
+    @patch('task.pipeline_drivers.AIToolsModel')
+    @patch('task.pipeline_drivers.UnifiedConfigRegistry')
+    def test_seedance_image_face_mask_switch_off_skips_image_steps(
+        self, MockRegistry, MockAITools, MockStepModel, mock_config
+    ):
+        """图片前置处理开关关闭时不创建 image_face_mask 步骤"""
+        mock_task_config = MagicMock()
+        mock_task_config.key = 'seedance_2_0_image_to_video'
+        MockRegistry.get_by_id.return_value = mock_task_config
+        mock_ai_tool = MagicMock()
+        mock_ai_tool.image_path = 'first.png'
+        mock_ai_tool.reference_images = None
+        mock_ai_tool.video_path = None
+        MockAITools.get_by_id.return_value = mock_ai_tool
+        mock_config.side_effect = (
+            lambda section, key, default=None:
+            False if (section, key) == ('pipeline', 'seedance_image_face_mask_enabled') else default
+        )
+
+        result = PipelineDriverFactory.create_param_prepare_steps(ai_tool_id=9, ai_tool_type=23)
+
+        self.assertEqual(result, [])
+        MockStepModel.create.assert_not_called()
 
 
 # ==================== 新增：PipelineDriverFactory.create_before_finish_steps 测试 ====================

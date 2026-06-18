@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 DRIVER_MAP = {
     AsyncTaskImplementationId.RUNNINGHUB_AUDIO: 'task.async_drivers.runninghub_audio_driver.RunningHubAudioDriver',
     AsyncTaskImplementationId.RUNNINGHUB_FACE_MASK: 'task.async_drivers.runninghub_face_mask_driver.RunningHubFaceMaskDriver',
+    AsyncTaskImplementationId.RUNNINGHUB_IMAGE_FACE_MASK: 'task.async_drivers.runninghub_image_face_mask_driver.RunningHubImageFaceMaskDriver',
 }
 
 
