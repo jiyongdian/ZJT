@@ -197,28 +197,27 @@ class AIToolsModel:
                 if not Edition.is_community():
                     step_order = 0
 
-                    if video_path:
-                        video_paths = [v.strip() for v in video_path.split(",") if v.strip()]
-                        for single_video_path in video_paths:
-                            PipelineStepModel.create_in_transaction(
-                                conn,
-                                ai_tool_id=ai_tool_id,
-                                stage=PipelineStage.PARAM_PREPARE,
-                                step_type=PipelineStepType.FACE_MASK,
-                                step_order=step_order,
-                                params={'video_path': single_video_path},
-                                target=single_video_path
-                            )
-                            step_order += 1
-                        logger.info(f"Created {len(video_paths)} face_mask pipeline steps for ai_tool {ai_tool_id}")
-
                     from config.config_util import get_dynamic_config_value
-                    image_face_mask_enabled = get_dynamic_config_value(
+                    face_mask_enabled = get_dynamic_config_value(
                         'pipeline',
-                        'seedance_image_face_mask_enabled',
+                        'seedance_face_mask_enabled',
                         default=True
                     )
-                    if image_face_mask_enabled:
+                    if face_mask_enabled:
+                        if video_path:
+                            video_paths = [v.strip() for v in video_path.split(",") if v.strip()]
+                            for single_video_path in video_paths:
+                                PipelineStepModel.create_in_transaction(
+                                    conn,
+                                    ai_tool_id=ai_tool_id,
+                                    stage=PipelineStage.PARAM_PREPARE,
+                                    step_type=PipelineStepType.FACE_MASK,
+                                    step_order=step_order,
+                                    params={'video_path': single_video_path},
+                                    target=single_video_path
+                                )
+                                step_order += 1
+                            logger.info(f"Created {len(video_paths)} face_mask pipeline steps for ai_tool {ai_tool_id}")
                         image_paths = [v.strip() for v in image_path.split(",") if v.strip()] if image_path else []
                         created_image_steps = 0
                         for idx, single_image_path in enumerate(image_paths):

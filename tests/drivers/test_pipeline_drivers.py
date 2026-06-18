@@ -300,7 +300,7 @@ class TestCreateParamPrepareSteps(unittest.TestCase):
         MockAITools.get_by_id.return_value = mock_ai_tool
         mock_config.side_effect = (
             lambda section, key, default=None:
-            True if (section, key) == ('pipeline', 'seedance_image_face_mask_enabled') else default
+            True if (section, key) == ('pipeline', 'seedance_face_mask_enabled') else default
         )
         MockStepModel.create.side_effect = [101, 102]
 
@@ -336,7 +336,7 @@ class TestCreateParamPrepareSteps(unittest.TestCase):
         MockAITools.get_by_id.return_value = mock_ai_tool
         mock_config.side_effect = (
             lambda section, key, default=None:
-            True if (section, key) == ('pipeline', 'seedance_image_face_mask_enabled') else default
+            True if (section, key) == ('pipeline', 'seedance_face_mask_enabled') else default
         )
         MockStepModel.create.side_effect = [201, 202]
 
@@ -367,10 +367,36 @@ class TestCreateParamPrepareSteps(unittest.TestCase):
         MockAITools.get_by_id.return_value = mock_ai_tool
         mock_config.side_effect = (
             lambda section, key, default=None:
-            False if (section, key) == ('pipeline', 'seedance_image_face_mask_enabled') else default
+            False if (section, key) == ('pipeline', 'seedance_face_mask_enabled') else default
         )
 
         result = PipelineDriverFactory.create_param_prepare_steps(ai_tool_id=9, ai_tool_type=23)
+
+        self.assertEqual(result, [])
+        MockStepModel.create.assert_not_called()
+
+    @patch('task.pipeline_drivers.get_dynamic_config_value')
+    @patch('task.pipeline_drivers.PipelineStepModel')
+    @patch('task.pipeline_drivers.AIToolsModel')
+    @patch('task.pipeline_drivers.UnifiedConfigRegistry')
+    def test_seedance_face_mask_switch_off_skips_video_steps(
+        self, MockRegistry, MockAITools, MockStepModel, mock_config
+    ):
+        """人脸遮罩总开关关闭时，视频输入也不创建 face_mask 步骤"""
+        mock_task_config = MagicMock()
+        mock_task_config.key = 'seedance_2_0_image_to_video'
+        MockRegistry.get_by_id.return_value = mock_task_config
+        mock_ai_tool = MagicMock()
+        mock_ai_tool.image_path = None
+        mock_ai_tool.reference_images = None
+        mock_ai_tool.video_path = 'input.mp4'
+        MockAITools.get_by_id.return_value = mock_ai_tool
+        mock_config.side_effect = (
+            lambda section, key, default=None:
+            False if (section, key) == ('pipeline', 'seedance_face_mask_enabled') else default
+        )
+
+        result = PipelineDriverFactory.create_param_prepare_steps(ai_tool_id=11, ai_tool_type=23)
 
         self.assertEqual(result, [])
         MockStepModel.create.assert_not_called()

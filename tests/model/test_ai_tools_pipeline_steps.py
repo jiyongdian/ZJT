@@ -92,7 +92,7 @@ class TestCreateWithPipelineSteps(unittest.TestCase):
         mock_is_community,
         mock_config,
     ):
-        """图片前置处理开关关闭时不创建 image_face_mask 步骤"""
+        """人脸遮罩总开关关闭时不创建图片遮罩步骤"""
         mock_config.return_value = False
 
         result = self._call_create(
@@ -100,6 +100,27 @@ class TestCreateWithPipelineSteps(unittest.TestCase):
             reference_images=json.dumps(['ref.png']),
             video_path=None,
         )
+
+        self.assertEqual(result, 123)
+        mock_create_step.assert_not_called()
+
+    @patch('config.config_util.get_dynamic_config_value')
+    @patch('config.constant.Edition.is_community', return_value=False)
+    @patch('model.ai_tool_pipeline_steps.PipelineStepModel.create_in_transaction')
+    @patch('model.database.execute_insert_in_transaction', return_value=123)
+    @patch('model.database.transaction', return_value=_FakeTransaction())
+    def test_face_mask_switch_off_skips_video_steps(
+        self,
+        mock_transaction,
+        mock_insert,
+        mock_create_step,
+        mock_is_community,
+        mock_config,
+    ):
+        """人脸遮罩总开关关闭时，视频输入也不创建 face_mask 步骤"""
+        mock_config.return_value = False
+
+        result = self._call_create(video_path='clip.mp4')
 
         self.assertEqual(result, 123)
         mock_create_step.assert_not_called()

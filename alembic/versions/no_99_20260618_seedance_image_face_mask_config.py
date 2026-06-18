@@ -1,4 +1,4 @@
-"""Add Seedance image face mask pipeline config
+"""Add Seedance face mask pipeline config
 
 Revision ID: 20260618_seed_img_mask
 Revises: 20260616_withdraw_method
@@ -24,4 +24,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("DELETE FROM system_config WHERE config_key = 'pipeline.seedance_image_face_mask_enabled'")
+    op.execute("DELETE FROM system_config WHERE config_key = 'pipeline.seedance_face_mask_enabled'")

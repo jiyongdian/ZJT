@@ -2097,10 +2097,10 @@ async def ai_app_run_image(
                         # 判断是否需要创建 pipeline steps（Seedance 2.0 + RunningHub 配置）
                         SEEDANCE_2_0_IDS = {TaskTypeId.SEEDANCE_2_0_FAST_IMAGE_TO_VIDEO, TaskTypeId.SEEDANCE_2_0_IMAGE_TO_VIDEO}
                         runninghub_api_key = get_dynamic_config_value("runninghub", "api_key", default=None)
-                        seedance_image_face_mask_enabled = get_dynamic_config_value("pipeline", "seedance_image_face_mask_enabled", default=True)
-                        has_image_face_mask_input = bool(image_path) or bool(reference_images_json)
-                        has_any_param_prepare_input = bool(video_path) or (
-                            seedance_image_face_mask_enabled and has_image_face_mask_input
+                        seedance_face_mask_enabled = get_dynamic_config_value("pipeline", "seedance_face_mask_enabled", default=True)
+                        has_image_input = bool(image_path) or bool(reference_images_json)
+                        has_any_param_prepare_input = seedance_face_mask_enabled and (
+                            bool(video_path) or has_image_input
                         )
                         need_pipeline_steps = (
                             image_to_video_type in SEEDANCE_2_0_IDS
@@ -2111,8 +2111,8 @@ async def ai_app_run_image(
                             f"Pipeline steps condition check: image_to_video_type={image_to_video_type}, "
                             f"in_SEEDANCE_2_0={image_to_video_type in SEEDANCE_2_0_IDS}, "
                             f"has_api_key={bool(runninghub_api_key)}, has_video={bool(video_path)}, "
-                            f"image_face_mask_enabled={bool(seedance_image_face_mask_enabled)}, "
-                            f"has_image_input={has_image_face_mask_input}, need_pipeline_steps={need_pipeline_steps}"
+                            f"face_mask_enabled={bool(seedance_face_mask_enabled)}, "
+                            f"has_image_input={has_image_input}, need_pipeline_steps={need_pipeline_steps}"
                         )
 
                         if need_pipeline_steps:
