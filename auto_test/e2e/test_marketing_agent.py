@@ -134,7 +134,8 @@ def test_marketing_agent_new_chat(marketing_agent_page, page, base_url):
     _navigate_and_wait(page, base_url)
     marketing_agent_page.wait_for_sidebar_loaded()
     # 等待会话列表实际加载完成
-    page.wait_for_timeout(2000)
+    page.wait_for_selector(".sidebar-history-item", timeout=10000)
+    page.wait_for_timeout(1000)
 
     count_before = marketing_agent_page.get_session_count()
     marketing_agent_page.click_new_chat()
