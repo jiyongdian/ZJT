@@ -756,6 +756,11 @@ async def admin_batch_update_configs(
     
     for item in request.configs:
         try:
+            # 禁止通过管理后台修改 test_mode 配置（仅允许脚本修改，防止生产环境误开启挡板）
+            if item.key.startswith('test_mode'):
+                errors.append(f"{item.key}: test_mode 配置仅允许通过脚本修改，禁止在管理后台修改")
+                continue
+
             config = SystemConfigModel.get_by_key(env, item.key)
 
             # 如果配置不存在，尝试从默认配置中获取定义并创建
@@ -847,7 +852,11 @@ async def admin_update_config(
         # 检查是否可编辑
         if not config.editable:
             raise HTTPException(status_code=403, detail="该配置不允许修改")
-        
+
+        # 禁止通过管理后台修改 test_mode 配置（仅允许脚本修改，防止生产环境误开启挡板）
+        if config_key.startswith('test_mode'):
+            raise HTTPException(status_code=403, detail="test_mode 配置仅允许通过脚本修改，禁止在管理后台修改")
+
         old_value = config.config_value
         # 将值转换为字符串存储
         new_value = str(request.value) if request.value is not None else ''
