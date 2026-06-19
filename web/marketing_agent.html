@@ -3016,6 +3016,15 @@
                                 return;
                             }
                         }
+                        const audioItems = mediaItems.value.filter(m => m.type === 'audio');
+                        if (audioItems.length > 0) {
+                            const invalidAudios = audioItems.filter(m => m.uploading || m.uploadFailed || !m.serverUrl || !isHttpUrl(m.serverUrl));
+                            if (invalidAudios.length > 0) {
+                                showError(t('audio_not_ready') || t('upload_timeout'));
+                                isLoading.value = false;
+                                return;
+                            }
+                        }
                         currentMessageMedia.forEach(media => {
                             if (media.type === 'video' && isHttpUrl(media.url) && !videoUrls.includes(media.url)) {
                                 videoUrls.push(media.url);
@@ -5021,6 +5030,7 @@
                         audioItem.uploadFailed = false;
                         const mediaItem = mediaItems.value.find(m => m.agentAudioItem === audioItem || m.fileUrl === audioItem.previewUrl);
                         if (mediaItem) {
+                            mediaItem.serverUrl = data.url;
                             mediaItem.fileUrl = data.url;
                             mediaItem.uploading = false;
                             mediaItem.uploadFailed = false;

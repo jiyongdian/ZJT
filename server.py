@@ -2097,11 +2097,23 @@ async def ai_app_run_image(
                         # 判断是否需要创建 pipeline steps（Seedance 2.0 + RunningHub 配置）
                         SEEDANCE_2_0_IDS = {TaskTypeId.SEEDANCE_2_0_FAST_IMAGE_TO_VIDEO, TaskTypeId.SEEDANCE_2_0_IMAGE_TO_VIDEO}
                         runninghub_api_key = get_dynamic_config_value("runninghub", "api_key", default=None)
+                        seedance_face_mask_enabled = get_dynamic_config_value("pipeline", "seedance_face_mask_enabled", default=True)
+                        has_image_input = bool(image_path) or bool(reference_images_json)
+                        has_any_param_prepare_input = seedance_face_mask_enabled and (
+                            bool(video_path) or has_image_input
+                        )
                         need_pipeline_steps = (
                             image_to_video_type in SEEDANCE_2_0_IDS
                             and runninghub_api_key
+                            and has_any_param_prepare_input
                         )
-                        logger.info(f"Pipeline steps condition check: image_to_video_type={image_to_video_type}, in_SEEDANCE_2_0={image_to_video_type in SEEDANCE_2_0_IDS}, has_api_key={bool(runninghub_api_key)}, need_pipeline_steps={need_pipeline_steps}")
+                        logger.info(
+                            f"Pipeline steps condition check: image_to_video_type={image_to_video_type}, "
+                            f"in_SEEDANCE_2_0={image_to_video_type in SEEDANCE_2_0_IDS}, "
+                            f"has_api_key={bool(runninghub_api_key)}, has_video={bool(video_path)}, "
+                            f"face_mask_enabled={bool(seedance_face_mask_enabled)}, "
+                            f"has_image_input={has_image_input}, need_pipeline_steps={need_pipeline_steps}"
+                        )
 
                         if need_pipeline_steps:
                             # 在同一事务中创建 ai_tools 和 face_mask pipeline steps
@@ -3938,15 +3950,18 @@ async def video_remix(
 @require_permission("digital_human:create")
 async def digital_human_generate(
     request: Request,
-    image: UploadFile = File(..., description="Input image for digital human"),
+    image: UploadFile = File(None, description="Input image for digital human"),
     text: str = Form(..., description="Text content for digital human to speak (max 1000 characters)"),
-    audio: UploadFile = File(..., description="Reference audio file"),
+    audio: UploadFile = File(None, description="Reference audio file"),
+    image_url: str = Form(None, description="Image URL for digital human (alternative to file upload)"),
+    audio_url: str = Form(None, description="Audio URL for digital human (alternative to file upload)"),
     aspect_ratio: str = Form("9:16", description="Video aspect ratio: 9:16, 16:9, 1:1, 3:2, 4:3, 2:3, 3:4"),
     user_id: int = Form(None, description="User ID"),
     auth_token: str = Form(None, description="Authentication token")
 ):
     """
     Generate digital human video from image, text and audio
+    Supports both file upload and URL parameters
     """
     try:
         # Validate text length
@@ -3956,11 +3971,23 @@ async def digital_human_generate(
                 detail="文本内容不能超过1000个字"
             )
         
-        # Save uploaded image
-        image_url = await asyncio.to_thread(_save_uploaded_image, image)
+        # Handle image (file upload or URL)
+        if image is not None:
+            image_url = await asyncio.to_thread(_save_uploaded_image, image)
+        elif not image_url:
+            raise HTTPException(
+                status_code=400,
+                detail="请提供图片文件或图片URL"
+            )
         
-        # Save uploaded audio
-        audio_url = await asyncio.to_thread(_save_uploaded_image, audio)  # Reuse the same function for audio
+        # Handle audio (file upload or URL)
+        if audio is not None:
+            audio_url = await asyncio.to_thread(_save_uploaded_image, audio)  # Reuse the same function for audio
+        elif not audio_url:
+            raise HTTPException(
+                status_code=400,
+                detail="请提供音频文件或音频URL"
+            )
         
         # Task type for digital human
         task_type = TaskTypeId.DIGITAL_HUMAN

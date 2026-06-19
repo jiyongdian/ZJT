@@ -221,6 +221,14 @@ DEFAULT_CONFIGS: List[Dict[str, Any]] = [
         'editable': True,
         'is_sensitive': False
     },
+    {
+        'key': 'pipeline.seedance_face_mask_enabled',
+        'value_type': 'bool',
+        'description': '是否启用 Seedance 2.0 / 2.0 Fast 图片和视频输入的人脸遮盖前置处理',
+        'editable': True,
+        'is_sensitive': False,
+        'quick_config': False
+    },
     
     # ==================== Duomi 配置 ====================
     {

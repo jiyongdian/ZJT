@@ -3093,6 +3093,24 @@ MCP_TOOLS = [
         }
     },
     {
+        "name": "generate_reference_audio",
+        "description": "生成通用参考音频（异步非阻塞）。不依赖角色卡，直接根据文本和声音风格提示词提交音频生成任务。返回 task_id，可通过 check_reference_audio_status 查询生成状态并获取 audio_url。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "text": {
+                    "type": "string",
+                    "description": "要朗读的文本内容（必填），例如数字人口播文案"
+                },
+                "style_prompt": {
+                    "type": "string",
+                    "description": "声音风格提示词（可选），例如：自然、平静、年轻女性声音、语速适中。不填则使用默认自然声音"
+                }
+            },
+            "required": ["text"]
+        }
+    },
+    {
         "name": "check_reference_audio_status",
         "description": "查询角色参考音频生成任务状态。后台 scheduler 会自动轮询 RunningHub 状态并更新数据库。",
         "inputSchema": {
@@ -3108,6 +3126,32 @@ MCP_TOOLS = [
                 }
             },
             "required": ["task_id"]
+        }
+    },
+    {
+        "name": "generate_digital_human",
+        "description": "生成数字人视频（非阻塞）。根据人物图片、口播文本和参考音频 URL 立即提交数字人生成任务，返回 project_ids。必须传入真实 audio_url；如果用户没有提供音频，请先调用 generate_reference_audio 生成并查询到 audio_url。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "image_url": {
+                    "type": "string",
+                    "description": "人物图片 URL（必填），必须来自对话中的真实图片 URL"
+                },
+                "text": {
+                    "type": "string",
+                    "description": "数字人需要说的文本（必填）"
+                },
+                "audio_url": {
+                    "type": "string",
+                    "description": "参考音频 URL（必填），必须是对话中用户上传的音频 URL，或 generate_reference_audio 完成后返回的 audio_url"
+                },
+                "aspect_ratio": {
+                    "type": "string",
+                    "description": "视频比例，可选，默认 9:16"
+                }
+            },
+            "required": ["image_url", "text", "audio_url"]
         }
     },
     {
@@ -3311,6 +3355,88 @@ def skill(SkillName: str) -> Dict[str, Any]:
 
 # ============ 音色相关 MCP 工具函数 ============
 
+def _create_reference_audio_task(
+    user_id: str,
+    world_id: str,
+    text: str,
+    style_prompt: Optional[str] = None,
+    character_name: Optional[str] = None,
+) -> int:
+    """Create a RunningHub reference-audio async task."""
+    try:
+        normalized_user_id = int(user_id)
+    except (ValueError, TypeError):
+        raise ValueError(f'无效的 user_id: {user_id}')
+
+    final_style_prompt = (
+        style_prompt
+        or '声音自然清晰，语气平稳，语速适中，适合数字人口播'
+    )
+    final_text = (text or '').strip()
+    if not final_text:
+        raise ValueError('音频文本不能为空')
+
+    from model import AsyncTasksModel
+    from config.unified_config import AsyncTaskImplementationId
+
+    params = {
+        'style_prompt': final_style_prompt,
+        'text': final_text,
+        'world_id': world_id
+    }
+    if character_name:
+        params['character_name'] = character_name
+
+    return AsyncTasksModel.create_and_schedule(
+        implementation=AsyncTaskImplementationId.RUNNINGHUB_AUDIO,
+        user_id=normalized_user_id,
+        params=params,
+        max_attempts=25
+    )
+
+
+def generate_reference_audio(
+    user_id: str,
+    world_id: str,
+    auth_token: str,
+    text: str,
+    style_prompt: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    生成通用参考音频 - MCP工具函数（异步非阻塞）。
+
+    不依赖角色卡，适用于数字人口播等营销场景。返回 async_tasks 主键，
+    后续通过 check_reference_audio_status 查询完成后的 audio_url。
+    """
+    try:
+        from config.config_util import get_dynamic_config_value
+        runninghub_api_key = get_dynamic_config_value("runninghub", "api_key", default="")
+        if not runninghub_api_key:
+            return {
+                'success': False,
+                'error': '参考音频生成功能依赖 RunningHub 服务，但尚未配置 RunningHub API Key。'
+            }
+
+        task_id = _create_reference_audio_task(
+            user_id=user_id,
+            world_id=world_id,
+            text=text,
+            style_prompt=style_prompt,
+        )
+
+        return {
+            'success': True,
+            'task_id': task_id,
+            'message': f'已提交参考音频生成任务 (task_id={task_id})，请使用 check_reference_audio_status 查询生成状态'
+        }
+    except Exception as e:
+        logger.error(f"generate_reference_audio error: {e}", exc_info=True)
+        return {
+            'success': False,
+            'error': f'生成参考音频失败: {str(e)}'
+        }
+
+
 def generate_character_reference_audio(user_id: str, world_id: str, auth_token: str,
                                        character_name: str,
                                        style_prompt: Optional[str] = None,
@@ -3379,32 +3505,12 @@ def generate_character_reference_audio(user_id: str, world_id: str, auth_token: 
             build_character_audio_style_prompt(character_data, style_prompt, model=model, vendor_id=vendor_id)
         )
 
-        # 验证 user_id
-        try:
-            int(user_id)
-        except (ValueError, TypeError):
-            return {
-                'success': False,
-                'error': f'无效的 user_id: {user_id}'
-            }
-
-        # 写入异步任务表，由 scheduler 后台统一处理提交和状态轮询
-        from model import AsyncTasksModel
-        from config.unified_config import AsyncTaskImplementationId
-
-        params = {
-            'character_name': character_name,
-            'style_prompt': final_style_prompt,
-            'text': final_text,
-            'world_id': world_id
-        }
-
-        # 创建异步任务记录（next_retry_at=NOW()，调度器约7秒后自动拾取提交到 RunningHub）
-        task_id = AsyncTasksModel.create_and_schedule(
-            implementation=AsyncTaskImplementationId.RUNNINGHUB_AUDIO,
-            user_id=int(user_id),
-            params=params,
-            max_attempts=25
+        task_id = _create_reference_audio_task(
+            user_id=user_id,
+            world_id=world_id,
+            text=final_text,
+            style_prompt=final_style_prompt,
+            character_name=character_name,
         )
 
         return {
@@ -3497,6 +3603,163 @@ def check_reference_audio_status(user_id: str, world_id: str, auth_token: str,
             'success': False,
             'error': f'查询音频状态失败: {str(e)}'
         }
+
+
+def generate_digital_human(
+    user_id: str,
+    world_id: str,
+    auth_token: str,
+    image_url: str,
+    text: str,
+    audio_url: str = None,
+    aspect_ratio: str = "9:16"
+) -> Dict[str, Any]:
+    """
+    生成数字人视频 - MCP工具函数（非阻塞版本）
+
+    根据参考图片、参考音频和文本内容生成数字人视频。立即返回 project_ids。
+    非阻塞，后台自动跟踪进度。
+
+    注意：如果没有提供 audio_url，需要先调用 generate_character_reference_audio 生成参考音频，
+    获取音频URL后再传入此参数。
+
+    Args:
+        user_id: 用户ID（必填）
+        world_id: 世界ID（必填）
+        auth_token: 认证令牌（必填）
+        image_url: 数字人参考图片URL（必填）
+        text: 数字人要说的文本内容（必填），不超过1000字
+        audio_url: 参考音频URL（可选），用于生成数字人的语音
+        aspect_ratio: 视频宽高比（默认 9:16），支持 9:16、16:9、1:1、3:2、4:3、2:3、3:4
+
+    Returns:
+        dict: 操作结果，包含 success、project_ids、status 等
+    """
+    try:
+        # 验证参数
+        if not image_url or not isinstance(image_url, str):
+            return {'success': False, 'error': '图片URL不能为空且必须是字符串'}
+
+        # 校验 image_url 格式：必须是有效路径或URL
+        image_url = image_url.strip()
+        _is_valid_image_path = (
+            image_url.startswith('/') or
+            image_url.startswith('upload/') or
+            image_url.startswith('http://') or
+            image_url.startswith('https://') or
+            (len(image_url) > 2 and image_url[1] == ':')
+        )
+        if not _is_valid_image_path:
+            # 尝试从中提取 project_id 并查数据库获取真实图片 URL
+            _match = re.search(r'(\d+)', image_url)
+            _resolved = False
+            if _match:
+                try:
+                    from model.ai_tools import AIToolsModel
+                    _project_id_num = int(_match.group(1))
+                    _ai_tool_record = AIToolsModel.get_by_id(_project_id_num)
+                    if _ai_tool_record and _ai_tool_record.result_url:
+                        logger.info(f"generate_digital_human: 自动解析 '{image_url}' -> project {_project_id_num} -> {_ai_tool_record.result_url}")
+                        image_url = _ai_tool_record.result_url
+                        _resolved = True
+                except Exception as e:
+                    logger.warning(f"generate_digital_human: 尝试解析 project_id 失败: {e}")
+            if not _resolved:
+                return {
+                    'success': False,
+                    'error': f'image_url "{image_url}" 不是有效的图片路径。'
+                             f'请传入真实的图片URL（如 /upload/generated/image/774.png），'
+                             f'而不是引用描述。可调用 check_image_status 获取真实图片URL。'
+                }
+
+        if not text or not isinstance(text, str):
+            return {'success': False, 'error': '文本内容不能为空且必须是字符串'}
+
+        if len(text) > 1000:
+            return {'success': False, 'error': '文本内容不能超过1000个字'}
+
+        if not audio_url:
+            return {
+                'success': False,
+                'error': '未提供参考音频URL。请先调用 generate_character_reference_audio 生成参考音频，获取音频URL后再调用此工具。'
+            }
+
+        # 获取服务器配置
+        server_config = get_config().get("server", {})
+        base_url = server_config.get("comfyui_base_url_inner") or server_config.get("host", "")
+
+        if not base_url:
+            return {'success': False, 'error': '配置文件中未找到服务器地址'}
+
+        # 获取数字人模型配置（digital_human 分类）
+        from config.unified_config import UnifiedConfigRegistry, TaskCategory
+        configs = UnifiedConfigRegistry.get_by_category(TaskCategory.DIGITAL_HUMAN)
+        if not configs:
+            return {'success': False, 'error': '未找到可用的数字人模型配置'}
+
+        # 获取第一个启用的模型
+        enabled_configs = [c for c in configs if c.enabled and not c.hidden]
+        if not enabled_configs:
+            return {'success': False, 'error': '未找到启用的数字人模型配置'}
+
+        task_config = enabled_configs[0]
+        task_id = task_config.id
+        model_name = task_config.name
+
+        # 计算预估算力
+        computing_power = task_config.get_computing_power() if task_config else 0
+
+        # 构建请求数据
+        request_data = {
+            'image_url': image_url,
+            'text': text,
+            'audio_url': audio_url,
+            'aspect_ratio': aspect_ratio,
+            'user_id': str(user_id),
+            'auth_token': auth_token
+        }
+
+        # 调用后端数字人生成API
+        api_url = f"{base_url.rstrip('/')}/api/digital-human"
+
+        try:
+            response = httpx.post(api_url, data=request_data, timeout=30, verify=False)
+            response.raise_for_status()
+
+            result_data = response.json()
+
+            if not result_data.get('success'):
+                return {
+                    'success': False,
+                    'error': result_data.get('error', '数字人生成请求失败')
+                }
+
+            project_id = result_data.get('project_id')
+            if not project_id:
+                return {'success': False, 'error': '数字人生成请求成功但未返回 project_id'}
+
+            return {
+                'success': True,
+                'project_ids': [str(project_id)],
+                'status': 'submitted',
+                'model_used': model_name,
+                'computing_power_required': computing_power,
+                'message': f'数字人生成请求已提交（使用模型: {model_name}），project_id: {project_id}'
+            }
+
+        except httpx.HTTPStatusError as e:
+            error_detail = ''
+            try:
+                error_body = e.response.json()
+                error_detail = error_body.get('detail', str(e))
+            except Exception:
+                error_detail = str(e)
+            logger.error(f"数字人生成 API 错误: {error_detail}")
+            return {'success': False, 'error': f'数字人生成请求失败: {error_detail}'}
+
+    except Exception as e:
+        logger.error(f"generate_digital_human error: {e}", exc_info=True)
+        return {'success': False, 'error': f'数字人生成请求异常: {str(e)}'}
 
 
 def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt: str,
