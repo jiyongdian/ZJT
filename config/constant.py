@@ -553,6 +553,26 @@ class MediaConstants:
     VIDEO_COMPRESS_THRESHOLD_MB = 10    # 超过此大小的视频触发前端压缩
 
 
+class RunningHubImageFaceMaskConstants:
+    """RunningHub 图片人脸遮盖工作流常量"""
+    APP_ID = "2067560129192620033"
+    IMAGE_NODE_ID = "3"
+    IMAGE_FIELD_NAME = "image"
+    FINAL_STATUSES = ("SUCCESS", "FAILED", "ERROR", "CANCELED", "CANCELLED")
+
+
+# ============ 剪映（CapCut）草稿导出常量 ============
+# 画布比例 → 分辨率（宽, 高）映射，未知比例回退 JIANYING_DEFAULT_RATIO
+JIANYING_RATIO_RESOLUTION = {
+    '9:16': (1080, 1920),  # 竖屏
+    '16:9': (1920, 1080),  # 横屏
+    '1:1':  (1080, 1080),  # 正方形
+    '3:4':  (1080, 1440),  # 竖屏（3:4）
+    '4:3':  (1440, 1080),  # 横屏（4:3）
+}
+JIANYING_DEFAULT_RATIO = '16:9'
+
+
 RECHARGE_PACKAGES = [
     {
         "package_id": 1,
@@ -573,6 +593,42 @@ RECHARGE_PACKAGES = [
         "description": "进阶套餐"
     }
 ]
+
+
+# ==================== 邀请佣金相关（商业版） ====================
+class Commission:
+    """邀请佣金配置（仅商业版启用；社区版由代码层 IS_COMMUNITY_EDITION 守卫跳过）"""
+    MIN_RATE = 0.0                # 最低佣金比例（0=关闭抽佣）
+    MAX_RATE = 0.5                # 最高佣金比例（50%）
+    STEP = 0.01                   # 比例设置步长（1%）
+    MIN_WITHDRAW_AMOUNT = 10.0    # 最低提现金额（元）
+    FIRST_RECHARGE_PACKAGE_ID = 1  # 首充福利套餐ID（首充不抽佣）
+
+
+class CommissionLogStatus:
+    """佣金明细状态"""
+    _CONSTANT_GROUP = True
+    _LABELS = {
+        'AVAILABLE': '可用(未提现)',
+        'WITHDRAWN': '已提现',
+        'REVERSED': '已冲正',
+    }
+    AVAILABLE = 0   # 可用（未提现）
+    WITHDRAWN = 1   # 已提现
+    REVERSED = 2    # 已冲正（退款预留）
+
+
+class CommissionWithdrawStatus:
+    """佣金提现申请状态"""
+    _CONSTANT_GROUP = True
+    _LABELS = {
+        'PENDING': '待审核',
+        'PAID': '已打款',
+        'REJECTED': '已驳回',
+    }
+    PENDING = 0     # 待审核
+    PAID = 1        # 已打款
+    REJECTED = 2    # 已驳回
 
 
 # 系统配置相关常量

@@ -29,6 +29,7 @@ class User:
         self.terms_agreed = kwargs.get('terms_agreed', 0)
         self.invite_code = kwargs.get('invite_code')
         self.inviter_id = kwargs.get('inviter_id')
+        self.commission_rate = kwargs.get('commission_rate')
         self.first_recharge = kwargs.get('first_recharge', 0)
         self.zjt_token_enabled = kwargs.get('zjt_token_enabled', 0)
         self.zjt_token_expire_at = kwargs.get('zjt_token_expire_at')
@@ -53,6 +54,7 @@ class User:
             'terms_agreed': self.terms_agreed,
             'invite_code': self.invite_code,
             'inviter_id': self.inviter_id,
+            'commission_rate': float(self.commission_rate) if self.commission_rate is not None else None,
             'first_recharge': self.first_recharge,
             'implementation_preferences': self.implementation_preferences,
             'active_preference_group': self.active_preference_group,
@@ -254,6 +256,27 @@ class UsersModel:
             return execute_update(sql, (status, user_id))
         except Exception as e:
             logger.error(f"Failed to update first recharge status for user {user_id}: {e}")
+            raise
+
+    @staticmethod
+    def get_commission_rate(user_id: int):
+        """获取邀请人佣金比例（Decimal；None/0 表示不抽佣）"""
+        sql = "SELECT commission_rate FROM users WHERE id = %s"
+        try:
+            result = execute_query(sql, (user_id,), fetch_one=True)
+            return result['commission_rate'] if result else None
+        except Exception as e:
+            logger.error(f"Failed to get commission rate for user {user_id}: {e}")
+            raise
+
+    @staticmethod
+    def update_commission_rate(user_id: int, rate) -> int:
+        """设置邀请人佣金比例（0~0.5；0=关闭抽佣）"""
+        sql = "UPDATE users SET commission_rate = %s, updated_at = NOW() WHERE id = %s"
+        try:
+            return execute_update(sql, (rate, user_id))
+        except Exception as e:
+            logger.error(f"Failed to update commission rate for user {user_id}: {e}")
             raise
     
     @staticmethod
@@ -768,6 +791,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   `terms_agreed` tinyint NOT NULL DEFAULT '0' COMMENT '同意条款（0-不同意，1-同意）',
   `invite_code` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '邀请码',
   `inviter_id` int DEFAULT NULL COMMENT '邀请人id',
+  `commission_rate` decimal(5,4) NOT NULL DEFAULT '0.0000' COMMENT '邀请人佣金比例(0~0.5；0=关闭抽佣)',
   `first_recharge` tinyint DEFAULT '0' COMMENT '是否首次充值',
   `implementation_preferences` json DEFAULT NULL COMMENT '用户实现方偏好配置',
   `active_preference_group` int DEFAULT NULL COMMENT '当前激活的偏好组',

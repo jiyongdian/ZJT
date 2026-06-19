@@ -2,10 +2,12 @@
 Pipeline 驱动工厂
 根据 step_type 创建对应的 pipeline 驱动实例。
 """
+import json
 import logging
 from typing import Optional, List, Dict, Any
 
 from model import PipelineStepType, PipelineStepModel, PipelineStage, AIToolsModel
+from config.config_util import get_dynamic_config_value
 from config.unified_config import (
     UnifiedConfigRegistry,
     get_implementation_id,
@@ -15,6 +17,7 @@ from config.unified_config import (
 
 from .base_pipeline_driver import BasePipelineDriver
 from .face_mask_driver import FaceMaskPipelineDriver
+from .image_face_mask_driver import ImageFaceMaskPipelineDriver
 from .implementation_retry_driver import ImplementationRetryPipelineDriver
 
 logger = logging.getLogger(__name__)
@@ -22,12 +25,18 @@ logger = logging.getLogger(__name__)
 # 驱动注册表
 _DRIVER_MAP = {
     PipelineStepType.FACE_MASK: FaceMaskPipelineDriver,
+    PipelineStepType.IMAGE_FACE_MASK: ImageFaceMaskPipelineDriver,
     PipelineStepType.IMPLEMENTATION_RETRY: ImplementationRetryPipelineDriver,
 }
 
 
 class PipelineDriverFactory:
     """Pipeline 驱动工厂"""
+
+    _SEEDANCE_FACE_MASK_KEYS = {
+        DriverKey.SEEDANCE_2_0_IMAGE_TO_VIDEO,
+        DriverKey.SEEDANCE_2_0_FAST_IMAGE_TO_VIDEO,
+    }
 
     @staticmethod
     def create_driver(step_type: str) -> Optional[BasePipelineDriver]:
@@ -71,6 +80,81 @@ class PipelineDriverFactory:
         },
     }
 
+    @staticmethod
+    def _split_paths(value: Any) -> List[str]:
+        """解析逗号分隔路径，过滤空值。"""
+        if not value:
+            return []
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return []
+
+    @classmethod
+    def _get_reference_images(cls, ai_tool) -> List[str]:
+        """解析 ai_tool.reference_images，兼容 JSON 数组和逗号分隔字符串。"""
+        raw_value = getattr(ai_tool, 'reference_images', None)
+        if not raw_value:
+            return []
+        if isinstance(raw_value, list):
+            return cls._split_paths(raw_value)
+        if isinstance(raw_value, str):
+            try:
+                parsed = json.loads(raw_value)
+                if isinstance(parsed, list):
+                    return cls._split_paths(parsed)
+            except json.JSONDecodeError:
+                return cls._split_paths(raw_value)
+        return []
+
+    @classmethod
+    def _build_seedance_param_prepare_steps(cls, ai_tool) -> List[Dict[str, Any]]:
+        """根据 Seedance 输入构建图片/视频人脸遮盖预处理步骤配置。
+
+        受 pipeline.seedance_face_mask_enabled 总开关控制，关闭后图片和视频遮盖步骤均不创建。
+        """
+        step_configs: List[Dict[str, Any]] = []
+
+        face_mask_enabled = get_dynamic_config_value(
+            'pipeline',
+            'seedance_face_mask_enabled',
+            default=True
+        )
+        if not face_mask_enabled:
+            return step_configs
+
+        for video_path in cls._split_paths(getattr(ai_tool, 'video_path', None)):
+            step_configs.append({
+                'step_type': PipelineStepType.FACE_MASK,
+                'params': {'video_path': video_path},
+                'target': video_path,
+            })
+
+        for idx, image_path in enumerate(cls._split_paths(getattr(ai_tool, 'image_path', None))):
+            step_configs.append({
+                'step_type': PipelineStepType.IMAGE_FACE_MASK,
+                'params': {
+                    'image_path': image_path,
+                    'field': 'image_path',
+                    'index': idx,
+                },
+                'target': image_path,
+            })
+
+        for idx, image_path in enumerate(cls._get_reference_images(ai_tool)):
+            step_configs.append({
+                'step_type': PipelineStepType.IMAGE_FACE_MASK,
+                'params': {
+                    'image_path': image_path,
+                    'field': 'reference_images',
+                    'index': idx,
+                },
+                'target': image_path,
+            })
+
+        return step_configs
+
     @classmethod
     def create_param_prepare_steps(
         cls,
@@ -92,7 +176,8 @@ class PipelineDriverFactory:
             return []
 
         rule = cls._PARAM_PREPARE_RULES.get(task_config.key)
-        if not rule:
+        is_seedance_face_mask = task_config.key in cls._SEEDANCE_FACE_MASK_KEYS
+        if not rule and not is_seedance_face_mask:
             return []
 
         # 获取 ai_tool 对象用于条件判断
@@ -100,20 +185,30 @@ class PipelineDriverFactory:
         if not ai_tool:
             return []
 
-        # 检查条件
-        if not rule['condition'](ai_tool):
+        if is_seedance_face_mask:
+            step_configs = cls._build_seedance_param_prepare_steps(ai_tool)
+        elif rule and rule['condition'](ai_tool):
+            step_configs = [
+                {
+                    'step_type': step_cfg['step_type'],
+                    'params': step_cfg['params_fn'](ai_tool) if step_cfg.get('params_fn') else None,
+                    'target': None,
+                }
+                for step_cfg in rule['steps']
+            ]
+        else:
             return []
 
         # 创建步骤
         step_ids = []
-        for idx, step_cfg in enumerate(rule['steps']):
-            params = step_cfg['params_fn'](ai_tool) if step_cfg.get('params_fn') else None
+        for idx, step_cfg in enumerate(step_configs):
             step_id = PipelineStepModel.create(
                 ai_tool_id=ai_tool_id,
                 stage=PipelineStage.PARAM_PREPARE,
                 step_type=step_cfg['step_type'],
                 step_order=idx,
-                params=params
+                params=step_cfg.get('params'),
+                target=step_cfg.get('target')
             )
             step_ids.append(step_id)
 

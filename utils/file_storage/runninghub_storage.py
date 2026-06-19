@@ -75,6 +75,14 @@ class RunningHubFileStorage(BaseFileStorage):
             project_path = get_project_path(file_path_or_url)
             if os.path.exists(project_path):
                 return project_path
+            # 兼容 /upload/... 风格的 web 相对路径
+            # Windows 上 os.path.join("G:\project", "/upload/...") 会返回 "G:/upload/..."
+            # 需要先去掉开头的 / 或 \ 再拼接
+            stripped = file_path_or_url.lstrip("/\\")
+            if stripped != file_path_or_url:
+                project_path = get_project_path(stripped)
+                if os.path.exists(project_path):
+                    return project_path
             # 都找不到，返回None
             self._log("warning", f"[图片上传诊断] 本地文件路径不存在: {file_path_or_url}, project_path={project_path}")
             return None

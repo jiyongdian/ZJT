@@ -276,34 +276,87 @@ def test_ratio_field_persistence(editor_page, base_url, test_workflow):
 
     add_image_to_video_node(page)
 
-    # 选择非默认值
-    saved_ratio = page.evaluate("""() => {
+    page.wait_for_function("""() => {
         const sel = document.querySelector('.node.selected .ratio-select');
-        if (!sel || sel.options.length < 2) return null;
-        sel.selectedIndex = 1;
+        const modelSel = document.querySelector('.node.selected .video-model-select');
+        const taskConfigReady = !window.TaskConfig || window.TaskConfig.isLoaded();
+        return taskConfigReady && !!sel && !!modelSel && !!modelSel.value && sel.options.length > 0;
+    }""", timeout=15000)
+
+    # 选择当前模型支持的一个非默认比例，并记录节点 id，避免刷新后误读其它节点。
+    saved_state = page.evaluate("""() => {
+        const nodeEl = document.querySelector('.node.selected');
+        const sel = nodeEl?.querySelector('.ratio-select');
+        const modelSel = nodeEl?.querySelector('.video-model-select');
+        if (!nodeEl || !sel || !modelSel) return null;
+
+        const options = Array.from(sel.options).map(o => o.value).filter(Boolean);
+        const target = options.find(v => v !== sel.value) || options[0] || '';
+        if (!target) return null;
+
+        sel.value = target;
         sel.dispatchEvent(new Event('change', { bubbles: true }));
-        return sel.options[sel.selectedIndex]?.textContent?.trim() || '';
+
+        const workflow = typeof serializeWorkflow === 'function' ? serializeWorkflow() : null;
+        const nodeData = workflow?.nodes?.find(n => String(n.id) === String(nodeEl.dataset.nodeId));
+        return {
+            nodeId: nodeEl.dataset.nodeId,
+            ratio: target,
+            model: modelSel.value,
+            options,
+            serializedRatio: nodeData?.data?.ratio || ''
+        };
     }""")
     page.wait_for_timeout(500)
 
-    if not saved_ratio:
+    if not saved_state or not saved_state.get("ratio"):
         pytest.skip("比例选择器不可用")
 
+    assert saved_state["serializedRatio"] == saved_state["ratio"], (
+        f"比例值未写入工作流数据，选择值: {saved_state['ratio']}，"
+        f"序列化值: {saved_state['serializedRatio']}，"
+        f"模型: {saved_state.get('model')}，可选值: {saved_state.get('options')}"
+    )
+
     # 保存工作流
-    page.evaluate("() => { const btn = document.getElementById('saveBtn'); if (btn) btn.click(); }")
+    with page.expect_response(
+        lambda resp: f"/api/video-workflow/{wf_id}" in resp.url and resp.request.method == "PUT",
+        timeout=10000,
+    ) as save_response:
+        page.evaluate("() => { const btn = document.getElementById('saveBtn'); if (btn) btn.click(); }")
+    assert save_response.value.ok, f"保存工作流失败: HTTP {save_response.value.status}"
     page.wait_for_timeout(2000)
 
     # 重新加载
     page.reload(wait_until="domcontentloaded")
     page.wait_for_load_state("networkidle", timeout=15000)
     make_all_nodes_visible(page)
-    page.wait_for_timeout(1000)
+    page.wait_for_function("""(nodeId) => {
+        const taskConfigReady = !window.TaskConfig || window.TaskConfig.isLoaded();
+        const workflowReady = typeof state === 'undefined' || state.workflowReady;
+        const node = document.querySelector(`.node[data-node-id="${nodeId}"]`);
+        const sel = node?.querySelector('.ratio-select');
+        return taskConfigReady && workflowReady && !!sel && sel.options.length > 0;
+    }""", arg=saved_state["nodeId"], timeout=15000)
 
-    # 验证比例值保留
-    reloaded_ratio = page.evaluate("""() => {
-        const sel = document.querySelector('.ratio-select');
-        return sel ? sel.options[sel.selectedIndex]?.textContent?.trim() || '' : '';
-    }""")
-    assert reloaded_ratio == saved_ratio, (
-        f"比例值未持久化，保存前: {saved_ratio}，重新加载后: {reloaded_ratio}"
+    reloaded_state = page.evaluate("""(nodeId) => {
+        const nodeEl = document.querySelector(`.node[data-node-id="${nodeId}"]`);
+        const sel = nodeEl?.querySelector('.ratio-select');
+        const modelSel = nodeEl?.querySelector('.video-model-select');
+        const workflow = typeof serializeWorkflow === 'function' ? serializeWorkflow() : null;
+        const nodeData = workflow?.nodes?.find(n => String(n.id) === String(nodeId));
+        return {
+            nodeId,
+            domRatio: sel ? sel.value || '' : '',
+            serializedRatio: nodeData?.data?.ratio || '',
+            model: modelSel ? modelSel.value || '' : '',
+            options: sel ? Array.from(sel.options).map(o => o.value).filter(Boolean) : []
+        };
+    }""", saved_state["nodeId"])
+
+    assert reloaded_state["serializedRatio"] == saved_state["ratio"], (
+        f"比例值未持久化到工作流数据，保存前: {saved_state}，重新加载后: {reloaded_state}"
+    )
+    assert reloaded_state["domRatio"] == saved_state["ratio"], (
+        f"比例下拉框未恢复保存值，保存前: {saved_state}，重新加载后: {reloaded_state}"
     )

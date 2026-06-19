@@ -144,7 +144,7 @@ class TestPipelineStepModelGetById(unittest.TestCase):
         result = PipelineStepModel.get_by_id(1)
 
         self.assertIsNotNone(result)
-        self.assertIsInstance(result, PipelineStep)
+        self.assertEqual(result.__class__.__name__, PipelineStep.__name__)
         self.assertEqual(result.id, 1)
         self.assertEqual(result.ai_tool_id, 100)
         self.assertEqual(result.stage, 'param_prepare')
@@ -186,7 +186,7 @@ class TestPipelineStepModelGetByAiToolAndStage(unittest.TestCase):
         result = PipelineStepModel.get_by_ai_tool_and_stage(100, 'param_prepare')
 
         self.assertEqual(len(result), 2)
-        self.assertIsInstance(result[0], PipelineStep)
+        self.assertEqual(result[0].__class__.__name__, PipelineStep.__name__)
         self.assertEqual(result[0].id, 1)
         self.assertEqual(result[1].id, 2)
         call_args = _steps_module.execute_query.call_args

@@ -423,6 +423,64 @@
 
 ---
 
+### ma_035 - 切换会话后恢复 ask_user 选项
+
+**目标**：验证 Agent 通过 `ask_user` 发起问题后，用户切换到其他会话再返回，原会话中未回答的选项按钮仍可点击。
+
+**前置条件**：会话 A 的 `chat_messages` 中存在未被 `verification_answer` 覆盖的 `verification_request`，会话 B 存在普通历史消息。
+
+**步骤**：
+1. 通过 Playwright mock `/api/sessions` 返回会话 A 和会话 B。
+2. mock `/api/session/{session_id}/history`，让会话 A 返回 `verification_request`，会话 B 返回普通 assistant 消息。
+3. 导航到 `/marketing-agent`，确认会话 A 的选项按钮可见。
+4. 切换到会话 B，确认主内容区显示会话 B 消息。
+5. 切换回会话 A，点击 `verification_request` 的预设选项。
+
+**预期结果**：
+- 切回会话 A 后，当前未回答 verification 的选项按钮不是 disabled。
+- 点击选项后调用 `POST /api/verification/{verification_id}`，请求体包含对应 `user_input`。
+- 不应误调用 `POST /api/session/{session_id}/task` 创建普通 Agent 任务。
+
+---
+
+### ma_036 - 切换会话后主输入框提交 ask_user 自定义回答
+
+**目标**：验证未回答的 `ask_user` 问题在会话切换后恢复时，用户仍可通过底部主输入框提交自定义回答。
+
+**前置条件**：同 `ma_035`。
+
+**步骤**：
+1. 导航到 `/marketing-agent`，加载带未回答 verification 的会话 A。
+2. 切换到会话 B，再切回会话 A。
+3. 在 `.marketing-textarea` 中输入自定义回答。
+4. 点击 `.marketing-send-btn`。
+
+**预期结果**：
+- 切回会话 A 后，输入内容时发送按钮可用。
+- 点击发送后调用 `POST /api/verification/{verification_id}`，请求体包含自定义 `user_input`。
+- 不应把自定义回答当作普通新消息提交到 `/api/session/{session_id}/task`。
+
+---
+
+### ma_037 - 超时 ask_user 不阻塞主输入框
+
+**目标**：验证用户切换会话期间 `ask_user` 已超时后，切回原会话不会继续阻塞底部主输入框。
+
+**前置条件**：会话 A 的历史中存在 `verification_request`，但该记录的 `verification_status` / `content.status` 为 `cancelled`；会话 B 存在普通历史消息。
+
+**步骤**：
+1. 通过 Playwright mock `/api/sessions` 返回会话 A 和会话 B。
+2. mock 会话 A 的 `/api/session/{session_id}/history` 返回已取消的 `verification_request`。
+3. 导航到 `/marketing-agent`，切换到会话 B，再切回会话 A。
+4. 在 `.marketing-textarea` 输入新消息并点击 `.marketing-send-btn`。
+
+**预期结果**：
+- 切回会话 A 后，发送按钮可用。
+- 点击发送不会调用 `POST /api/verification/{verification_id}`。
+- 点击发送会调用 `POST /api/session/{session_id}/task`，按普通新对话继续。
+
+---
+
 ### ma_028 - 保持至少一个会话
 
 **目标**：验证删除最后一个会话时有保护提示

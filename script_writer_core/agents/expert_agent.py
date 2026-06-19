@@ -158,6 +158,8 @@ class ExpertAgent(BaseAgent, AskUserMixin):
         task_description = task.get("description", "")
         conversation_history = task.get("conversation_history", [])
         image_urls = task.get("image_urls", [])
+        video_urls = task.get("video_urls", [])
+        audio_urls = task.get("audio_urls", [])
 
         # 设置双写属性：使用 PM 的 session_id，agent_scope = expert
         self._agent_scope = "expert"
@@ -188,11 +190,11 @@ class ExpertAgent(BaseAgent, AskUserMixin):
             if image_urls:
                 for i, img_url in enumerate(image_urls, 1):
                     combined_parts.append(f"[图片{i}]（URL: {img_url}）")
-            if hasattr(task, 'video_urls') and task.video_urls:
-                for i, vid_url in enumerate(task.video_urls, 1):
+            if video_urls:
+                for i, vid_url in enumerate(video_urls, 1):
                     combined_parts.append(f"[视频{i}]（URL: {vid_url}）")
-            if hasattr(task, 'audio_urls') and task.audio_urls:
-                for i, aud_url in enumerate(task.audio_urls, 1):
+            if audio_urls:
+                for i, aud_url in enumerate(audio_urls, 1):
                     combined_parts.append(f"[音频{i}]（URL: {aud_url}）")
             if combined_parts:
                 combined = "\n".join(combined_parts) + "\n\n" + task_description
@@ -402,7 +404,7 @@ class ExpertAgent(BaseAgent, AskUserMixin):
             result = self._execute_tool(tool_name, tool_args)
 
             # 收集图片/视频生成任务的 project_ids
-            if tool_name in ("generate_text_to_image", "edit_image", "generate_text_to_video", "image_to_video"):
+            if tool_name in ("generate_text_to_image", "edit_image", "generate_text_to_video", "image_to_video", "generate_digital_human"):
                 if isinstance(result, dict) and result.get("project_ids"):
                     self.pending_project_ids.extend(result["project_ids"])
 

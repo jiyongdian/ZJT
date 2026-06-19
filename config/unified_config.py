@@ -90,10 +90,12 @@ class AsyncTaskImplementationId:
         'UNKNOWN': '未知',
         'RUNNINGHUB_AUDIO': 'RunningHub 音频生成',
         'RUNNINGHUB_FACE_MASK': 'RunningHub 人脸遮盖视频生成',
+        'RUNNINGHUB_IMAGE_FACE_MASK': 'RunningHub 人脸遮盖图片生成',
     }
     UNKNOWN = 0
     RUNNINGHUB_AUDIO = 1
     RUNNINGHUB_FACE_MASK = 2
+    RUNNINGHUB_IMAGE_FACE_MASK = 3
 
 
 @dataclass
@@ -115,6 +117,9 @@ ASYNC_TASK_CONFIGS: Dict[int, AsyncTaskConfig] = {
     ),
     AsyncTaskImplementationId.RUNNINGHUB_FACE_MASK: AsyncTaskConfig(
         impl_id=2, name="RunningHub人脸遮盖", need_runninghub_slot=True, slot_task_type=2
+    ),
+    AsyncTaskImplementationId.RUNNINGHUB_IMAGE_FACE_MASK: AsyncTaskConfig(
+        impl_id=3, name="RunningHub图片人脸遮盖", need_runninghub_slot=True, slot_task_type=3
     ),
 }
 
@@ -2254,7 +2259,7 @@ ALL_IMPLEMENTATIONS: List[ImplementationConfig] = [
         name='ltx2_3_with_voice_runninghub_v1',
         display_name='RunningHub',
         driver_class='Ltx23WithVoiceRunninghubV1Driver',
-        default_computing_power=12,
+        default_computing_power=6,
         enabled=True,
         description='RunningHub LTX2.3 With Voice 接口（数字人）',
         sort_order=7001.0,

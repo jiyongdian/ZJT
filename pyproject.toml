@@ -1,8 +1,13 @@
 [project]
 name = "ZJT"
-version = "1.9.0"
+version = "1.9.4"
 requires-python = "==3.10.*"
 
 [[tool.uv.index]]
 url = "https://mirrors.aliyun.com/pypi/simple/"
 default = true
+
+[dependency-groups]
+dev = [
+    "pyarmor>=9.2.5",
+]

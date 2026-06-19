@@ -91,6 +91,10 @@ class MarketingPMAgent(PMAgent):
         )
 
         self.agent_id = "marketing_pm_agent"
+        self.allowed_expert_types = agents_config.get(
+            "marketing_pm_agent",
+            {}
+        ).get("allowed_expert_types", ["marketing"])
         logger.info(f"{self.agent_id}: MarketingPMAgent 初始化完成")
 
     def _build_system_prompt(self, skill_names: List[str]) -> str:

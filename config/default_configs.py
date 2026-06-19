@@ -181,7 +181,99 @@ DEFAULT_CONFIGS: List[Dict[str, Any]] = [
         'editable': True,
         'is_sensitive': False
     },
-    
+
+    # ---- test_mode 行为开关 ----
+    {
+        'key': 'test_mode.inject_failure_rate',
+        'value_type': 'int',
+        'description': '失败注入概率(0-100)，0=不注入（Phase3 错误注入用）',
+        'editable': True,
+        'is_sensitive': False
+    },
+    {
+        'key': 'test_mode.inject_failure_scenario',
+        'value_type': 'string',
+        'description': '失败注入场景，如 submit/poll/timeout（Phase3 错误注入用）',
+        'editable': True,
+        'is_sensitive': False
+    },
+
+    # ---- test_mode.mock_images 扩展 ----
+    {
+        'key': 'test_mode.mock_images.comfyui_text_to_image',
+        'value_type': 'string',
+        'description': 'ComfyUI 工具直调文生图预设URL',
+        'editable': True,
+        'is_sensitive': False
+    },
+    {
+        'key': 'test_mode.mock_images.comfyui_image_edit',
+        'value_type': 'string',
+        'description': 'ComfyUI 工具直调图片编辑预设URL',
+        'editable': True,
+        'is_sensitive': False
+    },
+    {
+        'key': 'test_mode.mock_images.grid_image',
+        'value_type': 'string',
+        'description': '四宫格整图预设URL(2x2真实图)',
+        'editable': True,
+        'is_sensitive': False
+    },
+    {
+        'key': 'test_mode.mock_images.multi_angle_front',
+        'value_type': 'string',
+        'description': '多角度-正面图预设URL',
+        'editable': True,
+        'is_sensitive': False
+    },
+    {
+        'key': 'test_mode.mock_images.multi_angle_side',
+        'value_type': 'string',
+        'description': '多角度-侧面图预设URL',
+        'editable': True,
+        'is_sensitive': False
+    },
+    {
+        'key': 'test_mode.mock_images.multi_angle_back',
+        'value_type': 'string',
+        'description': '多角度-背面图预设URL',
+        'editable': True,
+        'is_sensitive': False
+    },
+
+    # ---- test_mode.mock_videos 扩展 ----
+    {
+        'key': 'test_mode.mock_videos.digital_human',
+        'value_type': 'string',
+        'description': '数字人预设视频URL',
+        'editable': True,
+        'is_sensitive': False
+    },
+    {
+        'key': 'test_mode.mock_videos.face_mask',
+        'value_type': 'string',
+        'description': '人脸遮盖预设视频URL（必须本地真实mp4）',
+        'editable': True,
+        'is_sensitive': False
+    },
+
+    # ---- test_mode.mock_audio 扩展 ----
+    {
+        'key': 'test_mode.mock_audio.tts',
+        'value_type': 'string',
+        'description': 'Index TTS 预设音频URL',
+        'editable': True,
+        'is_sensitive': False
+    },
+    {
+        'key': 'test_mode.mock_audio.character_audio',
+        'value_type': 'string',
+        'description': 'RunningHub 角色音频预设URL',
+        'editable': True,
+        'is_sensitive': False
+    },
+
     # ==================== 图片配置 ====================
     {
         'key': 'image.enable_download',
@@ -220,6 +312,14 @@ DEFAULT_CONFIGS: List[Dict[str, Any]] = [
         'description': 'RunningHub 最大并发槽位数量，该值根据runninghub账号的 并发数决定，可以查看 https://www.runninghub.cn/vip-rights/2 查看并发数，注意，必须支持api调用的套餐才能使用 26年3月 基础版为1 专业版为3 专业Plus版为5 Max 为20',
         'editable': True,
         'is_sensitive': False
+    },
+    {
+        'key': 'pipeline.seedance_face_mask_enabled',
+        'value_type': 'bool',
+        'description': '是否启用 Seedance 2.0 / 2.0 Fast 图片和视频输入的人脸遮盖前置处理',
+        'editable': True,
+        'is_sensitive': False,
+        'quick_config': False
     },
     
     # ==================== Duomi 配置 ====================

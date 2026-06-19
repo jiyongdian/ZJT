@@ -176,7 +176,83 @@ class MediaUtils:
             info.update(video_info)
         
         return info
-    
+
+    def probe_safe(self, file_path: str) -> dict:
+        """
+        单次 ffprobe 同时获取时长、尺寸、帧率，任何失败均返回零值，不抛异常。
+
+        与 get_media_info 的区别：
+        - 单次 ffprobe 调用同时取 format=duration 与 stream=width,height,r_frame_rate
+          （get_media_info 内部会调用 2 次 ffprobe）
+        - 失败时返回零值字典而非抛 RuntimeError，适合在事件循环中通过
+          asyncio.to_thread 安全调用，无需依赖异常控制流
+
+        Args:
+            file_path: 媒体文件路径
+
+        Returns:
+            {'duration_us': int, 'width': int, 'height': int, 'fps': float}
+            （音频无视频流时 width/height/fps 为 0；探测失败全部为 0）
+        """
+        import json
+
+        result = {'duration_us': 0, 'width': 0, 'height': 0, 'fps': 0.0}
+        if not os.path.exists(file_path):
+            return result
+        try:
+            cmd = [
+                self.config.ffprobe_path,
+                '-v', 'quiet',
+                '-show_entries', 'format=duration:stream=width,height,r_frame_rate',
+                '-of', 'json',
+                file_path
+            ]
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=self.config.ffmpeg_timeout
+            )
+            if proc.returncode != 0 or not proc.stdout.strip():
+                return result
+
+            data = json.loads(proc.stdout)
+
+            # 时长（format.duration，秒）
+            duration_str = (data.get('format') or {}).get('duration')
+            if duration_str:
+                try:
+                    result['duration_us'] = int(float(duration_str) * 1_000_000)
+                except (ValueError, TypeError):
+                    pass
+
+            # 遍历找首个含宽高的流（视频流）。某些容器（部分 mkv/flv）音频流排在视频流前，
+            # 直接取 streams[0] 可能命中音频流导致宽高为 0；纯音频文件无视频流时保持默认 0。
+            for stream in data.get('streams') or []:
+                w = stream.get('width')
+                h = stream.get('height')
+                if not (w and h):
+                    continue
+                try:
+                    result['width'] = int(w)
+                    result['height'] = int(h)
+                except (ValueError, TypeError):
+                    continue
+                fps_str = stream.get('r_frame_rate', '')
+                if '/' in fps_str:
+                    num, den = fps_str.split('/', 1)
+                    try:
+                        den_i = int(den)
+                        if den_i != 0:
+                            result['fps'] = float(num) / den_i
+                    except (ValueError, TypeError):
+                        pass
+                break
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError,
+                FileNotFoundError, ValueError, TypeError, OSError, json.JSONDecodeError):
+            return result
+        return result
+
     def _get_video_info_with_ffprobe(self, file_path: str) -> Optional[dict]:
         """
         使用ffprobe获取视频信息

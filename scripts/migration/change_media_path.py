@@ -11,6 +11,7 @@ import os
 import sys
 import json
 import argparse
+from urllib.parse import quote
 
 # 添加项目根目录到 Python 路径
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -196,6 +197,116 @@ def _replace_ref_in_obj(obj, old_prefix, new_prefix):
     return changed
 
 
+def _replace_all_strings_in_obj(obj, old_prefix, new_prefix):
+    """递归遍历 JSON 对象，替换所有字符串值中的 host。用于 workflow_data 等深层嵌套 JSON。"""
+    changed = False
+    if isinstance(obj, dict):
+        for key, val in list(obj.items()):
+            if isinstance(val, str) and old_prefix in val:
+                obj[key] = val.replace(old_prefix, new_prefix)
+                changed = True
+            elif isinstance(val, (dict, list)):
+                if _replace_all_strings_in_obj(val, old_prefix, new_prefix):
+                    changed = True
+    elif isinstance(obj, list):
+        for i, item in enumerate(obj):
+            if isinstance(item, str) and old_prefix in item:
+                obj[i] = item.replace(old_prefix, new_prefix)
+                changed = True
+            elif isinstance(item, (dict, list)):
+                if _replace_all_strings_in_obj(item, old_prefix, new_prefix):
+                    changed = True
+    return changed
+
+
+# 深层嵌套 JSON 字段：(表名, 主键字段, JSON字段名)
+# 这些字段内部任意层级的字符串值都可能包含 URL
+NESTED_JSON_FIELDS = [
+    ("video_workflow", "id", "workflow_data"),
+]
+
+
+def replace_host_in_nested_json(old_host, new_host, dry_run=False):
+    """处理深层嵌套 JSON 字段（如 video_workflow.workflow_data），递归替换所有字符串中的 host"""
+    old_prefix = f"http://{old_host}"
+    new_prefix = f"http://{new_host}"
+    # URL 编码形式: http%3A%2F%2Fssh.perseids.cn%3A13000 → http%3A%2F%2Fyiliao.perseids.cn
+    old_prefix_encoded = quote(old_prefix, safe='')
+    new_prefix_encoded = quote(new_prefix, safe='')
+    stats = {}
+
+    for table, pk_field, field in NESTED_JSON_FIELDS:
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                # 查询包含旧 host 的行（明文或编码形式）
+                cursor.execute(
+                    f"SELECT `{pk_field}`, `{field}` FROM `{table}` WHERE `{field}` LIKE %s",
+                    (f"%{old_host}%",)
+                )
+                rows = cursor.fetchall()
+
+                if not rows:
+                    print(f"  [{table}.{field}] 无匹配记录，跳过")
+                    stats[f"{table}.{field}"] = 0
+                    continue
+
+                print(f"  [{table}.{field}] 匹配 {len(rows)} 条记录")
+
+                if dry_run:
+                    # 预览：列出匹配的记录 ID
+                    ids = [str(row[pk_field]) for row in rows[:10]]
+                    print(f"    匹配 ID: {', '.join(ids)}{'...' if len(rows) > 10 else ''}")
+                    stats[f"{table}.{field}"] = len(rows)
+                    continue
+
+                updated = 0
+                for row in rows:
+                    row_id = row[pk_field]
+                    raw = row[field]
+                    if not raw:
+                        continue
+
+                    # workflow_data 可能已经是 dict（pymysql JSON 字段自动解析）
+                    if isinstance(raw, str):
+                        try:
+                            data = json.loads(raw)
+                        except (json.JSONDecodeError, TypeError):
+                            print(f"    警告: ID={row_id} JSON 解析失败，跳过")
+                            continue
+                    elif isinstance(raw, dict):
+                        data = raw
+                    elif isinstance(raw, list):
+                        data = raw
+                    else:
+                        continue
+
+                    changed = False
+                    # 第一遍：替换明文 URL (http://ssh.perseids.cn:13000)
+                    if _replace_all_strings_in_obj(data, old_prefix, new_prefix):
+                        changed = True
+                    # 第二遍：替换 URL 编码形式 (http%3A%2F%2Fssh.perseids.cn%3A13000)
+                    if _replace_all_strings_in_obj(data, old_prefix_encoded, new_prefix_encoded):
+                        changed = True
+
+                    if changed:
+                        new_json = json.dumps(data, ensure_ascii=False)
+                        cursor.execute(
+                            f"UPDATE `{table}` SET `{field}` = %s WHERE `{pk_field}` = %s",
+                            (new_json, row_id)
+                        )
+                        updated += 1
+
+                conn.commit()
+                print(f"  [{table}.{field}] 已更新 {updated} 条记录")
+                stats[f"{table}.{field}"] = updated
+        except Exception as e:
+            print(f"  [{table}.{field}] 错误: {e}")
+            stats[f"{table}.{field}"] = -1
+
+    return stats
+
+
 def replace_host_in_files(old_host, new_host, dry_run=False):
     """遍历 files/script_writer 目录，替换 JSON 文件中 reference_image 的 host"""
     old_prefix = f"http://{old_host}"
@@ -276,19 +387,22 @@ def main():
     print(f"  预览模式: {'是' if args.dry_run else '否'}")
     print(f"=" * 60)
 
-    print("\n[1/3] 处理简单文本字段...")
+    print("\n[1/4] 处理简单文本字段...")
     text_stats = replace_host_in_text(old_host, new_host) if not args.dry_run else _dry_run_text(old_host, new_host)
 
-    print("\n[2/3] 处理 JSON 字段...")
+    print("\n[2/4] 处理 JSON 字段...")
     json_stats = replace_host_in_json(old_host, new_host, dry_run=args.dry_run)
 
-    print("\n[3/3] 处理磁盘 JSON 文件...")
+    print("\n[3/4] 处理深层嵌套 JSON 字段（workflow_data 等）...")
+    nested_stats = replace_host_in_nested_json(old_host, new_host, dry_run=args.dry_run)
+
+    print("\n[4/4] 处理磁盘 JSON 文件...")
     file_stats = replace_host_in_files(old_host, new_host, dry_run=args.dry_run)
 
     # 汇总
     print(f"\n{'=' * 60}")
     print("处理结果汇总：")
-    all_stats = {**(text_stats or {}), **(json_stats or {}), **(file_stats or {})}
+    all_stats = {**(text_stats or {}), **(json_stats or {}), **(nested_stats or {}), **(file_stats or {})}
     total = 0
     for key, val in all_stats.items():
         status = f"{val} 条" if val >= 0 else "失败"

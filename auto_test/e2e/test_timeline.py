@@ -18,8 +18,8 @@ def _navigate_to_workflow(page, base_url, workflow_id):
     page.route("**/api/user/computing_power", handle_computing_power)
 
     page.goto(f"{base_url}/video-workflow?id={workflow_id}", wait_until="domcontentloaded")
-    page.wait_for_timeout(2000)
     page.locator("#addBtn").wait_for(state="attached", timeout=15000)
+    page.wait_for_function("() => typeof state !== 'undefined' && state.workflowReady === true", timeout=15000)
 
 
 def _wait_for_timeline_visible(page, timeout=8000):
@@ -350,8 +350,8 @@ class TestTimelineDataPersistence:
         page.evaluate("""() => {
             return serializeWorkflow();
         }""")
-        # 使用 API 触发保存
-        page.evaluate("""() => {
+        # 使用 API 触发保存，并等待服务端确认写入完成
+        save_result = page.evaluate("""() => {
             const workflowId = new URLSearchParams(window.location.search).get('id');
             const workflowData = serializeWorkflow();
             return fetch('/api/video-workflow/' + workflowId, {
@@ -364,11 +364,10 @@ class TestTimelineDataPersistence:
                 body: JSON.stringify({ workflow_data: workflowData })
             }).then(r => r.json());
         }""")
-        page.wait_for_timeout(1000)
+        assert save_result.get("code") == 0, f"保存工作流失败: {save_result}"
 
         # 重新加载页面
         _navigate_to_workflow(page, base_url, wf_id)
-        page.wait_for_timeout(2000)
 
         # 验证时间轴数据恢复
         clips_after = _get_clip_data(page)

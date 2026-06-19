@@ -66,6 +66,19 @@ def _execute_sync_task(task_id: int, ai_tool_type: int) -> SyncTaskResult:
         AIToolsModel.update(task_id, status=AI_TOOL_STATUS_PROCESSING)
         TasksModel.update_by_task_id(task_id, status=TASK_STATUS_PROCESSING)
 
+        # ===== E2E Mock 短路（同步子进程，覆盖所有 13 个 sync_mode 实现）=====
+        from task.mock_interceptor import is_mock_enabled, visual_sync_result
+        if is_mock_enabled():
+            mock = visual_sync_result(ai_tool_type)
+            url = mock.get("result_url")
+            if url:
+                logger.info(f"[MOCK] visual sync short-circuit task={task_id} url={url}")
+                return SyncTaskResult(
+                    task_id=task_id, ai_tool_type=ai_tool_type,
+                    success=True, result_url=url,
+                )
+        # ==================================================================
+
         # 获取AI工具详情
         ai_tool = AIToolsModel.get_by_id(task_id)
         if not ai_tool:

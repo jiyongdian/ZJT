@@ -84,6 +84,51 @@
     
     // ============ 宫格提示词生成 ============
 
+    const DEFAULT_GRID_IMAGE_MODEL = 'gpt-image-2';
+
+    function getDefaultGridImageModelValue(options = null) {
+      const imageOptions = options || ((window.TaskConfig && window.TaskConfig.isLoaded())
+        ? window.TaskConfig.getModelOptionsForCategory('image_edit')
+        : []);
+      const gridOptions = imageOptions.filter(opt => opt.supportsGridImage);
+      const gptImage2 = gridOptions.find(opt => opt.value === DEFAULT_GRID_IMAGE_MODEL);
+      if(gptImage2) return gptImage2.value;
+      return gridOptions[0]?.value || DEFAULT_GRID_IMAGE_MODEL;
+    }
+
+    function normalizeGridImageModelValue(modelValue, options = null) {
+      if(!modelValue || modelValue === 'auto') return getDefaultGridImageModelValue(options);
+      return modelValue;
+    }
+
+    function populateGridImageModelSelect(selectEl, savedValue) {
+      if(!selectEl) return DEFAULT_GRID_IMAGE_MODEL;
+
+      selectEl.innerHTML = '';
+      let options = [];
+      if(window.TaskConfig && window.TaskConfig.isLoaded()) {
+        options = window.TaskConfig.getModelOptionsForCategory('image_edit').filter(opt => opt.supportsGridImage);
+        options.forEach(opt => {
+          const optEl = document.createElement('option');
+          optEl.value = opt.value;
+          optEl.textContent = opt.label;
+          selectEl.appendChild(optEl);
+        });
+      } else {
+        selectEl.innerHTML = `
+          <option value="gpt-image-2">GPT Image 2</option>
+          <option value="gemini-3-pro-4grid">加强版4宫格</option>
+          <option value="gemini-3-pro-image-preview">加强版9宫格</option>
+          <option value="seedream-5.0">Seedream 5.0</option>
+        `;
+      }
+
+      const selectedValue = normalizeGridImageModelValue(savedValue, options);
+      ensureSelectHasSavedOption(selectEl, selectedValue);
+      selectEl.value = selectedValue;
+      return selectedValue;
+    }
+
     // 根据 gridModel 和 gridLayout 用户偏好，计算最终的 gridSize / gridLayout / finalModel
     function resolveGridConfig(gridModel, gridLayoutPref, shotCount, forceEnhancedModel) {
       let gridSize, gridLayout, finalModel;
@@ -98,11 +143,12 @@
       }
 
       if(gridModel === 'auto') {
-        // 智能模式
+        // 兼容旧工作流保存的 auto，实际统一使用 GPT Image 2。
+        finalModel = DEFAULT_GRID_IMAGE_MODEL;
         if(gridLayoutPref === '4') {
-          finalModel = forceEnhancedModel ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image-preview';
+          // 保持 4宫格配置
         } else if(gridLayoutPref === '9') {
-          finalModel = 'gemini-3-pro-image-preview';
+          // 保持 9宫格配置
         } else {
           // auto: 根据分镜数量自动选择宫格大小
           if(shotCount <= 5) {
@@ -111,12 +157,6 @@
           } else {
             gridSize = 9;
             gridLayout = '3x3';
-          }
-          // 根据参考图片数量选择模型（forceEnhancedModel 仅影响模型，不影响宫格大小）
-          if(forceEnhancedModel) {
-            finalModel = 'gemini-3-pro-image-preview';
-          } else {
-            finalModel = 'gemini-2.5-flash-image-preview';
           }
         }
       } else if(gridModel === 'gemini-2.5-flash-image-preview' && !forceEnhancedModel) {
@@ -810,7 +850,7 @@
 
     function openVideoModal(src){
       if(!src) return;
-      videoModalPlayer.src = src;
+      videoModalPlayer.src = proxyDownloadUrl(src);
       videoModal.classList.add('show');
       videoModal.setAttribute('aria-hidden', 'false');
       const p = videoModalPlayer.play();
@@ -874,7 +914,7 @@
 
     function openShotGroupModal(shotGroupData, nodeId){
       currentShotGroupNodeId = nodeId;
-      shotGroupModalTitle.textContent = `分镜组详情 - ${shotGroupData.groupName || '未命名'}`;
+      shotGroupModalTitle.textContent = `幕详情 - ${shotGroupData.groupName || '未命名'}`;
       shotGroupModalContent.innerHTML = renderShotGroupTable(shotGroupData, nodeId);
       shotGroupModal.classList.add('show');
       shotGroupModal.setAttribute('aria-hidden', 'false');
@@ -1030,7 +1070,7 @@
       let html = `
         <div style="margin-bottom: 20px;">
           <div style="margin-bottom: 12px;">
-            <label style="display: block; font-weight: 600; margin-bottom: 6px; font-size: 13px;">分镜组ID</label>
+            <label style="display: block; font-weight: 600; margin-bottom: 6px; font-size: 13px;">幕ID</label>
             <input type="text" id="editGroupId" value="${escapeHtml(groupId)}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;" />
           </div>
           <div style="margin-bottom: 12px;">
@@ -1278,27 +1318,65 @@
         ? Math.max(0, Math.min(insertIndex, node.data.shots.length))
         : node.data.shots.length;
 
+      // 选择参考分镜：优先取插入位置的上一个，否则取下一个（使"插到最前"也能继承共性字段）
+      const refShot = node.data.shots[idx - 1] || node.data.shots[idx] || {};
+
+      // 生成简短且唯一的 shot_id：基于插入位置的前一个分镜
+      // 规则：在分镜 N 后插入 → N_1；再在 N_x 后插入 → N_{最大x+1}
+      // 前一个是基础分镜 → base 用其 shot_number；前一个是 N_M 插入分镜 → base = N
+      const prevShotForId = node.data.shots[idx - 1];
+      let base;
+      if(prevShotForId){
+        const prevId = String(prevShotForId.shot_id || '');
+        const insertMatch = prevId.match(/^(\d+)_\d+$/);
+        base = insertMatch ? insertMatch[1] : String(prevShotForId.shot_number || idx);
+      } else {
+        base = '0';  // 插在最前（无前一个分镜），用虚拟前缀 0
+      }
+      const idPrefix = base + '_';
+      let maxSub = 0;
+      node.data.shots.forEach(s => {
+        const sid = String(s.shot_id || '');
+        if(sid.startsWith(idPrefix)){
+          const tail = sid.slice(idPrefix.length);
+          if(/^\d+$/.test(tail)){
+            const x = parseInt(tail, 10);
+            if(x > maxSub) maxSub = x;
+          }
+        }
+      });
+      const newShotId = `${base}_${maxSub + 1}`;
+
       const newShot = {
-        shot_id: `s${Date.now()}`,
+        shot_id: newShotId,
         shot_number: idx + 1,
-        duration: 5.0,
-        location_id: '',
-        shot_type: '中景',
-        camera_movement: '固定',
+        // 共性字段从相邻分镜继承（同一分镜组通常一致），无参考时用默认值
+        duration: refShot.duration || 5.0,
+        location_id: refShot.location_id || '',
+        db_location_id: refShot.db_location_id || '',
+        db_location_pic: refShot.db_location_pic || '',
+        location_name: refShot.location_name || '',
+        time_of_day: refShot.time_of_day || '',
+        weather: refShot.weather || '',
+        mood: refShot.mood || '',
+        environment_sound: refShot.environment_sound || '',
+        background_music: refShot.background_music || '',
+        shot_type: refShot.shot_type || '中景',
+        camera_movement: refShot.camera_movement || '固定',
+        // 以下为每个分镜独有内容，留空由用户填写差异
         description: '',
         opening_frame_description: '',
         scene_detail: '',
+        action: '',
+        audio_notes: '',
         characters_present: [],
         dialogue: null,
-        action: '',
-        mood: '',
-        environment_sound: '',
-        background_music: '',
         props: []
       };
 
       node.data.shots.splice(idx, 0, newShot);
-      renumberShots(node.data.shots);
+      // 不再 renumberShots：它会把整组 shot_number 重排为 1,2,3...，破坏 LLM 生成的全局编号（如 5,6,7），
+      // 导致标题显示错误。新分镜的标题用 shot_id（N_x），LLM 分镜的标题用其原始 shot_number，数组顺序即显示顺序。
       shotGroupEditModalContent.innerHTML = renderShotGroupEditForm(node.data);
       bindShotEditEvents();
     }
@@ -1308,7 +1386,7 @@
       if(!node) return;
 
       node.data.shots.splice(index, 1);
-      renumberShots(node.data.shots);
+      // 不再 renumberShots：保留 LLM 生成的原始 shot_number（见 addNewShot 注释）
       shotGroupEditModalContent.innerHTML = renderShotGroupEditForm(node.data);
       bindShotEditEvents();
     }
@@ -1503,7 +1581,7 @@
 
       node.data.groupId = groupId;
       node.data.group_id = groupId;
-      node.title = groupId || '分镜组';
+      node.title = groupId || '幕';
 
       const shotItems = shotGroupEditModalContent.querySelectorAll('.shot-edit-item');
       shotItems.forEach((item, idx) => {
@@ -1538,8 +1616,21 @@
       });
 
       updateShotGroupNodeDisplay(currentEditingNodeId);
+
+      // 提醒用户点击"生成分镜"按钮，把新增/修改的分镜同步到画布（按钮闪烁 3 次后自动恢复）
+      // 注意：必须在 closeShotGroupEditModal() 之前查询按钮——后者会把 currentEditingNodeId 置空
+      const genBtn = canvasEl.querySelector(`.node[data-node-id="${currentEditingNodeId}"] .shot-group-generate-btn`);
+      if(genBtn){
+        genBtn.classList.remove('flashing');
+        void genBtn.offsetWidth;  // 强制 reflow，重启动画
+        genBtn.classList.add('flashing');
+        genBtn.addEventListener('animationend', () => {
+          genBtn.classList.remove('flashing');
+        }, { once: true });
+      }
+
       closeShotGroupEditModal();
-      safeAutoSave()
+      safeAutoSave();
     }
 
     function updateShotGroupNodeDisplay(nodeId){
@@ -1560,11 +1651,25 @@
         `;
       }).join('');
 
+      // 局部更新：只刷新分镜列表与计数，保留 createShotGroupNode 的原始 DOM 结构（.script-node-body 横向3列布局）、事件与 select 状态。
+      // 不再重写整个 node-body（旧逻辑会丢失 .script-node-body，导致分镜组形状从横向坍塌为纵向）。
+      const shotsListEl = el.querySelector('.shot-group-shots-list');
+      if(shotsListEl){
+        shotsListEl.innerHTML = shotsHtml || '<div class="shot-group-empty">暂无分镜</div>';
+      }
+      const shotCountEl = el.querySelector('.shot-group-shot-count');
+      if(shotCountEl){
+        const countText = window.t ? window.t('shot_group_shot_count', { count: node.data.shots.length }) : `共 ${node.data.shots.length} 个分镜`;
+        shotCountEl.textContent = countText;
+        shotCountEl.setAttribute('data-i18n-params', JSON.stringify({ count: node.data.shots.length }));
+      }
+      return;
+      // 以下旧的全量重建逻辑已由上方局部更新取代（不会执行），保留备查。
       const nodeBody = el.querySelector('.node-body');
       if(nodeBody){
         nodeBody.innerHTML = `
           <div class="field field-always-visible">
-            <div class="label">分镜组: ${escapeHtml(node.data.groupId || node.data.group_id)}</div>
+            <div class="label">幕: ${escapeHtml(node.data.groupId || node.data.group_id)}</div>
             <div class="gen-meta">共 ${node.data.shots.length} 个分镜</div>
           </div>
           <div class="field field-always-visible" style="max-height: 300px; overflow-y: auto;">
@@ -1642,11 +1747,16 @@
 
         // 动态填充分镜模型选项
         const shotGroupModelEl = nodeBody.querySelector('.shot-group-model');
-        let firstModelValue = 'gemini';
+        let firstModelValue = 'gpt-image-2';
         if(shotGroupModelEl) {
           if(window.TaskConfig && window.TaskConfig.isLoaded()) {
             const options = window.TaskConfig.getModelOptionsForCategory('image_edit');
-            if(options.length > 0) firstModelValue = options[0].value;
+            const gptImage2 = options.find(o => o.value === 'gpt-image-2');
+            if(gptImage2) {
+              firstModelValue = gptImage2.value;
+            } else if(options.length > 0) {
+              firstModelValue = options[0].value;
+            }
             options.forEach(opt => {
               const optEl = document.createElement('option');
               optEl.value = opt.value;
@@ -1700,28 +1810,7 @@
         // 宫格生图按钮和模型选择器
         const shotGroupGridModelEl = nodeBody.querySelector('.shot-group-grid-model');
         if(shotGroupGridModelEl) {
-          shotGroupGridModelEl.innerHTML = '<option value="auto">智能模式 (自动选择)</option>';
-          if(window.TaskConfig && window.TaskConfig.isLoaded()) {
-            const options = window.TaskConfig.getModelOptionsForCategory('image_edit');
-            options.forEach(opt => {
-              const optEl = document.createElement('option');
-              optEl.value = opt.value;
-              optEl.textContent = opt.label;
-              shotGroupGridModelEl.appendChild(optEl);
-            });
-          } else {
-            shotGroupGridModelEl.innerHTML += `
-              <option value="gemini-3-pro-4grid">加强版4宫格</option>
-              <option value="gemini-3-pro-image-preview">加强版9宫格</option>
-            `;
-          }
-          // 初始化宫格模型选择（默认智能模式）
-          if(!node.data.gridModel){
-            node.data.gridModel = 'auto';
-          }
-          // 确保已保存的宫格模型值在下拉框中可见
-          ensureSelectHasSavedOption(shotGroupGridModelEl, node.data.gridModel);
-          shotGroupGridModelEl.value = node.data.gridModel;
+          node.data.gridModel = populateGridImageModelSelect(shotGroupGridModelEl, node.data.gridModel);
           // 应用驱动状态禁用未配置的宫格生图模型选项
           applyDriverStatusToSelect(shotGroupGridModelEl);
           shotGroupGridModelEl.addEventListener('change', () => {
@@ -3154,6 +3243,10 @@
       const viewportPos = getViewportNodePosition();
       const x = opts && typeof opts.x === 'number' ? opts.x : viewportPos.x;
       const y = Math.max(MIN_NODE_Y, opts && typeof opts.y === 'number' ? opts.y : viewportPos.y);
+      const tOr = (key, fallback, params) => {
+        const translated = window.t ? window.t(key, params || {}) : '';
+        return translated && translated !== key ? translated : fallback;
+      };
 
       // 从后端配置获取第一个视频模型作为默认值
       let defaultVideoModel = 'wan22';
@@ -3165,7 +3258,7 @@
       const node = {
         id,
         type: 'image_to_video',
-        title: window.t ? window.t('image_to_video') : '生视频',
+        title: tOr('image_to_video', '生视频'),
         x,
         y,
         data: {
@@ -3204,21 +3297,21 @@
       el.style.top = node.y + 'px';
 
       el.innerHTML = `
-        <div class="port output" title="${window.t ? window.t('image_to_video_output_port') : '输出（连接到视频节点）'}"></div>
+        <div class="port output" title="${tOr('image_to_video_output_port', '输出（连接到视频节点）')}" data-i18n="image_to_video_output_port:title"></div>
         <div class="node-header">
-          <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="3" y="6" width="14" height="12" rx="2"/><path d="M17 10L21 8V16L17 14V10Z" fill="currentColor"/></svg>${node.title}</div>
-          <button class="icon-btn" title="${window.t ? window.t('node_delete_btn') : '删除'}">×</button>
+          <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="3" y="6" width="14" height="12" rx="2"/><path d="M17 10L21 8V16L17 14V10Z" fill="currentColor"/></svg><span data-i18n="image_to_video">${node.title}</span></div>
+          <button class="icon-btn" title="${tOr('node_delete_btn', '删除')}" data-i18n="node_delete_btn:title">×</button>
         </div>
         <div class="node-body">
           <div class="video-node-body">
             <!-- 左栏：输入源 -->
             <div class="video-section">
               <div class="field field-collapsible image-mode-field">
-                <div class="label">${window.t ? window.t('image_mode_label') : '图片模式'}</div>
+                <div class="label" data-i18n="image_mode_label">${tOr('image_mode_label', '图片模式')}</div>
                 <select class="image-mode-select">
-                  <option value="first_last_frame">${window.t ? window.t('image_mode_first_last') : '首尾帧模式'}</option>
-                  <option value="multi_reference">${window.t ? window.t('image_mode_multi_ref') : '多参考图模式'}</option>
-                  <option value="text_to_video">${window.t ? window.t('image_mode_text_to_video') : '文生视频'}</option>
+                  <option value="first_last_frame" data-i18n="image_mode_first_last">${tOr('image_mode_first_last', '首尾帧模式')}</option>
+                  <option value="multi_reference" data-i18n="image_mode_multi_ref">${tOr('image_mode_multi_ref', '多参考图模式')}</option>
+                  <option value="text_to_video" data-i18n="image_mode_text_to_video">${tOr('image_mode_text_to_video', '文生视频')}</option>
                 </select>
                 <div class="image-mode-hint" style="font-size: 11px; color: #6b7280; margin-top: 4px;"></div>
               </div>
@@ -3503,11 +3596,10 @@
         startImagePort.style.display = mode === 'first_last_frame' ? '' : 'none';
         endImagePort.style.display = mode === 'first_last_frame' ? '' : 'none';
 
-        // 显示/隐藏参考音频和参考视频字段（仅在多参考图模式下显示）
+        // 显示/隐藏参考音频字段（仅在多参考图模式下显示）
         const audioField = el.querySelector('.audio-field');
-        const videoField = el.querySelector('.video-field');
         if(audioField) audioField.style.display = mode === 'multi_reference' ? '' : 'none';
-        if(videoField) videoField.style.display = mode === 'multi_reference' ? '' : 'none';
+        // 参考视频字段在所有模式下都显示（支持视频节点连线）
 
         // 根据 supports_last_frame 控制尾帧输入框的可用性
         const endFileInput = el.querySelector('.end-file');
@@ -3609,7 +3701,7 @@
             startImagePort.classList.remove('disabled');
             endImagePort.classList.remove('disabled');
           } else {
-            // 从多参考图切换到首位帧：删除参考图、音频、视频的连接线和所有多参考数据
+            // 从多参考图切换到首位帧：删除参考图、音频的连接线和数据（视频连接保留，视频端口在所有模式可用）
             state.imageConnections = state.imageConnections.filter(c => {
               if(c.to === id && c.portType === 'ref-image'){
                 return false;  // 删除
@@ -3618,18 +3710,14 @@
             });
             // 清除音频连接线
             state.audioConnections = state.audioConnections.filter(c => c.to !== id);
-            // 清除视频连接线
-            state.videoConnections = state.videoConnections.filter(c => c.to !== id);
 
-            // 清除多参考图模式的所有数据
+            // 清除多参考图模式的数据（视频数据保留）
             node.data.referenceUrls = [];
             node.data.audioUrls = [];
-            node.data.videoUrls = [];
 
             // 清除预览显示
             referencePreviewList.innerHTML = '';
             audioPreviewList.innerHTML = '';
-            videoPreviewList.innerHTML = '';
 
             // 清除端口禁用状态
             refImageInputPort.classList.remove('disabled');
@@ -4866,7 +4954,7 @@
       return id;
     }
 
-    // ─── 注册 image_to_video 输入端口（供连接系统自动发现）───
+    // ── 注册 image_to_video 输入端口（供连接系统自动发现）───
     if (typeof registerInputPorts === 'function') {
       registerInputPorts('image_to_video', [
         // 首帧端口（接受图片节点连接）
@@ -4899,7 +4987,19 @@
           }
         },
         // 音频端口（接受音频节点连接）
-        PORT_PRESETS.AUDIO_INPUT()
+        PORT_PRESETS.AUDIO_INPUT(),
+        // 视频端口（接受视频节点连接，允许多连接）
+        {
+          selector: '.video-ref-input-port',
+          portType: 'video-ref',
+          accepts: ['video'],
+          connectionType: 'videoConnections',
+          allowMultiple: true,
+          guard: function(n) {
+            // 限制最多 3 个参考视频
+            return (n.data.videoUrls || []).length < 3;
+          }
+        }
       ]);
     }
 
@@ -4917,11 +5017,16 @@
       }
       const defaultRatio = state.ratio || ratioSelectEl.value || '9:16';
       
-      // 从后端配置获取第一个图片模型作为默认值
-      let defaultImageModel = 'gemini';
+      // 默认图片模型：优先使用 gpt-image-2
+      let defaultImageModel = 'gpt-image-2';
       if(window.TaskConfig && window.TaskConfig.isLoaded()) {
         const options = window.TaskConfig.getModelOptionsForCategory('image_edit');
-        if(options.length > 0) defaultImageModel = options[0].value;
+        const gptImage2 = options.find(o => o.value === 'gpt-image-2');
+        if(gptImage2) {
+          defaultImageModel = gptImage2.value;
+        } else if(options.length > 0) {
+          defaultImageModel = options[0].value;
+        }
       }
       
       const node = {
@@ -5236,13 +5341,18 @@
       const cameraControlBtn = el.querySelector('.image-camera-control-btn');
 
       // 动态填充图片模型选项（从 TaskConfig 获取）
-      let firstImageModelValue = 'gemini';
+      let firstImageModelValue = 'gpt-image-2';
       function populateImageModelOptions() {
         if(!modelEl) return;
         modelEl.innerHTML = '';
         if(window.TaskConfig && window.TaskConfig.isLoaded()) {
           const options = window.TaskConfig.getModelOptionsForCategory('image_edit');
-          if(options.length > 0) firstImageModelValue = options[0].value;
+          const gptImage2 = options.find(o => o.value === 'gpt-image-2');
+          if(gptImage2) {
+            firstImageModelValue = gptImage2.value;
+          } else if(options.length > 0) {
+            firstImageModelValue = options[0].value;
+          }
           options.forEach(opt => {
             const optEl = document.createElement('option');
             optEl.value = opt.value;
@@ -5824,7 +5934,7 @@
       el.style.top = node.y + 'px';
 
       el.innerHTML = `
-        <div class="port output" title="${window.t ? window.t('script_output_port') : '输出（拆分为分镜组）'}"></div>
+        <div class="port output" title="${window.t ? window.t('script_output_port') : '输出（拆分为幕）'}"></div>
         <div class="node-header">
           <div class="node-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><path d="M9 5H7C5.89543 5 5 5.89543 5 7V19C5 20.1046 5.89543 21 7 21H17C18.1046 21 19 20.1046 19 19V7C19 5.89543 18.1046 5 17 5H15"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>剧本 ${scriptId}</div>
           <button class="icon-btn" title="${window.t ? window.t('node_delete_btn') : '删除'}">×</button>
@@ -5897,8 +6007,8 @@
               <select class="script-video-model" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;"></select>
             </div>
             <div class="field field-always-visible">
-              <div class="label" data-i18n="script_output_language_label">${window.t ? window.t('script_output_language_label') : '输出语言'}</div>
-              <select class="script-language" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;">
+              <div class="label" data-i18n="script_dialogue_language_label">${window.t ? window.t('script_dialogue_language_label') : '对话语言'}</div>
+              <select class="script-dialogue-language" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;">
                 <option value="" data-i18n="script_language_default">${window.t ? window.t('script_language_default') : '中文（默认）'}</option>
                 <option value="English">English</option>
                 <option value="Deutsch">Deutsch</option>
@@ -5906,7 +6016,19 @@
                 <option value="Русский">Русский</option>
                 <option value="__custom__" data-i18n="script_language_custom">${window.t ? window.t('script_language_custom') : '自定义语言...'}</option>
               </select>
-              <input type="text" class="script-language-custom" placeholder="${window.t ? window.t('script_language_custom') : '或输入自定义语言...'}" style="display: none; width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white; margin-top: 4px;" />
+              <input type="text" class="script-dialogue-language-custom" placeholder="${window.t ? window.t('script_language_custom') : '或输入自定义语言...'}" style="display: none; width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white; margin-top: 4px;" />
+            </div>
+            <div class="field field-always-visible">
+              <div class="label" data-i18n="script_prompt_language_label">${window.t ? window.t('script_prompt_language_label') : '提示词语言'}</div>
+              <select class="script-prompt-language" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white;">
+                <option value="" data-i18n="script_language_default">${window.t ? window.t('script_language_default') : '中文（默认）'}</option>
+                <option value="English">English</option>
+                <option value="Deutsch">Deutsch</option>
+                <option value="Français">Français</option>
+                <option value="Русский">Русский</option>
+                <option value="__custom__" data-i18n="script_language_custom">${window.t ? window.t('script_language_custom') : '自定义语言...'}</option>
+              </select>
+              <input type="text" class="script-prompt-language-custom" placeholder="${window.t ? window.t('script_language_custom') : '或输入自定义语言...'}" style="display: none; width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; background: white; margin-top: 4px;" />
             </div>
             <div class="script-checkbox-group">
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
@@ -5936,14 +6058,14 @@
             </div>
             <div class="field field-always-visible">
               <div style="display: flex; gap: 6px;">
-                <button class="gen-btn gen-btn-white script-split-btn" type="button" style="border-radius: 8px; flex: 1; padding: 18px 0;" disabled data-i18n="script_split_btn">${window.t ? window.t('script_split_btn') : '拆分镜组'}</button>
+                <button class="gen-btn gen-btn-white script-split-btn" type="button" style="border-radius: 8px; flex: 1; padding: 18px 0;" disabled data-i18n="script_split_btn">${window.t ? window.t('script_split_btn') : '拆分幕'}</button>
                 <button class="gen-btn gen-btn-white script-grid-only-btn" type="button" style="border-radius: 8px; flex: 1; padding: 18px 0;" data-i18n="script_grid_only_btn">${window.t ? window.t('script_grid_only_btn') : '宫格生图'}</button>
               </div>
               <div class="gen-meta script-status" style="display:none; margin-top: 6px;"></div>
               <div class="gen-meta script-grid-only-status" style="display:none; margin-top: 6px;"></div>
             </div>
             <div class="field field-always-visible">
-              <button class="gen-btn gen-btn-green script-split-grid-btn" type="button" style="border-radius: 8px; width: 100%; padding: 18px 0;" data-i18n="script_split_grid_btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>${window.t ? window.t('script_split_grid_btn') : '拆分分镜组 + 宫格生图'}</button>
+              <button class="gen-btn gen-btn-green script-split-grid-btn" type="button" style="border-radius: 8px; width: 100%; padding: 18px 0;" data-i18n="script_split_grid_btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>${window.t ? window.t('script_split_grid_btn') : '拆分幕 + 宫格生图'}</button>
               <div class="gen-meta script-grid-status" style="display:none; margin-top: 6px;"></div>
             </div>
             <div class="field field-always-visible">
@@ -5967,8 +6089,10 @@
       const noBgMusicEl = el.querySelector('.script-no-bg-music');
       const splitMultiDialogueEl = el.querySelector('.script-split-multi-dialogue');
       const narrationAsDialogueEl = el.querySelector('.script-narration-as-dialogue');
-      const languageSelectEl = el.querySelector('.script-language');
-      const languageCustomEl = el.querySelector('.script-language-custom');
+      const dialogueLanguageSelectEl = el.querySelector('.script-dialogue-language');
+      const dialogueLanguageCustomEl = el.querySelector('.script-dialogue-language-custom');
+      const promptLanguageSelectEl = el.querySelector('.script-prompt-language');
+      const promptLanguageCustomEl = el.querySelector('.script-prompt-language-custom');
       const infoField = el.querySelector('.script-info-field');
       const nameEl = el.querySelector('.script-name');
       const lengthEl = el.querySelector('.script-length');
@@ -6316,29 +6440,13 @@
 
         function renderOptions() {
           if(!gridModelSelect) return;
-          gridModelSelect.innerHTML = '<option value="auto" selected>智能模式 (根据分镜数自动选择)</option>';
-          if(window.TaskConfig && window.TaskConfig.isLoaded()) {
-            const options = window.TaskConfig.getModelOptionsForCategory('image_edit');
-            options.forEach(opt => {
-              // 过滤掉不支持宫格生图的模型
-              if (!opt.supportsGridImage) return;
-              const optEl = document.createElement('option');
-              optEl.value = opt.value;
-              optEl.textContent = opt.label;
-              gridModelSelect.appendChild(optEl);
-            });
-          } else {
-            gridModelSelect.innerHTML += `
-              <option value="gemini_pro">加强版 (9宫格)</option>
-              <option value="seedream-5.0">Seedream 5.0</option>
-            `;
-          }
+          node.data.gridModel = populateGridImageModelSelect(gridModelSelect, node.data.gridModel);
         }
 
         if(window.TaskConfig && window.TaskConfig.isLoaded()) {
           renderOptions();
         } else if(window.TaskConfig) {
-          gridModelSelect.innerHTML = '<option value="auto" selected>智能模式 (根据分镜数自动选择)</option>';
+          node.data.gridModel = populateGridImageModelSelect(gridModelSelect, node.data.gridModel);
           window.TaskConfig.onLoaded(() => {
             renderOptions();
           });
@@ -6356,13 +6464,15 @@
       if(node.data.noBgMusic === undefined) node.data.noBgMusic = true;
       if(node.data.splitMultiDialogue === undefined) node.data.splitMultiDialogue = false;
       if(node.data.narrationAsDialogue === undefined) node.data.narrationAsDialogue = false;
-      if(!node.data.language) node.data.language = '';
+      if(!node.data.dialogueLanguage) node.data.dialogueLanguage = node.data.language || '';
+      if(!node.data.promptLanguage) node.data.promptLanguage = node.data.language || '';
       if(!node.data.gridModel) node.data.gridModel = 'auto';
       if(!node.data.splitModelVendorId) node.data.splitModelVendorId = '';
       if(!node.data.splitModelVendorName) node.data.splitModelVendorName = '';
 
       // 确保已保存的宫格模型值在下拉框中可见，并恢复选中状态
       if(gridModelSelect) {
+        node.data.gridModel = normalizeGridImageModelValue(node.data.gridModel);
         ensureSelectHasSavedOption(gridModelSelect, node.data.gridModel);
         gridModelSelect.value = node.data.gridModel;
       }
@@ -6451,59 +6561,62 @@
         node.data.narrationAsDialogue = narrationAsDialogueEl.checked;
       });
 
-      // 语言选择监听
-      if(languageSelectEl) {
-        languageSelectEl.addEventListener('change', () => {
-          if(languageSelectEl.value === '__custom__') {
-            languageCustomEl.style.display = 'block';
-            languageCustomEl.focus();
-            node.data.language = languageCustomEl.value;
+      // 语言选择监听 - 对话语言
+      function bindLanguageSelect(selectEl, customEl, dataKey) {
+        if(!selectEl) return;
+        selectEl.addEventListener('change', () => {
+          if(selectEl.value === '__custom__') {
+            customEl.style.display = 'block';
+            customEl.focus();
+            node.data[dataKey] = customEl.value;
           } else {
-            languageCustomEl.style.display = 'none';
-            node.data.language = languageSelectEl.value;
+            customEl.style.display = 'none';
+            node.data[dataKey] = selectEl.value;
           }
         });
-        languageCustomEl.addEventListener('input', () => {
-          node.data.language = languageCustomEl.value;
+        customEl.addEventListener('input', () => {
+          node.data[dataKey] = customEl.value;
         });
         // 恢复之前的选择
-        if(node.data.language) {
+        if(node.data[dataKey]) {
           const presetValues = ['', 'English', 'Deutsch', 'Français', 'Русский'];
-          if(presetValues.includes(node.data.language)) {
-            languageSelectEl.value = node.data.language;
-            languageCustomEl.style.display = 'none';
+          if(presetValues.includes(node.data[dataKey])) {
+            selectEl.value = node.data[dataKey];
+            customEl.style.display = 'none';
           } else {
-            languageSelectEl.value = '__custom__';
-            languageCustomEl.style.display = 'block';
-            languageCustomEl.value = node.data.language;
+            selectEl.value = '__custom__';
+            customEl.style.display = 'block';
+            customEl.value = node.data[dataKey];
           }
         }
+      }
+      bindLanguageSelect(dialogueLanguageSelectEl, dialogueLanguageCustomEl, 'dialogueLanguage');
+      bindLanguageSelect(promptLanguageSelectEl, promptLanguageCustomEl, 'promptLanguage');
 
-        // 监听右上角语言切换，联动更新剧本输出语言
-        if(window.ZJTi18n) {
-          window.ZJTi18n.on('locale-changed', ({ locale }) => {
-            // 根据界面语言自动设置剧本输出语言
-            const localeToLanguage = {
-              'en': 'English',
-              'zh-CN': ''
-            };
-            const newLanguage = localeToLanguage[locale];
-            if(newLanguage !== undefined) {
-              // 更新节点数据
-              node.data.language = newLanguage;
-              // 更新下拉框显示
-              const presetValues = ['', 'English', 'Deutsch', 'Français', 'Русский'];
-              if(presetValues.includes(newLanguage)) {
-                languageSelectEl.value = newLanguage;
-                languageCustomEl.style.display = 'none';
-              } else {
-                languageSelectEl.value = '__custom__';
-                languageCustomEl.style.display = 'block';
-                languageCustomEl.value = newLanguage;
-              }
+      // 监听右上角语言切换，联动更新剧本提示词语言
+      if(window.ZJTi18n && promptLanguageSelectEl) {
+        window.ZJTi18n.on('locale-changed', ({ locale }) => {
+          // 根据界面语言自动设置提示词语言
+          const localeToLanguage = {
+            'en': 'English',
+            'zh-CN': ''
+          };
+          const newLanguage = localeToLanguage[locale];
+          if(newLanguage !== undefined) {
+            // 更新节点数据
+            node.data.promptLanguage = newLanguage;
+            // 更新下拉框显示
+            const presetValues = ['', 'English', 'Deutsch', 'Français', 'Русский'];
+            if(presetValues.includes(newLanguage)) {
+              promptLanguageSelectEl.value = newLanguage;
+              promptLanguageCustomEl.style.display = 'none';
+            } else {
+              promptLanguageSelectEl.value = '__custom__';
+              promptLanguageCustomEl.style.display = 'block';
+              promptLanguageCustomEl.value = newLanguage;
             }
-          });
-        }
+          }
+        });
       }
 
       // 宫格模型选择监听
@@ -6591,7 +6704,7 @@
           });
 
           if(hasShotGroupNode) {
-            showToast(window.t ? window.t('duplicate_shot_group_warning') : '已有分镜组，请勿重复点击', 'warning');
+            showToast(window.t ? window.t('duplicate_shot_group_warning') : '已有幕，请勿重复点击', 'warning');
             return;
           }
         }
@@ -6623,7 +6736,8 @@
               no_bg_music: node.data.noBgMusic || false,
               split_multi_dialogue: node.data.splitMultiDialogue || false,
               narration_as_dialogue: node.data.narrationAsDialogue || false,
-              language: node.data.language || '',
+              dialogue_language: node.data.dialogueLanguage || '',
+              prompt_language: node.data.promptLanguage || '',
               model: node.data.splitModel || 'gemini-3-flash-preview',
               model_id: node.data.splitModelId || '',
               vendor_id: node.data.splitModelVendorId || ''
@@ -6635,7 +6749,7 @@
           if(result.code === 0 && result.data) {
             node.data.parsedData = result.data;
             
-            setStatusEl(statusEl, `解析成功！共${result.data.shot_groups?.length || 0}个分镜组`, '#16a34a');
+            setStatusEl(statusEl, `解析成功！共${result.data.shot_groups?.length || 0}个幕`, '#16a34a');
             if(window.TaskConfig && !window.TaskConfig.isLoaded()) {
               await window.TaskConfig.load();
             }
@@ -6700,7 +6814,7 @@
                   await generateShotFramesIndependentAsync(shotGroupNodeId, shotGroupNode);
                 }
               }
-              setStatusEl(statusEl, `已完成：${createdShotGroupNodes.length}个分镜组，所有分镜已自动生成`, '#16a34a');
+              setStatusEl(statusEl, `已完成：${createdShotGroupNodes.length}个幕，所有分镜已自动生成`, '#16a34a');
             }
             
             showToast(window.t ? window.t('script_split_complete') : '剧本拆分成功！所有分镜已自动生成', 'success');
@@ -6764,7 +6878,7 @@
           console.log(`[宫格生图] 其中 ${shotGroupsWithFrames.length} 个分镜组有分镜节点`);
           
           if(shotGroupsWithFrames.length > 0) {
-            showToast('已有分镜组和分镜节点，请勿重复点击', 'warning');
+            showToast('已有幕和分镜节点，请勿重复点击', 'warning');
             splitGridBtn.disabled = false;
             splitBtn.disabled = false;
             return;
@@ -6812,7 +6926,7 @@
                 return;
               }
 
-              const gridModel = node.data.gridModel || 'auto';
+              const gridModel = normalizeGridImageModelValue(node.data.gridModel);
               const gridLayoutPref = node.data.gridLayout || 'auto';
 
               // 如果参考图片超过5张，必须使用增强版模型（支持13张参考图）
@@ -7102,7 +7216,8 @@
               no_bg_music: node.data.noBgMusic || false,
               split_multi_dialogue: node.data.splitMultiDialogue || false,
               narration_as_dialogue: node.data.narrationAsDialogue || false,
-              language: node.data.language || '',
+              dialogue_language: node.data.dialogueLanguage || '',
+              prompt_language: node.data.promptLanguage || '',
               model: node.data.splitModel || 'gemini-3-flash-preview',
               model_id: node.data.splitModelId || '',
               vendor_id: node.data.splitModelVendorId || ''
@@ -7117,11 +7232,11 @@
 
           node.data.parsedData = result.data;
           gridStatusEl.style.color = '#16a34a';
-          gridStatusEl.textContent = `解析成功！共${result.data.shot_groups?.length || 0}个分镜组`;
+          gridStatusEl.textContent = `解析成功！共${result.data.shot_groups?.length || 0}个幕`;
 
           // 第二步：创建分镜组节点和分镜节点
           if(!result.data.shot_groups || result.data.shot_groups.length === 0) {
-            throw new Error('未生成分镜组');
+            throw new Error('未生成幕');
           }
 
           // 预先创建所有柱子
@@ -7209,7 +7324,7 @@
             return;
           }
 
-          const gridModel = node.data.gridModel || 'auto';
+          const gridModel = normalizeGridImageModelValue(node.data.gridModel);
           const gridLayoutPref = node.data.gridLayout || 'auto';
 
           // 如果参考图片超过5张，必须使用增强版模型（支持13张参考图）
@@ -7490,8 +7605,8 @@
           
           if(shotGroupNodes.length === 0) {
             batchStatusEl.style.color = '#dc2626';
-            batchStatusEl.textContent = '未找到分镜组节点，请先拆分镜组';
-            showToast('未找到分镜组节点，请先拆分镜组', 'error');
+            batchStatusEl.textContent = '未找到幕节点，请先拆分幕';
+            showToast('未找到幕节点，请先拆分幕', 'error');
             return;
           }
           
@@ -7536,14 +7651,14 @@
           
           if(shotGroupsWithFrames.length === 0) {
             batchStatusEl.style.color = '#dc2626';
-            batchStatusEl.textContent = '分镜组下未找到有预览图的分镜节点';
-            showToast('分镜组下未找到有预览图的分镜节点，请先生成分镜图', 'error');
+            batchStatusEl.textContent = '幕下未找到有预览图的分镜节点';
+            showToast('幕下未找到有预览图的分镜节点，请先生成分镜图', 'error');
             return;
           }
           
           // 显示确认弹窗
           const confirmMsg = `即将为整个剧本的所有分镜生成视频\n` +
-            `分镜组数量：${shotGroupsWithFrames.length}个\n` +
+            `幕数量：${shotGroupsWithFrames.length}个\n` +
             `分镜数量：${totalShotFrames}个\n` +
             `预计消耗算力：${totalPower}\n\n` +
             `确认开始生成吗？`;
@@ -7569,8 +7684,8 @@
           for(let i = 0; i < shotGroupsWithFrames.length; i++) {
             const { shotGroupNode, shotFrameNodes } = shotGroupsWithFrames[i];
             
-            batchStatusEl.textContent = `正在生成 ${i + 1}/${shotGroupsWithFrames.length} 分镜组的视频...`;
-            showToast(`正在生成 ${i + 1}/${shotGroupsWithFrames.length} 分镜组的视频...`, 'info');
+            batchStatusEl.textContent = `正在生成 ${i + 1}/${shotGroupsWithFrames.length} 个幕的视频...`;
+            showToast(`正在生成 ${i + 1}/${shotGroupsWithFrames.length} 个幕的视频...`, 'info');
             
             try {
               // 将剧本节点的视频模型同步到分镜组节点（修复剧本节点视频模型选择不生效的bug）
@@ -7581,14 +7696,14 @@
               await generateAllShotFrameVideos(shotGroupNode.id, shotGroupNode);
               successCount++;
             } catch(error) {
-              console.error(`生成分镜组视频失败:`, error);
+              console.error(`生成幕视频失败:`, error);
               failCount++;
             }
           }
           
           setBtnReady(batchGenerateBtn, '逐个生成视频');
           
-          const resultMsg = `批量生成完成！成功 ${successCount} 个分镜组，失败 ${failCount} 个`;
+          const resultMsg = `批量生成完成！成功 ${successCount} 个幕，失败 ${failCount} 个`;
           batchStatusEl.style.color = successCount > 0 ? '#22c55e' : '#dc2626';
           batchStatusEl.textContent = resultMsg;
           showToast(resultMsg, successCount > 0 ? 'success' : 'warning');
@@ -7621,8 +7736,8 @@
           
           if(shotGroupNodes.length === 0) {
             gridOnlyStatusEl.style.color = '#dc2626';
-            gridOnlyStatusEl.textContent = '未找到分镜组节点，请先拆分镜组';
-            showToast('未找到分镜组节点，请先拆分镜组', 'error');
+            gridOnlyStatusEl.textContent = '未找到幕节点，请先拆分幕';
+            showToast('未找到幕节点，请先拆分幕', 'error');
             return;
           }
           
@@ -7638,8 +7753,8 @@
           
           if(allShotFrameNodes.length === 0) {
             gridOnlyStatusEl.style.color = '#dc2626';
-            gridOnlyStatusEl.textContent = '分镜组下未找到分镜节点，请先拆分分镜组';
-            showToast('分镜组下未找到分镜节点', 'error');
+            gridOnlyStatusEl.textContent = '幕下未找到分镜节点，请先拆分幕';
+            showToast('幕下未找到分镜节点', 'error');
             return;
           }
           
@@ -7658,7 +7773,7 @@
           console.log(`[宫格生图-仅生图] 收集到 ${referenceImageUrls.length} 张参考图片URL`);
           
           // 决定宫格大小和模型
-          const gridModel = node.data.gridModel || 'auto';
+          const gridModel = normalizeGridImageModelValue(node.data.gridModel);
           const gridLayoutPref = node.data.gridLayout || 'auto';
           const forceEnhancedModel = referenceImageUrls.length > 5;
 
@@ -7985,17 +8100,22 @@
       const shotGroupData = opts && opts.shotGroupData ? opts.shotGroupData : {};
       const scriptData = opts && opts.scriptData ? opts.scriptData : {};
       
-      // 从后端配置获取默认模型
-      let defaultImageModel = 'gemini';
+      // 默认模型：图片优先使用 gpt-image-2
+      let defaultImageModel = 'gpt-image-2';
       let defaultVideoModel = 'wan22';
       if(window.TaskConfig && window.TaskConfig.isLoaded()) {
         const imageOptions = window.TaskConfig.getModelOptionsForCategory('image_edit');
-        if(imageOptions.length > 0) defaultImageModel = imageOptions[0].value;
+        const gptImage2 = imageOptions.find(o => o.value === 'gpt-image-2');
+        if(gptImage2) {
+          defaultImageModel = gptImage2.value;
+        } else if(imageOptions.length > 0) {
+          defaultImageModel = imageOptions[0].value;
+        }
         const videoOptions = window.TaskConfig.getModelOptionsForCategory('image_to_video');
         if(videoOptions.length > 0) defaultVideoModel = videoOptions[0].value;
       }
       
-      const groupName = shotGroupData.groupName || shotGroupData.group_name || shotGroupData.group_id || '分镜组';
+      const groupName = shotGroupData.groupName || shotGroupData.group_name || shotGroupData.group_id || '幕';
       const resolvedVideoModel = getVideoModelFromData(shotGroupData) || defaultVideoModel;
       const node = {
         id,
@@ -8010,6 +8130,7 @@
           shots: shotGroupData.shots || [],
           scriptData: scriptData,
           model: shotGroupData.model || defaultImageModel,
+          gridModel: normalizeGridImageModelValue(shotGroupData.gridModel || shotGroupData.grid_model),
           videoModel: resolvedVideoModel,
           videoDuration: pickFirstDefinedValue(shotGroupData.videoDuration, shotGroupData.video_duration) || 5,
           videoDrawCount: pickFirstDefinedValue(shotGroupData.videoDrawCount, shotGroupData.video_draw_count) || 1,
@@ -8042,7 +8163,7 @@
         <div class="port input" data-i18n="shot_group_input_port:title"></div>
         <div class="port output" data-i18n="shot_group_output_port:title"></div>
         <div class="node-header">
-          <div class="node-title" data-i18n="shot_group_title" data-i18n-params='${JSON.stringify({ title: escapeHtml(node.title) })}'><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M6 9H18M6 12H14M6 15H12" stroke="currentColor" stroke-linecap="round"/></svg>${window.t ? window.t('shot_group_title', { title: escapeHtml(node.title) }) : `分镜组: ${escapeHtml(node.title)}`}</div>
+          <div class="node-title" data-i18n="shot_group_title" data-i18n-params='${JSON.stringify({ title: escapeHtml(node.title) })}'><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M6 9H18M6 12H14M6 15H12" stroke="currentColor" stroke-linecap="round"/></svg>${window.t ? window.t('shot_group_title', { title: escapeHtml(node.title) }) : `幕: ${escapeHtml(node.title)}`}</div>
           <button class="icon-btn" data-i18n="node_delete_btn:title" title="${window.t ? window.t('node_delete_btn') : '删除'}">×</button>
         </div>
         <div class="node-body">
@@ -8054,11 +8175,15 @@
                 <div class="script-section-title" data-i18n="shot_group_details_section">${window.t ? window.t('shot_group_details_section') : '分镜详情'}</div>
               </div>
               <div class="field field-always-visible">
-                <div class="label" data-i18n="shot_group_label">${window.t ? window.t('shot_group_label') : '分镜组:'} ${escapeHtml(node.data.groupId || node.data.group_id)}</div>
-                <div class="gen-meta" data-i18n="shot_group_shot_count" data-i18n-params='${JSON.stringify({ count: node.data.shots.length })}'>${window.t ? window.t('shot_group_shot_count', { count: node.data.shots.length }) : `共 ${node.data.shots.length} 个分镜`}</div>
+                <div class="label" data-i18n="shot_group_label">${window.t ? window.t('shot_group_label') : '幕:'} ${escapeHtml(node.data.groupId || node.data.group_id)}</div>
+                <div class="gen-meta shot-group-shot-count" data-i18n="shot_group_shot_count" data-i18n-params='${JSON.stringify({ count: node.data.shots.length })}'>${window.t ? window.t('shot_group_shot_count', { count: node.data.shots.length }) : `共 ${node.data.shots.length} 个分镜`}</div>
               </div>
-              <div class="field field-always-visible" style="flex: 1; max-height: 300px; overflow-y: auto;">
+              <div class="field field-always-visible shot-group-shots-list" style="flex: 1; max-height: 300px; overflow-y: auto;">
                 ${shotsHtml}
+              </div>
+              <div class="field field-always-visible">
+                <div class="label" data-i18n="shot_group_model_label">${window.t ? window.t('shot_group_model_label') : '分镜模型'}</div>
+                <select class="shot-group-model"></select>
               </div>
               <div class="field field-always-visible btn-row" style="margin-top: 12px;">
                 <button class="mini-btn secondary shot-group-detail-btn" type="button" style="flex: 1; padding: 9px 12px;" data-i18n="shot_group_detail_btn">${window.t ? window.t('shot_group_detail_btn') : '查看/编辑'}</button>
@@ -8219,6 +8344,43 @@
         openShotGroupModal(node.data, id);
       });
 
+      // 分镜模型选择（第1列）—— 初始化选项 + 写回 node.data.model
+      const shotGroupModelEl = el.querySelector('.shot-group-model');
+      if(shotGroupModelEl){
+        let firstModelValue = 'gpt-image-2';
+        if(window.TaskConfig && window.TaskConfig.isLoaded()){
+          const modelOptions = window.TaskConfig.getModelOptionsForCategory('image_edit');
+          const gptImage2 = modelOptions.find(o => o.value === 'gpt-image-2');
+          if(gptImage2) {
+            firstModelValue = gptImage2.value;
+          } else if(modelOptions.length > 0) {
+            firstModelValue = modelOptions[0].value;
+          }
+          modelOptions.forEach(opt => {
+            const optEl = document.createElement('option');
+            optEl.value = opt.value;
+            optEl.textContent = opt.label;
+            if(opt.value === node.data.model) optEl.selected = true;
+            shotGroupModelEl.appendChild(optEl);
+          });
+        } else {
+          shotGroupModelEl.innerHTML = `
+            <option value="gemini" ${node.data.model === 'gemini' ? 'selected' : ''}>标准版</option>
+            <option value="gemini_pro" ${node.data.model === 'gemini_pro' ? 'selected' : ''}>加强版</option>
+            <option value="seedream-5.0" ${node.data.model === 'seedream-5.0' ? 'selected' : ''}>Seedream 5.0</option>
+          `;
+        }
+        if(!node.data.model){
+          node.data.model = firstModelValue;
+          shotGroupModelEl.value = firstModelValue;
+        }
+        ensureSelectHasSavedOption(shotGroupModelEl, node.data.model);
+        applyDriverStatusToSelect(shotGroupModelEl);
+        shotGroupModelEl.addEventListener('change', () => {
+          node.data.model = shotGroupModelEl.value;
+        });
+      }
+
       // 宫格生图按钮和模型选择器
       const gridBtn = el.querySelector('.shot-group-grid-btn');
       const gridModelSelect = el.querySelector('.shot-group-grid-model');
@@ -8226,31 +8388,16 @@
       
       // 动态填充宫格生图模型选项
       if(gridModelSelect) {
-        gridModelSelect.innerHTML = '<option value="auto">智能模式 (自动选择)</option>';
-        if(window.TaskConfig && window.TaskConfig.isLoaded()) {
-          const options = window.TaskConfig.getModelOptionsForCategory('image_edit');
-          options.forEach(opt => {
-            // 过滤掉不支持宫格生图的模型
-            if (!opt.supportsGridImage) return;
-            const optEl = document.createElement('option');
-            optEl.value = opt.value;
-            optEl.textContent = opt.label;
-            gridModelSelect.appendChild(optEl);
-          });
-        } else {
-          gridModelSelect.innerHTML += `
-            <option value="gemini_pro">加强版 (9宫格)</option>
-            <option value="seedream-5.0">Seedream 5.0</option>
-          `;
-        }
+        node.data.gridModel = populateGridImageModelSelect(gridModelSelect, node.data.gridModel);
       }
 
-      // 初始化宫格模型选择（默认智能模式）
-      if(!node.data.gridModel){
-        node.data.gridModel = 'auto';
+      // 初始化宫格模型选择，兼容旧工作流中保存的 auto 智能模式
+      if(!node.data.gridModel || node.data.gridModel === 'auto'){
+        node.data.gridModel = DEFAULT_GRID_IMAGE_MODEL;
       }
       if(gridModelSelect){
         // 确保已保存的宫格模型值在下拉框中可见
+        node.data.gridModel = normalizeGridImageModelValue(node.data.gridModel);
         ensureSelectHasSavedOption(gridModelSelect, node.data.gridModel);
         gridModelSelect.value = node.data.gridModel;
         // 应用驱动状态禁用未配置的宫格生图模型选项
@@ -8640,7 +8787,7 @@
           return;
         }
         
-        const gridModel = shotGroupNode.data.gridModel || 'auto';
+        const gridModel = normalizeGridImageModelValue(shotGroupNode.data.gridModel);
         const gridLayoutPref = shotGroupNode.data.gridLayout || 'auto';
 
         // 如果参考图片超过5张，必须使用增强版模型（支持13张参考图）
@@ -8846,258 +8993,212 @@
       }
     }
 
-    // 生成分镜图节点 - 独立分镜模式
-    function generateShotFramesIndependent(shotGroupNodeId, shotGroupNode){
-      const shots = shotGroupNode.data.shots || [];
-      if(shots.length === 0){
-        showToast('分镜组中没有分镜数据', 'warning');
-        return;
+    // 就地更新已有 shot_frame 节点的基础信息（保守同步：保留生成结果与用户编辑的提示词）
+    function updateShotFrameNodeBasic(shotFrameNode, shot){
+      shotFrameNode.data.description = shot.description || '';
+      shotFrameNode.data.duration = shot.duration || 0;
+      shotFrameNode.data.shotType = shot.shot_type || '';
+      shotFrameNode.data.cameraMovement = shot.camera_movement || '';
+      // 更新 shotJson 快照，保留原有附加字段（allLocationInfo/scriptData 等）
+      shotFrameNode.data.shotJson = {
+        ...(shotFrameNode.data.shotJson || {}),
+        ...shot
+      };
+      // 保留：imageUrl/generatedImage/previewImageUrl/videoMode/model/drawCount/videoDrawCount/videoDuration/videoModel/imagePrompt/videoPrompt/videoPromptText
+
+      // 就地更新 DOM 显示（只改 textContent，不重建 DOM，避免破坏事件绑定与生成结果展示）
+      const el = canvasEl.querySelector(`.node[data-node-id="${shotFrameNode.id}"]`);
+      if(!el) return;
+      const descEl = el.querySelector('.shot-frame-desc-display');
+      if(descEl) descEl.textContent = shotFrameNode.data.description;
+      const metaEl = el.querySelector('.shot-frame-meta');
+      if(metaEl){
+        const durLabel = window.t ? window.t('shot_frame_duration_label') : '时长:';
+        const secLabel = window.t ? window.t('shot_frame_seconds') : '秒';
+        metaEl.textContent = `${durLabel} ${shotFrameNode.data.duration}${secLabel} | ${shotFrameNode.data.shotType} | ${shotFrameNode.data.cameraMovement}`;
       }
 
-      // 获取已存在的分镜节点（通过连接关系查找）
-      const existingConnections = state.connections.filter(c => c.from === shotGroupNodeId);
-      const existingShotIds = new Set();
-      let maxExistingY = shotGroupNode.y;
-      
-      existingConnections.forEach(conn => {
-        const targetNode = state.nodes.find(n => n.id === conn.to);
-        if(targetNode && targetNode.type === 'shot_frame'){
-          // 收集已存在的 shotId
-          const shotId = targetNode.data.shotId || (targetNode.data.shotJson && targetNode.data.shotJson.shot_id);
-          if(shotId){
-            existingShotIds.add(shotId);
+      // 同步更新节点标题（shot_number 重排后避免与新节点标题重名）；保留 svg 图标，只更新文本
+      // 标题：手动添加（N_x 格式）用 shot_id；LLM 生成的用 shot_number
+      const _updSid = String(shot.shot_id || '');
+      const newTitle = /^\d+_\d+$/.test(_updSid) ? _updSid : (shot.shot_number ? String(shot.shot_number) : (shotFrameNode.title || '分镜图'));
+      if(newTitle !== shotFrameNode.title){
+        shotFrameNode.title = newTitle;
+        const titleEl = el.querySelector('.node-title');
+        if(titleEl){
+          const titleText = window.t ? window.t('shot_frame_title', { title: newTitle }) : `分镜: ${newTitle}`;
+          titleEl.setAttribute('data-i18n-params', JSON.stringify({ title: newTitle }));
+          const svg = titleEl.querySelector('svg');
+          if(svg){
+            let nxt = svg.nextSibling;
+            while(nxt){ const n = nxt.nextSibling; nxt.remove(); nxt = n; }
+            titleEl.appendChild(document.createTextNode(titleText));
+          } else {
+            titleEl.textContent = titleText;
           }
-          // 记录最大的 Y 坐标
-          if(targetNode.y > maxExistingY){
-            maxExistingY = targetNode.y;
-          }
         }
-      });
-
-      const createdNodeIds = [];
-      // 横向排列：shot_frame 在 shot_group 右侧，x 固定，y 纵向堆叠
-      const offsetX = 1200;
-      const SHOT_FRAME_GAP_Y = 120;  // 分镜节点之间的Y轴间距，与自动排列保持一致
-      const targetX = shotGroupNode.x + offsetX;
-      
-      // 从第一个镜头获取场景信息（所有镜头使用同一个场景）
-      const firstShot = shots[0];
-      const locationInfo = [];
-      if(firstShot.db_location_id && firstShot.location_name){
-        locationInfo.push({
-          name: firstShot.location_name,
-          pic: firstShot.db_location_pic,
-          id: firstShot.db_location_id
-        });
-      }
-
-      // 第一步：创建所有分镜节点（先放在临时Y位置）
-      let skippedCount = 0;
-      shots.forEach((shot) => {
-        if(existingShotIds.has(shot.shot_id)){
-          skippedCount++;
-          return;
-        }
-        
-        const shotDataWithLocation = {
-          ...shot,
-          allLocationInfo: locationInfo,
-          scriptData: shotGroupNode.data.scriptData
-        };
-        
-        const shotFrameNodeId = createShotFrameNode({
-          x: targetX,
-          y: 0,  // 临时位置，后面会重新定位
-          shotData: shotDataWithLocation,
-          model: shotGroupNode.data.model,
-          videoModel: shotGroupNode.data.videoModel,
-          checkCollision: false
-        });
-        createdNodeIds.push(shotFrameNodeId);
-
-        state.connections.push({
-          id: state.nextConnId++,
-          from: shotGroupNodeId,
-          to: shotFrameNodeId
-        });
-      });
-      
-      // 第二步：测量实际高度并重新定位（使用 setTimeout 确保布局完成）
-      // 扫描同一X列所有已有（非本次创建的）shot_frame 节点的最大底部位置
-      const newNodeIdSet = new Set(createdNodeIds);
-      let globalMaxBottom = shotGroupNode.y;
-      state.nodes.forEach(n => {
-        if(n.type === 'shot_frame' && !newNodeIdSet.has(n.id) && Math.abs(n.x - targetX) < 200) {
-          const el = canvasEl.querySelector(`.node[data-node-id="${n.id}"]`);
-          const h = el ? el.offsetHeight : 500;
-          const bottom = n.y + h;
-          if(bottom > globalMaxBottom) globalMaxBottom = bottom;
-        }
-      });
-      
-      let nextY = globalMaxBottom > shotGroupNode.y
-        ? globalMaxBottom + SHOT_FRAME_GAP_Y
-        : shotGroupNode.y;
-      
-      // 强制浏览器完成布局
-      void document.body.offsetHeight;
-      
-      // 按顺序重新定位每个新创建的节点
-      createdNodeIds.forEach(nodeId => {
-        const node = state.nodes.find(n => n.id === nodeId);
-        if(!node) return;
-        node.y = Math.max(MIN_NODE_Y, nextY);
-        const el = canvasEl.querySelector(`.node[data-node-id="${nodeId}"]`);
-        if(el) {
-          el.style.top = node.y + 'px';
-          const actualHeight = el.offsetHeight;
-          nextY = node.y + actualHeight + SHOT_FRAME_GAP_Y;
-        } else {
-          nextY += 600 + SHOT_FRAME_GAP_Y;
-        }
-      });
-
-      renderAllConnections();
-      safeAutoSave()
-      
-      // 显示合理的提示信息
-      if(createdNodeIds.length === 0 && skippedCount > 0){
-        showToast(`所有 ${skippedCount} 个分镜已存在对应节点，无需新增`, 'info');
-      } else if(skippedCount > 0){
-        showToast(`已生成 ${createdNodeIds.length} 个独立分镜节点，跳过 ${skippedCount} 个已存在的分镜`, 'success');
-      } else {
-        showToast(`已生成 ${createdNodeIds.length} 个独立分镜节点`, 'success');
       }
     }
 
-    // 生成分镜图节点 - 独立分镜模式（异步版本，用于自动批量生成）
-    async function generateShotFramesIndependentAsync(shotGroupNodeId, shotGroupNode){
+    // 增量同步核心：按 shots 数组同步 shot_frame 节点
+    // 新建缺失节点、就地更新已有节点（保留生成结果与提示词）、按 shots 顺序重排、孤儿节点保留并提示
+    async function syncShotFramesToShots(shotGroupNodeId, shotGroupNode, options){
+      const isAsync = options && options.isAsync;
       const shots = shotGroupNode.data.shots || [];
       if(shots.length === 0){
-        console.log('[宫格生图] 分镜组没有分镜数据');
+        if(!isAsync) showToast('幕中没有分镜数据', 'warning');
         return [];
       }
 
-      // 按 shot_number 排序，确保分镜按顺序创建
-      shots.sort((a, b) => (a.shot_number || 0) - (b.shot_number || 0));
+      // 按数组顺序处理（用户编辑后的显示顺序），不再按 shot_number 排序：
+      // addNewShot/deleteShot 已不 renumber，LLM 生成的 shot_number（全局值如 5/6/7）需保留用于标题显示，
+      // 数组顺序即正确顺序。
+      const sortedShots = [...shots];
 
-      // 获取已存在的分镜节点（通过连接关系查找）
-      // 注意：只查找真实存在的节点，忽略已删除节点的连接
+      // 建立 shot_id → 已有 shot_frame 节点 的映射，并收集所有关联节点（用于孤儿检测）
+      const existingMap = new Map();
+      const connectedNodes = [];
       const existingConnections = state.connections.filter(c => c.from === shotGroupNodeId);
-      const existingShotIds = new Set();
-      let maxExistingY = shotGroupNode.y;
-      
-      console.log(`[宫格生图] 分镜组 ${shotGroupNodeId} 有 ${existingConnections.length} 个连接`);
-      
       existingConnections.forEach(conn => {
         const targetNode = state.nodes.find(n => n.id === conn.to);
         if(targetNode && targetNode.type === 'shot_frame'){
           const shotId = targetNode.data.shotId || (targetNode.data.shotJson && targetNode.data.shotJson.shot_id);
           if(shotId){
-            existingShotIds.add(shotId);
-            console.log(`[宫格生图] 找到已存在的分镜节点: ${shotId}`);
+            existingMap.set(shotId, targetNode);
           }
-          if(targetNode.y > maxExistingY){
-            maxExistingY = targetNode.y;
-          }
-        } else if(!targetNode) {
-          console.log(`[宫格生图] 连接 ${conn.id} 指向的节点 ${conn.to} 不存在（可能已删除）`);
+          connectedNodes.push(targetNode);
         }
       });
-      
-      console.log(`[宫格生图] 已存在的分镜ID: ${Array.from(existingShotIds).join(', ')}`);
-      console.log(`[宫格生图] 需要生成的分镜总数: ${shots.length}`);
 
-      const createdNodeIds = [];
-      // 横向排列：shot_frame 在 shot_group 右侧，x 固定，y 纵向堆叠
-      const offsetX = 1200;
       const SHOT_FRAME_GAP_Y = 120;  // 分镜节点之间的Y轴间距，与自动排列保持一致
-      const targetX = shotGroupNode.x + offsetX;
-      
-      const firstShot = shots[0];
-      const locationInfo = [];
-      if(firstShot.db_location_id && firstShot.location_name){
-        locationInfo.push({
-          name: firstShot.location_name,
-          pic: firstShot.db_location_pic,
-          id: firstShot.db_location_id
-        });
+      const targetX = shotGroupNode.x + 1200;
+
+      // 遍历 shots：就地更新已有节点 或 新建缺失节点，并记录顺序用于重排
+      const orderedNodes = [];
+      const createdNodeIds = [];
+      const matchedNodeIds = new Set();
+      let updatedCount = 0;
+
+      sortedShots.forEach((shot) => {
+        const existing = existingMap.get(shot.shot_id);
+        if(existing){
+          updateShotFrameNodeBasic(existing, shot);
+          matchedNodeIds.add(existing.id);
+          orderedNodes.push(existing);
+          updatedCount++;
+        } else {
+          // 每个分镜用自己的场景信息（同一分镜组内可能含不同场景）
+          const shotLocationInfo = [];
+          if(shot.db_location_id && shot.location_name){
+            shotLocationInfo.push({
+              name: shot.location_name,
+              pic: shot.db_location_pic,
+              id: shot.db_location_id
+            });
+          }
+          const shotDataWithLocation = {
+            ...shot,
+            allLocationInfo: shotLocationInfo,
+            scriptData: shotGroupNode.data.scriptData
+          };
+          const shotFrameNodeId = createShotFrameNode({
+            x: targetX,
+            y: 0,  // 临时位置，后面重新定位
+            shotData: shotDataWithLocation,
+            model: shotGroupNode.data.model,
+            videoModel: shotGroupNode.data.videoModel,
+            checkCollision: false
+          });
+          createdNodeIds.push(shotFrameNodeId);
+          matchedNodeIds.add(shotFrameNodeId);
+          const newNode = state.nodes.find(n => n.id === shotFrameNodeId);
+          if(newNode) orderedNodes.push(newNode);
+          state.connections.push({
+            id: state.nextConnId++,
+            from: shotGroupNodeId,
+            to: shotFrameNodeId
+          });
+        }
+      });
+
+      // 孤儿节点：关联但不在当前 shots 里的（用户已从列表移除），保留不删除
+      const orphanNodes = connectedNodes.filter(n => !matchedNodeIds.has(n.id));
+
+      // 等待布局（异步版用 rAF）或强制同步布局（同步版），确保能测量节点实际高度
+      if(isAsync){
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      } else {
+        void document.body.offsetHeight;
       }
 
-      // 第一步：创建所有分镜节点（先放在临时Y位置）
-      let skippedCount = 0;
-      shots.forEach((shot) => {
-        if(existingShotIds.has(shot.shot_id)){
-          console.log(`[宫格生图] 跳过已存在的分镜: ${shot.shot_id}`);
-          skippedCount++;
-          return;
-        }
-        
-        const shotDataWithLocation = {
-          ...shot,
-          allLocationInfo: locationInfo,
-          scriptData: shotGroupNode.data.scriptData
-        };
-        
-        const shotFrameNodeId = createShotFrameNode({
-          x: targetX,
-          y: 0,  // 临时位置，后面会重新定位
-          shotData: shotDataWithLocation,
-          model: shotGroupNode.data.model,
-          checkCollision: false
+      // 按 shots 顺序重排有效节点的 y 坐标，孤儿节点移到末尾避免重叠
+      // 起点 nextY 的确定（关键：避免剧本拆分时多个分镜组的分镜节点重合）：
+      //  - 增量同步（updatedCount>0，如"生成分镜"按钮就地更新已有节点）：在本分镜组旁边重排，从 group.y 起。
+      //  - 全新建（updatedCount===0，如剧本拆分批量生成）：多个分镜组共享同一 targetX 列（x+1200），
+      //    且 parse-script 给每组预留的纵向空间（shotCount*700）小于实际分镜节点堆叠高度，
+      //    故需扫描同列已有 shot_frame 的最大底部，从其下方起排，避免覆盖前一组节点。
+      let nextY;
+      if(updatedCount > 0){
+        nextY = shotGroupNode.y;
+      } else {
+        const processedIdSet = new Set();
+        orderedNodes.forEach(n => { if(n) processedIdSet.add(n.id); });
+        orphanNodes.forEach(n => { if(n) processedIdSet.add(n.id); });
+        let globalMaxBottom = shotGroupNode.y;
+        state.nodes.forEach(n => {
+          if(n.type === 'shot_frame' && !processedIdSet.has(n.id) && Math.abs(n.x - targetX) < 200){
+            const otherEl = canvasEl.querySelector(`.node[data-node-id="${n.id}"]`);
+            const h = otherEl ? otherEl.offsetHeight : 500;
+            const bottom = n.y + h;
+            if(bottom > globalMaxBottom) globalMaxBottom = bottom;
+          }
         });
-        createdNodeIds.push(shotFrameNodeId);
-
-        state.connections.push({
-          id: state.nextConnId++,
-          from: shotGroupNodeId,
-          to: shotFrameNodeId
-        });
-      });
-      
-      // 第二步：等待浏览器完成布局后，测量实际高度并重新定位
-      // 使用 requestAnimationFrame 确保 DOM 完成渲染
-      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      
-      // 扫描同一X列所有已有（非本次创建的）shot_frame 节点的最大底部位置
-      const newNodeIdSet = new Set(createdNodeIds);
-      let globalMaxBottom = shotGroupNode.y;
-      state.nodes.forEach(n => {
-        if(n.type === 'shot_frame' && !newNodeIdSet.has(n.id) && Math.abs(n.x - targetX) < 200) {
-          const el = canvasEl.querySelector(`.node[data-node-id="${n.id}"]`);
-          const h = el ? el.offsetHeight : 500;
-          const bottom = n.y + h;
-          if(bottom > globalMaxBottom) globalMaxBottom = bottom;
-        }
-      });
-      
-      let nextY = globalMaxBottom > shotGroupNode.y
-        ? globalMaxBottom + SHOT_FRAME_GAP_Y
-        : shotGroupNode.y;
-      
-      // 按顺序重新定位每个新创建的节点
-      createdNodeIds.forEach(nodeId => {
-        const node = state.nodes.find(n => n.id === nodeId);
+        nextY = globalMaxBottom > shotGroupNode.y
+          ? globalMaxBottom + SHOT_FRAME_GAP_Y
+          : shotGroupNode.y;
+      }
+      const reposition = (node) => {
         if(!node) return;
+        node.x = targetX;
         node.y = Math.max(MIN_NODE_Y, nextY);
-        const el = canvasEl.querySelector(`.node[data-node-id="${nodeId}"]`);
-        if(el) {
+        const el = canvasEl.querySelector(`.node[data-node-id="${node.id}"]`);
+        if(el){
+          el.style.left = node.x + 'px';
           el.style.top = node.y + 'px';
-          const actualHeight = el.offsetHeight;
-          console.log(`[分镜布局] nodeId=${nodeId} offsetHeight=${actualHeight} y=${node.y}`);
-          nextY = node.y + actualHeight + SHOT_FRAME_GAP_Y;
+          nextY = node.y + el.offsetHeight + SHOT_FRAME_GAP_Y;
         } else {
           nextY += 600 + SHOT_FRAME_GAP_Y;
         }
-      });
-      
-      console.log(`[宫格生图] 生成完成 - 新建: ${createdNodeIds.length}, 跳过: ${skippedCount}`);
+      };
+      orderedNodes.forEach(reposition);
+      orphanNodes.forEach(reposition);
 
       renderAllConnections();
-      safeAutoSave()
-      
-      // 返回创建的节点ID数组（供宫格生图等功能使用）
+      safeAutoSave();
+
+      // 提示
+      const parts = [];
+      if(createdNodeIds.length > 0) parts.push(`新增 ${createdNodeIds.length} 个`);
+      if(updatedCount > 0) parts.push(`更新 ${updatedCount} 个`);
+      if(orphanNodes.length > 0) parts.push(`保留 ${orphanNodes.length} 个已从列表移除的节点`);
+      const msg = parts.length > 0 ? `分镜已同步：${parts.join('、')}` : '分镜已是最新，无需同步';
+      showToast(msg, (createdNodeIds.length > 0 || updatedCount > 0) ? 'success' : 'info');
+
       return createdNodeIds;
+    }
+
+    // 生成分镜图节点 - 独立分镜模式（增量同步；同步包装器，保留原签名）
+    function generateShotFramesIndependent(shotGroupNodeId, shotGroupNode){
+      // isAsync=false：核心内部用 void offsetHeight 强制同步布局，函数体内无 await，所有工作在本次调用中同步完成
+      syncShotFramesToShots(shotGroupNodeId, shotGroupNode, { isAsync: false }).catch(err => {
+        console.error('[分镜同步] 同步失败:', err);
+        showToast('分镜同步失败: ' + (err && err.message || err), 'error');
+      });
+    }
+
+    // 生成分镜图节点 - 独立分镜模式（异步版本，用于自动批量生成；增量同步）
+    async function generateShotFramesIndependentAsync(shotGroupNodeId, shotGroupNode){
+      return await syncShotFramesToShots(shotGroupNodeId, shotGroupNode, { isAsync: true });
     }
 
     // 将视频提示词JSON转换为可读文本格式
@@ -9170,12 +9271,17 @@
       }
       const shotData = opts && opts.shotData ? opts.shotData : {};
       
-      // 从后端配置获取默认模型
-      let defaultImageModel = 'gemini';
+      // 默认模型：图片优先使用 gpt-image-2
+      let defaultImageModel = 'gpt-image-2';
       let defaultVideoModel = 'wan22';
       if(window.TaskConfig && window.TaskConfig.isLoaded()) {
         const imageOptions = window.TaskConfig.getModelOptionsForCategory('image_edit');
-        if(imageOptions.length > 0) defaultImageModel = imageOptions[0].value;
+        const gptImage2 = imageOptions.find(o => o.value === 'gpt-image-2');
+        if(gptImage2) {
+          defaultImageModel = gptImage2.value;
+        } else if(imageOptions.length > 0) {
+          defaultImageModel = imageOptions[0].value;
+        }
         const videoOptions = window.TaskConfig.getModelOptionsForCategory('image_to_video');
         if(videoOptions.length > 0) defaultVideoModel = videoOptions[0].value;
       }
@@ -9183,7 +9289,9 @@
       const inheritedModel = opts && opts.model ? opts.model : defaultImageModel;
       const inheritedVideoModel = (opts && opts.videoModel) || getVideoModelFromData(shotData) || defaultVideoModel;
       
-      const shotTitle = shotData.shot_id || shotData.shot_number ? `镜头${shotData.shot_number || ''}` : '分镜图';
+      // 标题：手动添加的分镜（shot_id 为 N_x 格式，如 5_1）用 shot_id；LLM 生成的（s001 等）用 shot_number（位置序号）
+      const _titleSid = String(shotData.shot_id || '');
+      const shotTitle = /^\d+_\d+$/.test(_titleSid) ? _titleSid : (shotData.shot_number ? String(shotData.shot_number) : (shotData.shot_id || '分镜图'));
       
       // 构建图片提示词，包含时间和天气信息
       let imagePrompt = shotData.opening_frame_description || '';
@@ -9274,8 +9382,8 @@
                 <div class="script-section-title" data-i18n="shot_frame_basic_info_section">${window.t ? window.t('shot_frame_basic_info_section') : '基础信息'}</div>
               </div>
               <div class="field field-always-visible">
-                <div style="font-size: 13px; font-weight: 600; color: var(--text);">${escapeHtml(node.data.description)}</div>
-                <div class="gen-meta" style="margin-top: 4px;" data-i18n="shot_frame_duration_label">${window.t ? window.t('shot_frame_duration_label') : '时长:'} ${node.data.duration}${window.t ? window.t('shot_frame_seconds') : '秒'} | ${escapeHtml(node.data.shotType)} | ${escapeHtml(node.data.cameraMovement)}</div>
+                <div class="shot-frame-desc-display" style="font-size: 13px; font-weight: 600; color: var(--text);">${escapeHtml(node.data.description)}</div>
+                <div class="gen-meta shot-frame-meta" style="margin-top: 4px;" data-i18n="shot_frame_duration_label">${window.t ? window.t('shot_frame_duration_label') : '时长:'} ${node.data.duration}${window.t ? window.t('shot_frame_seconds') : '秒'} | ${escapeHtml(node.data.shotType)} | ${escapeHtml(node.data.cameraMovement)}</div>
               </div>
               <div class="field field-always-visible">
                 <div class="shot-ref-section" style="position: relative;">
@@ -9447,10 +9555,15 @@
       // 动态填充分镜模型选项
       if(modelEl) {
         modelEl.innerHTML = '';
-        let firstImageModelValue = 'gemini';
+        let firstImageModelValue = 'gpt-image-2';
         if(window.TaskConfig && window.TaskConfig.isLoaded()) {
           const options = window.TaskConfig.getModelOptionsForCategory('image_edit');
-          if(options.length > 0) firstImageModelValue = options[0].value;
+          const gptImage2 = options.find(o => o.value === 'gpt-image-2');
+          if(gptImage2) {
+            firstImageModelValue = gptImage2.value;
+          } else if(options.length > 0) {
+            firstImageModelValue = options[0].value;
+          }
           options.forEach(opt => {
             const optEl = document.createElement('option');
             optEl.value = opt.value;
@@ -11518,7 +11631,7 @@
           
           const newVideoNode = state.nodes.find(n => n.id === newVideoNodeId);
           if(newVideoNode){
-            newVideoNode.data.name = videoCount > 1 ? `分镜组视频${i + 1}` : '分镜组视频';
+            newVideoNode.data.name = videoCount > 1 ? `幕视频${i + 1}` : '幕视频';
             newVideoNode.data.project_id = projectIds[i] || projectIds[0];
             newVideoNode.title = newVideoNode.data.name;
             
@@ -11612,7 +11725,7 @@
               }
             });
             
-            showToast(`分镜组视频生成成功！`, 'success');
+            showToast(`幕视频生成成功！`, 'success');
             generateBtn.textContent = '生成视频';
             generateBtn.disabled = false;
             

@@ -23,6 +23,7 @@ from urllib.parse import urlparse
 from pydantic import BaseModel
 from api.clients.runninghub_client import RunningHubClient, TaskStatus, run_ai_app_task
 from config.config_util import resolve_bin_path
+from config.version import get_app_version
 from perseids_server.client import make_perseids_request, get_device_uuid, async_make_perseids_request, async_call_external_auth_server
 from model import AIToolsModel, VideoWorkflowModel,TasksModel, AIAudioModel, PaymentOrdersModel
 from model.users import UsersModel
@@ -63,7 +64,9 @@ from config.constant import (
     GRID_LOCK_TIMEOUT_SECONDS,
     GRID_IMAGE_DOWNLOAD_TIMEOUT,
     FilePathConstants,
-    UploadPathConstants
+    UploadPathConstants,
+    JIANYING_RATIO_RESOLUTION,
+    JIANYING_DEFAULT_RATIO
 )
 from utils.wechat_pay_util import WechatPayUtil
 from utils.project_path import (
@@ -200,26 +203,9 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_DIR = get_upload_dir()
 CHECK_AUTH_TOKEN = True
 
-# 前端静态资源版本号 - 从 pyproject.toml 读取版本号并生成 hash
+# 前端静态资源版本号 - 直接使用 pyproject.toml 中的版本号（如 1.9.2）
 # 上线时更新 pyproject.toml 中的 version 即可使浏览器缓存失效
-def _get_static_version() -> str:
-    """从 pyproject.toml 读取版本号并生成短 hash"""
-    pyproject_path = os.path.join(APP_DIR, "pyproject.toml")
-    try:
-        with open(pyproject_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        # 使用正则提取 version = "x.y.z"
-        match = re.search(r'version\s*=\s*"([^"]+)"', content)
-        if match:
-            version = match.group(1)
-            # 生成 8 位 hash
-            hash_str = hashlib.md5(version.encode()).hexdigest()[:8]
-            return hash_str
-    except Exception as e:
-        logging.warning(f"无法读取 pyproject.toml 版本号: {e}")
-    return "00000000"
-
-STATIC_VERSION = _get_static_version()
+STATIC_VERSION = get_app_version()
 
 # 缓存已处理的 HTML 内容，避免每次请求都重新处理
 _PROCESSED_HTML_CACHE = {}
@@ -237,6 +223,12 @@ def _get_processed_html(file_path: str) -> bytes:
 
     with open(file_path, 'r', encoding='utf-8') as f:
         content = f.read()
+
+    # 始终将 HTML 中显式书写的 __VERSION__ 占位符替换为真实版本号（来自 pyproject.toml）
+    # 无论是否开启 cache_bust 都必须解析，否则在开发模式（cache_bust 关闭）下
+    # 会原样输出 "?v=__VERSION__" 这样的占位字符串
+    if "__VERSION__" in content:
+        content = content.replace("__VERSION__", STATIC_VERSION)
 
     # 检查是否启用了缓存失效功能
     if CACHE_BUST_ENABLED:
@@ -2105,11 +2097,23 @@ async def ai_app_run_image(
                         # 判断是否需要创建 pipeline steps（Seedance 2.0 + RunningHub 配置）
                         SEEDANCE_2_0_IDS = {TaskTypeId.SEEDANCE_2_0_FAST_IMAGE_TO_VIDEO, TaskTypeId.SEEDANCE_2_0_IMAGE_TO_VIDEO}
                         runninghub_api_key = get_dynamic_config_value("runninghub", "api_key", default=None)
+                        seedance_face_mask_enabled = get_dynamic_config_value("pipeline", "seedance_face_mask_enabled", default=True)
+                        has_image_input = bool(image_path) or bool(reference_images_json)
+                        has_any_param_prepare_input = seedance_face_mask_enabled and (
+                            bool(video_path) or has_image_input
+                        )
                         need_pipeline_steps = (
                             image_to_video_type in SEEDANCE_2_0_IDS
                             and runninghub_api_key
+                            and has_any_param_prepare_input
                         )
-                        logger.info(f"Pipeline steps condition check: image_to_video_type={image_to_video_type}, in_SEEDANCE_2_0={image_to_video_type in SEEDANCE_2_0_IDS}, has_api_key={bool(runninghub_api_key)}, need_pipeline_steps={need_pipeline_steps}")
+                        logger.info(
+                            f"Pipeline steps condition check: image_to_video_type={image_to_video_type}, "
+                            f"in_SEEDANCE_2_0={image_to_video_type in SEEDANCE_2_0_IDS}, "
+                            f"has_api_key={bool(runninghub_api_key)}, has_video={bool(video_path)}, "
+                            f"face_mask_enabled={bool(seedance_face_mask_enabled)}, "
+                            f"has_image_input={has_image_input}, need_pipeline_steps={need_pipeline_steps}"
+                        )
 
                         if need_pipeline_steps:
                             # 在同一事务中创建 ai_tools 和 face_mask pipeline steps
@@ -3946,15 +3950,18 @@ async def video_remix(
 @require_permission("digital_human:create")
 async def digital_human_generate(
     request: Request,
-    image: UploadFile = File(..., description="Input image for digital human"),
+    image: UploadFile = File(None, description="Input image for digital human"),
     text: str = Form(..., description="Text content for digital human to speak (max 1000 characters)"),
-    audio: UploadFile = File(..., description="Reference audio file"),
+    audio: UploadFile = File(None, description="Reference audio file"),
+    image_url: str = Form(None, description="Image URL for digital human (alternative to file upload)"),
+    audio_url: str = Form(None, description="Audio URL for digital human (alternative to file upload)"),
     aspect_ratio: str = Form("9:16", description="Video aspect ratio: 9:16, 16:9, 1:1, 3:2, 4:3, 2:3, 3:4"),
     user_id: int = Form(None, description="User ID"),
     auth_token: str = Form(None, description="Authentication token")
 ):
     """
     Generate digital human video from image, text and audio
+    Supports both file upload and URL parameters
     """
     try:
         # Validate text length
@@ -3964,11 +3971,23 @@ async def digital_human_generate(
                 detail="文本内容不能超过1000个字"
             )
         
-        # Save uploaded image
-        image_url = await asyncio.to_thread(_save_uploaded_image, image)
+        # Handle image (file upload or URL)
+        if image is not None:
+            image_url = await asyncio.to_thread(_save_uploaded_image, image)
+        elif not image_url:
+            raise HTTPException(
+                status_code=400,
+                detail="请提供图片文件或图片URL"
+            )
         
-        # Save uploaded audio
-        audio_url = await asyncio.to_thread(_save_uploaded_image, audio)  # Reuse the same function for audio
+        # Handle audio (file upload or URL)
+        if audio is not None:
+            audio_url = await asyncio.to_thread(_save_uploaded_image, audio)  # Reuse the same function for audio
+        elif not audio_url:
+            raise HTTPException(
+                status_code=400,
+                detail="请提供音频文件或音频URL"
+            )
         
         # Task type for digital human
         task_type = TaskTypeId.DIGITAL_HUMAN
@@ -4450,13 +4469,30 @@ async def get_recharge_packages(request: Request, auth_token: str):
         has_completed_first_recharge = await _has_completed_first_recharge(auth_token)
 
         # 如果用户已经充值过，过滤掉首充福利套餐（第一个套餐）
-        packages = RECHARGE_PACKAGES.copy()
+        # 用 dict(pkg) 浅拷贝每个套餐，避免污染模块级常量 RECHARGE_PACKAGES
+        packages = [dict(pkg) for pkg in RECHARGE_PACKAGES]
         if has_completed_first_recharge:
             packages = [pkg for pkg in packages if pkg.get("package_id") != 1]
             logger.info(f"已经首充，过滤掉首充福利套餐")
         else:
             logger.info(f"是首充用户，显示所有套餐")
-        
+
+        # 计算扣邀请佣金后的实际到账算力（针对当前用户；社区版/无邀请人/首充=>全额）
+        grants = {}
+        try:
+            g_ok, g_msg, g_data = await async_make_perseids_request(
+                endpoint='commission/recharge_grants',
+                method='POST',
+                headers={'Authorization': f'Bearer {auth_token}'}
+            )
+            if g_ok and g_data:
+                grants = g_data.get('grants', {})
+        except Exception as e:
+            logger.warning(f"Failed to get commission recharge grants: {e}")
+        for pkg in packages:
+            pid = pkg.get("package_id")
+            pkg["granted_computing_power"] = grants.get(pid, pkg["computing_power"])
+
         return JSONResponse({
             "success": True,
             "packages": packages
@@ -4771,6 +4807,27 @@ async def wechat_payment_callback(request: Request):
             # 更新订单状态为已支付
             PaymentOrdersModel.update_paid(order_id, transaction_id)
 
+            # 邀请抽佣结算（商业版；返回被邀请人到账算力，已按佣金比例打折）。
+            # 首充/社区版/无邀请人/未开启抽佣等情况下 service 内部返回全额 computing_power；
+            # 若抽佣调用异常，降级为全额算力发放（宁可漏抽佣，不少发用户算力）。
+            settle_ok, settle_msg, settle_data = await async_make_perseids_request(
+                endpoint='commission/settle',
+                method='POST',
+                data={
+                    "user_id": user_id,
+                    "order_id": order_id,
+                    "transaction_id": transaction_id,
+                    "package_id": order.package_id,
+                    "price": order.price,
+                    "computing_power": computing_power
+                }
+            )
+            granted_computing_power = computing_power
+            if settle_ok and settle_data and 'granted_computing_power' in settle_data:
+                granted_computing_power = settle_data['granted_computing_power']
+            else:
+                logger.warning(f"Commission settle fallback to full power for order {order_id}: {settle_msg}")
+
             headers = {'Authorization': f'Bearer {auth_token}'}
                         
             # 发起请求，增加算力
@@ -4779,7 +4836,7 @@ async def wechat_payment_callback(request: Request):
                 method='POST',
                 headers=headers,
                 data={
-                    "computing_power": computing_power,
+                    "computing_power": granted_computing_power,
                     "behavior": "increase",
                     "transaction_id": transaction_id
                 }
@@ -5811,7 +5868,9 @@ async def parse_script(
         no_bg_music = body.get('no_bg_music', False)
         split_multi_dialogue = body.get('split_multi_dialogue', False)
         narration_as_dialogue = body.get('narration_as_dialogue', False)
-        language = body.get('language', '')
+        language = body.get('language', '')  # 兼容旧版单一语言参数
+        dialogue_language = body.get('dialogue_language', '') or language
+        prompt_language = body.get('prompt_language', '') or language
         model = body.get('model', 'gemini-3-flash-preview')
         model_id = body.get('model_id', '')
         vendor_id = body.get('vendor_id', None)
@@ -5883,6 +5942,8 @@ async def parse_script(
             split_multi_dialogue=split_multi_dialogue,
             narration_as_dialogue=narration_as_dialogue,
             language=language,
+            dialogue_language=dialogue_language,
+            prompt_language=prompt_language,
             auth_token=auth_token,
             vendor_id=real_vendor_id,
             model_id=int(model_id) if model_id else 1
@@ -8148,6 +8209,7 @@ class ExportTimelineDraftRequest(BaseModel):
     pillars: List[dict] = []
     workflow_name: Optional[str] = "未命名工作流"
     request_origin: Optional[str] = None
+    ratio: Optional[str] = None  # 画布比例，如 9:16 / 16:9
     # 兼容旧版本
     timeline_clips: Optional[List[dict]] = None
 
@@ -8383,16 +8445,43 @@ async def export_timeline_draft(
         # 创建剪影草稿
         logger.info("开始生成剪影草稿...")
         
-        # 创建库实例
+        # 根据前端选择的比例设置画布尺寸
+        ratio = payload.ratio or JIANYING_DEFAULT_RATIO
+        canvas_width, canvas_height = JIANYING_RATIO_RESOLUTION.get(
+            ratio, JIANYING_RATIO_RESOLUTION[JIANYING_DEFAULT_RATIO])
         library = JianyingMultiTrackLibrary(
             draft_name=draft_name,
             output_dir=local_draft_parent,
-            material_path_prefix=payload.draft_path
+            material_path_prefix=payload.draft_path,
+            width=canvas_width,
+            height=canvas_height,
+            ratio=ratio
         )
+        logger.info(f"画布比例: {ratio} -> {canvas_width}x{canvas_height}")
         
         # 创建视频轨道和音频轨道
         video_track = library.create_video_track("主轨道")
         audio_track = library.create_audio_track("音频轨道")
+
+        # 预取每个已下载文件的真实时长/尺寸（ffprobe 在线程池执行，不阻塞事件循环）
+        probe_cache = {}
+        probe_sem = asyncio.Semaphore(8)
+
+        async def _probe_media(item):
+            fp = item['file_path']
+            if fp not in probe_cache:
+                async with probe_sem:
+                    info = await asyncio.to_thread(library.media_utils.probe_safe, fp)
+                probe_cache[fp] = info
+            info = probe_cache[fp]
+            item['real_duration_us'] = info.get('duration_us', 0)
+            item['real_width'] = info.get('width', 0)
+            item['real_height'] = info.get('height', 0)
+            return item
+
+        if downloaded_video_files or downloaded_audio_files:
+            await asyncio.gather(*[_probe_media(it) for it in downloaded_video_files + downloaded_audio_files])
+            logger.info(f"已完成 {len(probe_cache)} 个文件的媒体信息探测")
         
         # 如果有柱子数据，使用柱子系统处理（支持不连续的视频）
         if payload.pillars:
@@ -8434,25 +8523,32 @@ async def export_timeline_draft(
                             has_video = True
                             clip = downloaded_item['clip']
                             file_path = downloaded_item['file_path']
-                            
+
                             # 计算剪切后的时长
                             start_time = clip.get('startTime', 0)
                             end_time = clip.get('endTime', clip.get('duration', 0))
                             clip_duration_sec = end_time - start_time
-                            
-                            # 转换为微秒
                             source_start = seconds_to_microseconds(start_time)
+
+                            # 未手动裁剪时用 ffprobe 真实时长，避免超出部分被切除
+                            real_duration_us = downloaded_item.get('real_duration_us', 0)
+                            if start_time == 0 and end_time >= clip.get('duration', 0) and real_duration_us > 0:
+                                clip_duration_sec = real_duration_us / 1_000_000
+
                             clip_duration = seconds_to_microseconds(clip_duration_sec)
-                            
-                            # 添加到轨道
+
+                            # 添加到轨道（传真实尺寸用于等比铺满，material_duration 为文件完整时长）
                             library.add_video_to_track(
                                 track_id=video_track,
                                 file_path=file_path,
                                 start_time=seconds_to_microseconds(current_time + pillar_video_duration),
                                 duration=clip_duration,
-                                source_start=source_start
+                                source_start=source_start,
+                                width=downloaded_item.get('real_width') or None,
+                                height=downloaded_item.get('real_height') or None,
+                                material_duration=real_duration_us or None
                             )
-                            
+
                             pillar_video_duration += clip_duration_sec
                             logger.info(f"  添加视频片段: {clip.get('name')}, 时长={clip_duration_sec:.2f}秒")
                 
@@ -8494,20 +8590,25 @@ async def export_timeline_draft(
                             start_time = clip.get('startTime', 0)
                             end_time = clip.get('endTime', clip.get('duration', 0))
                             clip_duration_sec = end_time - start_time
-                            
-                            # 转换为微秒
                             source_start = seconds_to_microseconds(start_time)
+
+                            # 未手动裁剪时用 ffprobe 真实时长，避免超出部分被切除
+                            real_duration_us = downloaded_item.get('real_duration_us', 0)
+                            if start_time == 0 and end_time >= clip.get('duration', 0) and real_duration_us > 0:
+                                clip_duration_sec = real_duration_us / 1_000_000
+
                             clip_duration = seconds_to_microseconds(clip_duration_sec)
-                            
-                            # 添加到轨道
+
+                            # 添加到轨道（material_duration 为文件完整时长）
                             library.add_audio_to_track(
                                 track_id=audio_track,
                                 file_path=file_path,
                                 start_time=seconds_to_microseconds(current_time + pillar_audio_duration),
                                 duration=clip_duration,
-                                source_start=source_start
+                                source_start=source_start,
+                                material_duration=real_duration_us or None
                             )
-                            
+
                             pillar_audio_duration += clip_duration_sec
                             logger.info(f"  添加音频片段: {clip.get('name')}, 时长={clip_duration_sec:.2f}秒")
                 
@@ -8529,21 +8630,30 @@ async def export_timeline_draft(
                 # 计算剪切后的时长
                 start_time = clip.get('startTime', 0)
                 end_time = clip.get('endTime', clip.get('duration', 0))
-                
-                # 转换为微秒
                 source_start = seconds_to_microseconds(start_time)
-                clip_duration = seconds_to_microseconds(end_time - start_time)
-                
-                # 添加到轨道
+
+                # 未手动裁剪时用 ffprobe 真实时长，避免超出部分被切除
+                real_duration_us = item.get('real_duration_us', 0)
+                if start_time == 0 and end_time >= clip.get('duration', 0) and real_duration_us > 0:
+                    used_duration_sec = real_duration_us / 1_000_000
+                else:
+                    used_duration_sec = end_time - start_time
+
+                clip_duration = seconds_to_microseconds(used_duration_sec)
+
+                # 添加到轨道（传真实尺寸用于等比铺满，material_duration 为文件完整时长）
                 library.add_video_to_track(
                     track_id=video_track,
                     file_path=file_path,
                     start_time=seconds_to_microseconds(current_time),
                     duration=clip_duration,
-                    source_start=source_start
+                    source_start=source_start,
+                    width=item.get('real_width') or None,
+                    height=item.get('real_height') or None,
+                    material_duration=real_duration_us or None
                 )
-                
-                current_time += (end_time - start_time)
+
+                current_time += used_duration_sec
             
             # 添加音频片段
             audio_time = 0
@@ -8554,21 +8664,28 @@ async def export_timeline_draft(
                 # 计算剪切后的时长
                 start_time = clip.get('startTime', 0)
                 end_time = clip.get('endTime', clip.get('duration', 0))
-                
-                # 转换为微秒
                 source_start = seconds_to_microseconds(start_time)
-                clip_duration = seconds_to_microseconds(end_time - start_time)
-                
-                # 添加到轨道
+
+                # 未手动裁剪时用 ffprobe 真实时长，避免超出部分被切除
+                real_duration_us = item.get('real_duration_us', 0)
+                if start_time == 0 and end_time >= clip.get('duration', 0) and real_duration_us > 0:
+                    used_duration_sec = real_duration_us / 1_000_000
+                else:
+                    used_duration_sec = end_time - start_time
+
+                clip_duration = seconds_to_microseconds(used_duration_sec)
+
+                # 添加到轨道（material_duration 为文件完整时长）
                 library.add_audio_to_track(
                     track_id=audio_track,
                     file_path=file_path,
                     start_time=seconds_to_microseconds(audio_time),
                     duration=clip_duration,
-                    source_start=source_start
+                    source_start=source_start,
+                    material_duration=real_duration_us or None
                 )
-                
-                audio_time += (end_time - start_time)
+
+                audio_time += used_duration_sec
         
         # 生成草稿
         generator = DraftGenerator(library)
