@@ -73,7 +73,13 @@ def test_sw_no_world_shows_prompt(browser, auth_token, user_id, base_url):
     p.route("**/api/user/computing_power", handler)
 
     p.goto(f"{base_url}/script-writer?user_id={user_id}", wait_until="domcontentloaded")
-    p.wait_for_timeout(5000)
+    p.wait_for_function("""() => {
+        const input = document.querySelector('#message-input');
+        return document.querySelector('.world-sidebar.open')
+            || document.querySelector('.world-sidebar-overlay.active')
+            || document.querySelector('.world-selection-prompt')
+            || (input && input.disabled);
+    }""", timeout=15000)
 
     # 应该显示世界选择提示或侧边栏，或消息输入被禁用
     has_prompt = (
@@ -165,16 +171,21 @@ def test_sw_requirement_selector_visible(sw_page):
 
 @pytest.mark.p0
 @pytest.mark.script_writer
-def test_sw_requirement_new_script(sw_page):
+def test_sw_requirement_new_script(sw_page, test_world):
     """sw_007 - 点击"剧本新建"按钮后输入框填入默认文本。"""
+    # 使用临时新世界，避免复用已有世界的历史会话后欢迎卡片被历史消息替换。
+    sw_page.world_id = test_world["id"]
     _navigate_sw(sw_page)
     page = sw_page.page
 
-    buttons = page.locator(".requirement-btn")
-    if buttons.count() < 3:
+    try:
+        page.locator("#requirement-selector").wait_for(state="visible", timeout=10000)
+        page.locator(".requirement-btn").nth(2).wait_for(state="visible", timeout=5000)
+    except Exception:
         pytest.skip("需求选择器不可见")
 
     # 点击第 3 个按钮（剧本新建）
+    buttons = page.locator(".requirement-btn")
     buttons.nth(2).click()
     page.wait_for_timeout(500)
 

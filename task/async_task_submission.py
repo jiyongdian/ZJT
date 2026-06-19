@@ -79,6 +79,15 @@ async def _submit_task_with_retry(task: AsyncTasksModel) -> Dict[str, Any]:
     config = get_async_task_config(task.implementation)
     driver = driver_class()
 
+    # ===== E2E Mock 防御：mock external_task_id 跳过真实 submit =====
+    # 正常 mock async task 的 next_retry_at=NULL，不会被 get_ready_to_retry_tasks 取到，
+    # 故不会进入本流程；此守卫仅为防御性兜底（见方案 §5.4）。
+    from task.mock_interceptor import is_mock_id
+    if is_mock_id(task.external_task_id):
+        logger.info(f"[MOCK] async submission skip (mock id) task={task.id}")
+        return {'success': True, 'project_id': task.external_task_id, 'mock': True}
+    # =============================================================
+
     # 需要槽位
     if config.need_runninghub_slot:
         slot_acquired = RunningHubSlotsModel.try_acquire_slot(

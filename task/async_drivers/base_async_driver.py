@@ -87,6 +87,16 @@ class BaseAsyncDriver(ABC):
             params=params
         )
 
+        # ===== E2E Mock 短路：跳过槽位与文件上传，直接写 mock external_task_id =====
+        from task.mock_interceptor import is_mock_enabled, generate_mock_project_id
+        if is_mock_enabled():
+            mock_pid = generate_mock_project_id()
+            AsyncTasksModel.update_external_task_id(async_task_id, mock_pid)
+            logger.info(f"[MOCK] async submit short-circuit impl={self.impl_id} "
+                        f"async_task_id={async_task_id} pid={mock_pid}")
+            return {"success": True, "project_id": mock_pid, "async_task_id": async_task_id}
+        # =========================================================================
+
         # 2. 如果需要槽位
         if config.need_runninghub_slot:
             slot_acquired = RunningHubSlotsModel.try_acquire_slot(

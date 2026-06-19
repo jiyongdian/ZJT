@@ -267,6 +267,7 @@
   "toast_checkin_saved": "Check-in config saved",
   "toast_partial_save_failed": "Some configs failed to save",
   "toast_commercial_only_modify": "This config requires commercial edition to modify. Contact WeChat: jeffstric Email: jeff@perseids.cn to purchase.",
+    "toast_test_mode_modify_forbidden": "test_mode configs can only be modified via scripts, not in the admin panel (to prevent accidental mock activation in production).",
   "toast_commercial_only_use": "This config requires commercial edition. Contact WeChat: jeffstric Email: jeff@perseids.cn to purchase.",
   "toast_json_invalid": "Invalid JSON format",
   "toast_config_updated": "Config updated successfully",

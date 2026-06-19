@@ -232,6 +232,9 @@ async def _submit_new_task(ai_tool):
         logger.info(f"[TEST MODE] [DRIVER] Submitting task {task_id} (type: {ai_tool_type})")
 
     try:
+        from task.mock_interceptor import is_mock_enabled, visual_async_submit_result
+        mock_enabled = is_mock_enabled()
+
         # 0a. 检查 param_prepare 步骤（流水线预处理阶段）
         from task.pipeline_processor import PipelineProcessor
         pending_prep = PipelineProcessor.get_pending_steps(task_id, PipelineStage.PARAM_PREPARE)
@@ -289,6 +292,16 @@ async def _submit_new_task(ai_tool):
                     return True
                 else:
                     logger.warning(f"[SyncTask] Sync task executor not running, falling back to normal processing")
+
+        # ===== E2E Mock 短路（保留 param_prepare 与 sync_mode 调度之后，仅拦截普通异步 driver）=====
+        if mock_enabled:
+            mock = visual_async_submit_result(ai_tool_type)
+            project_id = mock["project_id"]
+            AIToolsModel.update(task_id, project_id=project_id, status=AI_TOOL_STATUS_PROCESSING)
+            TasksModel.update_by_task_id(task_id, status=TASK_STATUS_PROCESSING)
+            logger.info(f"[MOCK] visual async submit short-circuit task={task_id} pid={project_id}")
+            return True
+        # ==============================================================================
 
         # 1. 优先使用记录的 implementation 创建驱动，确保重试时使用正确的实现方
         driver = None
@@ -479,6 +492,17 @@ async def _check_task_status(ai_tool):
     
     if _is_test_mode_enabled() and isinstance(project_id, str) and project_id.startswith("mock_task_"):
         logger.info(f"[TEST MODE] [DRIVER] Checking status for mock task {project_id}")
+
+    # ===== E2E Mock 短路 =====
+    from task.mock_interceptor import is_mock_enabled, is_mock_id, visual_async_status_result
+    if is_mock_enabled() and is_mock_id(project_id):
+        mock = visual_async_status_result(ai_tool_type)
+        result_url = mock.get("result_url")
+        if result_url:
+            return await _handle_task_success(project_id, task_id, result_url)
+        return _handle_task_failure(
+            task_id, ai_tool_type, "mock 未配置 result_url", ai_tool.user_id, project_id=project_id)
+    # =========================
 
     try:
         # 1. 优先使用任务提交时记录的 implementation 创建驱动，确保状态查询与提交使用同一实现方
@@ -680,8 +704,14 @@ async def _handle_task_success(project_id, task_id, media_url):
                 media_type = "image"
         
         # 下载并缓存，如果失败则使用原URL
-        cached_url = await download_and_cache(media_url, task_id, media_type)
-        final_url = cached_url if cached_url else media_url
+        # mock 本地路径短路（download_and_cache 不识别 /upload/ 本地路径，见方案 §5.1 改动 C）
+        is_local_path = media_url and media_url.startswith("/upload/")
+        if is_local_path:
+            final_url = media_url
+            logger.info(f"[MOCK] local path, skip download_and_cache: {media_url}")
+        else:
+            cached_url = await download_and_cache(media_url, task_id, media_type)
+            final_url = cached_url if cached_url else media_url
         
         logger.info(f"Media cached: {media_url} -> {final_url}")
         
