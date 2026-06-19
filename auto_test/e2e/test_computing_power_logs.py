@@ -281,13 +281,27 @@ def test_power_logs_pagination_returns_different_pages(api_client, e2e_config, b
 
 @pytest.mark.p1
 @pytest.mark.computing_power
-def test_power_logs_pagination_with_behavior_filter(api_client):
+def test_power_logs_pagination_with_behavior_filter(api_client, e2e_config, base_url):
     """cpl_008 - 带 behavior 筛选的分页也应正确工作。"""
+    from conftest import refresh_login
+
     for behavior in ("increase", "deduct"):
         resp = api_client.get(
             "/api/user/computing_power_logs",
             params={"page": 1, "page_size": 10, "behavior": behavior},
         )
+        # token 失效时重新登录
+        if resp.status_code == 400 and "认证" in resp.text:
+            login_data = refresh_login(e2e_config, base_url)
+            if login_data:
+                api_client.headers.update({
+                    "Authorization": f"Bearer {login_data['token']}",
+                    "X-User-Id": login_data["user_id"],
+                })
+            resp = api_client.get(
+                "/api/user/computing_power_logs",
+                params={"page": 1, "page_size": 10, "behavior": behavior},
+            )
         assert resp.status_code == 200, f"behavior={behavior} 请求失败: {resp.status_code}"
         data = resp.json()
         assert data["success"] is True, f"behavior={behavior} 返回失败: {data.get('message')}"

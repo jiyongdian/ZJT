@@ -201,7 +201,10 @@ class MarketingAgentPage(BasePage):
         # 隐藏遮挡元素
         self.page.evaluate("""() => {
             const fab = document.querySelector('.feedback-fab-container');
-            if (fab) fab.style.display = 'none';
+            if (fab) {
+                fab.style.display = 'none';
+                fab.style.pointerEvents = 'none';
+            }
         }""")
         # 点击发送按钮
         send_btn = self.page.locator(".marketing-send-btn").first
