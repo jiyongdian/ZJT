@@ -742,11 +742,11 @@ def validate_name_for_filename(name: str, field_name: str = "名称", language: 
 def validate_image_url(url: str, field_name: str = "reference_image") -> Dict[str, Any]:
     """
     验证图片URL是否为合法的HTTP/HTTPS地址
-    
+
     Args:
         url: 要验证的URL
         field_name: 字段名称，用于错误提示
-        
+
     Returns:
         dict: 包含验证结果
     """
@@ -755,38 +755,41 @@ def validate_image_url(url: str, field_name: str = "reference_image") -> Dict[st
             'valid': False,
             'error': f'{field_name}必须是字符串类型'
         }
-    
+
     url = url.strip()
-    
-    # 检查是否以http://或https://开头
-    if not (url.startswith('http://') or url.startswith('https://')):
-        return {
-            'valid': False,
-            'error': f'{field_name}必须是合法的HTTP图片地址（以http://或https://开头）。请不要传入非URL内容，该字段只能传入图片URL地址。'
-        }
-    
-    # 简单的URL格式验证
-    url_pattern = re.compile(
-        r'^https?://'
-        r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,6}\.?|'
-        r'localhost|'
-        r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'
-        r'(?::\d+)?'
-        r'(?:/?|[/?]\S+)$', re.IGNORECASE)
-    
-    if not url_pattern.match(url):
+
+    # 使用标准库 urllib.parse 解析URL，判断协议与主机是否合法。
+    # 不使用严格正则，以兼容主机名含下划线的内部域名（如 zjt_dev.xxx.cn）。
+    from urllib.parse import urlparse
+    try:
+        parsed = urlparse(url)
+    except Exception:
         return {
             'valid': False,
             'error': f'{field_name}的URL格式不正确。请提供合法的HTTP图片地址，不要传入非URL内容。'
         }
-    
+
+    # 检查是否以http://或https://开头
+    if parsed.scheme not in ('http', 'https'):
+        return {
+            'valid': False,
+            'error': f'{field_name}必须是合法的HTTP图片地址（以http://或https://开头）。请不要传入非URL内容，该字段只能传入图片URL地址。'
+        }
+
+    # 检查主机部分(netloc)是否存在
+    if not parsed.netloc:
+        return {
+            'valid': False,
+            'error': f'{field_name}的URL格式不正确。请提供合法的HTTP图片地址，不要传入非URL内容。'
+        }
+
     return {
         'valid': True,
         'error': None
     }
 
 
-def create_character_json(user_id: str, world_id: str, auth_token: str, name: str, age: str = None, identity: str = None, 
+def create_character_json(user_id: str, world_id: str, auth_token: str, name: str, age: str = None, identity: str = None,
                          appearance: str = None, personality: str = None, behavior: str = None, 
                          other_info: str = None, reference_image: str = None, 
                          _temp_filename: str = None, language: str = "zh-CN", **additional_fields) -> Dict[str, Any]:
@@ -835,7 +838,7 @@ def create_character_json(user_id: str, world_id: str, auth_token: str, name: st
                     'success': False,
                     'error': url_validation['error']
                 }
-        
+
         # 创建角色数据
         character_data = {
             'name': validated_name,
@@ -1288,7 +1291,7 @@ def create_location_json(user_id: str, world_id: str, auth_token: str, name: str
                     'success': False,
                     'error': url_validation['error']
                 }
-        
+
         # 创建地点数据
         location_data = {
             'name': validated_name,
@@ -1381,7 +1384,7 @@ def create_prop_json(user_id: str, world_id: str, auth_token: str, name: str, pr
                     'success': False,
                     'error': url_validation['error']
                 }
-        
+
         # 创建道具数据
         prop_data = {
             'name': validated_name,
@@ -1845,7 +1848,7 @@ def update_character_json(user_id: str, world_id: str, auth_token: str, name: st
                     'success': False,
                     'error': url_validation['error']
                 }
-        
+
         # 更新字段（只更新提供的非None字段）
         if age is not None:
             existing_data['age'] = age
@@ -1956,7 +1959,7 @@ def update_location_json(user_id: str, world_id: str, auth_token: str, name: str
                     'success': False,
                     'error': url_validation['error']
                 }
-        
+
         # 更新字段（只更新提供的非None字段）
         if parent_id is not None:
             existing_data['parent_id'] = parent_id
@@ -2059,7 +2062,7 @@ def update_prop_json(user_id: str, world_id: str, auth_token: str, name: str, pr
                     'success': False,
                     'error': url_validation['error']
                 }
-        
+
         # 更新字段（只更新提供的非None字段）
         if prop_type is not None:
             existing_data['type'] = prop_type
