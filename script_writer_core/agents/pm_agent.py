@@ -26,7 +26,7 @@ def _get_session_storage():
 
 class PMAgent(BaseAgent, AskUserMixin):
     """项目经理智能体 - 负责任务拆分、派发、验证、协调"""
-    
+
     def __init__(
         self,
         model: str,
@@ -67,6 +67,7 @@ class PMAgent(BaseAgent, AskUserMixin):
         self.file_manager = file_manager
         self.tool_executor = tool_executor
         self.agents_config = agents_config
+        self.allowed_expert_types = agents_config.get("pm_agent", {}).get("allowed_expert_types")
         self.user_id = user_id
         self.world_id = world_id
         self.auth_token = auth_token
@@ -100,12 +101,12 @@ class PMAgent(BaseAgent, AskUserMixin):
                 f"以上是已有内容。请基于这些信息进行创作规划。\n"
                 f"{'='*60}"
             )
-        
+
         if skip_env_context:
             logger.info(f"{agent_id}: Built system prompt without environment context (total: {len(enhanced_system_prompt)} chars)")
         else:
             logger.info(f"{agent_id}: Built enhanced system prompt with environment context ({len(env_context)} chars, total: {len(enhanced_system_prompt)} chars)")
-        
+
         super().__init__(
             agent_id=agent_id,
             skill_names=pm_skill_names,
@@ -128,12 +129,12 @@ class PMAgent(BaseAgent, AskUserMixin):
         self.last_api_input_tokens = 0
         # 暂时没有对 内容进行压缩
         self.summarizer = ConversationSummarizer()
-        
+
         # 将 system 提示词添加到对话历史（用于日志记录）
         self.add_to_history("system", self.system_prompt)
         logger.info(f"{self.agent_id}: Added system prompt to conversation_history (length: {len(self.system_prompt)} chars)")
         logger.info(f"{self.agent_id}: conversation_history now has {len(self.conversation_history)} messages")
-    
+
     def _build_system_prompt(self, skill_names: List[str]) -> str:
         """构建系统提示"""
         base_prompt = self._custom_base_prompt or """你是剧本架构师（Script Orchestrator），负责协调专家智能体完成剧本创作。
@@ -153,7 +154,7 @@ class PMAgent(BaseAgent, AskUserMixin):
 - 绝不直接生成剧本内容，必须通过 call_agent 调用专家
 - 向用户提问时必须使用 ask_user 工具，禁止以纯文本方式提问（纯文本提问用户无法收到交互弹框）
 """
-        
+
         # 加载所有技能内容
         skill_prompts = []
         for skill_name in skill_names:
@@ -163,7 +164,7 @@ class PMAgent(BaseAgent, AskUserMixin):
                 skill_prompts.append((skill_name, skill_prompt))
             else:
                 logger.warning(f"Failed to load {skill_name} skill, skipping")
-        
+
         # 如果成功加载技能内容，则附加到提示词中
         if skill_prompts:
             skills_section = "\n\n" + "="*60 + "\n**你的核心技能**\n" + "="*60 + "\n\n"
@@ -172,7 +173,7 @@ class PMAgent(BaseAgent, AskUserMixin):
             return base_prompt + skills_section
         else:
             return base_prompt
-    
+
     def execute(self, task: AgentTask, session_data: Dict[str, Any]) -> Dict[str, Any]:
         """执行主任务"""
         logger.info(f"{self.agent_id}: Starting execution for task {task.task_id}")
@@ -270,14 +271,14 @@ class PMAgent(BaseAgent, AskUserMixin):
 
             # 执行 PM 循环
             result = self._run_pm_loop(task, session_data)
-            
+
             logger.info(f"{self.agent_id}: Execution completed")
             return {
                 "success": True,
                 "result": result,
                 "completed_tasks": self.completed_tasks
             }
-            
+
         except Exception as e:
             logger.error(f"{self.agent_id}: Execution failed - {e}", exc_info=True)
             return {
@@ -285,14 +286,14 @@ class PMAgent(BaseAgent, AskUserMixin):
                 "error": str(e),
                 "completed_tasks": self.completed_tasks
             }
-    
+
     def _run_pm_loop(self, task: AgentTask, session_data: Dict[str, Any], max_iterations: int = 50) -> str:
         """运行 PM 主循环"""
         iteration = 0
-        
+
         while iteration < max_iterations:
             iteration += 1
-            
+
             should_stop, reason = self.should_stop()
             if should_stop:
                 logger.info(f"{self.agent_id}: Stopping - {reason}")
@@ -314,12 +315,12 @@ class PMAgent(BaseAgent, AskUserMixin):
                 return f"任务执行停止: {e.message}"
 
             logger.info(f"{self.agent_id}: PM Loop iteration {iteration}/{max_iterations}")
-            
+
             self.task_manager.push_message(task.task_id, 'progress', {
                 'progress': iteration / max_iterations,
                 'step': f"执行中 ({iteration}/{max_iterations})"
             })
-            
+
             try:
                 # 在构建 API 消息前检查是否需要压缩上下文
                 if self._should_compress():
@@ -376,7 +377,7 @@ class PMAgent(BaseAgent, AskUserMixin):
                     logger.info(f"{self.agent_id}: 本次 API input_tokens={self.last_api_input_tokens}")
 
                 message = response.choices[0].message
-                
+
                 if hasattr(message, 'tool_calls') and message.tool_calls:
                     self._handle_tool_calls(message, task, session_data)
                 else:
@@ -389,13 +390,13 @@ class PMAgent(BaseAgent, AskUserMixin):
                     logger.info(f"{self.agent_id}: Adding assistant response to history (length: {len(content)} chars, has_reasoning={reasoning_content is not None})")
                     self.add_to_history("assistant", history_content)
                     logger.info(f"{self.agent_id}: conversation_history now has {len(self.conversation_history)} messages")
-                    
+
                     logger.warning(f"[DUPLICATE-DEBUG] About to push PM message: task_id={task.task_id}, content_preview={content[:100]}...")
                     self.task_manager.push_message(task.task_id, 'message', {
                         'role': 'assistant',
                         'content': content
                     })
-                    
+
                     logger.info(f"{self.agent_id}: PM completed with response")
                     return content
 
@@ -421,7 +422,7 @@ class PMAgent(BaseAgent, AskUserMixin):
                 self.task_manager.push_message(task.task_id, 'error', {
                     'error': str(e)
                 })
-        
+
         logger.warning(f"{self.agent_id}: Max iterations reached")
         return "任务执行达到最大迭代次数"
 
@@ -450,12 +451,12 @@ class PMAgent(BaseAgent, AskUserMixin):
                 for tc in tool_calls
             ]
         }
-        
+
         # 提取 thought_signature（如果存在）
         # 根据 Gemini 文档：并行函数调用时，只有第一个函数调用包含 thought_signature
         if hasattr(message, 'thought_signature') and message.thought_signature:
             history_entry["thought_signature"] = message.thought_signature
-        
+
         # 提取 reasoning_content（如果存在）
         # DeepSeek 等推理模型要求在后续请求中回传 reasoning_content
         # 注意：即使 reasoning_content 为空字符串或 None 也要保留，服务端要求原样回传
@@ -539,7 +540,7 @@ class PMAgent(BaseAgent, AskUserMixin):
         """执行工具调用"""
         if tool_name not in self.allowed_tools:
             return {"error": f"工具 {tool_name} 不在允许列表中"}
-        
+
         try:
             if tool_name == "call_agent":
                 return self._handle_agent_call(tool_args, task, session_data)
@@ -585,7 +586,7 @@ class PMAgent(BaseAgent, AskUserMixin):
         return {"success": True, "sop_name": sop_name, "content": sop_content}
 
     def _handle_agent_call(
-        self, 
+        self,
         tool_args: Dict[str, Any],
         task: AgentTask,
         session_data: Dict[str, Any]
@@ -595,16 +596,25 @@ class PMAgent(BaseAgent, AskUserMixin):
 
         if not skill_name:
             return {"error": "缺少 AgentName 参数"}
-        
+
         if skill_name not in self.agents_config["expert_agents"]:
             return {"error": f"未知的专家技能: {skill_name}"}
-        
+
+        if not self._is_expert_allowed(skill_name):
+            allowed_types = ", ".join(self.allowed_expert_types or [])
+            return {
+                "error": (
+                    f"不允许调用专家 {skill_name}。"
+                    f"当前 PM 仅允许调用类型: {allowed_types or '未限制'}"
+                )
+            }
+
         logger.info(f"{self.agent_id}: Dispatching task to expert {skill_name}")
-        
+
         self.task_manager.push_message(task.task_id, 'progress', {
             'step': f"正在调用专家 {skill_name} 执行任务..."
         })
-        
+
         expert_config = self.agents_config["expert_agents"][skill_name]
 
         # 构建包含完整环境内容的上下文
@@ -647,8 +657,10 @@ class PMAgent(BaseAgent, AskUserMixin):
         pm_ask_user_history = self._extract_ask_user_qa()
         merged_history = llm_history + pm_ask_user_history
 
-        # 自动提取当前任务中的图片 URL，注入到专家上下文
+        # 自动提取当前任务中的媒体 URL，注入到专家上下文
         image_urls_for_expert = task.image_urls or []
+        audio_urls_for_expert = task.audio_urls or []
+        video_urls_for_expert = task.video_urls or []
 
         expert_task = {
             "session_id": task.task_id,
@@ -657,7 +669,9 @@ class PMAgent(BaseAgent, AskUserMixin):
             "description": tool_args.get("task_description", "执行任务"),
             "pm_context": context,
             "conversation_history": merged_history,
-            "image_urls": image_urls_for_expert
+            "image_urls": image_urls_for_expert,
+            "audio_urls": audio_urls_for_expert,
+            "video_urls": video_urls_for_expert
         }
 
         result = expert.execute_task(expert_task)
@@ -733,29 +747,33 @@ class PMAgent(BaseAgent, AskUserMixin):
         return result
 
     def _save_pending_task_to_history(self, session_id: str, event_type: str, project_ids: list):
-        """将待处理的图片/视频任务标记保存到对话历史，支持页面刷新后恢复"""
+        """将待处理的图片/视频任务标记保存到 chat_messages 表，支持页面刷新后恢复"""
         try:
-            from model.chat_sessions import ChatSessionsModel
-            session_entity = ChatSessionsModel.get_by_session_id(session_id)
-            if session_entity:
-                history = session_entity.conversation_history or []
-                history.append({
-                    'role': 'assistant',
-                    'content': f'__PENDING_TASK__:{event_type}:{json.dumps(project_ids)}',
-                    'timestamp': datetime.now().isoformat()
-                })
-                ChatSessionsModel.update_conversation_history(
-                    session_id=session_id,
-                    conversation_history=history,
-                    update_tokens=False
-                )
-                # 使缓存失效，确保下次加载时从数据库读取最新数据
-                try:
-                    _get_session_storage().invalidate_cache(session_id)
-                except Exception as cache_err:
-                    logger.warning(f"{self.agent_id}: 清除会话缓存失败: {cache_err}")
+            from model.chat_messages import ChatMessagesModel
+
+            content = f'__PENDING_TASK__:{event_type}:{json.dumps(project_ids)}'
+            idempotency_key = f'pending:{session_id}:{event_type}:{",".join(str(pid) for pid in sorted(project_ids))}'
+
+            ChatMessagesModel.create(
+                message_id=f'pending_{uuid.uuid4().hex[:12]}',
+                session_id=session_id,
+                role='assistant',
+                message_type='pending_task',
+                content=content,
+                idempotency_key=idempotency_key,
+                source='pm_agent',
+                agent_scope='pm',
+                context_state='active',
+                visibility='ui',
+            )
+
+            # 使缓存失效，确保下次加载时从数据库读取最新数据
+            try:
+                _get_session_storage().invalidate_cache(session_id)
+            except Exception as cache_err:
+                logger.warning(f"{self.agent_id}: 清除会话缓存失败: {cache_err}")
         except Exception as e:
-            logger.warning(f"{self.agent_id}: 保存 pending task 标记到对话历史失败: {e}")
+            logger.warning(f"{self.agent_id}: 保存 pending task 标记到 chat_messages 失败: {e}")
 
     def _build_context_for_expert(self, skill_name: str, user_id: str = "0", world_id: str = "0") -> str:
         """为专家构建上下文，包含所有环境内容"""
@@ -839,22 +857,22 @@ class PMAgent(BaseAgent, AskUserMixin):
     def _truncate_environment_context(self, env_context: str, user_id: str, world_id: str, max_chars: int) -> str:
         """截断环境上下文"""
         return self._truncate_context(env_context, user_id, world_id, max_chars)
-    
+
     def _truncate_context(self, full_context: str, user_id: str, world_id: str, max_chars: int) -> str:
         """截断上下文，保留前25000和后25000个字符"""
         if len(full_context) <= max_chars:
             return full_context
-        
+
         # 保留前25000和后25000个字符
         half_size = 25000
         truncated = (
-            full_context[:half_size] + 
-            f"\n\n[... 省略中间 {len(full_context) - 2*half_size} 个字符 ...]\n\n" + 
+            full_context[:half_size] +
+            f"\n\n[... 省略中间 {len(full_context) - 2*half_size} 个字符 ...]\n\n" +
             full_context[-half_size:]
         )
-        
+
         return truncated
-    
+
     def _get_context_window(self) -> Optional[int]:
         """获取上下文窗口大小，优先使用配置值，否则按模型名推断默认值"""
         if self.context_window is not None:
@@ -1327,6 +1345,7 @@ class PMAgent(BaseAgent, AskUserMixin):
 
     def _get_tool_definitions(self) -> List[Dict[str, Any]]:
         """获取工具定义"""
+        allowed_experts = self._get_allowed_expert_names()
         # 1. 核心 PM 工具定义
         pm_tools = [
             {
@@ -1339,7 +1358,7 @@ class PMAgent(BaseAgent, AskUserMixin):
                         "properties": {
                             "AgentName": {
                                 "type": "string",
-                                "enum": list(self.agents_config["expert_agents"].keys()),
+                                "enum": allowed_experts,
                                 "description": "要调用的专家智能体名称（如 story-writer, character-creator 等）"
                             },
                             "task_description": {
@@ -1371,7 +1390,7 @@ class PMAgent(BaseAgent, AskUserMixin):
                 }
             }
         ]
-        
+
         # 2. 获取 allowed_tools 中的其他工具
         core_tool_names = ["call_agent", "ask_user", "load_sop"]
         other_allowed_tools = [t for t in self.allowed_tools if t not in core_tool_names]
@@ -1389,6 +1408,27 @@ class PMAgent(BaseAgent, AskUserMixin):
             pm_tools.append(LOAD_SOP_TOOL_DEFINITION)
 
         return pm_tools
+
+    def _get_allowed_expert_names(self) -> List[str]:
+        """根据当前 PM 允许的 expert_type 返回可调用专家列表。"""
+        expert_agents = self.agents_config.get("expert_agents", {})
+        if not self.allowed_expert_types:
+            return list(expert_agents.keys())
+
+        allowed_types = set(self.allowed_expert_types)
+        return sorted(
+            name
+            for name, config in expert_agents.items()
+            if config.get("expert_type") in allowed_types
+        )
+
+    def _is_expert_allowed(self, skill_name: str) -> bool:
+        """校验当前 PM 是否允许调用指定专家。"""
+        if not self.allowed_expert_types:
+            return True
+
+        expert_config = self.agents_config.get("expert_agents", {}).get(skill_name, {})
+        return expert_config.get("expert_type") in set(self.allowed_expert_types)
 
     def should_stop(self) -> tuple[bool, str]:
         """检查是否需要停止"""

@@ -138,6 +138,12 @@ def _resubmit_image_request(task) -> str:
     Returns:
         新的 project_id，失败返回 None
     """
+    # ===== E2E Mock 短路 =====
+    from task.mock_interceptor import is_mock_enabled, generate_mock_project_id
+    if is_mock_enabled():
+        return generate_mock_project_id()
+    # =========================
+
     if not task.prompt or not task.task_config_id:
         logger.warning(f"任务 {task.task_key} 缺少 prompt 或 task_config_id，无法重试")
         return None
@@ -191,10 +197,13 @@ def _handle_task_success(task: Any, comfyui_task_data: Dict):
         if not file_url:
             raise Exception('图片生成完成但未返回文件URL')
         
-        # 默认关闭图片下载功能
+        is_grid_type = task.item_type in [4, 5, 6]  # 4=character_grid, 5=location_grid, 6=prop_grid
+
+        # 默认关闭图片下载功能；E2E mock 四宫格必须落盘拆图，否则四个 item 不会获得参考图
         enable_image_download = get_config().get("image", {}).get("enable_download", False)
-        
-        if enable_image_download:
+        force_mock_grid_download = is_grid_type and isinstance(file_url, str) and file_url.startswith("/upload/mock/")
+
+        if enable_image_download or force_mock_grid_download:
             # 启用图片下载和本地存储
             local_image_url, local_file_path = _download_and_store_image(
                 file_url, task.item_type, task.comfyui_base_url
@@ -205,10 +214,9 @@ def _handle_task_success(task: Any, comfyui_task_data: Dict):
             local_file_path = None
         
         # 检查是否为4宫格类型，需要进行图片拆分
-        is_grid_type = task.item_type in [4, 5, 6]  # 4=character_grid, 5=location_grid, 6=prop_grid
         split_image_urls = []
         
-        if is_grid_type and enable_image_download and local_file_path:
+        if is_grid_type and local_file_path:
             # 4宫格图片需要拆分
             try:
                 # 解析item_name（格式："name1,name2,name3,name4"）
@@ -412,6 +420,15 @@ def process_grid_image_tasks(app=None):
                     _update_task_status_file(task.item_type, task.item_name, 'running', 
                                            task.user_id, task.world_id)
                 
+                # ===== E2E Mock 短路 =====
+                from task.mock_interceptor import is_mock_enabled, is_mock_id, comfyui_status_success, _img
+                if is_mock_enabled() and is_mock_id(task.project_id):
+                    file_url = (_img("grid_image") if task.item_type in (4, 5, 6)
+                                else _img("comfyui_text_to_image")) or "/upload/mock/e2e_grid_2x2.png"
+                    _handle_task_success(task, comfyui_status_success(file_url))
+                    continue
+                # =========================
+
                 # 检查ComfyUI任务状态
                 status_url = f"{task.comfyui_base_url.rstrip('/')}/api/get-status/{task.project_id}"
                 response = requests.get(f"{status_url}?auth_token={task.auth_token}", timeout=10)

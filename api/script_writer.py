@@ -1052,6 +1052,22 @@ async def get_session_history(request: Request, session_id: str):
 
             if messages:
                 history = [msg.to_frontend_dict() for msg in messages]
+                verification_history = [
+                    item for item in history
+                    if item.get('role') == 'verification'
+                    and isinstance(item.get('content'), dict)
+                    and item.get('content', {}).get('verification_id')
+                ]
+                if verification_history:
+                    from model.agent_verifications import AgentVerificationsModel
+                    for item in verification_history:
+                        verification = await asyncio.to_thread(
+                            AgentVerificationsModel.get_by_verification_id,
+                            item['content']['verification_id'],
+                        )
+                        if verification:
+                            item['verification_status'] = verification.status
+                            item['content']['status'] = verification.status
                 # 从 chat_sessions 获取时间戳
                 from model.chat_sessions import ChatSessionsModel
                 entity = await asyncio.to_thread(ChatSessionsModel.get_by_session_id, session_id)
@@ -1361,11 +1377,25 @@ async def append_session_message(request: Request, session_id: str, message_requ
 @router.post('/session/{session_id}/clean-pending-tasks')
 @require_permission("script_session:update")
 async def clean_pending_tasks(request: Request, session_id: str):
-    """清理对话历史中的 __PENDING_TASK__ 标记（软删除 chat_messages 中对应记录）"""
+    """清理对话历史中的 __PENDING_TASK__ 标记（精确清理，支持并发任务）
+
+    请求体（可选）:
+    - task_type: str, 如 'image_task_submitted' / 'video_task_submitted'
+    - project_ids: list[int], 如 [757]
+    不传参数时清理全部 pending 标记（向后兼容）。
+    """
     try:
+        body = {}
+        try:
+            body = await request.json()
+        except Exception:
+            pass  # 无 body 时兼容旧调用
+
+        task_type = body.get('task_type')
+        project_ids = body.get('project_ids')
+
         from model.chat_messages import ChatMessagesModel
 
-        # 查询所有非 deleted 的 assistant 消息
         all_msgs = await asyncio.to_thread(
             ChatMessagesModel.list_for_session, session_id,
             agent_scope='pm',
@@ -1374,14 +1404,28 @@ async def clean_pending_tasks(request: Request, session_id: str):
 
         pending_msg_ids = []
         for m in all_msgs:
-            content = m.content
-            # 检查是否是 __PENDING_TASK__ 消息
             text = ''
-            if isinstance(content, str):
-                text = content
-            elif isinstance(content, dict):
-                text = content.get('text', '')
-            if text.startswith('__PENDING_TASK__'):
+            if isinstance(m.content, str):
+                text = m.content
+            elif isinstance(m.content, dict):
+                text = m.content.get('text', '')
+
+            if not text.startswith('__PENDING_TASK__'):
+                continue
+
+            # 精确匹配：只清理指定 task_type 和 project_ids 的 pending 消息
+            if task_type and project_ids:
+                match = re.match(r'^__PENDING_TASK__:([^:]+):(.+)$', text)
+                if match:
+                    msg_event_type = match.group(1)
+                    try:
+                        msg_project_ids = json.loads(match.group(2))
+                    except (json.JSONDecodeError, TypeError):
+                        msg_project_ids = []
+                    if msg_event_type == task_type and set(map(str, msg_project_ids)) == set(map(str, project_ids)):
+                        pending_msg_ids.append(m.id)
+            else:
+                # 兼容旧调用：不传参数时清理全部
                 pending_msg_ids.append(m.id)
 
         if pending_msg_ids:
@@ -1402,6 +1446,79 @@ async def clean_pending_tasks(request: Request, session_id: str):
             'success': False,
             'error': str(e)
         }, status_code=500)
+
+@router.put('/session/{session_id}/message/{message_id}')
+@require_permission("script_session:update")
+async def update_message_content(request: Request, session_id: str, message_id: str):
+    """更新指定消息的内容（用于 pending_task → 结果替换）"""
+    try:
+        body = await request.json()
+        new_content = body.get('content')
+        new_message_type = body.get('message_type')
+
+        if not new_content:
+            return JSONResponse({'success': False, 'error': 'content is required'}, status_code=400)
+
+        from model.chat_messages import ChatMessagesModel
+        affected = await asyncio.to_thread(
+            ChatMessagesModel.update_content,
+            message_id,
+            new_content,
+            new_message_type,
+            session_id
+        )
+        if affected == 0:
+            return JSONResponse({'success': False, 'error': 'message not found or session mismatch'}, status_code=404)
+        session_storage.invalidate_cache(session_id)
+        return JSONResponse({'success': True})
+    except Exception as e:
+        logger.error(f'更新消息内容失败: {str(e)}')
+        return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
+
+@router.post('/session/{session_id}/replace-pending-task')
+@require_permission("script_session:update")
+async def replace_pending_task(request: Request, session_id: str):
+    """按 task_type + project_ids 查找并替换 pending_task 消息为结果内容
+
+    请求体:
+    - task_type: str, 如 'image_task_submitted' / 'video_task_submitted'
+    - project_ids: list[int], 如 [757]
+    - content: str, 替换后的结果内容
+
+    返回:
+    - replaced: int, 实际替换的行数（0 表示未找到匹配的 pending 行）
+    """
+    try:
+        body = await request.json()
+        task_type = body.get('task_type')
+        project_ids = body.get('project_ids')
+        new_content = body.get('content')
+
+        if not task_type or not project_ids or not new_content:
+            return JSONResponse({
+                'success': False,
+                'error': 'task_type, project_ids and content are required'
+            }, status_code=400)
+
+        from model.chat_messages import ChatMessagesModel
+        affected = await asyncio.to_thread(
+            ChatMessagesModel.replace_pending_task,
+            session_id,
+            task_type,
+            project_ids,
+            new_content
+        )
+
+        if affected > 0:
+            session_storage.invalidate_cache(session_id)
+
+        return JSONResponse({
+            'success': True,
+            'replaced': affected
+        })
+    except Exception as e:
+        logger.error(f'替换 pending task 失败: {str(e)}')
+        return JSONResponse({'success': False, 'error': str(e)}, status_code=500)
 
 @router.get('/session/{session_id}/latest-task')
 @require_permission("agent_task:view")

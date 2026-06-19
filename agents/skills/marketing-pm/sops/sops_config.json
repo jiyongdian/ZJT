@@ -7,6 +7,10 @@
     "allowed_tools": [
     ]
   },
+  "sop-digital-human": {
+    "allowed_tools": [
+    ]
+  },
   "sop-image-understanding": {
     "allowed_tools": [
     ]

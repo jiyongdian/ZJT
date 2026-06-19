@@ -51,11 +51,19 @@ class TestAsyncTaskConfigValues(unittest.TestCase):
         self.assertTrue(config.need_runninghub_slot)
         self.assertEqual(config.slot_task_type, 2)
 
+    def test_runninghub_image_face_mask_config(self):
+        """RunningHub 图片人脸遮盖配置应为需要槽位且 slot_task_type=3"""
+        config = get_async_task_config(AsyncTaskImplementationId.RUNNINGHUB_IMAGE_FACE_MASK)
+
+        self.assertTrue(config.need_runninghub_slot)
+        self.assertEqual(config.slot_task_type, 3)
+
     def test_implementation_id_constants(self):
         """验证实现 ID 常量值"""
         self.assertEqual(AsyncTaskImplementationId.UNKNOWN, 0)
         self.assertEqual(AsyncTaskImplementationId.RUNNINGHUB_AUDIO, 1)
         self.assertEqual(AsyncTaskImplementationId.RUNNINGHUB_FACE_MASK, 2)
+        self.assertEqual(AsyncTaskImplementationId.RUNNINGHUB_IMAGE_FACE_MASK, 3)
 
 
 class TestMediaConstants(unittest.TestCase):

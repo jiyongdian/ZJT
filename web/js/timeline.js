@@ -1923,7 +1923,8 @@
               video_clips: videoClipsData,
               audio_clips: audioClipsData,
               pillars: pillarsData,
-              workflow_name: workflowName
+              workflow_name: workflowName,
+              ratio: state.ratio
             })
           });
           

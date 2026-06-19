@@ -39,7 +39,8 @@ class JianyingMultiTrackLibrary:
 
     def __init__(self, draft_name: str, output_dir: str, config: Optional[JianyingConfig] = None,
                  material_path_prefix: Optional[str] = None,
-                 width: int = 1920, height: int = 1080, fps: int = 30):
+                 width: int = 1920, height: int = 1080, fps: int = 30,
+                 ratio: str = "original"):
         """
         初始化多轨道草稿生成器
         
@@ -60,6 +61,7 @@ class JianyingMultiTrackLibrary:
         self.width = width or 1920  # 默认1920x1080分辨率
         self.height = height or 1080
         self.fps = fps or 30  # 默认30fps
+        self.ratio = ratio or "original"  # 画布比例，写入 canvas_config.ratio
         self.draft_id = str(uuid.uuid4()).upper()
 
         # 轨道管理
@@ -138,7 +140,8 @@ class JianyingMultiTrackLibrary:
     def add_video_to_track(self, track_id: str, file_path: str, start_time: int, 
                           duration: int = None, source_start: int = 0, width: int = None, 
                           height: int = None, speed: float = 1.0, volume: float = 1.0, 
-                          is_placeholder: bool = False) -> str:
+                          is_placeholder: bool = False,
+                          material_duration: Optional[int] = None) -> str:
         """向指定视频轨道添加视频片段"""
         # 查找轨道
         track = None
@@ -164,6 +167,9 @@ class JianyingMultiTrackLibrary:
         video_width = width or self.width
         video_height = height or self.height
 
+        # material_duration 为素材文件完整时长；duration 为本片段使用时长（可能含裁剪）
+        material_dur = material_duration if material_duration is not None else duration
+
         # 添加到素材库
         if material_id not in self.video_materials:
             self.video_materials[material_id] = {
@@ -179,7 +185,7 @@ class JianyingMultiTrackLibrary:
                 },
                 "crop_ratio": "free",
                 "crop_scale": 1.0,
-                "duration": duration,
+                "duration": material_dur,
                 "height": video_height,
                 "id": material_id,
                 "local_material_id": "",
@@ -194,7 +200,7 @@ class JianyingMultiTrackLibrary:
             # 添加元数据
             self.meta_materials.append({
                 "create_time": int(datetime.now().timestamp()),
-                "duration": duration,
+                "duration": material_dur,
                 "extra_info": "",
                 "file_Path": material_path,
                 "height": video_height,
@@ -230,7 +236,8 @@ class JianyingMultiTrackLibrary:
 
     def add_audio_to_track(self, track_id: str, file_path: str, start_time: int,
                           duration: int = None, source_start: int = 0, volume: float = 1.0,
-                          speed: float = 1.0) -> str:
+                          speed: float = 1.0,
+                          material_duration: Optional[int] = None) -> str:
         """向指定音频轨道添加音频片段"""
         # 查找轨道
         track = None
@@ -252,6 +259,9 @@ class JianyingMultiTrackLibrary:
         # 素材路径使用用户提供的剪影目录前缀
         material_path = self._build_material_path(filename)
 
+        # material_duration 为素材文件完整时长；duration 为本片段使用时长（可能含裁剪）
+        material_dur = material_duration if material_duration is not None else duration
+
         # 添加到素材库
         if material_id not in self.audio_materials:
             self.audio_materials[material_id] = {
@@ -259,7 +269,7 @@ class JianyingMultiTrackLibrary:
                 "category_id": "",
                 "category_name": "local",
                 "check_flag": 1,
-                "duration": duration,
+                "duration": material_dur,
                 "effect_id": "",
                 "formula_id": "",
                 "id": material_id,
@@ -287,7 +297,7 @@ class JianyingMultiTrackLibrary:
             # 添加元数据
             self.meta_materials.append({
                 "create_time": int(datetime.now().timestamp()),
-                "duration": duration,
+                "duration": material_dur,
                 "extra_info": "",
                 "file_Path": material_path,
                 "height": 0,

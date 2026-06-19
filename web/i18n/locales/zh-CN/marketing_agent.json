@@ -189,6 +189,7 @@
   "video_upload_failed_delete": "视频上传失败，请删除失败的视频后重新上传",
   "video_processing_timeout": "视频处理超时，请稍后重试",
   "video_not_ready": "视频上传未完成，请稍后重试",
+  "audio_not_ready": "音频上传未完成，请稍后重试",
   "image_mode_only_images": "图片生成模式下只能上传图片文件",
   "audio_size_limit": "音频大小不能超过 20MB",
   "audio_processing_failed": "音频处理失败，请重新上传",

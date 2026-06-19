@@ -51,6 +51,7 @@ class TestPipelineStepConstants(unittest.TestCase):
     def test_type_values(self):
         """验证 PipelineStepType 常量值"""
         self.assertEqual(PipelineStepType.FACE_MASK, 'face_mask')
+        self.assertEqual(PipelineStepType.IMAGE_FACE_MASK, 'image_face_mask')
         self.assertEqual(PipelineStepType.IMPLEMENTATION_RETRY, 'implementation_retry')
 
 

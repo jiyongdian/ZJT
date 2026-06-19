@@ -216,5 +216,78 @@ class TestBuildContextForExpert(unittest.TestCase):
         self.assertIn("完整模式", result)
 
 
+class TestMarketingExpertTypeIsolation(unittest.TestCase):
+    """测试营销 PM 只能看到营销类型专家"""
+
+    def _create_agent(self):
+        from script_writer_core.agents.marketing_pm_agent import MarketingPMAgent
+
+        file_manager = MagicMock()
+        file_manager.get_context_for_ai.return_value = ""
+        return MarketingPMAgent(
+            model="gpt-4",
+            allowed_tools=["call_agent"],
+            task_manager=MagicMock(),
+            file_manager=file_manager,
+            tool_executor=MagicMock(),
+            agents_config={
+                "marketing_pm_agent": {
+                    "allowed_expert_types": ["marketing"]
+                },
+                "expert_agents": {
+                    "marketing-video": {
+                        "expert_type": "marketing",
+                        "skills": [],
+                        "allowed_tools": [],
+                        "model": "gpt-4",
+                    },
+                    "digital-human-creator": {
+                        "expert_type": "marketing",
+                        "skills": [],
+                        "allowed_tools": [],
+                        "model": "gpt-4",
+                    },
+                    "story-writer": {
+                        "expert_type": "script",
+                        "skills": [],
+                        "allowed_tools": [],
+                        "model": "gpt-4",
+                    },
+                },
+            },
+            user_id="1",
+            world_id="1",
+            auth_token="token",
+            base_prompt="test prompt",
+            sop_loader=MagicMock(),
+        )
+
+    def test_call_agent_schema_only_includes_marketing_experts(self):
+        """营销 PM 的 call_agent 枚举不包含剧本专家"""
+        agent = self._create_agent()
+
+        tool_defs = agent._get_tool_definitions()
+        call_agent = next(tool for tool in tool_defs if tool["function"]["name"] == "call_agent")
+        enum_values = call_agent["function"]["parameters"]["properties"]["AgentName"]["enum"]
+
+        self.assertEqual(enum_values, ["digital-human-creator", "marketing-video"])
+
+    def test_rejects_cross_type_expert_call(self):
+        """即使模型硬传剧本专家，后端也拒绝执行"""
+        agent = self._create_agent()
+        task = MagicMock()
+        task.user_id = "1"
+        task.world_id = "1"
+        task.task_id = "task-1"
+
+        result = agent._handle_agent_call(
+            {"AgentName": "story-writer", "task_description": "write story"},
+            task,
+            {},
+        )
+
+        self.assertIn("不允许调用", result["error"])
+
+
 if __name__ == '__main__':
     unittest.main()
