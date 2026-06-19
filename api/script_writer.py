@@ -1052,6 +1052,22 @@ async def get_session_history(request: Request, session_id: str):
 
             if messages:
                 history = [msg.to_frontend_dict() for msg in messages]
+                verification_history = [
+                    item for item in history
+                    if item.get('role') == 'verification'
+                    and isinstance(item.get('content'), dict)
+                    and item.get('content', {}).get('verification_id')
+                ]
+                if verification_history:
+                    from model.agent_verifications import AgentVerificationsModel
+                    for item in verification_history:
+                        verification = await asyncio.to_thread(
+                            AgentVerificationsModel.get_by_verification_id,
+                            item['content']['verification_id'],
+                        )
+                        if verification:
+                            item['verification_status'] = verification.status
+                            item['content']['status'] = verification.status
                 # 从 chat_sessions 获取时间戳
                 from model.chat_sessions import ChatSessionsModel
                 entity = await asyncio.to_thread(ChatSessionsModel.get_by_session_id, session_id)

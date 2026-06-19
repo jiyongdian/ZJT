@@ -88,6 +88,156 @@ def _navigate_and_wait(page, base_url, path="/marketing-agent"):
     )
 
 
+def _mock_marketing_verification_restore_flow(page, verification_status="pending"):
+    """Mock two sessions where session A has an unanswered ask_user verification."""
+    state = {
+        "verification_posts": [],
+        "task_posts": [],
+    }
+
+    sessions = [
+        {
+            "session_id": "e2e-verification-session-a",
+            "title": "E2E verification A",
+            "created_at": "2026-06-19T10:00:00",
+            "updated_at": "2026-06-19T10:00:00",
+        },
+        {
+            "session_id": "e2e-verification-session-b",
+            "title": "E2E verification B",
+            "created_at": "2026-06-19T09:00:00",
+            "updated_at": "2026-06-19T09:00:00",
+        },
+    ]
+
+    histories = {
+        "e2e-verification-session-a": [
+            {
+                "role": "verification",
+                "message_type": "verification_request",
+                "verification_id": "e2e-verification-id-a",
+                "verification_status": verification_status,
+                "content": {
+                    "verification_id": "e2e-verification-id-a",
+                    "title": "请选择营销方向",
+                    "description": "切换会话回来后仍应可以回答这个问题。",
+                    "options": ["方案A", "方案B"],
+                    "status": verification_status,
+                },
+                "timestamp": "2026-06-19T10:01:00",
+            }
+        ],
+        "e2e-verification-session-b": [
+            {
+                "role": "assistant",
+                "message_type": "normal",
+                "content": "这是另一个会话的消息。",
+                "timestamp": "2026-06-19T09:01:00",
+            }
+        ],
+    }
+
+    def handler(route):
+        request = route.request
+        url = request.url
+        method = request.method.upper()
+        path = "/" + url.split("://", 1)[-1].split("/", 1)[-1].split("?", 1)[0]
+
+        if path == "/api/user/computing_power":
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=_json.dumps({"success": True, "data": {"computing_power": 9999}}),
+            )
+            return
+
+        if path == "/api/system/server-config":
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=_json.dumps({"code": 0, "data": {}}),
+            )
+            return
+
+        if path == "/api/models":
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=_json.dumps({
+                    "success": True,
+                    "models": [
+                        {
+                            "model_id": 1,
+                            "name": "doubao-seed-2-0-lite",
+                            "vendor_id": 1,
+                            "vendor_name": "volcengine",
+                            "supports_vl": True,
+                            "supports_thinking": False,
+                        }
+                    ],
+                }),
+            )
+            return
+
+        if path == "/api/sessions":
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=_json.dumps({"success": True, "sessions": sessions}),
+            )
+            return
+
+        if path.endswith("/history") and path.startswith("/api/session/"):
+            session_id = path.split("/")[3]
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=_json.dumps({
+                    "success": True,
+                    "code": 0,
+                    "history": histories.get(session_id, []),
+                }),
+            )
+            return
+
+        if path.endswith("/latest-task") and path.startswith("/api/session/"):
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=_json.dumps({"success": False, "task": None}),
+            )
+            return
+
+        if path.endswith("/task") and path.startswith("/api/session/") and method == "POST":
+            try:
+                state["task_posts"].append(_json.loads(request.post_data or "{}"))
+            except Exception:
+                state["task_posts"].append(request.post_data)
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=_json.dumps({"success": True, "task_id": "unexpected-normal-task"}),
+            )
+            return
+
+        if path.startswith("/api/verification/") and method == "POST":
+            try:
+                state["verification_posts"].append(_json.loads(request.post_data or "{}"))
+            except Exception:
+                state["verification_posts"].append(request.post_data)
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=_json.dumps({"success": True}),
+            )
+            return
+
+        route.continue_()
+
+    page.route("**/api/**", handler)
+    return state
+
+
 # ═══════════════════════════════════════════════════════════════
 # P0 测试
 # ═══════════════════════════════════════════════════════════════
@@ -214,6 +364,101 @@ def test_marketing_agent_switch_session(marketing_agent_page, page, base_url):
     # 验证第一个会话不再 active
     first_class = items.first.get_attribute("class") or ""
     assert "active" not in first_class, "第一个会话不应再是活跃状态"
+
+
+@pytest.mark.p1
+@pytest.mark.marketing_agent
+def test_marketing_agent_restores_verification_option_after_session_switch(page, base_url):
+    """ma_035 - 切换会话再返回后，未回答的 ask_user 选项仍可点击。"""
+    state = _mock_marketing_verification_restore_flow(page)
+
+    page.goto(f"{base_url}/marketing-agent", wait_until="domcontentloaded")
+    page.locator(".sidebar-history-item").first.wait_for(state="visible", timeout=10000)
+
+    option = page.get_by_role("button", name="方案A").first
+    option.wait_for(state="visible", timeout=10000)
+
+    page.locator(".sidebar-history-item").nth(1).click()
+    page.wait_for_function(
+        "() => document.body.innerText.includes('这是另一个会话的消息。')",
+        timeout=10000,
+    )
+
+    page.locator(".sidebar-history-item").first.click()
+    option.wait_for(state="visible", timeout=10000)
+    assert option.is_enabled(), "切换回原会话后 verification 选项应保持可点击"
+
+    option.click()
+    page.wait_for_timeout(500)
+
+    assert state["verification_posts"], "点击 verification 选项后应提交 /api/verification/{id}"
+    assert state["verification_posts"][0].get("user_input") == "方案A"
+    assert state["task_posts"] == [], "回答 verification 不应创建新的普通 Agent 任务"
+
+
+@pytest.mark.p1
+@pytest.mark.marketing_agent
+def test_marketing_agent_restores_verification_text_input_after_session_switch(page, base_url):
+    """ma_036 - 切换会话再返回后，主输入框可提交 ask_user 自定义回答。"""
+    state = _mock_marketing_verification_restore_flow(page)
+
+    page.goto(f"{base_url}/marketing-agent", wait_until="domcontentloaded")
+    page.locator(".sidebar-history-item").first.wait_for(state="visible", timeout=10000)
+    page.get_by_role("button", name="方案A").first.wait_for(state="visible", timeout=10000)
+
+    page.locator(".sidebar-history-item").nth(1).click()
+    page.wait_for_function(
+        "() => document.body.innerText.includes('这是另一个会话的消息。')",
+        timeout=10000,
+    )
+
+    page.locator(".sidebar-history-item").first.click()
+    page.get_by_role("button", name="方案A").first.wait_for(state="visible", timeout=10000)
+
+    _fill_and_dispatch(page, "我选择自定义营销方向")
+    send_btn = page.locator(".marketing-send-btn").first
+    assert send_btn.is_enabled(), "恢复 pending verification 后主输入发送按钮应可用"
+    send_btn.click()
+    page.wait_for_timeout(500)
+
+    assert state["verification_posts"], "主输入框回答应提交 /api/verification/{id}"
+    assert state["verification_posts"][0].get("user_input") == "我选择自定义营销方向"
+    assert state["task_posts"] == [], "主输入框回答 verification 不应创建新的普通 Agent 任务"
+
+
+@pytest.mark.p1
+@pytest.mark.marketing_agent
+def test_marketing_agent_timeout_verification_does_not_block_input_after_session_switch(page, base_url):
+    """ma_037 - 已超时的 ask_user 历史问题切回后不应阻塞主输入框。"""
+    state = _mock_marketing_verification_restore_flow(page, verification_status="cancelled")
+
+    page.goto(f"{base_url}/marketing-agent", wait_until="domcontentloaded")
+    page.locator(".sidebar-history-item").first.wait_for(state="visible", timeout=10000)
+    page.get_by_text("切换会话回来后仍应可以回答这个问题。").first.wait_for(
+        state="visible",
+        timeout=10000,
+    )
+
+    page.locator(".sidebar-history-item").nth(1).click()
+    page.wait_for_function(
+        "() => document.body.innerText.includes('这是另一个会话的消息。')",
+        timeout=10000,
+    )
+
+    page.locator(".sidebar-history-item").first.click()
+    page.get_by_text("切换会话回来后仍应可以回答这个问题。").first.wait_for(
+        state="visible",
+        timeout=10000,
+    )
+
+    _fill_and_dispatch(page, "超时后开始新的营销对话")
+    send_btn = page.locator(".marketing-send-btn").first
+    assert send_btn.is_enabled(), "超时 verification 不应继续禁用主输入发送"
+    send_btn.click()
+    page.wait_for_timeout(500)
+
+    assert state["verification_posts"] == [], "超时 verification 不应继续提交 verification 回答"
+    assert state["task_posts"], "超时后主输入应能创建新的普通 Agent 任务"
 
 
 @pytest.mark.p0

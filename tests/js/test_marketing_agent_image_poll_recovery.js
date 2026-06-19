@@ -23,9 +23,14 @@ const imageHandlerStart = html.indexOf('function handleImageTaskSubmitted');
 assert.notEqual(imageHandlerStart, -1, 'image task submitted handler should exist');
 const imageHandler = html.slice(imageHandlerStart, imageHandlerStart + 1200);
 assert.equal(
-  imageHandler.includes('const pollSessionId = currentSessionId.value'),
+  imageHandler.includes('function handleImageTaskSubmitted(data, explicitSessionId)'),
   true,
-  'image task submitted handler should bind polling to the current session'
+  'image task submitted handler should accept an explicit session id from the caller'
+);
+assert.equal(
+  imageHandler.includes('const pollSessionId = explicitSessionId || currentSessionId.value'),
+  true,
+  'image task submitted handler should prefer the explicit session id and fall back to the current session'
 );
 assert.equal(
   imageHandler.includes('activeGenerationPollKeys.add(pollKey)'),
@@ -64,6 +69,33 @@ assert.equal(
   imagePoll.includes('appendMessageToBackend(') && imagePoll.includes('pollSessionId'),
   true,
   'image status polling should persist final result to the originating session'
+);
+
+const videoPollStart = html.indexOf('function pollAgentVideoStatus');
+const videoPollEnd = html.indexOf('function sendContinue', videoPollStart);
+assert.notEqual(videoPollStart, -1, 'video status polling function should exist');
+assert.notEqual(videoPollEnd, -1, 'continue handler should follow video polling function');
+const videoPoll = html.slice(videoPollStart, videoPollEnd);
+assert.equal(
+  videoPoll.includes("appendMessageToBackend('assistant', finalContent, pollSessionId)"),
+  true,
+  'video status polling fallback should persist final result to the originating session'
+);
+
+const pendingRecoveryStart = html.indexOf('async function recoverPendingTasks');
+const pendingRecoveryEnd = html.indexOf('// 选择会话', pendingRecoveryStart);
+assert.notEqual(pendingRecoveryStart, -1, 'pending task recovery function should exist');
+assert.notEqual(pendingRecoveryEnd, -1, 'session selection should follow pending task recovery');
+const pendingRecovery = html.slice(pendingRecoveryStart, pendingRecoveryEnd);
+assert.equal(
+  pendingRecovery.includes('async function recoverPendingTasks(sessionId = currentSessionId.value)'),
+  true,
+  'pending task recovery should bind backend writes to the session being restored'
+);
+assert.equal(
+  pendingRecovery.includes("appendMessageToBackend('assistant', content, sessionId)"),
+  true,
+  'pending task recovery fallback should append completed results to the restored session'
 );
 
 console.log('marketing agent image poll recovery tests passed');
