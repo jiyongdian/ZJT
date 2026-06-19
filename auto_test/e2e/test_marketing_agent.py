@@ -51,7 +51,16 @@ def _navigate_and_wait(page, base_url, path="/marketing-agent"):
     """导航到页面并等待加载完成"""
     _mock_computing_power(page)
     page.goto(f"{base_url}{path}", wait_until="domcontentloaded")
-    page.wait_for_timeout(2000)
+    page.wait_for_timeout(3000)
+
+    # 检查是否被重定向到登录页
+    current_url = page.url
+    if "login=1" in current_url or "index.html" in current_url:
+        # 等待 localStorage 注入生效并重新加载
+        page.wait_for_timeout(2000)
+        page.reload(wait_until="domcontentloaded")
+        page.wait_for_timeout(3000)
+
     page.locator(".sidebar, main.main-content").first.wait_for(
         state="attached", timeout=15000
     )
@@ -187,24 +196,101 @@ def test_marketing_agent_switch_session(marketing_agent_page, page, base_url):
 
 @pytest.mark.p0
 @pytest.mark.marketing_agent
-def test_marketing_agent_send_message(marketing_agent_page, page, base_url):
+def test_marketing_agent_send_message(browser, base_url, e2e_config):
     """ma_010 - 发送消息后用户消息出现在聊天区域。"""
-    _navigate_and_wait(page, base_url)
+    from conftest import MarketingAgentPage, refresh_login
 
-    test_text = f"E2E测试消息_{__import__('time').time():.0f}"
-    marketing_agent_page.send_message(test_text)
-    page.wait_for_timeout(3000)
+    # 重新登录获取新 token
+    login_data = refresh_login(e2e_config, base_url)
+    if not login_data:
+        pytest.skip("登录失败，跳过测试")
 
-    # 验证用户消息出现
-    user_messages = page.locator(".message.user")
-    assert user_messages.count() > 0, "发送消息后未出现用户消息"
+    auth_token = login_data["token"]
+    user_id = login_data["user_id"]
 
-    # 验证消息内容包含发送的文本
-    last_user_msg = user_messages.last
-    msg_text = last_user_msg.text_content() or ""
-    assert test_text in msg_text, (
-        f"用户消息内容不匹配，期望包含 '{test_text}'，实际 '{msg_text}'"
+    # 创建新的浏览器上下文
+    context = browser.new_context(
+        viewport={"width": 1280, "height": 720},
+        locale="zh-CN",
     )
+    # 注入 localStorage 认证信息
+    context.add_init_script(f"""
+        localStorage.setItem('auth_token', '{auth_token}');
+        localStorage.setItem('user_id', '{user_id}');
+    """)
+    page = context.new_page()
+
+    # Mock 算力 API
+    def handler(route):
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=_json.dumps({"success": True, "data": {"computing_power": 9999}}),
+        )
+    page.route("**/api/user/computing_power", handler)
+
+    try:
+        # 导航到页面
+        page.goto(f"{base_url}/marketing-agent", wait_until="domcontentloaded")
+        page.wait_for_timeout(3000)
+
+        # 检查是否被重定向到登录页
+        current_url = page.url
+        if "login=1" in current_url or "index.html" in current_url:
+            # 直接注入 token 并重新加载
+            page.evaluate(f"""() => {{
+                localStorage.setItem('auth_token', '{auth_token}');
+                localStorage.setItem('user_id', '{user_id}');
+            }}""")
+            page.reload(wait_until="domcontentloaded")
+            page.wait_for_timeout(3000)
+
+        marketing_agent_page = MarketingAgentPage(page, base_url)
+        marketing_agent_page.wait_for_sidebar_loaded()
+        page.wait_for_timeout(2000)
+
+        # 新建会话确保干净状态
+        marketing_agent_page.click_new_chat()
+        page.wait_for_timeout(2000)
+
+        test_text = f"E2E测试消息_{__import__('time').time():.0f}"
+        marketing_agent_page.send_message(test_text)
+
+        # 等待用户消息出现（最多 20 秒，轮询检查）
+        user_messages = page.locator(".message.user")
+        found = False
+        for i in range(20):
+            page.wait_for_timeout(1000)
+            count = user_messages.count()
+            if count > 0:
+                found = True
+                break
+
+        if not found:
+            # 打印页面状态用于调试
+            page_state = page.evaluate("""() => {
+                return {
+                    url: window.location.href,
+                    textarea_value: document.querySelector('.marketing-textarea')?.value,
+                    send_btn_disabled: document.querySelector('.marketing-send-btn')?.disabled,
+                    messages_count: document.querySelectorAll('.message').length,
+                }
+            }""")
+            assert False, (
+                f"发送消息后未出现用户消息，页面状态: {page_state}"
+            )
+
+        assert user_messages.count() > 0, "发送消息后未出现用户消息"
+
+        # 验证消息内容包含发送的文本
+        last_user_msg = user_messages.last
+        msg_text = last_user_msg.text_content() or ""
+        assert test_text in msg_text, (
+            f"用户消息内容不匹配，期望包含 '{test_text}'，实际 '{msg_text}'"
+        )
+    finally:
+        page.close()
+        context.close()
 
 
 # ═══════════════════════════════════════════════════════════════

@@ -184,16 +184,29 @@ class MarketingAgentPage(BasePage):
         textarea.click()
         self.page.wait_for_timeout(200)
         textarea.fill(text)
-        self.page.evaluate("""() => {
+        # 触发 Vue v-model 更新
+        self.page.evaluate("""(text) => {
             const ta = document.querySelector('.marketing-textarea');
-            if (ta) ta.dispatchEvent(new Event('input', { bubbles: true }));
-        }""")
-        self.page.wait_for_timeout(300)
+            if (ta) {
+                // 设置原生值
+                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+                    window.HTMLTextAreaElement.prototype, 'value'
+                ).set;
+                nativeInputValueSetter.call(ta, text);
+                ta.dispatchEvent(new Event('input', { bubbles: true }));
+                ta.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        }""", text)
+        self.page.wait_for_timeout(500)
+        # 隐藏遮挡元素
         self.page.evaluate("""() => {
             const fab = document.querySelector('.feedback-fab-container');
             if (fab) fab.style.display = 'none';
         }""")
-        self.page.locator(".marketing-send-btn").first.click()
+        # 点击发送按钮
+        send_btn = self.page.locator(".marketing-send-btn").first
+        send_btn.wait_for(state="visible", timeout=5000)
+        send_btn.click()
 
     def get_session_count(self) -> int:
         """获取侧边栏会话数量"""

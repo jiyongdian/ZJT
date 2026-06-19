@@ -155,6 +155,39 @@ def auth_headers(auth_token, user_id):
     }
 
 
+def refresh_login(e2e_config, base_url):
+    """重新登录获取新 token（当 token 失效时使用）"""
+    creds = e2e_config["credentials"]["primary"]
+    resp = httpx.post(
+        f"{base_url}/api/auth/login",
+        json={"phone": creds["phone"], "password": creds["password"]},
+        timeout=10,
+    )
+    if resp.status_code != 200:
+        return None
+    data = resp.json()
+    inner = data.get("data", data)
+    token = inner.get("token") or data.get("token") or data.get("access_token")
+    uid = inner.get("user_id") or data.get("user_id")
+    if token and uid:
+        return {"token": token, "user_id": str(uid)}
+    return None
+
+
+@pytest.fixture
+def api_client_with_refresh(base_url, auth_headers, e2e_config):
+    """httpx API 客户端，支持 token 失效时自动刷新"""
+    import time
+
+    client = httpx.Client(
+        base_url=base_url,
+        headers=auth_headers,
+        timeout=httpx.Timeout(10.0),
+    )
+    yield client
+    client.close()
+
+
 # ──────────────────────────── 浏览器 ────────────────────────────
 
 

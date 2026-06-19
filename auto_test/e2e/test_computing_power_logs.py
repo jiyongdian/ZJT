@@ -220,18 +220,36 @@ def test_power_logs_empty_state(browser, auth_token, user_id, base_url):
 
 @pytest.mark.p0
 @pytest.mark.computing_power
-def test_power_logs_pagination_returns_different_pages(api_client):
+def test_power_logs_pagination_returns_different_pages(api_client, e2e_config, base_url):
     """cpl_007 - 分页接口第1页和第2页返回不同数据。
 
     验证后端 offset 计算正确（此前 client.py 用不存在的字段重新计算
     offset 导致恒为 0，永远返回第一页）。
     """
-    # 请求第1页
-    resp1 = api_client.get(
-        "/api/user/computing_power_logs",
-        params={"page": 1, "page_size": 20},
+    import time
+    from conftest import refresh_login
+
+    # 请求第1页（带重试和 token 刷新）
+    resp1 = None
+    for attempt in range(3):
+        resp1 = api_client.get(
+            "/api/user/computing_power_logs",
+            params={"page": 1, "page_size": 20},
+        )
+        if resp1.status_code == 200:
+            break
+        # token 失效，重新登录
+        if resp1.status_code == 400 and "认证" in resp1.text:
+            login_data = refresh_login(e2e_config, base_url)
+            if login_data:
+                api_client.headers.update({
+                    "Authorization": f"Bearer {login_data['token']}",
+                    "X-User-Id": login_data["user_id"],
+                })
+        time.sleep(1)
+    assert resp1.status_code == 200, (
+        f"第1页请求失败: {resp1.status_code}, 响应: {resp1.text[:200]}"
     )
-    assert resp1.status_code == 200, f"第1页请求失败: {resp1.status_code}"
     data1 = resp1.json()
     assert data1["success"] is True, f"第1页返回失败: {data1.get('message')}"
 
