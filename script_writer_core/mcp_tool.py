@@ -593,10 +593,17 @@ def edit_image(user_id: str, world_id: str, auth_token: str, prompt: str,
 
         try:
             # 使用 httpx 替代 requests，避免同步阻塞事件循环
-            response = httpx.post(api_url, data=request_data, timeout=30, verify=False)
-            response.raise_for_status()
+            # ===== E2E Mock 短路：仅替换 project_ids 获取，保留后续 grid_image_tasks 创建逻辑 =====
+            from task.mock_interceptor import is_mock_enabled, generate_mock_project_id
+            if is_mock_enabled():
+                result_data = {'project_ids': [generate_mock_project_id()]}
+                logger.info(f"[MOCK] mcp_tool image_edit short-circuit pid={result_data['project_ids'][0]}")
+            else:
+                response = httpx.post(api_url, data=request_data, timeout=30, verify=False)
+                response.raise_for_status()
+                result_data = response.json()
+            # ==============================================================================
 
-            result_data = response.json()
             project_ids = result_data.get('project_ids', [])
 
             if not project_ids:
@@ -3949,12 +3956,19 @@ def generate_text_to_image(user_id: str, world_id: str, auth_token: str, prompt:
         try:
             # 接口使用 Form 参数，需要使用 data 而不是 json 来发送表单数据
             # 使用 httpx 替代 requests，避免同步阻塞事件循环
-            response = httpx.post(api_url, data=request_data, timeout=30, verify=False)
-            response.raise_for_status()
-            
-            result_data = response.json()
+            # ===== E2E Mock 短路：仅替换 project_ids 获取，保留后续 grid_image_tasks 创建逻辑 =====
+            from task.mock_interceptor import is_mock_enabled, generate_mock_project_id
+            if is_mock_enabled():
+                result_data = {'project_ids': [generate_mock_project_id()]}
+                logger.info(f"[MOCK] mcp_tool text_to_image short-circuit pid={result_data['project_ids'][0]}")
+            else:
+                response = httpx.post(api_url, data=request_data, timeout=30, verify=False)
+                response.raise_for_status()
+                result_data = response.json()
+            # ==============================================================================
+
             project_ids = result_data.get('project_ids', [])
-            
+
             if not project_ids:
                 return {
                     'success': False,

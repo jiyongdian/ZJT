@@ -694,3 +694,70 @@ def marketing_session(api_client, auth_token, user_id):
         api_client.delete(f"/api/session/{sid}")
     except Exception:
         pass
+
+
+# ──────────────────────────── E2E Mock 挡板（§13）────────────────────────────
+
+
+@pytest.fixture(scope="session")
+def mock_mode(user_id):
+    """开启 E2E 媒体生成挡板（opt-in）。
+
+    需要在 mock 模式下跑的 E2E 用例声明本 fixture（作为参数，或
+    ``@pytest.mark.usefixtures("mock_mode")``）。
+
+    做三件事：
+    1. 开启 ``test_mode.enabled``（传 Python bool，不可传 "false" 字符串，见 config_util.py:365）；
+    2. 重置测试账户算力到高值（§6.1，算力/CDN/token 均【不绕过】，靠此重置防扣穿）；
+    3. 重启 ``SyncTaskExecutor`` 进程池，使子进程重新 fork 后读到新 test_mode（§7 缓存一致性）。
+
+    teardown 仅恢复 ``test_mode.enabled``（不清理数据，见 §14）。
+    任一步失败都只告警不阻断，保证其它 E2E 用例可继续。
+    """
+    from config.config_util import (
+        set_dynamic_config_value,
+        get_dynamic_config_value,
+        invalidate_dynamic_cache,
+    )
+
+    saved_enabled = get_dynamic_config_value("test_mode", "enabled", default=False)
+
+    # 1) 开启挡板并写入完整 mock URL，避免只开开关时部分通道回落到真实外部服务
+    try:
+        from scripts.enable_test_mode import KV as MOCK_MODE_CONFIGS
+        for keys, (val, vtype) in MOCK_MODE_CONFIGS.items():
+            set_dynamic_config_value(*keys, value=val, value_type=vtype)
+        invalidate_dynamic_cache()
+    except Exception as e:
+        print(f"[mock_mode] 写入 mock 配置失败（非致命）: {e}")
+        set_dynamic_config_value("test_mode", "enabled", value=True, value_type="bool")
+        invalidate_dynamic_cache("test_mode.enabled")
+
+    # 2) 重置测试账户算力
+    try:
+        uid = int(user_id)
+        from model.computing_power import ComputingPowerModel
+        ComputingPowerModel.create_or_update(user_id=uid, computing_power=1_000_000)
+    except Exception as e:
+        print(f"[mock_mode] 重置算力失败（非致命）: {e}")
+
+    # 3) 重启同步任务进程池
+    try:
+        from task.sync_task_executor import get_sync_task_executor
+        exe = get_sync_task_executor()
+        if exe.is_running():
+            exe.shutdown(wait=False)
+            exe.start()
+    except Exception as e:
+        print(f"[mock_mode] 重启 SyncTaskExecutor 失败（非致命）: {e}")
+
+    yield
+
+    # teardown：恢复 test_mode.enabled
+    try:
+        set_dynamic_config_value(
+            "test_mode", "enabled", value=bool(saved_enabled), value_type="bool"
+        )
+        invalidate_dynamic_cache("test_mode.enabled")
+    except Exception as e:
+        print(f"[mock_mode] 恢复 test_mode 失败: {e}")

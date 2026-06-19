@@ -317,6 +317,32 @@ def process_runninghub_async_tasks(app=None):
                         if not task.external_task_id:
                             continue
 
+                        # ===== E2E Mock 短路：跳过 success_handler（其内部 download 不识别本地路径，见方案 §5.8）=====
+                        from task.mock_interceptor import is_mock_id, mock_audio, mock_video
+                        if is_mock_id(task.external_task_id):
+                            params = task.get_params_dict()
+                            if impl_id == AsyncTaskImplementationId.RUNNINGHUB_AUDIO:
+                                async_result_url = mock_audio("character_audio") or "/upload/mock/e2e_char.mp3"
+                                # 替代 _handle_audio_task_success 的副作用：直接写角色 default_voice
+                                character_id = params.get('character_id')
+                                if character_id:
+                                    try:
+                                        from model.character import CharacterModel
+                                        CharacterModel.update(character_id, default_voice=async_result_url)
+                                    except Exception as e:
+                                        logger.warning(f"[MOCK] set default_voice failed: {e}")
+                            else:  # RUNNINGHUB_FACE_MASK：直接写 completed，跳过 overlay（见 §5.8）
+                                async_result_url = mock_video("face_mask") or "/upload/mock/e2e_face_mask.mp4"
+                            AsyncTasksModel.update_status(
+                                record_id=task.id,
+                                status=AsyncTaskStatus.COMPLETED,
+                                result_url=async_result_url
+                            )
+                            RunningHubSlotsModel.release_slot(task.id, source=RunningHubSlot.SOURCE_ASYNC)
+                            logger.info(f"[MOCK] async poll short-circuit task={task.id} url={async_result_url}")
+                            continue
+                        # =====================================================================
+
                         AsyncTasksModel.increment_try_count(task.id)
                         task.try_count += 1
 
