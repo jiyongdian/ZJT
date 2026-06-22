@@ -2151,21 +2151,50 @@
                 }
             }
 
+            /**
+             * 构建下载 URL：CDN 地址直接下载（七牛 attname 参数指定文件名），本地路径走 /api/download 代理
+             */
+            function buildDownloadUrl(url, filename) {
+                if (url && url.startsWith('http')) {
+                    const separator = url.includes('?') ? '&' : '?';
+                    return `${url}${separator}attname=${encodeURIComponent(filename)}`;
+                }
+                return `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
+            }
+
+            function isWechatBrowser() {
+                const ua = navigator.userAgent.toLowerCase();
+                return /micromessenger/.test(ua);
+            }
+
             function downloadModalImage() {
                 const img = document.getElementById('imgModalImg');
                 if (!img || !img.src) return;
-                const link = document.createElement('a');
-                link.href = img.src;
                 // 从 URL 中提取文件名，默认 fallback
+                let filename = 'image.png';
                 try {
                     const urlPath = img.src.split('?')[0];
-                    link.download = urlPath.split('/').pop() || 'image.png';
+                    filename = urlPath.split('/').pop() || 'image.png';
                 } catch (e) {
-                    link.download = 'image.png';
+                    filename = 'image.png';
                 }
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
+
+                const downloadUrl = buildDownloadUrl(img.src, filename);
+
+                if (isWechatBrowser()) {
+                    window.open(downloadUrl, '_blank');
+                    setTimeout(() => {
+                        alert('请长按图片，然后选择"保存图片"');
+                    }, 500);
+                } else {
+                    const link = document.createElement('a');
+                    link.href = downloadUrl;
+                    link.download = filename;
+                    link.target = '_blank';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
             }
             // 挂载到全局，供原生 HTML onclick 调用
             window.downloadModalImage = downloadModalImage;
@@ -2923,10 +2952,8 @@
                             const tasks = res.data.tasks;
                             const allDone = tasks.every(isGenerationTerminal);
 
-                            const imageUrls = [];
-                            tasks.forEach(task => {
-                                collectGenerationUrls(task).forEach(url => imageUrls.push(url));
-                            });
+                            // 仅保留图片类型 URL，过滤掉混入的视频，避免把视频包进 <img>
+                            const imageUrls = collectGenerationUrlsByType(tasks, 'image');
 
                             if (allDone) {
                                 shouldContinuePolling = false;
@@ -3046,10 +3073,8 @@
                             const tasks = res.data.tasks;
                             const allDone = tasks.every(isGenerationTerminal);
 
-                            const videoUrls = [];
-                            tasks.forEach(task => {
-                                collectGenerationUrls(task).forEach(url => videoUrls.push(url));
-                            });
+                            // 仅保留视频类型 URL，过滤掉混入的图片（如数字人参考图），避免把图片包进 <video>
+                            const videoUrls = collectGenerationUrlsByType(tasks, 'video');
 
                             if (allDone) {
                                 shouldContinuePolling = false;
@@ -4242,24 +4267,6 @@
 
             function buildResultContent(type, tasks) {
                 return buildGeneratedTaskContent(type, tasks);
-                const urls = [];
-                tasks.forEach(task => {
-                    collectGenerationUrls(task).forEach(url => urls.push(url));
-                });
-                if (urls.length > 0) {
-                    if (type === 'image') {
-                        const html = urls.map(url =>
-                            `<div class="generated-image-wrapper" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${url}';window.resetModalImageInfo && window.resetModalImageInfo()"><img src="${url}" class="generated-image" alt="${window.t('generated_result_alt')}"></div>`
-                        ).join('');
-                        return window.t('image_generated') + '\n\n' + html;
-                    } else {
-                        const html = urls.map(url =>
-                            `<video src="${url}" controls style="max-width:100%;max-height:400px;border-radius:8px;margin:8px 0;"></video>`
-                        ).join('');
-                        return window.t('video_generated') + '\n\n' + html;
-                    }
-                }
-                return type === 'image' ? window.t('image_generation_failed') : window.t('video_generation_failed');
             }
 
             // 恢复页面刷新后的待处理任务（从历史中的 __PENDING_TASK__ 标记恢复）
