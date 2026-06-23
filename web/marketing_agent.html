@@ -2113,6 +2113,25 @@
                     return `<img${attrs} style="max-width:300px;max-height:200px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${src}';window.resetModalImageInfo && window.resetModalImageInfo()" alt="${window.t('image_alt')}">`;
                 });
 
+
+                // 兜底重新签名：内容中所有「点击放大」设置 imgModalImg.src 的 onclick，
+                // 无论挂在 <img> 还是 <div>（如 generated-image-wrapper）等元素上，都统一
+                // 重新走代理。解决历史已存库图片消息：commit 0bf53fe 之前生成结果以已渲染
+                // HTML 入库，onclick 直接写的是会过期的图床原始 URL，reload 后点击放大仍用过期
+                // 地址。proxyImageUrl 对已是代理 URL（同源）幂等，故新生成内容不受影响。
+                html = html.replace(/imgModalImg'\)\.src='([^']*)'/g, (_m, u) =>
+                    `imgModalImg').src='${proxyImageUrl(u)}'`
+                );
+
+                // 兜底重新签名：<video>/<audio>/<source> 的原始 src。
+                // 同因：commit 0bf53fe 之前生成的视频/音频以已渲染 HTML 入库，src 写死的是
+                // 会过期的图床原始 URL，renderMarkdown 既有处理只覆盖 <img>。此处统一走
+                // /api/download 代理（后端识别 CDN 后 302 到重新签名地址，支持 Range 播放）。
+                // proxyDownloadUrl 对已是代理 URL（同源）幂等，新生成内容不受影响。
+                html = html.replace(/<(video|audio|source)\b([^>]*?)\ssrc="([^"]*)"/gi, (_m, tag, attrs, src) =>
+                    `<${tag}${attrs} src="${proxyDownloadUrl(src)}"`
+                );
+
                 return html;
             }
 
