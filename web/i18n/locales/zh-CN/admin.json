@@ -267,6 +267,7 @@
   "toast_checkin_saved": "签到配置保存成功",
   "toast_partial_save_failed": "部分配置保存失败",
   "toast_commercial_only_modify": "该配置需要商业版本才能修改，联系 微信: jeffstric 邮箱: jeff@perseids.cn 升级购买",
+    "toast_test_mode_modify_forbidden": "test_mode 配置仅允许通过脚本修改，禁止在管理后台修改（防止生产环境误开启挡板）",
   "toast_commercial_only_use": "该配置需要商业版本才能使用，联系 微信: jeffstric 邮箱: jeff@perseids.cn 升级购买",
   "toast_json_invalid": "JSON格式不正确",
   "toast_config_updated": "配置更新成功",

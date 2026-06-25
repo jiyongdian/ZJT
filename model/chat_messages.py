@@ -116,12 +116,15 @@ class ChatMessageEntity:
 
         # verification_request 还原为前端可用的结构
         if self.message_type == 'verification_request' and isinstance(self.content, dict):
+            verification_status = self.content.get('status')
             result['role'] = 'verification'
+            result['verification_status'] = verification_status
             result['content'] = {
                 'verification_id': self.verification_id,
                 'title': self.content.get('title', ''),
                 'description': self.content.get('description', ''),
                 'options': self.content.get('options', []),
+                'status': verification_status,
             }
 
         return result

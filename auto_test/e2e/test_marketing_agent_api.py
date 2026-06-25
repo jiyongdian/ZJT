@@ -136,8 +136,13 @@ def test_api_append_message(api_client, marketing_session):
     hist_data = hist_resp.json()
     inner = hist_data.get("data", hist_data)
     history = inner.get("history") or inner.get("conversation_history") or []
-    # 查找刚追加的消息
-    contents = [m.get("content", "") for m in history]
+    # 查找刚追加的消息（content 可能是 dict 或 string）
+    def _extract_text(content):
+        if isinstance(content, dict):
+            return content.get("text", "")
+        return str(content)
+
+    contents = [_extract_text(m.get("content", "")) for m in history]
     assert any(test_content in c for c in contents), (
         f"追加的消息未在历史中找到: {history}"
     )

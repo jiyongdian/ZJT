@@ -35,10 +35,32 @@ class TestSession:
         except Exception:
             pass
 
-    def test_session_list(self, api_client, test_session_id):
+    def test_session_list(self, api_client, test_session_id, e2e_config, base_url):
         """获取会话列表"""
-        resp = api_client.get("/api/sessions")
-        assert resp.status_code == 200, f"获取会话列表失败: {resp.status_code} {resp.text}"
+        import time
+
+        from conftest import refresh_login
+
+        resp = None
+        for attempt in range(3):
+            try:
+                resp = api_client.get("/api/sessions", timeout=15)
+                if resp.status_code == 200:
+                    break
+            except Exception:
+                pass
+            # token 可能失效，刷新后重试
+            if attempt < 2:
+                login_data = refresh_login(e2e_config, base_url)
+                if login_data:
+                    api_client.headers.update({
+                        "Authorization": f"Bearer {login_data['token']}",
+                        "X-User-Id": login_data["user_id"],
+                    })
+                time.sleep(1)
+        assert resp is not None and resp.status_code == 200, (
+            f"获取会话列表失败: {resp.status_code if resp else 'timeout'}"
+        )
         data = resp.json()
         # 响应可能是列表或包含列表的字典
         sessions = data if isinstance(data, list) else data.get("sessions", data.get("data", []))

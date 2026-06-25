@@ -182,6 +182,50 @@ def _update_reference_images_to_staging(task: LocationMultiAngleTask, generated_
         return False
 
 
+def _apply_mock_angle(task_key: str, comfyui_base_url: str):
+    """E2E Mock：推进一个角度（与真实"一次一个角度"状态机一致）。
+    选 mock 图→落盘到 upload/location/pic→写场景 JSON reference_images→递增 index，
+    最后一个角度置 COMPLETED。_download_and_store_image 已能处理 /upload/mock/ 本地路径
+    （is_local_file_path 对非 http(s) 路径返回 True，走本地拷贝分支）。"""
+    from task.mock_interceptor import _img
+    task = LocationMultiAngleTasksModel.get_by_task_key(task_key)
+    angles = task.get_angles_list()
+    idx = task.current_angle_index or 0
+    generated = task.get_generated_images_list() or []
+    if idx >= len(angles):
+        LocationMultiAngleTasksModel.update_status(
+            task_key, LocationMultiAngleTaskStatus.COMPLETED, generated_images=generated)
+        return
+
+    angle = angles[idx].get('angle', 0)
+    angle_key = angles[idx].get('angleKey', 'unknown')
+    label = angles[idx].get('label', f'{angle}°')
+
+    # 角度→mock 图映射（front≈0°，back≈180°，其余 side）
+    if angle >= 337.5 or angle < 22.5:
+        file_url = _img('multi_angle_front') or '/upload/mock/e2e_ma_front.png'
+    elif 157.5 <= angle < 202.5:
+        file_url = _img('multi_angle_back') or '/upload/mock/e2e_ma_back.png'
+    else:
+        file_url = _img('multi_angle_side') or '/upload/mock/e2e_ma_side.png'
+
+    local_image_url, local_file_path = _download_and_store_image(file_url, comfyui_base_url)
+
+    new_image = {'angle': angle_key, 'label': label,
+                 'url': local_image_url, 'local_file_path': local_file_path}
+    generated.append(new_image)
+    _update_reference_images_to_staging(task, [new_image])
+
+    next_idx = idx + 1
+    if next_idx >= len(angles):
+        LocationMultiAngleTasksModel.update_status(
+            task_key, LocationMultiAngleTaskStatus.COMPLETED, generated_images=generated)
+    else:
+        LocationMultiAngleTasksModel.update_status(
+            task_key, LocationMultiAngleTaskStatus.PROCESSING,
+            current_angle_index=next_idx, generated_images=generated, ai_tool_task_id=0)
+
+
 def process_location_multi_angle_task(task_key: str) -> Dict[str, Any]:
     """
     处理单个场景多角度生图任务（非阻塞模式）
@@ -234,6 +278,12 @@ def process_location_multi_angle_task(task_key: str) -> Dict[str, Any]:
 
         config = get_config()
         comfyui_base_url = config["server"]["host"]
+
+        # E2E Mock 不依赖 qwen-multi-angle 配置或真实 ComfyUI，仅按状态机推进一个角度。
+        from task.mock_interceptor import is_mock_enabled
+        if is_mock_enabled():
+            _apply_mock_angle(task_key, comfyui_base_url)
+            return {'success': True, 'submitted': True, 'project_id': 'mock_task_multi_angle'}
 
         # 检查是否有正在等待的 AI 任务
         if task.ai_tool_task_id:

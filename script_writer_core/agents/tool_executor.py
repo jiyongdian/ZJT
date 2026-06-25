@@ -35,8 +35,10 @@ from script_writer_core.mcp_tool import (
     get_text_to_image_model_info,
     get_user_computing_power,
     fetch_image_as_base64,
+    generate_reference_audio,
     generate_character_reference_audio,
     check_reference_audio_status,
+    generate_digital_human,
 )
 
 logger = logging.getLogger(__name__)
@@ -91,8 +93,10 @@ class ToolExecutor:
             "get_text_to_image_model_info": get_text_to_image_model_info,
             "get_user_computing_power": get_user_computing_power,
             "fetch_image_as_base64": fetch_image_as_base64,
+            "generate_reference_audio": generate_reference_audio,
             "generate_character_reference_audio": generate_character_reference_audio,
             "check_reference_audio_status": check_reference_audio_status,
+            "generate_digital_human": generate_digital_human,
         }
 
         # 注入企业版工具函数
@@ -134,7 +138,9 @@ class ToolExecutor:
                 "edit_image", "get_text_to_image_model_info", "get_user_computing_power",
                 "generate_text_to_video", "image_to_video",
                 "fetch_image_as_base64",
-                "generate_character_reference_audio", "check_reference_audio_status"
+                "generate_reference_audio",
+                "generate_character_reference_audio", "check_reference_audio_status",
+                "generate_digital_human"
             ]
 
             # 需要传递 language 参数的创建工具（update 函数不调用 validate_name_for_filename，不需要此参数）

@@ -53,7 +53,21 @@ async def _submit_new_task(ai_audio):
         bool: True if successful, False otherwise
     """
     task_id = ai_audio.id
-    
+
+    # ===== E2E Mock 短路（必须在 generate_audio 之前，直接写 mock result_url）=====
+    # 注意：不能放在 utils/index_tts_util.generate_audio 内部——_submit_new_task 会用
+    # 本地 audio_filename 拼接 result_url 覆盖返回值，导致写库 URL 指向不存在文件。
+    from task.mock_interceptor import is_mock_enabled, mock_audio
+    if is_mock_enabled():
+        url = mock_audio("tts")
+        if url:
+            AIAudioModel.update(task_id, status=AI_AUDIO_STATUS_COMPLETED,
+                                result_url=url, message="[MOCK] 音频生成成功")
+            TasksModel.update_by_task_id(task_id, status=TASK_STATUS_COMPLETED)
+            logger.info(f"[MOCK] audio tts short-circuit task={task_id} url={url}")
+            return True
+    # =====================================================================
+
     try:
         AIAudioModel.update(task_id, status=AI_AUDIO_STATUS_PROCESSING, message="任务处理中")
         TasksModel.update_by_task_id(task_id, status=TASK_STATUS_PROCESSING)

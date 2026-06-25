@@ -544,7 +544,7 @@
                                 </td>
                                 <td>{{ formatDate(item.updated_at) }}</td>
                                 <td>
-                                    <button class="action-btn primary" @click="openConfigEditModal(item)" :disabled="!item.editable">
+                                    <button class="action-btn primary" @click="openConfigEditModal(item)" :disabled="!item.editable || isTestModeConfig(item.config_key)">
                                         {{ t('edit_btn') }}
                                     </button>
                                     <button class="action-btn" @click="viewConfigHistory(item)">

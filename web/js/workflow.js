@@ -787,6 +787,7 @@
         if (!el) return;
 
         const modelEl = el.querySelector('.shot-group-model');
+        const gridModelEl = el.querySelector('.shot-group-grid-model');
         const videoModelEl = el.querySelector('.shot-group-video-model');
 
         // 刷新生图模型
@@ -801,10 +802,31 @@
               if (opt.value === node.data.model) optEl.selected = true;
               modelEl.appendChild(optEl);
             });
-            // 如果当前值不在选项中，更新为第一个选项
+            // 如果当前值不在选项中，优先使用 GPT Image 2
             if (!imageOptions.find(o => o.value === node.data.model)) {
-              node.data.model = imageOptions[0].value;
+              node.data.model = imageOptions.find(o => o.value === 'gpt-image-2')?.value || imageOptions[0].value;
               modelEl.value = node.data.model;
+            }
+          }
+        }
+
+        // 刷新宫格生图模型，旧工作流中的 auto 智能模式迁移到 GPT Image 2
+        if (gridModelEl && window.TaskConfig) {
+          const gridOptions = window.TaskConfig
+            .getModelOptionsForCategory('image_edit')
+            .filter(opt => opt.supportsGridImage);
+          if (gridOptions.length > 0) {
+            gridModelEl.innerHTML = '';
+            gridOptions.forEach(opt => {
+              const optEl = document.createElement('option');
+              optEl.value = opt.value;
+              optEl.textContent = opt.label;
+              if (opt.value === node.data.gridModel) optEl.selected = true;
+              gridModelEl.appendChild(optEl);
+            });
+            if (!node.data.gridModel || node.data.gridModel === 'auto' || !gridOptions.find(o => o.value === node.data.gridModel)) {
+              node.data.gridModel = gridOptions.find(o => o.value === 'gpt-image-2')?.value || gridOptions[0].value;
+              gridModelEl.value = node.data.gridModel;
             }
           }
         }
@@ -866,9 +888,9 @@
               if (opt.value === currentModel) optEl.selected = true;
               modelEl.appendChild(optEl);
             });
-            // 如果当前值不在选项中，更新为第一个选项
+            // 如果当前值不在选项中，优先使用 GPT Image 2
             if (!imageOptions.find(o => o.value === currentModel)) {
-              node.data.model = imageOptions[0].value;
+              node.data.model = imageOptions.find(o => o.value === 'gpt-image-2')?.value || imageOptions[0].value;
               modelEl.value = node.data.model;
             }
           }
@@ -2134,9 +2156,13 @@
         node.data.noBgMusic = nodeData.data.noBgMusic !== undefined ? nodeData.data.noBgMusic : true;
         node.data.splitMultiDialogue = nodeData.data.splitMultiDialogue !== undefined ? nodeData.data.splitMultiDialogue : false;
         node.data.narrationAsDialogue = nodeData.data.narrationAsDialogue !== undefined ? nodeData.data.narrationAsDialogue : false;
+        // 恢复语言设置（兼容旧数据：旧的 language 字段作为两个新字段的默认值）
+        const legacyLanguage = nodeData.data.language || '';
+        node.data.dialogueLanguage = nodeData.data.dialogueLanguage !== undefined ? nodeData.data.dialogueLanguage : legacyLanguage;
+        node.data.promptLanguage = nodeData.data.promptLanguage !== undefined ? nodeData.data.promptLanguage : legacyLanguage;
         // 恢复模型相关字段（防止被 createScriptNode 的默认值覆盖）
         if(nodeData.data.videoModel) node.data.videoModel = nodeData.data.videoModel;
-        if(nodeData.data.gridModel) node.data.gridModel = nodeData.data.gridModel;
+        if(nodeData.data.gridModel) node.data.gridModel = nodeData.data.gridModel === 'auto' ? 'gpt-image-2' : nodeData.data.gridModel;
         if(nodeData.data.gridLayout) node.data.gridLayout = nodeData.data.gridLayout;
         if(nodeData.data.splitModel) node.data.splitModel = nodeData.data.splitModel;
         if(nodeData.data.splitModelId) node.data.splitModelId = nodeData.data.splitModelId;
@@ -2183,6 +2209,31 @@
           if(splitModelEl && node.data.splitModel){
             ensureSelectHasSavedOption(splitModelEl, node.data.splitModel);
             splitModelEl.value = node.data.splitModel;
+          }
+
+          // 恢复语言选择器的UI显示
+          const presetLanguageValues = ['', 'English', 'Deutsch', 'Français', 'Русский'];
+          const dialogueLangSelect = el.querySelector('.script-dialogue-language');
+          const dialogueLangCustom = el.querySelector('.script-dialogue-language-custom');
+          if(dialogueLangSelect && node.data.dialogueLanguage) {
+            if(presetLanguageValues.includes(node.data.dialogueLanguage)) {
+              dialogueLangSelect.value = node.data.dialogueLanguage;
+              if(dialogueLangCustom) dialogueLangCustom.style.display = 'none';
+            } else {
+              dialogueLangSelect.value = '__custom__';
+              if(dialogueLangCustom) { dialogueLangCustom.style.display = 'block'; dialogueLangCustom.value = node.data.dialogueLanguage; }
+            }
+          }
+          const promptLangSelect = el.querySelector('.script-prompt-language');
+          const promptLangCustom = el.querySelector('.script-prompt-language-custom');
+          if(promptLangSelect && node.data.promptLanguage) {
+            if(presetLanguageValues.includes(node.data.promptLanguage)) {
+              promptLangSelect.value = node.data.promptLanguage;
+              if(promptLangCustom) promptLangCustom.style.display = 'none';
+            } else {
+              promptLangSelect.value = '__custom__';
+              if(promptLangCustom) { promptLangCustom.style.display = 'block'; promptLangCustom.value = node.data.promptLanguage; }
+            }
           }
 
           if(node.data.scriptContent && node.data.scriptContent.trim().length > 0){

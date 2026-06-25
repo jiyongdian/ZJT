@@ -173,21 +173,21 @@
                             <div v-if="msg.isVerification && msg.verificationOptions && msg.verificationOptions.length > 0" style="margin-top: 10px;">
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                                     <button v-for="opt in msg.verificationOptions" :key="opt"
-                                        @click="selectVerificationOption(opt)"
-                                        :disabled="!pendingVerificationId"
+                                        @click="selectVerificationOption(opt, msg.verificationId)"
+                                        :disabled="!isActiveVerificationMessage(msg)"
                                         style="padding: 6px 16px; border: 1px solid #d0d5dd; border-radius: 8px; background: #fff; cursor: pointer; font-size: 14px; color: #344054; transition: all 0.2s;">
                                         {{ opt }}
                                     </button>
                                     <!-- 前端硬性追加"其他"按钮，不依赖模型返回 -->
-                                    <button @click="showOtherInput = true; $nextTick(() => $refs.otherInputRef && $refs.otherInputRef.focus())"
-                                        v-if="!showOtherInput"
-                                        :disabled="!pendingVerificationId"
+                                    <button @click="openOtherInput(msg)"
+                                        v-if="activeOtherVerificationId !== msg.verificationId"
+                                        :disabled="!isActiveVerificationMessage(msg)"
                                         style="padding: 6px 16px; border: 1px dashed #d0d5dd; border-radius: 8px; background: #f9fafb; cursor: pointer; font-size: 14px; color: #667085; transition: all 0.2s;">
                                         {{ $t('other') }}
                                     </button>
                                 </div>
                                 <!-- 其他 - 内联输入框 -->
-                                <div v-if="showOtherInput" style="display: flex; gap: 8px; margin-top: 8px;">
+                                <div v-if="activeOtherVerificationId === msg.verificationId" style="display: flex; gap: 8px; margin-top: 8px;">
                                     <input ref="otherInputRef"
                                         v-model="otherInputText"
                                         @keyup.enter="submitOtherInput()"
@@ -627,7 +627,7 @@
                                 </svg>
                                 <span style="font-weight: 600; color: #00a8e6;">{{ computingPower }}</span>
                             </div>
-                            <button class="marketing-send-btn" @click="handleSend" :disabled="!inputText.trim() || isLoading || hasPendingAgentImages">
+                            <button class="marketing-send-btn" @click="handleSend" :disabled="!inputText.trim() || (isLoading && !pendingVerificationId) || hasPendingAgentImages">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
                                 </svg>
@@ -1236,6 +1236,7 @@
             const pendingVerificationId = ref(null);
             const showOtherInput = ref(false);
             const otherInputText = ref('');
+            const activeOtherVerificationId = ref(null);
 
             const aspectRatioMap = {
                 'auto':  { label: window.t('ratio_smart'), value: 'auto', w: 20, h: 20 },
@@ -2079,7 +2080,7 @@
             // 发送消息
             async function handleSend() {
                 const text = inputText.value.trim();
-                if (!text || isLoading.value) return;
+                if (!text || (isLoading.value && !pendingVerificationId.value)) return;
 
                 // ===== 发送前：统一等待图片/视频上传完成 =====
                 if (selectedType.value === 'agent') {
@@ -2313,6 +2314,12 @@
                     const res = await axios.get(`/api/get-status/${projectIdsStr}`, { params });
                     resetTaskErrorCount(errorKey);
 
+                    // await 后再次校验会话：任务进行中切换对话时，旧轮询回调不可再写入当前（已切换的）messages/全局结果状态
+                    if (currentSessionId.value !== task.sessionId) {
+                        clearDirectGenerationTask(task);
+                        return;
+                    }
+
                     if (res.data.tasks) {
                         const tasks = res.data.tasks;
                         const allSuccess = tasks.every(isGenerationSuccess);
@@ -2459,10 +2466,11 @@
             }
 
             // Agent 图片任务提交后，前端轮询状态
-            function handleImageTaskSubmitted(data) {
+            function handleImageTaskSubmitted(data, explicitSessionId) {
                 const { project_ids, message } = data;
                 if (!project_ids || project_ids.length === 0) return;
-                const pollSessionId = currentSessionId.value;
+                // 优先用调用方显式传入的 session（如 SSE 流归属的 streamSessionId），否则取当前对话
+                const pollSessionId = explicitSessionId || currentSessionId.value;
                 if (hasGeneratedImageResult(project_ids)) return;
                 const pollKey = getGenerationPollKey('image', project_ids, pollSessionId);
                 if (activeGenerationPollKeys.has(pollKey)) return;
@@ -2580,10 +2588,11 @@
             }
 
             // Agent 视频生成任务提交回调（SSE video_task_submitted 事件）
-            function handleVideoTaskSubmitted(data) {
+            function handleVideoTaskSubmitted(data, explicitSessionId) {
                 const { project_ids, message } = data;
                 if (!project_ids || project_ids.length === 0) return;
-                const pollSessionId = currentSessionId.value;
+                // 优先用调用方显式传入的 session（如 SSE 流归属的 streamSessionId），否则取当前对话
+                const pollSessionId = explicitSessionId || currentSessionId.value;
                 if (hasGeneratedVideoResult(project_ids)) return;
                 const pollKey = getGenerationPollKey('video', project_ids, pollSessionId);
                 if (activeGenerationPollKeys.has(pollKey)) return;
@@ -2672,7 +2681,7 @@
                                 const replaced = await replacePendingTask(pollSessionId, 'video_task_submitted', projectIds, finalContent);
                                 if (!replaced) {
                                     // 后端没有匹配的 pending 行，fallback 追加
-                                    await appendMessageToBackend('assistant', finalContent);
+                                    await appendMessageToBackend('assistant', finalContent, pollSessionId);
                                 }
                                 await cleanPendingTasksFromHistory(pollSessionId, 'video_task_submitted', projectIds);
                             } else {
@@ -3016,6 +3025,15 @@
                                 return;
                             }
                         }
+                        const audioItems = mediaItems.value.filter(m => m.type === 'audio');
+                        if (audioItems.length > 0) {
+                            const invalidAudios = audioItems.filter(m => m.uploading || m.uploadFailed || !m.serverUrl || !isHttpUrl(m.serverUrl));
+                            if (invalidAudios.length > 0) {
+                                showError(t('audio_not_ready') || t('upload_timeout'));
+                                isLoading.value = false;
+                                return;
+                            }
+                        }
                         currentMessageMedia.forEach(media => {
                             if (media.type === 'video' && isHttpUrl(media.url) && !videoUrls.includes(media.url)) {
                                 videoUrls.push(media.url);
@@ -3189,6 +3207,13 @@
                             }
                             if (data.id) processedSseMessageIds.add(data.id);
 
+                            // 守卫：该 SSE 流属于发起时的 streamSessionId；用户已切换到其他对话时，丢弃残留事件，避免 message/任务结果串台到当前对话
+                            if (currentSessionId.value !== streamSessionId) {
+                                eventSource.close();
+                                if (currentEventSource === eventSource) currentEventSource = null;
+                                return;
+                            }
+
                             if (data.type === 'message') {
                                 hasReceivedData = true;
                                 resetTaskErrorCount(streamErrorKey);
@@ -3214,9 +3239,7 @@
                                 handleHumanVerification(data.verification);
                             } else if (data.type === 'verification_timeout') {
                                 // 验证超时
-                                pendingVerificationId.value = null;
-                showOtherInput.value = false;
-                otherInputText.value = '';
+                                clearPendingVerificationState();
                                 messages.value.push({
                                     _uid: generateMsgUid(),
                                     role: 'ai',
@@ -3227,23 +3250,21 @@
                             } else if (data.type === 'context_compression') {
                                 // 上下文压缩，可忽略
                             } else if (data.type === 'image_task_submitted') {
-                                // Agent 提交了图片生成任务，前端开始轮询
+                                // Agent 提交了图片生成任务，前端开始轮询（绑定到该 SSE 流的发起会话）
                                 hasReceivedData = true;
                                 resetTaskErrorCount(streamErrorKey);
-                                handleImageTaskSubmitted(data);
+                                handleImageTaskSubmitted(data, streamSessionId);
                             } else if (data.type === 'video_task_submitted') {
-                                // Agent 提交了视频生成任务，前端开始轮询
+                                // Agent 提交了视频生成任务，前端开始轮询（绑定到该 SSE 流的发起会话）
                                 hasReceivedData = true;
                                 resetTaskErrorCount(streamErrorKey);
-                                handleVideoTaskSubmitted(data);
+                                handleVideoTaskSubmitted(data, streamSessionId);
                             } else if (data.type === 'error') {
                                 settleStream();
                                 eventSource.close();
                                 if (currentEventSource === eventSource) currentEventSource = null;
                                 delete sessionActiveTaskId[streamSessionId];
-                                pendingVerificationId.value = null;
-                showOtherInput.value = false;
-                otherInputText.value = '';
+                                clearPendingVerificationState();
                                 if (msgUid) {
                                     const idx = findMsgByIdx(msgUid);
                                     if (idx !== -1) messages.value[idx].content = fullContent || window.t('stream_error');
@@ -3296,9 +3317,7 @@
                         settleStream();
                         eventSource.close();
                         if (currentEventSource === eventSource) currentEventSource = null;
-                        pendingVerificationId.value = null;
-                showOtherInput.value = false;
-                otherInputText.value = '';
+                        clearPendingVerificationState();
                         if (!hasReceivedData) {
                             const failures = recordTaskError(streamErrorKey);
                             messages.value.push({
@@ -3327,9 +3346,7 @@
                         settleStream();
                         eventSource.close();
                         if (currentEventSource === eventSource) currentEventSource = null;
-                        pendingVerificationId.value = null;
-                showOtherInput.value = false;
-                otherInputText.value = '';
+                        clearPendingVerificationState();
                         if (!hasReceivedData) {
                             const failures = recordTaskError(streamErrorKey);
                             messages.value.push({
@@ -3355,6 +3372,64 @@
             }
 
             // 处理 AI 向用户提问（ask_user 工具）
+            function clearPendingVerificationState() {
+                pendingVerificationId.value = null;
+                showOtherInput.value = false;
+                otherInputText.value = '';
+                activeOtherVerificationId.value = null;
+            }
+
+            function getHistoryVerificationId(historyItem) {
+                if (!historyItem) return null;
+                if (historyItem.verification_id) return historyItem.verification_id;
+
+                let content = historyItem.content;
+                if (typeof content === 'string') {
+                    try { content = JSON.parse(content); } catch (e) { return null; }
+                }
+                return content && typeof content === 'object' ? (content.verification_id || null) : null;
+            }
+
+            function restorePendingVerificationFromHistory(history) {
+                const answeredVerificationIds = new Set();
+                let latestPendingId = null;
+
+                for (const item of history || []) {
+                    const verificationId = getHistoryVerificationId(item);
+                    if (!verificationId) continue;
+                    if (item.verification_status && item.verification_status !== 'pending') {
+                        answeredVerificationIds.add(verificationId);
+                        if (latestPendingId === verificationId) latestPendingId = null;
+                        continue;
+                    }
+
+                    if (item.message_type === 'verification_answer') {
+                        answeredVerificationIds.add(verificationId);
+                        if (latestPendingId === verificationId) latestPendingId = null;
+                        continue;
+                    }
+
+                    if (item.role === 'verification' || item.message_type === 'verification_request') {
+                        if (!answeredVerificationIds.has(verificationId)) {
+                            latestPendingId = verificationId;
+                        }
+                    }
+                }
+
+                if (latestPendingId) {
+                    pendingVerificationId.value = latestPendingId;
+                    showOtherInput.value = false;
+                    otherInputText.value = '';
+                    activeOtherVerificationId.value = null;
+                } else {
+                    clearPendingVerificationState();
+                }
+            }
+
+            function isActiveVerificationMessage(msg) {
+                return !!pendingVerificationId.value && msg?.verificationId === pendingVerificationId.value;
+            }
+
             function handleHumanVerification(verification) {
                 if (!verification) return;
 
@@ -3402,17 +3477,26 @@
             }
 
             // 用户选择预设选项回答 AI 提问
-            async function selectVerificationOption(option) {
-                if (!pendingVerificationId.value) return;
-                await submitVerificationAnswer(pendingVerificationId.value, option);
+            async function selectVerificationOption(option, verificationId = pendingVerificationId.value) {
+                if (!verificationId || verificationId !== pendingVerificationId.value) return;
+                await submitVerificationAnswer(verificationId, option);
+            }
+
+            function openOtherInput(msg) {
+                if (!isActiveVerificationMessage(msg)) return;
+                activeOtherVerificationId.value = msg.verificationId;
+                showOtherInput.value = true;
+                otherInputText.value = '';
             }
 
             // 处理"其他"选项 - 提交内联输入框内容
             async function submitOtherInput() {
-                if (!pendingVerificationId.value || !otherInputText.value.trim()) return;
-                await submitVerificationAnswer(pendingVerificationId.value, otherInputText.value.trim());
+                const verificationId = activeOtherVerificationId.value || pendingVerificationId.value;
+                if (!verificationId || verificationId !== pendingVerificationId.value || !otherInputText.value.trim()) return;
+                await submitVerificationAnswer(verificationId, otherInputText.value.trim());
                 showOtherInput.value = false;
                 otherInputText.value = '';
+                activeOtherVerificationId.value = null;
             }
 
             // 提交验证回答
@@ -3445,23 +3529,17 @@
                         data = {};
                     }
                     if (response.status === 404 || response.status === 410) {
-                        pendingVerificationId.value = null;
-                        showOtherInput.value = false;
-                        otherInputText.value = '';
+                        clearPendingVerificationState();
                         showError(data.error || window.t('verification_timeout') || window.t('send_failed'));
                         return;
                     }
 
                     if (data.success) {
-                        pendingVerificationId.value = null;
-                        showOtherInput.value = false;
-                        otherInputText.value = '';
+                        clearPendingVerificationState();
                     } else {
                         // 验证已处理或不存在时，清除状态避免阻塞后续对话
                         if (data.status === 'approved' || data.status === 'not_found' || data.status === 'cancelled') {
-                            pendingVerificationId.value = null;
-                            showOtherInput.value = false;
-                            otherInputText.value = '';
+                            clearPendingVerificationState();
                         }
                         showError(data.error || window.t('send_failed'));
                     }
@@ -3477,9 +3555,7 @@
                 if (currentEventSource) { currentEventSource.close(); currentEventSource = null; }
 
                 // 清除验证状态
-                pendingVerificationId.value = null;
-                showOtherInput.value = false;
-                otherInputText.value = '';
+                clearPendingVerificationState();
 
                 messages.value = [];
                 isLoading.value = false;
@@ -3548,7 +3624,8 @@
                             timestamp: h.timestamp,
                             isVerification: true,
                             verificationOptions: vData.options || [],
-                            verificationId: vData.verification_id || null
+                            verificationId: vData.verification_id || null,
+                            verificationStatus: vData.status || h.verification_status || null
                         };
                     }
                     return { role: 'ai', content: typeof h.content === 'string' ? h.content : JSON.stringify(h.content), timestamp: h.timestamp };
@@ -3795,7 +3872,7 @@
             }
 
             // 恢复页面刷新后的待处理任务（从历史中的 __PENDING_TASK__ 标记恢复）
-            async function recoverPendingTasks() {
+            async function recoverPendingTasks(sessionId = currentSessionId.value) {
                 const pendingMsgs = messages.value.filter(m => m._isPendingTask);
                 if (pendingMsgs.length === 0) return;
 
@@ -3812,11 +3889,11 @@
                             msg._isPendingTask = false;
                             // 优先按 project_ids 在后端替换 pending 行
                             const taskTypeKey = msg._taskType === 'image' ? 'image_task_submitted' : 'video_task_submitted';
-                            const replaced = await replacePendingTask(currentSessionId.value, taskTypeKey, msg._projectIds, content);
+                            const replaced = await replacePendingTask(sessionId, taskTypeKey, msg._projectIds, content);
                             if (!replaced) {
-                                await appendMessageToBackend('assistant', content);
+                                await appendMessageToBackend('assistant', content, sessionId);
                             }
-                            await cleanPendingTasksFromHistory(currentSessionId.value, taskTypeKey, msg._projectIds);
+                            await cleanPendingTasksFromHistory(sessionId, taskTypeKey, msg._projectIds);
                         } else {
                             // 任务仍在运行：恢复轮询
                             msg.role = 'ai';
@@ -3841,9 +3918,7 @@
                 if (currentEventSource) { currentEventSource.close(); currentEventSource = null; }
 
                 // 清除验证状态（防止跨 session 验证泄露）
-                pendingVerificationId.value = null;
-                showOtherInput.value = false;
-                otherInputText.value = '';
+                clearPendingVerificationState();
 
                 currentSessionId.value = sessionId;
                 // 完全重置所有媒体状态
@@ -3865,10 +3940,11 @@
                 if (referenceInputRef.value) referenceInputRef.value.value = '';
                 const history = await loadSessionHistory(sessionId);
                 messages.value = normalizeLoadedMessages(history.filter(filterHistoryMessage).map(parseHistoryMessage));
+                restorePendingVerificationFromHistory(history);
                 recoverVideoTasksFromAssistantMessages();
 
                 // 恢复活跃任务（从历史中的 __PENDING_TASK__ 标记恢复）
-                await recoverPendingTasks();
+                await recoverPendingTasks(sessionId);
 
                 // 恢复活跃 Agent 任务流（AI 正在回复时切换对话的场景）
                 const activeTaskId = sessionActiveTaskId[sessionId];
@@ -4131,8 +4207,9 @@
                     const history = await loadSessionHistory(latestSession.id);
                     if (history.length > 0) {
                         messages.value = normalizeLoadedMessages(history.filter(filterHistoryMessage).map(parseHistoryMessage));
+                        restorePendingVerificationFromHistory(history);
                         recoverVideoTasksFromAssistantMessages();
-                        await recoverPendingTasks();
+                        await recoverPendingTasks(latestSession.id);
                     }
                 } else {
                     // 没有历史会话，自动新建一个
@@ -5021,6 +5098,7 @@
                         audioItem.uploadFailed = false;
                         const mediaItem = mediaItems.value.find(m => m.agentAudioItem === audioItem || m.fileUrl === audioItem.previewUrl);
                         if (mediaItem) {
+                            mediaItem.serverUrl = data.url;
                             mediaItem.fileUrl = data.url;
                             mediaItem.uploading = false;
                             mediaItem.uploadFailed = false;
@@ -6403,6 +6481,9 @@
                 pendingVerificationId,
                 showOtherInput,
                 otherInputText,
+                activeOtherVerificationId,
+                isActiveVerificationMessage,
+                openOtherInput,
                 selectVerificationOption,
                 submitOtherInput,
                 submitVerificationAnswer

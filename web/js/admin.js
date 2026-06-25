@@ -2241,6 +2241,12 @@ const AdminApp = {
                 return;
             }
 
+            // test_mode 配置仅允许通过脚本修改，禁止在管理后台修改（防止生产环境误开启挡板）
+            if (this.isTestModeConfig(item.config_key)) {
+                this.showToast(this.t('toast_test_mode_modify_forbidden'), 'error');
+                return;
+            }
+
             this.configEditModal.configId = item.id;
             this.configEditModal.configKey = item.config_key;
             this.configEditModal.valueType = item.value_type;
@@ -2271,7 +2277,14 @@ const AdminApp = {
             ];
             return commercialPatterns.some(pattern => configKey.startsWith(pattern));
         },
-        
+
+        /**
+         * 判断是否为 test_mode 配置（E2E 挡板配置，仅允许脚本修改）
+         */
+        isTestModeConfig(configKey) {
+            return configKey && configKey.startsWith('test_mode');
+        },
+
         // 关闭配置编辑弹窗
         closeConfigEditModal() {
             this.configEditModal.show = false;

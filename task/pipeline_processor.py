@@ -9,6 +9,7 @@ Pipeline 编排器
 4. 将步骤结果应用回 ai_tool
 """
 import logging
+import json
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 import pymysql
@@ -218,16 +219,64 @@ class PipelineProcessor:
 
         if stage == PipelineStage.PARAM_PREPARE:
             # 预处理阶段：将步骤结果写回 ai_tool 的对应字段
+            updates = {}
+            image_path_items = None
+            reference_image_items = None
+
             for step in steps:
                 if step.status == PipelineStepStatus.COMPLETED and step.step_type == 'face_mask':
                     masked_video_url = step.result_url
                     if masked_video_url:
                         # 更新 ai_tool 的 video_path 为遮盖后的视频
-                        AIToolsModel.update(ai_tool.id, video_path=masked_video_url)
+                        updates['video_path'] = masked_video_url
                         logger.info(
                             f"Applied face_mask result to ai_tool {ai_tool.id}: "
                             f"video_path -> {masked_video_url}"
                         )
+                elif step.status == PipelineStepStatus.COMPLETED and step.step_type == 'image_face_mask':
+                    masked_image_url = step.result_url
+                    if not masked_image_url:
+                        continue
+
+                    params = step.get_params_dict()
+                    field = params.get('field')
+                    index = params.get('index')
+                    if not isinstance(index, int):
+                        logger.warning(f"image_face_mask step {step.id} missing integer index, skipped")
+                        continue
+
+                    if field == 'image_path':
+                        if image_path_items is None:
+                            image_path_items = [
+                                item.strip()
+                                for item in (getattr(ai_tool, 'image_path', '') or '').split(',')
+                                if item.strip()
+                            ]
+                        if 0 <= index < len(image_path_items):
+                            image_path_items[index] = masked_image_url
+                            updates['image_path'] = ','.join(image_path_items)
+                            logger.info(
+                                f"Applied image_face_mask result to ai_tool {ai_tool.id}: "
+                                f"image_path[{index}] -> {masked_image_url}"
+                            )
+                    elif field == 'reference_images':
+                        if reference_image_items is None:
+                            raw_reference_images = getattr(ai_tool, 'reference_images', None)
+                            try:
+                                parsed = json.loads(raw_reference_images) if isinstance(raw_reference_images, str) else raw_reference_images
+                            except json.JSONDecodeError:
+                                parsed = []
+                            reference_image_items = parsed if isinstance(parsed, list) else []
+                        if 0 <= index < len(reference_image_items):
+                            reference_image_items[index] = masked_image_url
+                            updates['reference_images'] = json.dumps(reference_image_items, ensure_ascii=False)
+                            logger.info(
+                                f"Applied image_face_mask result to ai_tool {ai_tool.id}: "
+                                f"reference_images[{index}] -> {masked_image_url}"
+                            )
+
+            if updates:
+                AIToolsModel.update(ai_tool.id, **updates)
 
     # ==================== 调度器入口 ====================
 
