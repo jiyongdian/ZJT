@@ -13,18 +13,28 @@ from utils.sentry_util import SentryUtil, AlertLevel
 class GrokCommonV1Driver(BaseVideoDriver):
     """
     Grok 通用聚合站点 v1 版本驱动（基类）
-    支持图生视频，使用 grok-video-3-10s 模型
+    对接 yunwu.ai 新接口 POST /v1/videos/generations，使用 grok-imagine-video 模型
 
     特点：
     - 支持多个站点配置（通过 site_id 区分）
     - 从 api_aggregator.{site_id} 加载配置
-    - 支持首尾帧和多参考图模式
+    - 支持首帧模式（image，单张）和多参考图模式（reference_images，最多7张）
+    - 新接口 image 与 reference_images 互斥
 
     注意：这是基类，不应该直接实例化，应该使用具体的站点类
     """
 
-    # Grok 模型名称
-    MODEL_NAME = "grok-video-3-10s"
+    # Grok 模型名称（yunwu.ai 新接口）
+    MODEL_NAME = "grok-imagine-video"
+
+    # 固定分辨率（新接口必需字段，AITool 无该字段，固定 720p）
+    RESOLUTION = "720p"
+
+    # 默认时长（秒）
+    DEFAULT_DURATION = 10
+
+    # 多参考图模式最大图片数量
+    MAX_REFERENCE_IMAGES = 7
 
     def __init__(self, site_id: str, impl_name: str = None):
         """
@@ -79,23 +89,22 @@ class GrokCommonV1Driver(BaseVideoDriver):
         Returns:
             tuple[bool, Optional[str]]: (是否有效, 错误信息)
 
-        期望的响应格式（OpenAI 风格）:
+        期望的响应格式（yunwu 新接口）:
         {
-            "id": "chatcmpl-xxxx",
-            "object": "video.completion",
-            "created": 1234567890,
-            "choices": [...],
-            "usage": {...}
+            "request_id": "86856ed7-xxxx-xxxx-xxxx"
         }
+        同时兼容含 "id" 字段的旧风格格式
         """
         if not isinstance(result, dict):
             return False, f"响应不是字典类型，实际类型: {type(result)}"
 
-        if "id" not in result:
-            return False, f"响应缺少 'id' 字段，实际字段: {list(result.keys())}"
+        # 新接口返回 request_id，兼容旧风格的 id
+        task_id = result.get("id") or result.get("request_id")
+        if not task_id:
+            return False, f"响应缺少 'id' 或 'request_id' 字段，实际字段: {list(result.keys())}"
 
-        if not isinstance(result.get("id"), str):
-            return False, f"'id' 字段类型错误，期望 str，实际: {type(result.get('id'))}"
+        if not isinstance(task_id, str):
+            return False, f"任务ID字段类型错误，期望 str，实际: {type(task_id)}"
 
         return True, None
 
@@ -109,32 +118,56 @@ class GrokCommonV1Driver(BaseVideoDriver):
         Returns:
             tuple[bool, Optional[str]]: (是否有效, 错误信息)
 
-        期望的响应格式:
-        {
-            "id": "chatcmpl-xxxx",
-            "status": "completed" / "processing" / "failed",
-            "output": {
-                "video": {"url": "https://..."}
-            }
-        }
-        或 OpenAI 风格带 choices 的格式
+        查询响应分阶段：
+        - 早期（刚提交/排队中）：仅 {"request_id": "..."}，尚无 status
+        - 处理中/完成/失败：{"id": "...", "status": "processing/completed/failed", "error": {...}}
+        只要是合法 dict 即通过；具体状态由 check_status 解析（无 status 时兜底为 RUNNING）
         """
         if not isinstance(result, dict):
             return False, f"响应不是字典类型，实际类型: {type(result)}"
 
-        if "id" not in result:
-            return False, f"响应缺少 'id' 字段，实际字段: {list(result.keys())}"
-
         return True, None
+
+    def _map_aspect_ratio(self, ratio: str) -> str:
+        """
+        将视频比例映射为新接口支持的 aspect_ratio
+
+        新接口仅支持 1:1 / 16:9 / 9:16，对其他比例做兜底映射：
+        - 竖屏（2:3, 3:4）→ 9:16
+        - 横屏（3:2, 4:3）→ 16:9
+        - 其余未识别 → 9:16（默认）
+
+        Args:
+            ratio: 原始视频比例
+
+        Returns:
+            str: 新接口支持的 aspect_ratio
+        """
+        SUPPORTED = {"1:1", "16:9", "9:16"}
+        if ratio in SUPPORTED:
+            return ratio
+
+        MAPPING = {
+            "2:3": "9:16", "3:4": "9:16",   # 竖屏
+            "3:2": "16:9", "4:3": "16:9",   # 横屏
+        }
+        mapped = MAPPING.get(ratio)
+        if mapped:
+            self.logger.warning(f"Grok yw新接口不支持比例 {ratio}，已映射为 {mapped}")
+            return mapped
+
+        self.logger.warning(f"Grok yw新接口不支持比例 {ratio}，使用默认 9:16")
+        return "9:16"
 
     def build_create_request(self, ai_tool) -> Dict[str, Any]:
         """
-        构建创建 Grok 任务的完整请求参数
+        构建创建 Grok 任务的完整请求参数（对接 yunwu.ai 新接口）
 
-        支持三种图片模式：
-        - first_last_frame: 首尾帧模式，传入1~2张图片
-        - multi_reference: 多参考图模式，最多3张
-        - first_last_with_ref: 首尾帧+参考图模式，优先使用首尾帧
+        新接口 POST /v1/videos/generations，model/prompt/resolution/aspect_ratio/duration 必填，
+        image 与 reference_images 互斥：
+        - first_last_frame（首帧模式）：使用 image={url}，新接口 image 仅单张，忽略尾帧
+        - multi_reference（多参模式）：使用 reference_images=[{url},...]，最多7张
+        - first_last_with_ref：image 与 reference_images 互斥，优先使用首帧
 
         Args:
             ai_tool: AITool 对象
@@ -151,51 +184,75 @@ class GrokCommonV1Driver(BaseVideoDriver):
 
         self.logger.info(f"Grok yw驱动图片模式: {mode}, 首帧: {first_frame}, 尾帧: {last_frame}, 参考图: {len(reference_images)}张")
 
-        # 根据模式构建图片列表
-        image_urls = []
+        # 根据模式构建图片字段（新接口 image 单张对象 / reference_images 对象数组，二者互斥）
+        image_url = None          # 首帧模式 -> image 字段（单张）
+        ref_url_list = []         # 多参模式 -> reference_images 字段
 
         if mode == ImageMode.FIRST_LAST_FRAME:
             if first_frame:
-                image_urls.append(first_frame)
+                image_url = first_frame
             if last_frame:
-                image_urls.append(last_frame)
+                # 新接口 image 仅支持单张首帧，忽略尾帧
+                self.logger.warning("Grok yw驱动首帧模式：新接口 image 仅支持单张，已忽略尾帧")
         elif mode == ImageMode.MULTI_REFERENCE:
             if reference_images:
-                image_urls = reference_images[:7]
-                if len(reference_images) > 7:
-                    self.logger.warning(f"Grok yw驱动最多支持7张参考图，已截取前7张")
+                ref_url_list = reference_images[:self.MAX_REFERENCE_IMAGES]
+                if len(reference_images) > self.MAX_REFERENCE_IMAGES:
+                    self.logger.warning(f"Grok yw驱动最多支持{self.MAX_REFERENCE_IMAGES}张参考图，已截取")
         elif mode == ImageMode.FIRST_LAST_WITH_REF:
-            if first_frame or last_frame:
-                if first_frame:
-                    image_urls.append(first_frame)
-                if last_frame:
-                    image_urls.append(last_frame)
+            # image 与 reference_images 互斥，优先使用首帧
+            if first_frame:
+                image_url = first_frame
                 if reference_images:
-                    self.logger.warning(f"Grok yw驱动首尾帧+参考图模式，已使用首尾帧，忽略 {len(reference_images)} 张参考图")
+                    self.logger.warning(f"Grok yw驱动首尾帧+参考图模式：已使用首帧，忽略 {len(reference_images)} 张参考图")
             elif reference_images:
-                image_urls = reference_images[:7]
+                ref_url_list = reference_images[:self.MAX_REFERENCE_IMAGES]
 
-        # 上传图片到CDN图床，确保外部API可访问
-        if image_urls:
-            image_urls = self.ensure_public_urls(image_urls)
+        # 上传图片到CDN图床，确保外部API可访问（首帧在前，上传后按位置还原）
+        all_urls = []
+        if image_url:
+            all_urls.append(image_url)
+        all_urls.extend(ref_url_list)
 
-        # 获取比例并映射为 Grok 支持的格式
-        ratio = getattr(ai_tool, 'ratio', '9:16')
-        # Grok 支持: 2:3, 3:2, 1:1
-        aspect_ratio = ratio
+        # grok 新接口要求 https 图片源，force_upload=True 强制把图片（含 http 外网源）重传到 https CDN
+        if all_urls:
+            uploaded = self.ensure_public_urls(all_urls, force_upload=True)
+            if image_url:
+                image_url = uploaded[0]
+                ref_url_list = uploaded[1:]
+            else:
+                ref_url_list = uploaded
+
+        # 比例映射为新接口支持的 aspect_ratio（1:1/16:9/9:16）
+        ratio = getattr(ai_tool, 'ratio', None) or '9:16'
+        aspect_ratio = self._map_aspect_ratio(ratio)
+
+        # 时长：取合法档位（6/10/15），异常值回退默认，并做 [1,15] 边界防御
+        duration = getattr(ai_tool, 'duration', None)
+        try:
+            duration = int(duration) if duration is not None else self.DEFAULT_DURATION
+        except (TypeError, ValueError):
+            duration = self.DEFAULT_DURATION
+        if duration not in (6, 10, 15):
+            self.logger.warning(f"Grok yw驱动时长 {duration} 不在支持档位(6/10/15)，回退默认 {self.DEFAULT_DURATION}")
+            duration = self.DEFAULT_DURATION
+        duration = max(1, min(15, duration))
 
         payload = {
             "model": self.MODEL_NAME,
             "prompt": ai_tool.prompt,
+            "resolution": self.RESOLUTION,
             "aspect_ratio": aspect_ratio,
-            "size": "720P",
+            "duration": duration,
         }
 
-        if image_urls:
-            payload["images"] = image_urls
+        if image_url:
+            payload["image"] = {"url": image_url}
+        if ref_url_list:
+            payload["reference_images"] = [{"url": u} for u in ref_url_list]
 
         return {
-            "url": f"{self._base_url}/v1/video/create",
+            "url": f"{self._base_url}/v1/videos/generations",
             "method": "POST",
             "json": payload,
             "headers": {
@@ -216,9 +273,8 @@ class GrokCommonV1Driver(BaseVideoDriver):
             Dict[str, Any]: 请求参数字典
         """
         return {
-            "url": f"{self._base_url}/v1/video/query",
+            "url": f"{self._base_url}/v1/videos/{project_id}",
             "method": "GET",
-            "params": {"id": project_id},
             "json": None,
             "headers": {
                 "Accept": "application/json",
@@ -266,7 +322,7 @@ class GrokCommonV1Driver(BaseVideoDriver):
                     alert_type="INVALID_RESPONSE_FORMAT",
                     message=f"Grok yunwu submit_task 响应格式错误: {validation_error}",
                     context={
-                        "api": "v1/video/create",
+                        "api": "v1/videos/generations",
                         "response": result,
                         "ai_tool_id": ai_tool.id
                     }
@@ -279,7 +335,7 @@ class GrokCommonV1Driver(BaseVideoDriver):
                     "retry": False
                 }
 
-            project_id = result.get("id")
+            project_id = result.get("id") or result.get("request_id")
             if not project_id:
                 return {
                     "success": False,
@@ -350,7 +406,7 @@ class GrokCommonV1Driver(BaseVideoDriver):
                     alert_type="INVALID_RESPONSE_FORMAT",
                     message=f"Grok yunwu check_status 响应格式错误: {validation_error}",
                     context={
-                        "api": "v1/video/status",
+                        "api": "v1/videos/{request_id}",
                         "response": raw_result,
                         "project_id": project_id
                     }
@@ -384,7 +440,12 @@ class GrokCommonV1Driver(BaseVideoDriver):
                             "error_type": "SYSTEM"
                         }
                 elif status_value in ("failed", "FAILED", "error", "ERROR"):
-                    error_msg = raw_result.get("error", raw_result.get("message", "任务失败"))
+                    error = raw_result.get("error", raw_result.get("message", "任务失败"))
+                    # error 可能是字符串，也可能是 {"code": ..., "message": ...} 字典
+                    if isinstance(error, dict):
+                        error_msg = error.get("message") or error.get("code") or str(error)
+                    else:
+                        error_msg = error
                     return {
                         "status": "FAILED",
                         "error": error_msg,
@@ -423,8 +484,8 @@ class GrokCommonV1Driver(BaseVideoDriver):
                         "message": "任务处理中..."
                     }
 
-            # 无法识别的格式，视为处理中
-            self.logger.warning(f"无法识别的 yunwu 状态响应格式: {raw_result}")
+            # 无 status 字段（早期刚提交/排队中，仅含 request_id）→ 视为处理中（正常，非异常）
+            self.logger.info(f"任务尚无 status，视为排队/处理中: {raw_result}")
             return {
                 "status": "RUNNING",
                 "message": "任务处理中..."
@@ -507,6 +568,17 @@ class GrokCommonV1Driver(BaseVideoDriver):
 
         # 路径6: 根级别 video_url
         url = data.get("video_url")
+        if url:
+            return url
+
+        # 路径7: output.url / data.url（yunwu 等新接口视频 url 可能直接挂这层）
+        if isinstance(output, dict) and output.get("url"):
+            return output["url"]
+        if isinstance(result_data, dict) and result_data.get("url"):
+            return result_data["url"]
+
+        # 路径8: 根级 url
+        url = data.get("url")
         if url:
             return url
 
