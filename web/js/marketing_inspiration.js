@@ -760,7 +760,11 @@ function updateToolbarUI() {
 
   // Type label
   if (typeLabel) {
-    const labels = { agent: 'Agent 模式', image: '图片生成', video: '视频生成' };
+    const labels = {
+      agent: tOrFallback('mode_agent', 'Agent 模式'),
+      image: tOrFallback('mode_image', '图片生成'),
+      video: tOrFallback('mode_video', '视频生成'),
+    };
     typeLabel.textContent = labels[toolbarState.type] || toolbarState.type;
   }
 
@@ -1083,7 +1087,7 @@ async function initPage() {
 
       // 将灵感图片加入媒体列表，让 goToGenerate 通过 sessionStorage 传递
       if (src) {
-        const fullUrl = window.location.origin + src;
+        const fullUrl = /^https?:\/\//.test(src) ? src : (window.location.origin + src);
         uploadedMediaItems.push({
           id: ++mediaIdCounter,
           file: null,
@@ -1111,7 +1115,7 @@ async function initPage() {
 
       // 将灵感图片作为参考图加入媒体列表
       if (src) {
-        const fullUrl = window.location.origin + src;
+        const fullUrl = /^https?:\/\//.test(src) ? src : (window.location.origin + src);
         uploadedMediaItems.push({
           id: ++mediaIdCounter,
           file: null,
@@ -1128,14 +1132,6 @@ async function initPage() {
       goToGenerate(prompt || '', { mode: 'agent', media_type: 'image' });
     });
   }
-
-  // Tab 切换
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', function () {
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      this.classList.add('active');
-    });
-  });
 
   // 输入框自动增高
   const promptInput = document.querySelector('.prompt-input');

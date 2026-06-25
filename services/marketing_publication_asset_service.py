@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import mimetypes
 import os
 import shutil
@@ -14,6 +15,8 @@ from urllib.parse import urlparse
 from config.media_file_policy import MediaFilePolicy
 from model.media_file_mapping import MediaFileMappingModel
 from utils.media_mapping_util import extract_local_path_from_url
+
+logger = logging.getLogger(__name__)
 
 
 class PublicationAssetError(RuntimeError):
@@ -217,10 +220,10 @@ class MarketingPublicationAssetService:
         file_path: Path,
         original_url: str,
         label: str,
-    ) -> None:
+    ) -> int:
         local_path = public_url.lstrip("/")
         media_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
-        MediaFileMappingModel.create(
+        mapping_id = MediaFileMappingModel.create(
             user_id=user_id,
             local_path=local_path,
             cloud_path=None,
@@ -232,6 +235,37 @@ class MarketingPublicationAssetService:
             file_size=file_path.stat().st_size,
             label=label,
         )
+        # 建立映射后异步触发 CDN 上传（仅启用时）；完成后由 cdn_redirect_middleware
+        # 将 /upload/... 请求透明 302 到 CDN，前端无需感知 URL 变化。
+        if local_path:
+            MarketingPublicationAssetService._trigger_cdn_upload(mapping_id, local_path)
+        return mapping_id
+
+    @staticmethod
+    def _trigger_cdn_upload(mapping_id: int, local_path: str) -> None:
+        """异步触发 CDN 上传（fire-and-forget，守护线程执行，不阻塞调用方）。
+
+        仅在 ``server.auto_upload_to_cdn`` 启用时上传。上传完成后由 server.py 的
+        ``cdn_redirect_middleware`` 将 ``/upload/...`` 请求透明 302 重定向到 CDN 签名 URL，
+        因此发布时仍写入本地路径，前端与中间件配合即可访问 CDN。
+        """
+        try:
+            from config.config_util import get_config
+
+            if not get_config().get("server", {}).get("auto_upload_to_cdn", False):
+                return
+
+            import threading
+            from utils.cdn_util import CDNUtil
+
+            threading.Thread(
+                target=CDNUtil.trigger_cdn_upload,
+                args=(mapping_id, local_path),
+                daemon=True,
+                name=f"mp-cdn-upload-{mapping_id}",
+            ).start()
+        except Exception as exc:
+            logger.warning("触发营销灵感 CDN 上传失败 (mapping_id=%s): %s", mapping_id, exc)
 
     @classmethod
     def _build_params_snapshot(
