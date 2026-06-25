@@ -1,7 +1,7 @@
 """Create marketing publications table
 
 Revision ID: 20260624_marketing_publications
-Revises: 20260616_withdraw_method
+Revises: 20260618_seed_img_mask
 Create Date: 2026-06-24
 """
 from typing import Sequence, Union
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 # revision identifiers, used by Alembic.
 revision: str = '20260624_marketing_publications'
-down_revision: Union[str, None] = '20260616_withdraw_method'
+down_revision: Union[str, None] = '20260618_seed_img_mask'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
