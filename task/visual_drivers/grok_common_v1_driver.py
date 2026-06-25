@@ -423,9 +423,9 @@ class GrokCommonV1Driver(BaseVideoDriver):
             status_value = raw_result.get("status", "")
             result_data = raw_result
 
-            # 格式1: 直接 status 字段 (completed / processing / failed)
+            # 格式1: 直接 status 字段 (done / completed / processing / failed)
             if status_value:
-                if status_value in ("completed", "COMPLETED", "success", "SUCCESS"):
+                if status_value in ("completed", "COMPLETED", "success", "SUCCESS", "done", "DONE", "succeeded", "Succeeded"):
                     # 尝试从 output.video.url 或 choices 中提取视频URL
                     video_url = self._extract_video_url(result_data)
                     if video_url:
