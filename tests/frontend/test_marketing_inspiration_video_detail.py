@@ -54,3 +54,22 @@ def test_inspiration_feed_does_not_use_hardcoded_sample_images():
     assert "/files/inspiration/img" not in html
     assert "return publishedInspirationData" in js
     assert "IMAGE_DATA" not in js[js.index("function getFeedData"):js.index("function inferMediaTypeFromUrl")]
+
+
+def test_prompt_enter_submits_without_newline_and_shift_enter_keeps_newline():
+    js = _read_js()
+
+    assert "promptInput.addEventListener('keydown'" in js
+    assert "e.key === 'Enter' && !e.shiftKey" in js
+    assert "e.preventDefault()" in js
+    assert "sendBtn.click()" in js
+
+
+def test_inspiration_send_opens_new_marketing_agent_session():
+    inspiration_js = _read_js()
+    agent_html = (ROOT / "web" / "marketing_agent.html").read_text(encoding="utf-8")
+
+    assert "params.set('new_session', '1')" in inspiration_js
+    assert "const forceNewSession = getUrlParam('new_session') === '1'" in agent_html
+    assert "if (forceNewSession) {" in agent_html
+    assert agent_html.index("const forceNewSession = getUrlParam('new_session') === '1'") < agent_html.index("if (backendSessions.length > 0)")

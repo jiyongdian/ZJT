@@ -989,6 +989,7 @@ function handleFileSelect(files) {
 // ── 页面跳转：做同款 / 发送（携带完整参数）
 function goToGenerate(prompt, options) {
   const params = new URLSearchParams();
+  params.set('new_session', '1');
   if (prompt) params.set('prompt', prompt);
 
   if (options) {
@@ -1135,15 +1136,21 @@ async function initPage() {
 
   // 输入框自动增高
   const promptInput = document.querySelector('.prompt-input');
+  const sendBtn = document.querySelector('.marketing-send-btn');
   if (promptInput) {
     promptInput.addEventListener('input', function () {
       this.style.height = 'auto';
       this.style.height = Math.min(this.scrollHeight, 200) + 'px';
     });
+    promptInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+        e.preventDefault();
+        if (sendBtn) sendBtn.click();
+      }
+    });
   }
 
   // 发送按钮
-  const sendBtn = document.querySelector('.marketing-send-btn');
   if (sendBtn) {
     sendBtn.addEventListener('click', function () {
       const val = promptInput ? promptInput.value.trim() : '';

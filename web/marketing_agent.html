@@ -1428,6 +1428,30 @@
             // 当前可选分辨率
             const currentResolutions = Vue.computed(() => availableResolutions.value);
 
+            function normalizeImageResolution(resolution) {
+                const sizeMap = { '1K': '1K', [window.t('resolution_2k')]: '2K', [window.t('resolution_4k')]: '4K' };
+                return sizeMap[resolution] || resolution;
+            }
+
+            function getLowestCurrentImageResolution() {
+                const firstConcrete = currentResolutions.value.find(res => res && res !== 'auto');
+                return firstConcrete ? normalizeImageResolution(firstConcrete) : null;
+            }
+
+            function getImageResolutionForRequest() {
+                if (selectedResolution.value && selectedResolution.value !== 'auto') {
+                    return normalizeImageResolution(selectedResolution.value);
+                }
+                return getLowestCurrentImageResolution();
+            }
+
+            function getImageResolutionPreference() {
+                if (!selectedResolution.value || selectedResolution.value === 'auto') {
+                    return 'auto';
+                }
+                return normalizeImageResolution(selectedResolution.value);
+            }
+
             // 是否为视频模式
             const isVideoMode = Vue.computed(() => {
                 return selectedType.value === 'video' ||
@@ -2677,9 +2701,8 @@
                         form.append('image', uploadedImageFile.value);
                         form.append('ratio', selectedRatio.value);
                         form.append('count', '1');
-                        if (selectedResolution.value && selectedResolution.value !== 'auto') {
-                            const sizeMap = { '1K': '1K', [window.t('resolution_2k')]: '2K', [window.t('resolution_4k')]: '4K' };
-                            const sizeVal = sizeMap[selectedResolution.value] || selectedResolution.value;
+                        const sizeVal = getImageResolutionForRequest();
+                        if (sizeVal) {
                             form.append('image_size', sizeVal);
                         }
                         // 获取 task_id
@@ -2695,9 +2718,8 @@
                         // 文生图
                         form.append('aspect_ratio', selectedRatio.value);
                         form.append('count', '1');
-                        if (selectedResolution.value && selectedResolution.value !== 'auto') {
-                            const sizeMap = { '1K': '1K', [window.t('resolution_2k')]: '2K', [window.t('resolution_4k')]: '4K' };
-                            const sizeVal = sizeMap[selectedResolution.value] || selectedResolution.value;
+                        const sizeVal = getImageResolutionForRequest();
+                        if (sizeVal) {
                             form.append('image_size', sizeVal);
                         }
                         // 获取 task_id
@@ -3497,15 +3519,12 @@
                     const validAudioUrls = audioUrls.filter(isHttpUrl);
 
                     // 1. 创建任务
-                    // 构建图片偏好（auto 分辨率不传）
+                    // 构建图片偏好（auto 显式传给后端，用于清理旧分辨率偏好）
                     const imagePreferences = {
                         ratio: selectedRatio.value,
-                        model_name: selectedImageModel.value
+                        model_name: selectedImageModel.value,
+                        resolution: getImageResolutionPreference()
                     };
-                    if (selectedResolution.value && selectedResolution.value !== 'auto') {
-                        const sizeMap = { '1K': '1K', [window.t('resolution_2k')]: '2K', [window.t('resolution_4k')]: '4K' };
-                        imagePreferences.resolution = sizeMap[selectedResolution.value] || selectedResolution.value;
-                    }
 
                     const taskResponse = await fetch(`/api/session/${sessionId}/task`, {
                         method: 'POST',
@@ -4625,11 +4644,15 @@
                 await loadComputingPower();
                 startComputingPowerRefresh();
 
+                const forceNewSession = getUrlParam('new_session') === '1';
+
                 // 从后端加载会话列表
                 const backendSessions = await loadSessionsFromBackend();
 
                 // 如果有历史会话，自动复用最近一条
-                if (backendSessions.length > 0) {
+                if (forceNewSession) {
+                    await createSession();
+                } else if (backendSessions.length > 0) {
                     const latestSession = backendSessions[0];
                     currentSessionId.value = latestSession.id;
                     const history = await loadSessionHistory(latestSession.id);
@@ -6613,9 +6636,8 @@
                         ? window.TaskConfig.getTaskIdByKey(model.key, 'text_to_image') || window.TaskConfig.getTaskIdByKey(model.key, 'image_edit')
                         : null;
                     if (!taskId || !userId.value || !worldId.value) return;
-                    // 解析分辨率为后端格式（auto 不传）
-                    const sizeMap = { '1K': '1K', [window.t('resolution_2k')]: '2K', [window.t('resolution_4k')]: '4K' };
-                    const resolvedResolution = selectedResolution.value === 'auto' ? null : (sizeMap[selectedResolution.value] || selectedResolution.value);
+                    // 解析分辨率为后端格式；auto 显式同步以清理旧的固定分辨率偏好
+                    const resolvedResolution = getImageResolutionPreference();
                     const resp = await fetch('/api/text-to-image-model', {
                         method: 'POST',
                         headers: {
