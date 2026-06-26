@@ -377,7 +377,7 @@ class GrokDuomiV1Driver(BaseVideoDriver):
                 }
             elif state == "error":
                 result = {
-                    "code": 1,
+                    "code": 0,
                     "msg": message or "任务失败",
                     "data": {
                         "status": 2,

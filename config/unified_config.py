@@ -886,11 +886,13 @@ class DriverImplementation:
     SEEDANCE_1_5_PRO_VOLCENGINE_V1 = 'seedance_1_5_pro_volcengine_v1'
     SEEDANCE_2_0_FAST_VOLCENGINE_V1 = 'seedance_2_0_fast_volcengine_v1'
     SEEDANCE_2_0_VOLCENGINE_V1 = 'seedance_2_0_volcengine_v1'
+    SEEDANCE_2_0_MINI_VOLCENGINE_V1 = 'seedance_2_0_mini_volcengine_v1'
 
     # Volcengine Oversea (火山引擎海外版)
     SEEDREAM5_VOLCENGINE_OVERSEA_V1 = 'seedream5_volcengine_oversea_v1'
     SEEDANCE_2_0_FAST_VOLCENGINE_OVERSEA_V1 = 'seedance_2_0_fast_volcengine_oversea_v1'
     SEEDANCE_2_0_VOLCENGINE_OVERSEA_V1 = 'seedance_2_0_volcengine_oversea_v1'
+    SEEDANCE_2_0_MINI_VOLCENGINE_OVERSEA_V1 = 'seedance_2_0_mini_volcengine_oversea_v1'
 
     # GPT Image
     DUOMI_GPT_IMAGE_V1 = 'duomi_gpt_image_v1'
@@ -984,6 +986,8 @@ class DriverImplementationId:
     SEEDREAM5_VOLCENGINE_OVERSEA_V1 = 52
     SEEDANCE_2_0_FAST_VOLCENGINE_OVERSEA_V1 = 53
     SEEDANCE_2_0_VOLCENGINE_OVERSEA_V1 = 54
+    SEEDANCE_2_0_MINI_VOLCENGINE_V1 = 56
+    SEEDANCE_2_0_MINI_VOLCENGINE_OVERSEA_V1 = 57
 
 
 # implementation 字符串到 ID 的映射
@@ -1011,6 +1015,7 @@ IMPLEMENTATION_TO_ID = {
     'seedance_1_5_pro_volcengine_v1': DriverImplementationId.SEEDANCE_1_5_PRO_VOLCENGINE_V1,
     'seedance_2_0_fast_volcengine_v1': DriverImplementationId.SEEDANCE_2_0_FAST_VOLCENGINE_V1,
     'seedance_2_0_volcengine_v1': DriverImplementationId.SEEDANCE_2_0_VOLCENGINE_V1,
+    'seedance_2_0_mini_volcengine_v1': DriverImplementationId.SEEDANCE_2_0_MINI_VOLCENGINE_V1,
     'qwen_multi_angle_runninghub_v1': DriverImplementationId.QWEN_MULTI_ANGLE_RUNNINGHUB_V1,
     'veo3_common_site1_v1': DriverImplementationId.VEO3_COMMON_SITE1_V1,
     'duomi_gpt_image_v1': DriverImplementationId.DUOMI_GPT_IMAGE_V1,
@@ -1043,6 +1048,7 @@ IMPLEMENTATION_TO_ID = {
     'seedream5_volcengine_oversea_v1': DriverImplementationId.SEEDREAM5_VOLCENGINE_OVERSEA_V1,
     'seedance_2_0_fast_volcengine_oversea_v1': DriverImplementationId.SEEDANCE_2_0_FAST_VOLCENGINE_OVERSEA_V1,
     'seedance_2_0_volcengine_oversea_v1': DriverImplementationId.SEEDANCE_2_0_VOLCENGINE_OVERSEA_V1,
+    'seedance_2_0_mini_volcengine_oversea_v1': DriverImplementationId.SEEDANCE_2_0_MINI_VOLCENGINE_OVERSEA_V1,
 }
 
 # implementation ID 到字符串的映射
@@ -1104,6 +1110,7 @@ class DriverKey:
     SEEDANCE_1_5_PRO_IMAGE_TO_VIDEO = 'seedance_1_5_pro_image_to_video'
     SEEDANCE_2_0_FAST_IMAGE_TO_VIDEO = 'seedance_2_0_fast_image_to_video'
     SEEDANCE_2_0_IMAGE_TO_VIDEO = 'seedance_2_0_image_to_video'
+    SEEDANCE_2_0_MINI_IMAGE_TO_VIDEO = 'seedance_2_0_mini_image_to_video'
 
     # Grok 图生视频
     GROK_IMAGE_TO_VIDEO = 'grok_image_to_video'
@@ -1148,6 +1155,7 @@ class TaskTypeId:
         'SEEDANCE_1_5_PRO_IMAGE_TO_VIDEO': 'Seedance 1.5 Pro 图生视频',
         'SEEDANCE_2_0_FAST_IMAGE_TO_VIDEO': 'Seedance 2.0 Fast 图生视频',
         'SEEDANCE_2_0_IMAGE_TO_VIDEO': 'Seedance 2.0 图生视频',
+        'SEEDANCE_2_0_MINI_IMAGE_TO_VIDEO': 'Seedance 2.0 Mini 图生视频',
         'GROK_IMAGE_TO_VIDEO': 'Grok 图生视频',
         'HAPPY_HORSE_IMAGE_TO_VIDEO': 'Happy Horse 图生视频',
         'HAPPY_HORSE_REFERENCE_TO_VIDEO': 'Happy Horse 参考生视频',
@@ -1184,6 +1192,7 @@ class TaskTypeId:
     SEEDANCE_1_5_PRO_IMAGE_TO_VIDEO = 21
     SEEDANCE_2_0_FAST_IMAGE_TO_VIDEO = 22
     SEEDANCE_2_0_IMAGE_TO_VIDEO = 23
+    SEEDANCE_2_0_MINI_IMAGE_TO_VIDEO = 31
     GROK_IMAGE_TO_VIDEO = 27
     HAPPY_HORSE_IMAGE_TO_VIDEO = 28
     HAPPY_HORSE_REFERENCE_TO_VIDEO = 29
@@ -1667,6 +1676,31 @@ ALL_TASK_CONFIGS: List[UnifiedTaskConfig] = [
         default_ratio='9:16',
         default_duration=5,
         sort_order=39,
+        supported_image_modes=[ImageMode.FIRST_LAST_FRAME, ImageMode.MULTI_REFERENCE],
+        supports_last_frame=True,  # 支持首尾帧
+        supports_ref_audio_video=True,  # 支持参考音频和视频
+        max_multi_ref_images=9,
+        supports_grid_merge=True,
+    ),
+    UnifiedTaskConfig(
+        id=TaskTypeId.SEEDANCE_2_0_MINI_IMAGE_TO_VIDEO,
+        key='seedance_2_0_mini_image_to_video',
+        short_key='seedance_2_0_mini',
+        name='Seedance 2.0 Mini',
+        category=TaskCategory.IMAGE_TO_VIDEO,
+        categories=[TaskCategory.TEXT_TO_VIDEO],  # 支持文生视频
+        provider=TaskProvider.VOLCENGINE,
+        driver_name=DriverKey.SEEDANCE_2_0_MINI_IMAGE_TO_VIDEO,
+        implementation=DriverImplementation.SEEDANCE_2_0_MINI_VOLCENGINE_V1,
+        implementations=[
+            DriverImplementation.SEEDANCE_2_0_MINI_VOLCENGINE_V1,
+            DriverImplementation.SEEDANCE_2_0_MINI_VOLCENGINE_OVERSEA_V1,
+        ],
+        supported_ratios=['9:16', '16:9'],
+        supported_durations=[5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+        default_ratio='9:16',
+        default_duration=5,
+        sort_order=40,
         supported_image_modes=[ImageMode.FIRST_LAST_FRAME, ImageMode.MULTI_REFERENCE],
         supports_last_frame=True,  # 支持首尾帧
         supports_ref_audio_video=True,  # 支持参考音频和视频
@@ -2332,6 +2366,16 @@ ALL_IMPLEMENTATIONS: List[ImplementationConfig] = [
         sort_order=10700.0,
         required_config_keys=['volcengine.api_key']
     ),
+    ImplementationConfig(
+        name='seedance_2_0_mini_volcengine_v1',
+        display_name='火山引擎',
+        driver_class='Seedance20MiniVolcengineV1Driver',
+        default_computing_power={5: 125, 6: 150, 7: 175, 8: 200, 9: 225, 10: 250, 11: 275, 12: 300, 13: 325, 14: 350, 15: 375},
+        enabled=True,
+        description='火山引擎 Seedance 2.0 Mini 图生视频接口',
+        sort_order=10650.0,
+        required_config_keys=['volcengine.api_key']
+    ),
 
     # ==================== 火山引擎海外版供应商 ====================
     ImplementationConfig(
@@ -2363,6 +2407,16 @@ ALL_IMPLEMENTATIONS: List[ImplementationConfig] = [
         enabled=True,
         description='火山引擎海外版 Seedance 2.0 图生视频接口',
         sort_order=10750.0,
+        required_config_keys=['volcengine_oversea.api_key']
+    ),
+    ImplementationConfig(
+        name='seedance_2_0_mini_volcengine_oversea_v1',
+        display_name='火山引擎海外版',
+        driver_class='Seedance20MiniVolcengineOverseaV1Driver',
+        default_computing_power={5: 125, 6: 150, 7: 175, 8: 200, 9: 225, 10: 250, 11: 275, 12: 300, 13: 325, 14: 350, 15: 375},
+        enabled=True,
+        description='火山引擎海外版 Seedance 2.0 Mini 图生视频接口',
+        sort_order=10680.0,
         required_config_keys=['volcengine_oversea.api_key']
     ),
     ImplementationConfig(

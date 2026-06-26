@@ -675,12 +675,14 @@ def register_all_drivers():
         from .seedance_volcengine_v1_driver import (
             Seedance15ProVolcengineV1Driver,
             Seedance20FastVolcengineV1Driver,
-            Seedance20VolcengineV1Driver
+            Seedance20VolcengineV1Driver,
+            Seedance20MiniVolcengineV1Driver
         )
-        # 注册 Seedance 火山引擎 v1 版本（3 个模型）
+        # 注册 Seedance 火山引擎 v1 版本（4 个模型）
         VideoDriverFactory.register_driver(DriverImplementation.SEEDANCE_1_5_PRO_VOLCENGINE_V1, Seedance15ProVolcengineV1Driver)
         VideoDriverFactory.register_driver(DriverImplementation.SEEDANCE_2_0_FAST_VOLCENGINE_V1, Seedance20FastVolcengineV1Driver)
         VideoDriverFactory.register_driver(DriverImplementation.SEEDANCE_2_0_VOLCENGINE_V1, Seedance20VolcengineV1Driver)
+        VideoDriverFactory.register_driver(DriverImplementation.SEEDANCE_2_0_MINI_VOLCENGINE_V1, Seedance20MiniVolcengineV1Driver)
     except ImportError as e:
         logger.warning(f"Failed to import Seedance drivers: {e}")
 
@@ -695,10 +697,12 @@ def register_all_drivers():
     try:
         from .seedance_volcengine_oversea_v1_driver import (
             Seedance20FastVolcengineOverseaV1Driver,
-            Seedance20VolcengineOverseaV1Driver
+            Seedance20VolcengineOverseaV1Driver,
+            Seedance20MiniVolcengineOverseaV1Driver
         )
         VideoDriverFactory.register_driver(DriverImplementation.SEEDANCE_2_0_FAST_VOLCENGINE_OVERSEA_V1, Seedance20FastVolcengineOverseaV1Driver)
         VideoDriverFactory.register_driver(DriverImplementation.SEEDANCE_2_0_VOLCENGINE_OVERSEA_V1, Seedance20VolcengineOverseaV1Driver)
+        VideoDriverFactory.register_driver(DriverImplementation.SEEDANCE_2_0_MINI_VOLCENGINE_OVERSEA_V1, Seedance20MiniVolcengineOverseaV1Driver)
     except ImportError as e:
         logger.warning(f"Failed to import Seedance Oversea drivers: {e}")
 

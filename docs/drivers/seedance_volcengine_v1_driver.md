@@ -11,6 +11,9 @@
 | 21 | doubao-seedance-1-5-pro-251215 | `Seedance15ProVolcengineV1Driver` | first_last_frame | 支持 |
 | 22 | doubao-seedance-2-0-fast-260128 | `Seedance20FastVolcengineV1Driver` | first_last_frame, multi_reference | 支持 |
 | 23 | doubao-seedance-2-0-260128 | `Seedance20VolcengineV1Driver` | first_last_frame, multi_reference | 支持 |
+| 31 | doubao-seedance-2-0-mini-260615 | `Seedance20MiniVolcengineV1Driver` | first_last_frame, multi_reference | 支持 |
+
+> **Seedance 2.0 Mini**：价格为 Seedance 2.0 的一半，功能与 Seedance 2.0 一致。
 
 ## 特性
 
@@ -74,7 +77,9 @@ volcengine:
 
 | 文件 | 说明 |
 |------|------|
-| `task/visual_drivers/seedance_volcengine_v1_driver.py` | 驱动实现 |
+| `task/visual_drivers/seedance_volcengine_v1_driver.py` | 国内版驱动实现 |
+| `task/visual_drivers/seedance_volcengine_oversea_v1_driver.py` | 海外版驱动实现 |
 | `task/visual_drivers/base_video_driver.py` | 驱动基类 |
 | `config/unified_config.py` | 驱动配置定义 |
+| `config/constant.py` | 驱动映射配置 |
 | `model/ai_tools.py` | AI 工具模型（含 audio_path、video_path 字段） |
