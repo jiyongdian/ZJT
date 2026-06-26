@@ -664,7 +664,7 @@
                     <article v-for="asset in assetItems" :key="asset.id" class="asset-card">
                         <div class="asset-preview">
                             <video v-if="isAssetVideo(asset)" :src="asset.result_url" controls preload="metadata"></video>
-                            <img v-else :src="asset.result_url" :alt="asset.prompt || $t('generated_result_alt')" loading="lazy" decoding="async" @click="showImageModal(asset.result_url, asset.ai_tool_id || asset.project_id || asset.id, asset.prompt)">
+                            <img v-else :src="asset.result_url" :alt="asset.prompt || $t('generated_result_alt')" loading="lazy" decoding="async" @click="showImageModal(asset.result_url, asset.id, asset.prompt)">
                         </div>
                         <div class="asset-card-body">
                             <div class="asset-card-title">{{ asset.prompt || $t('generated_result_alt') }}</div>
@@ -1150,6 +1150,8 @@
                 return String(value || '')
                     .replace(/\\/g, '\\\\')
                     .replace(/'/g, "\\'")
+                    .replace(/\n/g, '\\n')
+                    .replace(/\r/g, '\\r')
                     .replace(/&/g, '&amp;')
                     .replace(/"/g, '&quot;')
                     .replace(/</g, '&lt;')
@@ -2011,7 +2013,7 @@
             // 发布资产到灵感页
             async function publishAsset(asset) {
                 if (!asset || asset.published) return;
-                const aiToolId = asset.ai_tool_id || asset.project_id || asset.id;
+                const aiToolId = asset.id;
                 if (!aiToolId) return;
                 currentModalImageInfo = { aiToolId: aiToolId, published: false, suggestedTitle: asset.prompt || '' };
                 showPublishTitleModal(asset.prompt || '');
@@ -2118,8 +2120,10 @@
                 // 解析 Markdown
                 let html = marked.parse(text);
 
-                // 为图片添加样式和点击事件
+                // 为图片添加样式和点击事件（跳过已由 buildGeneratedMediaRowsHtml 处理的图片）
                 html = html.replace(/<img([^>]*)>/g, (match, attrs) => {
+                    // 跳过已有 generated-image class 的图片，它们由父级 div 的 onclick 处理
+                    if (attrs.includes('generated-image')) return match;
                     // 提取 src 属性
                     const srcMatch = attrs.match(/src="([^"]*)"/);
                     const src = srcMatch ? srcMatch[1] : '';
@@ -2285,6 +2289,11 @@
             window.publishGeneratedResult = publishGeneratedResult;
 
             async function doPublish(aiToolId, title) {
+                const numericId = Number(aiToolId);
+                if (!numericId || Number.isNaN(numericId)) {
+                    showError('发布失败：无效的任务ID');
+                    return;
+                }
                 try {
                     const resp = await fetch('/api/marketing-publications', {
                         method: 'POST',
@@ -2294,8 +2303,8 @@
                             'X-User-Id': userId.value || ''
                         },
                         body: JSON.stringify({
-                            ai_tool_id: Number(aiToolId),
-                            title: title,
+                            ai_tool_id: numericId,
+                            title: (title || '').slice(0, 255),
                             tags: []
                         })
                     });
@@ -2309,8 +2318,7 @@
                     updateModalPublishButton();
                     // 更新资产列表中的发布状态
                     const assetIndex = assetItems.value.findIndex(item => {
-                        const itemId = item.ai_tool_id || item.project_id || item.id;
-                        return String(itemId) === String(aiToolId);
+                        return String(item.id) === String(aiToolId);
                     });
                     if (assetIndex !== -1) {
                         assetItems.value[assetIndex].published = true;

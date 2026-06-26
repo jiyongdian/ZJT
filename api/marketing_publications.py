@@ -25,7 +25,7 @@ router = APIRouter(tags=["marketing-publications"])
 
 class CreatePublicationRequest(BaseModel):
     ai_tool_id: int
-    title: Optional[str] = Field(None, max_length=255)
+    title: Optional[str] = None
     description: Optional[str] = None
     tags: List[str] = Field(default_factory=list)
 
