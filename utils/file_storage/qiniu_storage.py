@@ -260,7 +260,7 @@ class QiniuFileStorage(BaseFileStorage):
         # 确保域名不以/结尾，key不以/开头
         domain = self.cdn_domain.rstrip("/")
         key = key.lstrip("/")
-        return f"https://{domain}/{key}"
+        return f"http://{domain}/{key}"
 
     def _sync_list_by_prefix(self, prefix: str, limit: int = 1000) -> list:
         """同步列出指定前缀下的所有文件 key"""

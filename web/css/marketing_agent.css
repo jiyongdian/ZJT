@@ -1246,6 +1246,35 @@ body {
   background: #0284c7;
 }
 
+.publish-result-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #94a3b8;
+  border-color: #94a3b8;
+}
+
+.publish-asset-btn {
+  border: 1px solid #0ea5e9;
+  background: #0ea5e9;
+  color: #fff;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.publish-asset-btn:hover {
+  background: #0284c7;
+}
+
+.publish-asset-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #94a3b8;
+  border-color: #94a3b8;
+}
+
 /* ========== 算力显示 ========== */
 .computing-power-display {
   display: flex;

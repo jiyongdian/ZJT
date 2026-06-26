@@ -2,12 +2,17 @@
 Grok 通用聚合站点 v1 版本驱动实现
 支持多个站点配置，使用基类+站点类的架构
 """
-from typing import Dict, Any, Optional
+import os
+from typing import Dict, Any, Optional, Tuple
 import traceback
 from .base_video_driver import BaseVideoDriver, ImageMode
 from config.config_util import get_config, get_dynamic_config_value
 from config.unified_config import DriverImplementation
 from utils.sentry_util import SentryUtil, AlertLevel
+from utils.network_utils import is_local_file_path, is_local_or_private_url
+from utils.image_compressor import compress_local_image_to_base64, url_to_base64
+from utils.media_mapping_util import extract_local_path_from_url
+from utils.project_path import get_project_root
 
 
 class GrokCommonV1Driver(BaseVideoDriver):
@@ -36,6 +41,13 @@ class GrokCommonV1Driver(BaseVideoDriver):
     # 多参考图模式最大图片数量
     MAX_REFERENCE_IMAGES = 7
 
+    # 图片转 base64 data URI 的体积压缩上限（仅 >2MB 才压缩，≤2MB 原样发送，保留参考图细节）
+    _IMAGE_MAX_MB = 2.0
+    # 像素上限：**保持 0**。compress_local_image_to_base64 的 max_pixels>0 分支会强制缩放 +
+    # JPEG q85 重编码（为 LLM 视觉省 token 设计），对视频参考图过度有损、会导致人物细节丢失。
+    # 设为 0 表示不做 LLM 式强制缩放，仅按体积温和压缩（compress_image_to_limit，质量 95->60 自适应）。
+    _IMAGE_MAX_PIXELS = 0
+
     def __init__(self, site_id: str, impl_name: str = None):
         """
         初始化驱动（基类）
@@ -58,6 +70,10 @@ class GrokCommonV1Driver(BaseVideoDriver):
         # 是否为本地环境
         self._is_local = get_dynamic_config_value("server", "is_local", default=False)
         self._config = get_config()
+
+        # 视频下载代理配置（用于大陆地区无法访问 vidgen.x.ai）
+        self._video_proxy_enabled = get_dynamic_config_value("grok", "video_proxy_enabled", default=False)
+        self._video_proxy_domain = get_dynamic_config_value("grok", "video_proxy_domain", default="")
 
         self._validate_required({
             f"API Aggregator {site_id} API Key": self._api_key,
@@ -159,6 +175,105 @@ class GrokCommonV1Driver(BaseVideoDriver):
         self.logger.warning(f"Grok yw新接口不支持比例 {ratio}，使用默认 9:16")
         return "9:16"
 
+    def _build_image_payload(self, source: str) -> Optional[Dict[str, Any]]:
+        """
+        将单个图片源转为 grok 新接口的图片对象 {"url": ...}。
+
+        决策表（按顺序匹配，命中即返回）：
+        | source 形态 | 处理 |
+        |---|---|
+        | 空 | 返回 None |
+        | `data:` 开头（已是 data URI） | 直接透传 `{"url": source}` |
+        | 公网 `https://`（非局域网/私有地址） | 直接透传 `{"url": source}` |
+        | 其余（本地路径 / 局域网 / 本机服务 URL / 外网 http / 其它协议） | 压缩转 base64 → `{"url": "data:image/...;base64,..."}`；失败返回 None |
+
+        背景约束：
+        - grok 新接口图片源（同一 url 字段）支持「公网 HTTPS URL」与「base64 data URI」两种形式；
+        - 底层 x.ai 拒绝 `http://`、且本地/LAN 源外网不可达，故这类源必须转 base64。
+
+        压缩策略见 `_source_to_data_uri` / 类常量 `_IMAGE_MAX_MB` / `_IMAGE_MAX_PIXELS`：
+        仅按体积温和压缩（`_IMAGE_MAX_PIXELS` 必须为 0，避免 LLM 式强制缩放破坏参考图细节）。
+
+        Args:
+            source: 图片源（本地路径 / URL / data URI）
+
+        Returns:
+            {"url": ...}；source 为空或转换失败时返回 None（失败原因已写入日志）。
+            调用方约定：首帧（image）转换失败应抛错；参考图（reference_images）单张失败应丢弃。
+        """
+        if not source:
+            return None
+
+        # 已是 data URI：直接透传，避免重复编码
+        if source.startswith("data:"):
+            return {"url": source}
+
+        # 公网 HTTPS：直接透传（跳过局域网/私有地址）
+        if source.startswith("https://") and not is_local_or_private_url(source):
+            return {"url": source}
+
+        # 其余：压缩转 base64 data URI
+        data_uri, err = self._source_to_data_uri(source)
+        if data_uri:
+            return {"url": data_uri}
+
+        self.logger.error(f"Grok 图片转 base64 失败，源={source[:80]}，错误={err}")
+        return None
+
+    def _source_to_data_uri(self, source: str) -> Tuple[Optional[str], Optional[str]]:
+        """
+        将本地文件路径或各类 URL 转为（温和压缩后的）base64 data URI。
+
+        处理顺序（命中即返回，避免不必要的下载）：
+        1. 本地文件路径（is_local_file_path）→ 直接压缩转 base64；
+        2. URL → 用 `extract_local_path_from_url` 按 `/upload/` 前缀映射为本服务本地文件
+           （与域名无关，**避免回环下载自身服务器**，如 `http://zjt_dev.perseids.cn/upload/...`
+           → `<project_root>/upload/...`）；命中且文件存在则直接压缩；
+        3. 外网 URL（非 `/upload/`）或本地映射未命中 → `url_to_base64` 同步下载 + 压缩兜底。
+
+        压缩由 `compress_local_image_to_base64(max_pixels=self._IMAGE_MAX_PIXELS=0)` 完成，
+        即**仅按体积温和压缩**（≤2MB 原样、>2MB 才压）。`_IMAGE_MAX_PIXELS` 必须保持 0——
+        传 >0 会触发 LLM 式强制缩放+JPEG q85，过度有损、曾导致参考图人物细节丢失
+        （详见 compress_local_image_to_base64 的「误用警告」）。
+
+        全程同步，不触碰事件循环（本驱动 submit_task 在运行中的事件循环里被同步内联调用）。
+
+        Args:
+            source: 本地文件路径或 URL
+
+        Returns:
+            (data_uri, err)：成功时 data_uri 非 None、err 为 None；失败时相反（err 含失败原因）。
+        """
+        # 1. 本地文件路径 -> 直接压缩转 base64
+        if is_local_file_path(source):
+            if not os.path.exists(source):
+                return None, f"本地文件不存在: {source[:80]}"
+            ok, data_uri, err = compress_local_image_to_base64(
+                source, max_size_mb=self._IMAGE_MAX_MB, max_pixels=self._IMAGE_MAX_PIXELS
+            )
+            return (data_uri, None) if ok else (None, err)
+
+        # 2. URL -> 优先映射为本服务 upload 本地文件（避免回环下载自身服务器）
+        #    extract_local_path_from_url 按 /upload/ 前缀提取相对路径，与域名无关；
+        #    再用 os.path.exists 兜底，映射不到（文件不在本机）则回退下载。
+        local_rel = extract_local_path_from_url(source)
+        if local_rel:
+            local_abs = os.path.join(get_project_root(), local_rel)
+            if os.path.exists(local_abs):
+                ok, data_uri, err = compress_local_image_to_base64(
+                    local_abs, max_size_mb=self._IMAGE_MAX_MB, max_pixels=self._IMAGE_MAX_PIXELS
+                )
+                if ok:
+                    return data_uri, None
+
+        # 3. 外网 URL（含 http；x.ai 拒绝 http 必须转 base64）/ 本地映射失败 -> 同步下载压缩转 base64
+        data_uri = url_to_base64(
+            source, max_size_mb=self._IMAGE_MAX_MB, max_pixels=self._IMAGE_MAX_PIXELS
+        )
+        if data_uri:
+            return data_uri, None
+        return None, f"下载或转换失败: {source[:80]}"
+
     def build_create_request(self, ai_tool) -> Dict[str, Any]:
         """
         构建创建 Grok 任务的完整请求参数（对接 yunwu.ai 新接口）
@@ -168,6 +283,9 @@ class GrokCommonV1Driver(BaseVideoDriver):
         - first_last_frame（首帧模式）：使用 image={url}，新接口 image 仅单张，忽略尾帧
         - multi_reference（多参模式）：使用 reference_images=[{url},...]，最多7张
         - first_last_with_ref：image 与 reference_images 互斥，优先使用首帧
+
+        图片源（url 字段）支持公网 HTTPS URL（透传）或 base64 data URI，详见 _build_image_payload。
+        首帧转换失败会抛 RuntimeError（由 submit_task 兜成 SYSTEM 错误），参考图单张失败则丢弃。
 
         Args:
             ai_tool: AITool 对象
@@ -208,20 +326,24 @@ class GrokCommonV1Driver(BaseVideoDriver):
             elif reference_images:
                 ref_url_list = reference_images[:self.MAX_REFERENCE_IMAGES]
 
-        # 上传图片到CDN图床，确保外部API可访问（首帧在前，上传后按位置还原）
-        all_urls = []
+        # 构建图片 payload：公网 HTTPS 透传，其余压缩转 base64 data URI
+        # （grok 新接口图片源支持 公网 HTTPS URL 或 base64 data URI，二者放在同一 url 字段；
+        #  底层 x.ai 仍拒绝 http，本地/LAN 源外网不可达，故统一转 base64，不再依赖图床）
+        image_payload = None
+        ref_payloads = []
         if image_url:
-            all_urls.append(image_url)
-        all_urls.extend(ref_url_list)
-
-        # grok 新接口要求 https 图片源，force_upload=True 强制把图片（含 http 外网源）重传到 https CDN
-        if all_urls:
-            uploaded = self.ensure_public_urls(all_urls, force_upload=True)
-            if image_url:
-                image_url = uploaded[0]
-                ref_url_list = uploaded[1:]
-            else:
-                ref_url_list = uploaded
+            image_payload = self._build_image_payload(image_url)
+            if image_payload is None:
+                # 首帧是单张必需图，转换失败直接抛错（由 submit_task 的 except 兜成 SYSTEM 错误，不发坏数据）
+                raise RuntimeError(f"首帧图片处理失败: {image_url[:80]}")
+        if ref_url_list:
+            for src in ref_url_list:
+                p = self._build_image_payload(src)
+                if p is not None:
+                    ref_payloads.append(p)
+                # 单张参考图失败：丢弃该张并继续，不中断整批
+            if ref_url_list and not ref_payloads:
+                raise RuntimeError("所有参考图处理失败")
 
         # 比例映射为新接口支持的 aspect_ratio（1:1/16:9/9:16）
         ratio = getattr(ai_tool, 'ratio', None) or '9:16'
@@ -246,10 +368,10 @@ class GrokCommonV1Driver(BaseVideoDriver):
             "duration": duration,
         }
 
-        if image_url:
-            payload["image"] = {"url": image_url}
-        if ref_url_list:
-            payload["reference_images"] = [{"url": u} for u in ref_url_list]
+        if image_payload:
+            payload["image"] = image_payload
+        if ref_payloads:
+            payload["reference_images"] = ref_payloads
 
         return {
             "url": f"{self._base_url}/v1/videos/generations",
@@ -429,6 +551,8 @@ class GrokCommonV1Driver(BaseVideoDriver):
                     # 尝试从 output.video.url 或 choices 中提取视频URL
                     video_url = self._extract_video_url(result_data)
                     if video_url:
+                        # 如果启用代理，替换视频 URL 域名
+                        video_url = self._apply_video_proxy(video_url)
                         return {
                             "status": "SUCCESS",
                             "result_url": video_url
@@ -468,6 +592,7 @@ class GrokCommonV1Driver(BaseVideoDriver):
 
                 if finish_reason == "stop" and content:
                     # 可能 content 就是视频URL，或者需要解析
+                    content = self._apply_video_proxy(content)
                     return {
                         "status": "SUCCESS",
                         "result_url": content
@@ -583,6 +708,34 @@ class GrokCommonV1Driver(BaseVideoDriver):
             return url
 
         return None
+
+    def _apply_video_proxy(self, video_url: str) -> str:
+        """
+        应用视频下载代理配置，将 vidgen.x.ai 域名替换为代理域名
+
+        Args:
+            video_url: 原始视频 URL
+
+        Returns:
+            替换后的 URL（如果启用代理）或原始 URL
+        """
+        if not self._video_proxy_enabled:
+            return video_url
+
+        if not self._video_proxy_domain:
+            self.logger.warning("视频代理已启用但未配置 video_proxy_domain")
+            return video_url
+
+        if not video_url:
+            return video_url
+
+        # 替换 https://vidgen.x.ai 为代理域名
+        if "vidgen.x.ai" in video_url:
+            proxied_url = video_url.replace("https://vidgen.x.ai", self._video_proxy_domain)
+            self.logger.info(f"应用视频代理: {video_url} -> {proxied_url}")
+            return proxied_url
+
+        return video_url
 
 
 # ============ 具体站点实现类 ============

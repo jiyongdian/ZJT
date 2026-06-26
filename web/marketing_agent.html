@@ -664,7 +664,7 @@
                     <article v-for="asset in assetItems" :key="asset.id" class="asset-card">
                         <div class="asset-preview">
                             <video v-if="isAssetVideo(asset)" :src="asset.result_url" controls preload="metadata"></video>
-                            <img v-else :src="asset.result_url" :alt="asset.prompt || $t('generated_result_alt')" loading="lazy" decoding="async" @click="showImageModal(asset.result_url)">
+                            <img v-else :src="asset.result_url" :alt="asset.prompt || $t('generated_result_alt')" loading="lazy" decoding="async" @click="showImageModal(asset.result_url, asset.ai_tool_id || asset.project_id || asset.id, asset.prompt)">
                         </div>
                         <div class="asset-card-body">
                             <div class="asset-card-title">{{ asset.prompt || $t('generated_result_alt') }}</div>
@@ -674,9 +674,9 @@
                                 <span>{{ formatAssetDate(asset.completed_time || asset.create_time) }}</span>
                             </div>
                             <div class="asset-card-actions">
-                                <button @click="copyAssetUrl(asset.result_url)">{{ $t('copy') }}</button>
                                 <a :href="asset.result_url" target="_blank" rel="noopener">{{ $t('view_original') }}</a>
                                 <button v-if="!isAssetVideo(asset)" @click="useAssetForVideo(asset)">{{ $t('generate_video') }}</button>
+                                <button class="publish-asset-btn" @click="publishAsset(asset)" :disabled="asset.published">{{ asset.published ? '已发布' : '发布' }}</button>
                             </div>
                         </div>
                     </article>
@@ -736,10 +736,29 @@
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     {{ $t('download_image') }}
                 </button>
+                <button id="imgModalPublishBtn" style="padding: 8px 20px; background: rgba(0,168,230,0.6); color: white; border: 1px solid rgba(0,168,230,0.8); border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px; transition: background 0.2s;" onmouseover="this.style.background='rgba(0,168,230,0.8)'" onmouseout="this.style.background='rgba(0,168,230,0.6)'" onclick="event.stopPropagation(); window.publishFromModal && window.publishFromModal()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21V9M5 12l7-7 7 7"/></svg>
+                    发布
+                </button>
                 <button style="padding: 8px 20px; background: rgba(0,168,230,0.6); color: white; border: 1px solid rgba(0,168,230,0.8); border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px; transition: background 0.2s;" onmouseover="this.style.background='rgba(0,168,230,0.8)'" onmouseout="this.style.background='rgba(0,168,230,0.6)'" onclick="event.stopPropagation(); imageToVideo()">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                     {{ $t('generate_video') }}
                 </button>
+            </div>
+        </div>
+
+        <!-- 发布标题输入弹框 -->
+        <div id="publishTitleModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 2100; align-items: center; justify-content: center;">
+            <div style="background: white; border-radius: 16px; padding: 32px; width: 420px; max-width: 90vw; box-shadow: 0 20px 60px rgba(0,0,0,0.3);" onclick="event.stopPropagation()">
+                <h3 style="margin: 0 0 20px; font-size: 20px; font-weight: 600; color: #1e293b;">发布到灵感页</h3>
+                <div style="margin-bottom: 8px;">
+                    <label style="display: block; font-size: 14px; font-weight: 500; color: #475569; margin-bottom: 8px;">标题</label>
+                    <input id="publishTitleInput" type="text" placeholder="请输入发布标题" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 15px; outline: none; transition: border-color 0.2s; box-sizing: border-box;" onfocus="this.style.borderColor='#0ea5e9'" onblur="this.style.borderColor='#e2e8f0'">
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
+                    <button onclick="document.getElementById('publishTitleModal').style.display='none'" style="padding: 10px 24px; background: #f1f5f9; color: #475569; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: background 0.2s;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">取消</button>
+                    <button id="publishTitleConfirmBtn" onclick="window.confirmPublish && window.confirmPublish()" style="padding: 10px 24px; background: #0ea5e9; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: background 0.2s;" onmouseover="this.style.background='#0284c7'" onmouseout="this.style.background='#0ea5e9'">确认发布</button>
+                </div>
             </div>
         </div>
 
@@ -1146,7 +1165,7 @@
             function buildGeneratedMediaHtml(type, urls) {
                 if (type === 'image') {
                     return urls.map(url =>
-                        `<div class="generated-image-wrapper" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${url}'"><img src="${url}" class="generated-image" alt="${window.t('generated_result_alt')}"></div>`
+                        `<div class="generated-image-wrapper" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${url}';window.resetModalImageInfo && window.resetModalImageInfo()"><img src="${url}" class="generated-image" alt="${window.t('generated_result_alt')}"></div>`
                     ).join('');
                 }
                 if (type === 'video') {
@@ -1161,7 +1180,9 @@
                 if (type === 'image') {
                     return rows.map(row => {
                         const url = row.result_url || '';
-                        return `<div class="generated-image-wrapper generated-result-card" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${url}'"><img src="${url}" class="generated-image" alt="${window.t('generated_result_alt')}"><div class="generated-result-actions">${buildPublishButton(row.ai_tool_id, inputText.value)}</div></div>`;
+                        const aiToolId = row.ai_tool_id || '';
+                        const safeTitle = escapeHtmlAttr(inputText.value || '');
+                        return `<div class="generated-image-wrapper generated-result-card" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${url}';window.setModalImageInfo && window.setModalImageInfo('${aiToolId}', '${safeTitle}')"><img src="${url}" class="generated-image" alt="${window.t('generated_result_alt')}"><div class="generated-result-actions">${buildPublishButton(aiToolId, inputText.value)}</div></div>`;
                     }).join('');
                 }
                 if (type === 'video') {
@@ -1823,7 +1844,7 @@
                 if (media.type === 'image') {
                     const displayUrl = media.thumbnailUrl || media.url;  // 显示用缩略图
                     const fullUrl = media.url;  // 点击查看原图
-                    return `${label} <img src="${displayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${fullUrl}'" alt="${label}">`;
+                    return `${label} <img src="${displayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${fullUrl}';window.resetModalImageInfo && window.resetModalImageInfo()" alt="${label}">`;
                 }
                 if (media.type === 'video') {
                     return `${label} <video src="${media.url}" style="max-height:160px;border-radius:8px;" controls muted></video>`;
@@ -1987,14 +2008,13 @@
                 return `${year}-${month}-${day}`;
             }
 
-            async function copyAssetUrl(url) {
-                try {
-                    await navigator.clipboard.writeText(url);
-                    showError(window.t('copied'));
-                } catch (error) {
-                    console.error('复制资产地址失败:', error);
-                    showError(window.t('copy_failed'));
-                }
+            // 发布资产到灵感页
+            async function publishAsset(asset) {
+                if (!asset || asset.published) return;
+                const aiToolId = asset.ai_tool_id || asset.project_id || asset.id;
+                if (!aiToolId) return;
+                currentModalImageInfo = { aiToolId: aiToolId, published: false, suggestedTitle: asset.prompt || '' };
+                showPublishTitleModal(asset.prompt || '');
             }
 
             // 跳转到登录页面，带上当前页面路径以便登录后跳回
@@ -2090,19 +2110,25 @@
                     const src = srcMatch ? srcMatch[1] : '';
 
                     // 添加样式和点击事件
-                    return `<img${attrs} style="max-width:300px;max-height:200px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${src}'" alt="${window.t('image_alt')}">`;
+                    return `<img${attrs} style="max-width:300px;max-height:200px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${src}';window.resetModalImageInfo && window.resetModalImageInfo()" alt="${window.t('image_alt')}">`;
                 });
 
                 return html;
             }
 
             // 图片放大弹窗
-            function showImageModal(src) {
+            function showImageModal(src, aiToolId, suggestedTitle) {
                 const modal = document.getElementById('imgModal');
                 const img = document.getElementById('imgModalImg');
                 if (modal && img) {
                     img.src = src;
                     modal.style.display = 'flex';
+                    // 设置弹框图片信息
+                    if (aiToolId) {
+                        setModalImageInfo(aiToolId, suggestedTitle);
+                    } else {
+                        resetModalImageInfo();
+                    }
                 }
             }
 
@@ -2125,10 +2151,77 @@
             // 挂载到全局，供原生 HTML onclick 调用
             window.downloadModalImage = downloadModalImage;
 
+            // 跟踪当前放大图片的信息
+            let currentModalImageInfo = { aiToolId: null, published: false, suggestedTitle: '' };
+
+            // 设置弹框图片信息（点击图片时调用）
+            function setModalImageInfo(aiToolId, suggestedTitle) {
+                currentModalImageInfo = { aiToolId: aiToolId || null, published: false, suggestedTitle: suggestedTitle || '' };
+                updateModalPublishButton();
+            }
+            window.setModalImageInfo = setModalImageInfo;
+
+            // 重置弹框图片信息（无 aiToolId 时禁用发布按钮）
+            function resetModalImageInfo() {
+                currentModalImageInfo = { aiToolId: null, published: false, suggestedTitle: '' };
+                updateModalPublishButton();
+            }
+            window.resetModalImageInfo = resetModalImageInfo;
+
+            // 打开发布标题弹框
+            function showPublishTitleModal(suggestedTitle) {
+                const modal = document.getElementById('publishTitleModal');
+                const input = document.getElementById('publishTitleInput');
+                input.value = suggestedTitle || '';
+                modal.style.display = 'flex';
+                setTimeout(() => input.focus(), 100);
+            }
+
+            // 从弹框发布
+            function publishFromModal() {
+                if (!currentModalImageInfo.aiToolId || currentModalImageInfo.published) return;
+                showPublishTitleModal(currentModalImageInfo.suggestedTitle);
+            }
+            window.publishFromModal = publishFromModal;
+
+            // 确认发布
+            async function confirmPublish() {
+                const input = document.getElementById('publishTitleInput');
+                const title = input.value.trim();
+                if (!title) {
+                    input.style.borderColor = '#ef4444';
+                    return;
+                }
+                document.getElementById('publishTitleModal').style.display = 'none';
+                await doPublish(currentModalImageInfo.aiToolId, title);
+            }
+            window.confirmPublish = confirmPublish;
+
+            // 更新弹框发布按钮状态
+            function updateModalPublishButton() {
+                const btn = document.getElementById('imgModalPublishBtn');
+                if (!btn) return;
+                if (currentModalImageInfo.published) {
+                    btn.style.opacity = '0.5';
+                    btn.style.cursor = 'not-allowed';
+                    btn.style.background = 'rgba(255,255,255,0.15)';
+                    btn.style.borderColor = 'rgba(255,255,255,0.3)';
+                } else {
+                    btn.style.opacity = '1';
+                    btn.style.cursor = 'pointer';
+                    btn.style.background = 'rgba(0,168,230,0.6)';
+                    btn.style.borderColor = 'rgba(0,168,230,0.8)';
+                }
+            }
+
             async function publishGeneratedResult(aiToolId, suggestedTitle) {
                 if (!aiToolId) return;
-                const title = window.prompt('发布标题', suggestedTitle || inputText.value || '');
-                if (title === null) return;
+                currentModalImageInfo = { aiToolId, published: false, suggestedTitle };
+                showPublishTitleModal(suggestedTitle || inputText.value || '');
+            }
+            window.publishGeneratedResult = publishGeneratedResult;
+
+            async function doPublish(aiToolId, title) {
                 try {
                     const resp = await fetch('/api/marketing-publications', {
                         method: 'POST',
@@ -2139,7 +2232,7 @@
                         },
                         body: JSON.stringify({
                             ai_tool_id: Number(aiToolId),
-                            title: title.trim(),
+                            title: title,
                             tags: []
                         })
                     });
@@ -2148,6 +2241,25 @@
                     if (!resp.ok || data.success === false) {
                         throw new Error(data.detail || data.message || '发布失败');
                     }
+                    // 标记已发布
+                    currentModalImageInfo.published = true;
+                    updateModalPublishButton();
+                    // 更新资产列表中的发布状态
+                    const assetIndex = assetItems.value.findIndex(item => {
+                        const itemId = item.ai_tool_id || item.project_id || item.id;
+                        return String(itemId) === String(aiToolId);
+                    });
+                    if (assetIndex !== -1) {
+                        assetItems.value[assetIndex].published = true;
+                    }
+                    // 禁用对话中对应的发布按钮
+                    document.querySelectorAll('.publish-result-btn').forEach(btn => {
+                        if (btn.onclick && btn.onclick.toString().includes(aiToolId)) {
+                            btn.disabled = true;
+                            btn.style.opacity = '0.5';
+                            btn.style.cursor = 'not-allowed';
+                        }
+                    });
                     messages.value.push({
                         role: 'ai',
                         content: '已提交发布审核，通过后会出现在灵感页。',
@@ -2158,7 +2270,6 @@
                     showError(e.message || '发布失败');
                 }
             }
-            window.publishGeneratedResult = publishGeneratedResult;
 
             function imageToVideo() {
                 const img = document.getElementById('imgModalImg');
@@ -3949,7 +4060,7 @@
                         // 优先使用原始 HTTP URL，避免传递 base64 data URL
                         const fullUrl = originalUrlMap[imgUrl] || imgUrl;
                         const displayUrl = thumbnailMap[imgIdx] || fullUrl;
-                        finalContent += `\n\n<img src="${displayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${fullUrl}'" alt="${window.t('reference_image_alt')}">`;
+                        finalContent += `\n\n<img src="${displayUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${fullUrl}';window.resetModalImageInfo && window.resetModalImageInfo()" alt="${window.t('reference_image_alt')}">`;
                     }
                     if (h.role === 'user' && window.AgentMessageDedupe?.formatAgentUserMessageForDisplay) {
                         finalContent = window.AgentMessageDedupe.formatAgentUserMessageForDisplay(finalContent);
@@ -3972,7 +4083,7 @@
                     for (const m of imageUrlMatches) {
                         const fullUrl = m[1];
                         const thumbUrl = m[2] || fullUrl;
-                        renderedContent += `\n\n<img src="${thumbUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${fullUrl}'" alt="${window.t('reference_image_alt')}">`;
+                        renderedContent += `\n\n<img src="${thumbUrl}" style="max-height:160px;border-radius:8px;cursor:zoom-in;" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${fullUrl}';window.resetModalImageInfo && window.resetModalImageInfo()" alt="${window.t('reference_image_alt')}">`;
                     }
                 }
 
@@ -4119,7 +4230,7 @@
                 if (urls.length > 0) {
                     if (type === 'image') {
                         const html = urls.map(url =>
-                            `<div class="generated-image-wrapper" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${url}'"><img src="${url}" class="generated-image" alt="${window.t('generated_result_alt')}"></div>`
+                            `<div class="generated-image-wrapper" onclick="document.getElementById('imgModal').style.display='flex';document.getElementById('imgModalImg').src='${url}';window.resetModalImageInfo && window.resetModalImageInfo()"><img src="${url}" class="generated-image" alt="${window.t('generated_result_alt')}"></div>`
                         ).join('');
                         return window.t('image_generated') + '\n\n' + html;
                     } else {
@@ -6733,8 +6844,8 @@
                 isAssetVideo,
                 formatAssetType,
                 formatAssetDate,
-                copyAssetUrl,
                 useAssetForVideo,
+                publishAsset,
 
                 sessions,
                 currentSessionId,

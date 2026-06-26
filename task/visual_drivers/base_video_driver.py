@@ -277,10 +277,23 @@ class BaseVideoDriver(ABC):
             elif isinstance(value, dict):
                 masked[key] = self._mask_sensitive_payload(value)
             elif isinstance(value, list):
-                masked[key] = [self._mask_sensitive_payload(item) if isinstance(item, dict) else item for item in value]
+                masked[key] = [
+                    self._mask_sensitive_payload(item) if isinstance(item, dict) else self._mask_data_uri(item)
+                    for item in value
+                ]
             else:
-                masked[key] = value
+                masked[key] = self._mask_data_uri(value)
         return masked
+
+    def _mask_data_uri(self, value: Any, threshold: int = 200) -> Any:
+        """
+        截断超长的 base64 data URI 字符串，避免把数 MB 的 base64 写入请求日志。
+
+        仅处理以 "data:" 开头且超过阈值长度的字符串，非 data-URI 的真实 URL/普通值原样返回。
+        """
+        if isinstance(value, str) and value.startswith("data:") and len(value) > threshold:
+            return value[:60] + f"...[data-uri {len(value)} chars truncated]"
+        return value
 
     def _truncate_base64_in_response(self, data: Any, max_length: int = 50) -> Any:
         """
@@ -555,20 +568,18 @@ class BaseVideoDriver(ABC):
         """
         return ai_tool.video_path if hasattr(ai_tool, 'video_path') else None
 
-    def ensure_public_urls(self, urls: List[str], force_upload: bool = False) -> List[str]:
+    def ensure_public_urls(self, urls: List[str]) -> List[str]:
         """
         确保图片/媒体URL可被外部API访问，统一上传到CDN图床
 
         无论是本地环境还是服务器环境，都上传到CDN以确保外部API可访问。
         upload_local_images_to_cdn_sync 内部已处理：
-        - 外网URL：force_upload=False 时直接返回不再上传；force_upload=True 时重传CDN
+        - 外网URL直接返回不再上传
         - 本地文件路径会上传到CDN
         - 局域网URL会下载后上传
 
         Args:
             urls: 图片/媒体路径列表
-            force_upload: 是否强制把外网URL也重新上传到CDN（适用于要求 https 图片源的外部API，
-                          如 grok 新接口）。True 时外网URL优先映射本地文件（省下载），否则下载后上传。
 
         Returns:
             List[str]: CDN链接列表
@@ -578,8 +589,8 @@ class BaseVideoDriver(ABC):
 
         from utils.image_upload_utils import upload_local_images_to_cdn_sync
 
-        self.logger.info(f"准备上传媒体到CDN图床: {urls}, force_upload={force_upload}")
-        cdn_urls = upload_local_images_to_cdn_sync(urls, self._config, force_upload=force_upload)
+        self.logger.info(f"准备上传媒体到CDN图床: {urls}")
+        cdn_urls = upload_local_images_to_cdn_sync(urls, self._config)
         self.logger.info(f"CDN上传完成: {cdn_urls}")
         return cdn_urls if cdn_urls else urls
 

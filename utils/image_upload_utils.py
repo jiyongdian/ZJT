@@ -129,8 +129,7 @@ async def download_url_to_temp(url: str, app_dir: str = None) -> Optional[str]:
 async def upload_local_images_to_cdn(
     image_urls: List[str],
     config: Dict[str, Any],
-    project_root: str = None,
-    force_upload: bool = False
+    project_root: str = None
 ) -> List[str]:
     """
     将本地图片上传到图床并返回CDN链接
@@ -139,8 +138,6 @@ async def upload_local_images_to_cdn(
         image_urls: 图片路径列表（可能是本地路径或URL）
         config: 配置字典，包含 file_storage 和 server 配置
         project_root: 项目根目录，用于URL到本地文件的映射
-        force_upload: 是否强制把外网URL也重新上传到图床（默认 False，外网URL直接透传）。
-                      True 时外网URL优先映射本地文件（省下载），否则下载后上传，得到 https CDN 链接。
 
     Returns:
         List[str]: 上传后的CDN链接列表
@@ -160,13 +157,10 @@ async def upload_local_images_to_cdn(
         if not image_path:
             continue
 
-        # 外网URL：force_upload=False 时直接透传；True 时落入下面的"映射本地/下载+上传"逻辑重传CDN
+        # 外网URL：直接透传
         if not is_local_path(image_path):
-            if not force_upload:
-                result_urls.append(image_path)
-                continue
-            # force_upload=True：外网URL重传CDN（优先映射本地省下载，否则下载），不 continue
-            logger.info(f"force_upload: 外网图片将重传到CDN: {image_path}")
+            result_urls.append(image_path)
+            continue
 
         temp_file = None
         file_to_upload = None
@@ -190,7 +184,7 @@ async def upload_local_images_to_cdn(
                 file_to_upload = resolved_path
                 filename = os.path.basename(resolved_path)
             else:
-                # 局域网/外网URL（force_upload），优先尝试映射到本地文件（省下载），否则HTTP下载
+                # 局域网URL，优先尝试映射到本地文件（省下载），否则HTTP下载
                 local_file = try_map_url_to_local_file(image_path, config, project_root)
                 if local_file:
                     # URL域名与server.host匹配，直接使用本地文件
@@ -246,8 +240,7 @@ async def upload_local_images_to_cdn(
 def upload_local_images_to_cdn_sync(
     image_urls: List[str],
     config: Dict[str, Any],
-    project_root: str = None,
-    force_upload: bool = False
+    project_root: str = None
 ) -> List[str]:
     """
     同步方式上传本地图片到图床
@@ -256,7 +249,6 @@ def upload_local_images_to_cdn_sync(
         image_urls: 图片路径列表
         config: 配置字典
         project_root: 项目根目录
-        force_upload: 是否强制把外网URL也重新上传到图床，透传给 upload_local_images_to_cdn
 
     Returns:
         List[str]: 上传后的CDN链接列表
@@ -269,16 +261,16 @@ def upload_local_images_to_cdn_sync(
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 future = executor.submit(
                     asyncio.run,
-                    upload_local_images_to_cdn(image_urls, config, project_root, force_upload=force_upload)
+                    upload_local_images_to_cdn(image_urls, config, project_root)
                 )
                 return future.result()
         else:
             return loop.run_until_complete(
-                upload_local_images_to_cdn(image_urls, config, project_root, force_upload=force_upload)
+                upload_local_images_to_cdn(image_urls, config, project_root)
             )
     except RuntimeError:
         # 没有事件循环，创建新的
-        return asyncio.run(upload_local_images_to_cdn(image_urls, config, project_root, force_upload=force_upload))
+        return asyncio.run(upload_local_images_to_cdn(image_urls, config, project_root))
 
 
 async def resolve_url_to_local_file(

@@ -285,12 +285,12 @@ class VideoDriverFactory:
                 task_key = config.key
                 user_pref = UsersModel.get_implementation_preference(user_id, task_key)
                 if user_pref:
-                    # 验证用户偏好是否可用（配置已就绪）
-                    if cls._is_driver_available(user_pref):
+                    # 验证用户偏好：配置就绪 且 已启用（admin 禁用的实现方不能被偏好绕过）
+                    if cls._is_driver_available(user_pref) and cls._is_impl_enabled(user_pref, config.driver_name):
                         logger.debug(f"Using user preference for task {task_key}: {user_pref}")
                         impl_name = user_pref
                     else:
-                        logger.warning(f"User preference {user_pref} config not available, will auto-select")
+                        logger.warning(f"User preference {user_pref} unavailable or disabled, will auto-select")
             except Exception as e:
                 logger.warning(f"Failed to get user preference: {e}")
 
@@ -322,6 +322,9 @@ class VideoDriverFactory:
         """
         检查实现方驱动是否可用（配置已就绪）
 
+        仅校验驱动能否实例化（必需配置键是否有值），**不检查 enabled**。
+        若需同时尊重 admin 禁用，请配合 `_is_impl_enabled` 使用（偏好采纳路径必须二者都过）。
+
         Args:
             impl_name: 实现方名称
 
@@ -334,6 +337,29 @@ class VideoDriverFactory:
         try:
             driver_class()
             return True
+        except Exception:
+            return False
+
+    @classmethod
+    def _is_impl_enabled(cls, impl_name: str, driver_key: Optional[str]) -> bool:
+        """
+        检查实现方是否启用（尊重 admin 在 implementation_power_config 的 enabled 设置）
+
+        用于偏好采纳路径：被 admin 禁用的实现方，即便配置就绪、即便用户偏好指向它，
+        也不应被选中。复用 ImplementationConfig.is_enabled（unified_config.py）的 DB 读取。
+
+        Args:
+            impl_name: 实现方名称
+            driver_key: 业务驱动名（任务配置的 driver_name），用于 DB 查询
+
+        Returns:
+            bool: 启用返回 True；未注册/异常/被禁用返回 False（保守，避免禁用失效）
+        """
+        try:
+            impl_config = UnifiedConfigRegistry.get_implementation(impl_name)
+            if not impl_config:
+                return False
+            return impl_config.is_enabled(driver_key)
         except Exception:
             return False
     
