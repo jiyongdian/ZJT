@@ -2054,6 +2054,21 @@
                 return `${d.getMonth() + 1}/${d.getDate()}`;
             }
 
+            // 图片/媒体 URL 代理辅助函数（幂等：已是同源 URL 则原样返回）
+            function proxyImageUrl(url) {
+                if (!url) return url;
+                // 同源路径直接返回
+                if (url.startsWith('/') && !url.startsWith('//')) return url;
+                return url;
+            }
+
+            function proxyDownloadUrl(url) {
+                if (!url) return url;
+                // 同源路径直接返回
+                if (url.startsWith('/') && !url.startsWith('//')) return url;
+                return url;
+            }
+
             // 渲染 Markdown
             function renderMarkdown(text) {
                 if (!text) return '';
