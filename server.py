@@ -337,6 +337,9 @@ app.include_router(system_router)
 from api.media import router as media_router
 app.include_router(media_router)
 
+from api.marketing_publications import router as marketing_publications_router
+app.include_router(marketing_publications_router)
+
 # 导入并注册通知系统 API 路由
 from api.notifications import router as notifications_router
 app.include_router(notifications_router)
@@ -2094,8 +2097,10 @@ async def ai_app_run_image(
                         extra_config_data = {'image_mode': image_mode}
                         extra_config_json = json.dumps(extra_config_data)
 
-                        # 判断是否需要创建 pipeline steps（Seedance 2.0 + RunningHub 配置）
-                        SEEDANCE_2_0_IDS = {TaskTypeId.SEEDANCE_2_0_FAST_IMAGE_TO_VIDEO, TaskTypeId.SEEDANCE_2_0_IMAGE_TO_VIDEO}
+                        # 判断是否需要创建 pipeline steps（Seedance 2.0 系列 + RunningHub 配置）
+                        # 适配模型清单为单一来源：config/unified_config.py::SEEDANCE_FACE_MASK_DRIVER_KEYS
+                        from task.pipeline_processor import PipelineProcessor
+                        is_seedance_face_mask = PipelineProcessor.is_seedance_face_mask_type(image_to_video_type)
                         runninghub_api_key = get_dynamic_config_value("runninghub", "api_key", default=None)
                         seedance_face_mask_enabled = get_dynamic_config_value("pipeline", "seedance_face_mask_enabled", default=True)
                         has_image_input = bool(image_path) or bool(reference_images_json)
@@ -2103,13 +2108,13 @@ async def ai_app_run_image(
                             bool(video_path) or has_image_input
                         )
                         need_pipeline_steps = (
-                            image_to_video_type in SEEDANCE_2_0_IDS
+                            is_seedance_face_mask
                             and runninghub_api_key
                             and has_any_param_prepare_input
                         )
                         logger.info(
                             f"Pipeline steps condition check: image_to_video_type={image_to_video_type}, "
-                            f"in_SEEDANCE_2_0={image_to_video_type in SEEDANCE_2_0_IDS}, "
+                            f"is_seedance_face_mask={is_seedance_face_mask}, "
                             f"has_api_key={bool(runninghub_api_key)}, has_video={bool(video_path)}, "
                             f"face_mask_enabled={bool(seedance_face_mask_enabled)}, "
                             f"has_image_input={has_image_input}, need_pipeline_steps={need_pipeline_steps}"
@@ -3151,6 +3156,7 @@ async def get_ai_tools_history(
     type: Optional[int] = Query(None, description="Tool type filter (1-图片编辑, 2-AI视频生成, 3-图片生成视频)"),
     types: Optional[str] = Query(None, description="Multiple tool types filter, comma-separated (e.g., '3,10,11,12')"),
     has_image_path: Optional[bool] = Query(None, description="Filter by image_path presence: true=图片编辑, false=文生图"),
+    has_result_url: Optional[bool] = Query(None, description="Filter by result_url presence: true=has result asset"),
 ):
     """
     获取用户的 AI 工具历史记录
@@ -3195,7 +3201,8 @@ async def get_ai_tools_history(
                 order_by='create_time',
                 order_direction='DESC',
                 type_list=type_list_param,
-                has_image_path=has_image_path
+                has_image_path=has_image_path,
+                has_result_url=has_result_url
             )
         elif type in type_mapping:
             result = AIToolsModel.list_by_user(
@@ -3205,7 +3212,8 @@ async def get_ai_tools_history(
                 order_by='create_time',
                 order_direction='DESC',
                 type_list=type_mapping[type],
-                has_image_path=has_image_path
+                has_image_path=has_image_path,
+                has_result_url=has_result_url
             )
         else:
             result = AIToolsModel.list_by_user(
@@ -3215,7 +3223,8 @@ async def get_ai_tools_history(
                 order_by='create_time',
                 order_direction='DESC',
                 type=type,
-                has_image_path=has_image_path
+                has_image_path=has_image_path,
+                has_result_url=has_result_url
             )
         
         return JSONResponse(
@@ -8846,6 +8855,15 @@ async def serve_marketing_agent():
         content = _get_processed_html(file_path)
         return Response(content=content, media_type="text/html")
     raise HTTPException(status_code=404, detail="Marketing agent page not found")
+
+
+@app.get("/marketing-inspiration")
+async def serve_marketing_inspiration():
+    file_path = os.path.join(static_dir, "marketing_inspiration.html")
+    if os.path.isfile(file_path):
+        content = _get_processed_html(file_path)
+        return Response(content=content, media_type="text/html")
+    raise HTTPException(status_code=404, detail="Marketing inspiration page not found")
 
 
 @app.get(f"{MP_VERIFY_ROUTE}")
